@@ -78,7 +78,7 @@ const App = () => {
     setGameOver(false);
     setMessages([]);
     setResetJoysticks(prev => prev + 1); // Reset Inputs
-    addSystemMessage("Welcome to Stick Arena. Survive.");
+    addSystemMessage("Welcome to Stick Rumble. Survive.");
   };
 
   // Restart
@@ -106,7 +106,7 @@ const App = () => {
 
       {!gameStarted && (
         <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black bg-opacity-90">
-           <h1 className="text-5xl md:text-7xl font-bold text-red-600 mb-4 pixel-font text-center tracking-tighter">STICK ARENA</h1>
+           <h1 className="text-5xl md:text-7xl font-bold text-red-600 mb-4 pixel-font text-center tracking-tighter">STICK RUMBLE</h1>
            <p className="text-xl text-gray-400 mb-8">AI REVENGE</p>
            <button 
              onClick={startGame}
