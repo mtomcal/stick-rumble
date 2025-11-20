@@ -416,44 +416,46 @@ export class MainScene extends Phaser.Scene {
 
   private handleAiming() {
     let aimAngle = this.player.rotation;
-    let usingMouse = false;
     
-    const pointer = this.input.activePointer;
-    // Cast to any to access pointerType which exists at runtime but might be missing in types
-    const isMouse = (pointer as any).pointerType === 'mouse';
-
+    // Priority to Virtual Joystick (Touch)
     if (this.aimStick.active && (this.aimStick.x !== 0 || this.aimStick.y !== 0)) {
         aimAngle = Math.atan2(this.aimStick.y, this.aimStick.x);
-    } else if (isMouse) {
-        usingMouse = true;
-        const worldPoint = pointer.positionToCamera(this.cameras.main) as Phaser.Math.Vector2;
-        aimAngle = Phaser.Math.Angle.Between(this.player.x, this.player.y, worldPoint.x, worldPoint.y);
-    }
-    
-    this.player.setRotation(aimAngle);
+        this.player.setRotation(aimAngle);
 
-    if (this.reticle) {
-        if (usingMouse) {
-             const worldPoint = pointer.positionToCamera(this.cameras.main) as Phaser.Math.Vector2;
-             this.reticle.setPosition(worldPoint.x, worldPoint.y);
-             this.reticle.setVisible(true);
-        } else if (this.aimStick.active) {
+        // Update reticle for joystick
+        if (this.reticle) {
              const dist = 250;
              this.reticle.setPosition(
                  this.player.x + Math.cos(aimAngle) * dist,
                  this.player.y + Math.sin(aimAngle) * dist
              );
              this.reticle.setVisible(true);
-        } else {
-            this.reticle.setVisible(false);
+        }
+    } else {
+        // Fallback to Mouse/Pointer Aim (Desktop)
+        // We assume that if the virtual aim stick is not active, the user is using a mouse/trackpad.
+        const pointer = this.input.activePointer;
+        const worldPoint = pointer.positionToCamera(this.cameras.main) as Phaser.Math.Vector2;
+        
+        aimAngle = Phaser.Math.Angle.Between(this.player.x, this.player.y, worldPoint.x, worldPoint.y);
+        this.player.setRotation(aimAngle);
+
+        if (this.reticle) {
+             this.reticle.setPosition(worldPoint.x, worldPoint.y);
+             this.reticle.setVisible(true);
         }
     }
   }
 
   private handleAttacks(time: number) {
+    // 1. Mobile Joystick Fire (Threshold check)
     const isMobileFiring = this.aimStick.active && (Math.abs(this.aimStick.x) > 0.3 || Math.abs(this.aimStick.y) > 0.3);
+    
+    // 2. Mouse Fire
     const pointer = this.input.activePointer;
-    const isMouseFiring = pointer.isDown && (pointer as any).pointerType === 'mouse';
+    // Allow firing if pointer is down AND virtual stick is NOT active. 
+    // This ensures normal mouse clicks work on Mac/PC, while preventing touch interactions elsewhere from firing the gun erroneously if not aimed.
+    const isMouseFiring = pointer.isDown && !this.aimStick.active;
     
     if (isMobileFiring || isMouseFiring) {
        this.executeAttack(this.player, this.bullets, true);
