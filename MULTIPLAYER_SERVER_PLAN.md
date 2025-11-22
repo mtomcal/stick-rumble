@@ -949,7 +949,7 @@ logger.Info("Player joined room",
 
 ### Roadmap
 
-1. **Voice Chat**: Integrate WebRTC for in-game comms
+1. **Voice Chat**: Integrate WebRTC for in-game communications
 2. **Spectator Mode**: Watch live matches
 3. **Replay System**: Record and playback matches
 4. **Tournaments**: Automated bracket system
