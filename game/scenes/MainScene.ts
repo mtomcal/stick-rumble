@@ -10,8 +10,9 @@ import { Pathfinder } from '../systems/Pathfinder';
 const WEAPON_STATS = {
   [WeaponType.BAT]: { damage: 60, cooldown: 425, range: 90, isMelee: true, color: 0xcccccc, speed: 0, clipSize: 0, reloadTime: 0 },
   [WeaponType.KATANA]: { damage: 100, cooldown: 800, range: 110, isMelee: true, color: 0xffffff, speed: 0, clipSize: 0, reloadTime: 0 },
-  [WeaponType.UZI]: { damage: 8, cooldown: 100, range: 600, isMelee: false, color: 0xffff00, speed: 850, clipSize: 30, reloadTime: 1200 },
+  [WeaponType.UZI]: { damage: 12, cooldown: 100, range: 600, isMelee: false, color: 0xffff00, speed: 850, clipSize: 30, reloadTime: 1200 },
   [WeaponType.AK47]: { damage: 20, cooldown: 150, range: 1000, isMelee: false, color: 0xffaa00, speed: 1250, clipSize: 20, reloadTime: 2000 },
+  [WeaponType.SHOTGUN]: { damage: 20, cooldown: 950, range: 350, isMelee: false, color: 0x5d4037, speed: 900, clipSize: 6, reloadTime: 2000, pellets: 6 },
 };
 
 interface Tracer {
@@ -73,7 +74,9 @@ export class MainScene extends Phaser.Scene {
   }
 
   create() {
-    this.input.setDefaultCursor('none'); // Hide system cursor
+    // Use crosshair cursor for better desktop aiming visibility
+    this.input.setDefaultCursor('crosshair'); 
+    this.input.mouse.disableContextMenu(); // Prevent right click menu
 
     this.stats = {
       health: 100, ammo: 0, maxAmmo: 0, isReloading: false,
@@ -96,7 +99,7 @@ export class MainScene extends Phaser.Scene {
     this.pathfinder.buildNavGrid(this.walls.getChildren());
 
     // Random Start Weapon
-    const startWeapons = [WeaponType.BAT, WeaponType.UZI, WeaponType.AK47, WeaponType.KATANA];
+    const startWeapons = [WeaponType.BAT, WeaponType.UZI, WeaponType.AK47, WeaponType.KATANA, WeaponType.SHOTGUN];
     const myWeapon = Phaser.Utils.Array.GetRandom(startWeapons);
 
     this.player = new StickFigure(this, 800, 800, 0x222222, 'YOU', myWeapon);
@@ -274,12 +277,19 @@ export class MainScene extends Phaser.Scene {
     const scale = 0.075; 
     const mapX = 20;
     const mapY = 20;
+    const radarRange = 600; // Enemies beyond this range are not shown
 
     this.minimapGraphics.fillStyle(0xff0000, 1);
     const enemies = this.enemies.getChildren();
     for (const e of enemies) {
         const enemy = e as StickFigure;
         if (enemy.active && !enemy.isDead) {
+            // Radar Logic: Skip enemies outside radar range
+            if (this.player && !this.player.isDead) {
+                 const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y);
+                 if (dist > radarRange) continue;
+            }
+
             this.minimapGraphics.fillCircle(
                 mapX + enemy.x * scale,
                 mapY + enemy.y * scale,
@@ -295,6 +305,15 @@ export class MainScene extends Phaser.Scene {
             mapY + this.player.y * scale,
             4
         );
+        
+        // Draw Radar Range Ring
+        this.minimapGraphics.lineStyle(1, 0x00ff00, 0.15);
+        this.minimapGraphics.strokeCircle(
+             mapX + this.player.x * scale,
+             mapY + this.player.y * scale,
+             radarRange * scale
+        );
+
         const rot = this.player.rotation;
         this.minimapGraphics.lineStyle(1, 0x00ff00, 0.8);
         this.minimapGraphics.beginPath();
@@ -336,6 +355,8 @@ export class MainScene extends Phaser.Scene {
 
       unit.isReloading = true;
       if (unit === this.player) this.updateAmmoUI();
+      
+      unit.playReloadAnimation(); // Visual reload
 
       const reloadTime = stats.reloadTime;
       this.tweens.addCounter({
@@ -381,6 +402,7 @@ export class MainScene extends Phaser.Scene {
 
   private hasLineOfSight(source: {x: number, y: number}, target: {x: number, y: number}): boolean {
       const line = new Phaser.Geom.Line(source.x, source.y, target.x, target.y);
+      // wallBounds is populated during map creation
       for(const rect of this.wallBounds) {
           if (Phaser.Geom.Intersects.LineToRectangle(line, rect)) {
               return false;
@@ -433,9 +455,11 @@ export class MainScene extends Phaser.Scene {
         }
     } else {
         // Fallback to Mouse/Pointer Aim (Desktop)
-        // We assume that if the virtual aim stick is not active, the user is using a mouse/trackpad.
-        const pointer = this.input.activePointer;
-        const worldPoint = pointer.positionToCamera(this.cameras.main) as Phaser.Math.Vector2;
+        // CRITICAL FIX: Use mousePointer specifically for desktop to avoid ambiguity with activePointer
+        // pointer.x/y returns SCREEN coordinates (e.g. 0-windowWidth).
+        // Since the camera moves, we must convert this to World coordinates to aim correctly.
+        const pointer = this.input.mousePointer;
+        const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
         
         aimAngle = Phaser.Math.Angle.Between(this.player.x, this.player.y, worldPoint.x, worldPoint.y);
         this.player.setRotation(aimAngle);
@@ -452,10 +476,9 @@ export class MainScene extends Phaser.Scene {
     const isMobileFiring = this.aimStick.active && (Math.abs(this.aimStick.x) > 0.3 || Math.abs(this.aimStick.y) > 0.3);
     
     // 2. Mouse Fire
-    const pointer = this.input.activePointer;
-    // Allow firing if pointer is down AND virtual stick is NOT active. 
-    // This ensures normal mouse clicks work on Mac/PC, while preventing touch interactions elsewhere from firing the gun erroneously if not aimed.
-    const isMouseFiring = pointer.isDown && !this.aimStick.active;
+    // Allow firing if the mouse is clicked, provided we aren't currently using the touch joystick.
+    // Explicitly check primaryDown for left click on the mousePointer specifically.
+    const isMouseFiring = !this.aimStick.active && (this.input.mousePointer.primaryDown || this.input.mousePointer.isDown);
     
     if (isMobileFiring || isMouseFiring) {
        this.executeAttack(this.player, this.bullets, true);
@@ -512,6 +535,11 @@ export class MainScene extends Phaser.Scene {
       potentialVictims.forEach(victim => {
           const dist = Phaser.Math.Distance.Between(attacker.x, attacker.y, victim.x, victim.y);
           if (dist < range) {
+               // WALL FIX: Check for Line of Sight to ensure swords don't go through walls
+               if (!this.hasLineOfSight({x: attacker.x, y: attacker.y}, {x: victim.x, y: victim.y})) {
+                   return;
+               }
+
                const angleToVictim = Phaser.Math.Angle.Between(attacker.x, attacker.y, victim.x, victim.y);
                const diff = Phaser.Math.Angle.Wrap(angleToVictim - attacker.rotation);
                if (Math.abs(diff) < 1.0) {
@@ -527,61 +555,86 @@ export class MainScene extends Phaser.Scene {
 
   private fireBullet(shooter: StickFigure, group: Phaser.Physics.Arcade.Group, color: number, speed: number, damage: number, weaponType: WeaponType) {
     const startPos = shooter.getBarrelPosition();
+    
+    // Check wall obstruction
     const lineOfFire = new Phaser.Geom.Line(shooter.x, shooter.y, startPos.x, startPos.y);
     let blocked = false;
-    
     for(const rect of this.wallBounds) {
         if (Phaser.Geom.Intersects.LineToRectangle(lineOfFire, rect)) {
             blocked = true;
             break;
         }
     }
-
     if (blocked) {
         const spark = this.add.circle(startPos.x, startPos.y, 3, 0xffff00);
-        this.tweens.add({
-            targets: spark, alpha: 0, scale: 2, duration: 100,
-            onComplete: () => spark.destroy()
-        });
+        this.tweens.add({ targets: spark, alpha: 0, scale: 2, duration: 100, onComplete: () => spark.destroy() });
         return;
     }
-    
-    const bullet = group.get(startPos.x, startPos.y) as any;
-    if (bullet) {
-      bullet.setActive(true).setVisible(true);
-      bullet.damageAmount = damage;
-      bullet.weaponType = weaponType; 
-      bullet.sourceX = shooter.x;
-      bullet.sourceY = shooter.y;
-      bullet.owner = shooter; 
 
-      if (weaponType === WeaponType.AK47) {
-          bullet.setTexture('bullet_tracer');
-          bullet.setTint(0xffaa00);
-          if (bullet.body) bullet.body.setCircle(2);
-      } else {
-          bullet.setTexture('bullet_pellet');
-          bullet.setTint(0xffff00);
-          if (bullet.body) bullet.body.setCircle(2);
-      }
+    const stats = WEAPON_STATS[weaponType];
+    const pelletCount = (stats as any).pellets || 1;
 
-      let angle = shooter.rotation;
-      let spread = 0;
+    for(let i=0; i < pelletCount; i++) {
+        const bullet = group.get(startPos.x, startPos.y) as any;
+        if (bullet) {
+            bullet.setActive(true).setVisible(true);
+            bullet.damageAmount = damage;
+            bullet.weaponType = weaponType;
+            bullet.sourceX = shooter.x;
+            bullet.sourceY = shooter.y;
+            bullet.owner = shooter;
 
-      if (weaponType === WeaponType.UZI) {
-          spread = (Math.random() - 0.5) * 0.3;
-      } else if (weaponType === WeaponType.AK47) {
-           spread = (Math.random() - 0.5) * 0.05;
-      }
+            // Visuals
+            if (weaponType === WeaponType.AK47) {
+                bullet.setTexture('bullet_tracer');
+                bullet.setTint(0xffaa00);
+                if (bullet.body) bullet.body.setCircle(2);
+            } else if (weaponType === WeaponType.SHOTGUN) {
+                 bullet.setTexture('bullet_pellet');
+                 bullet.setTint(0xff0000); // Red pellets
+                 bullet.setScale(1.2);
+                 if (bullet.body) bullet.body.setCircle(3);
+            } else {
+                bullet.setTexture('bullet_pellet');
+                bullet.setTint(0xffff00);
+                bullet.setScale(1);
+                if (bullet.body) bullet.body.setCircle(2);
+            }
 
-      const finalAngle = angle + spread;
-      const vec = this.physics.velocityFromRotation(finalAngle, speed);
-      bullet.setRotation(finalAngle);
+            let angle = shooter.rotation + (shooter.aimSway || 0);
+            
+            // --- BOT INACCURACY CHANGE ---
+            if (shooter !== this.player) {
+                // Add random error to bot aim (+/- ~11 degrees)
+                angle += (Math.random() - 0.5) * 0.4;
+            }
 
-      if (bullet.body) {
-        bullet.body.reset(startPos.x, startPos.y);
-        bullet.setVelocity(vec.x, vec.y);
-      }
+            let spread = 0;
+
+            if (weaponType === WeaponType.UZI) {
+                spread = (Math.random() - 0.5) * 0.3;
+            } else if (weaponType === WeaponType.AK47) {
+                spread = (Math.random() - 0.5) * 0.05;
+            } else if (weaponType === WeaponType.SHOTGUN) {
+                spread = (Math.random() - 0.5) * 0.6; // Wide spread
+            }
+
+            const finalAngle = angle + spread;
+            
+            // Variance in speed for shotgun to make it look less uniform
+            let actualSpeed = speed;
+            if (weaponType === WeaponType.SHOTGUN) {
+                actualSpeed = speed * (0.8 + Math.random() * 0.4);
+            }
+
+            const vec = this.physics.velocityFromRotation(finalAngle, actualSpeed);
+            bullet.setRotation(finalAngle);
+
+            if (bullet.body) {
+                bullet.body.reset(startPos.x, startPos.y);
+                bullet.setVelocity(vec.x, vec.y);
+            }
+        }
     }
   }
 
@@ -612,7 +665,7 @@ export class MainScene extends Phaser.Scene {
         const names = ['Noob', 'Camper', 'Lag', 'Bot_01', 'X_x_X', 'Reaper', 'Guest123', 'Sniper'];
         const name = Phaser.Utils.Array.GetRandom(names);
 
-        const weaponTypes = [WeaponType.BAT, WeaponType.KATANA, WeaponType.UZI, WeaponType.AK47];
+        const weaponTypes = [WeaponType.BAT, WeaponType.KATANA, WeaponType.UZI, WeaponType.AK47, WeaponType.SHOTGUN];
         const randomWeapon = Phaser.Utils.Array.GetRandom(weaponTypes);
         const color = 0xff0000; 
         const stats = WEAPON_STATS[randomWeapon];
@@ -663,34 +716,39 @@ export class MainScene extends Phaser.Scene {
             this.reloadWeapon(enemy);
         }
         
-        let attackRange = stats.isMelee ? stats.range + 20 : 600;
-        let stopDist = stats.isMelee ? 40 : (enemy.weaponType === WeaponType.UZI ? 150 : 250);
+        let attackRange = stats.isMelee ? stats.range + 20 : (enemy.weaponType === WeaponType.SHOTGUN ? 300 : 600);
+        let stopDist = stats.isMelee ? 40 : (enemy.weaponType === WeaponType.UZI || enemy.weaponType === WeaponType.SHOTGUN ? 150 : 250);
 
-        let hasLOS = false;
+        // --- FIXED: Persist LOS state to prevent shooting through walls ---
+        // Only check LOS every 200ms to save CPU
         if (time - enemy.lastLOSTime > 200) { 
             enemy.lastLOSTime = time;
-            hasLOS = this.hasLineOfSight({x: enemy.x, y: enemy.y}, {x: target.x, y: target.y});
-        } else {
-            hasLOS = distToTarget < 300; 
-        }
+            enemy.hasLOS = this.hasLineOfSight({x: enemy.x, y: enemy.y}, {x: target.x, y: target.y});
+        } 
+        
+        // If we have LOS, we can move directly and attack.
+        // If we do NOT have LOS, we must use pathfinding and cannot attack (unless melee).
 
-        if (distToTarget < stopDist && hasLOS) {
+        if (distToTarget < stopDist && enemy.hasLOS) {
+             // Stop and shoot if close enough and we see them
              enemy.setVelocity(0, 0);
              enemy.setRotation(Phaser.Math.Angle.Between(enemy.x, enemy.y, target.x, target.y));
         } else {
-             if (hasLOS) {
+             // Movement Logic
+             if (enemy.hasLOS) {
+                 // Direct movement (cheaper/smoother) if we see them
                  this.physics.moveToObject(enemy, target, 160);
                  enemy.setRotation(Phaser.Math.Angle.Between(enemy.x, enemy.y, target.x, target.y));
                  enemy.currentPath = [];
                  enemy.pathIndex = 0;
              } else {
+                 // No LOS -> Use Pathfinding
                  if (pathUpdateBudget > 0 && (
                      enemy.currentPath.length === 0 || 
                      enemy.pathIndex >= enemy.currentPath.length || 
                      time - enemy.lastPathTime > 500)) { 
                      
                      pathUpdateBudget--;
-                     // Use external Pathfinder
                      enemy.currentPath = this.pathfinder.findPath(
                          new Phaser.Math.Vector2(enemy.x, enemy.y), 
                          new Phaser.Math.Vector2(target.x, target.y)
@@ -718,8 +776,13 @@ export class MainScene extends Phaser.Scene {
              }
         }
 
-        if (distToTarget < attackRange && hasLOS) {
-             this.executeAttack(enemy, this.enemyBullets, false);
+        // Attack Logic
+        if (distToTarget < attackRange) {
+             // STRICT LOS CHECK FOR ALL WEAPONS (Removed isMelee bypass)
+             // Bots should not attack through walls
+             if (enemy.hasLOS) {
+                 this.executeAttack(enemy, this.enemyBullets, false);
+             }
         }
       }
     });

@@ -1,5 +1,5 @@
 {
-  "name": "Stick Rumble: AI Revenge",
+  "name": "Stick Rumble",
   "description": "A fast-paced top-down stick figure shooter. Features single-player survival mode against AI bots that trash-talk you using the Gemini API. Mobile-friendly with virtual dual-stick controls.",
   "requestFramePermissions": []
 }

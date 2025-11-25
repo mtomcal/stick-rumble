@@ -28,7 +28,8 @@ export enum WeaponType {
   BAT = 'BAT',
   KATANA = 'KATANA',
   UZI = 'UZI',
-  AK47 = 'AK47'
+  AK47 = 'AK47',
+  SHOTGUN = 'SHOTGUN'
 }
 
 // Events used by the EventBus
