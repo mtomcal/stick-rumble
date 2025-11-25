@@ -45,12 +45,12 @@ workflow_status:
   - phase: 1
     name: "Planning"
     workflows:
-      - id: "prd"
-        name: "Product Requirements Document"
-        status: "required"
-        agent: "pm"
-        command: "/bmad:bmm:workflows:prd"
-        note: "Define functional and non-functional requirements"
+      - id: "gdd"
+        name: "Game Design Document"
+        status: "docs/GDD.md"
+        agent: "game-designer"
+        command: "/bmad:bmgd:workflows:gdd"
+        note: "Complete game design document for Stick Rumble"
 
       - id: "validate-prd"
         name: "Validate PRD"
@@ -72,7 +72,7 @@ workflow_status:
     workflows:
       - id: "create-architecture"
         name: "Architecture"
-        status: "required"
+        status: "docs/game-architecture.md"
         agent: "architect"
         command: "/bmad:bmm:workflows:architecture"
         note: "System architecture for Phaser frontend + Golang multiplayer backend"
