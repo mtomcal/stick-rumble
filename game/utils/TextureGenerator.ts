@@ -73,4 +73,5 @@ export const generateGameTextures = (scene: Phaser.Scene) => {
   createDropIcon(`drop_${WeaponType.KATANA}`, 0xffffff, 40, 4);
   createDropIcon(`drop_${WeaponType.UZI}`, 0x333333, 20, 12);
   createDropIcon(`drop_${WeaponType.AK47}`, 0x5d4037, 40, 8);
+  createDropIcon(`drop_${WeaponType.SHOTGUN}`, 0x5d4037, 35, 10);
 };

@@ -10,6 +10,7 @@ export class StickFigure extends Phaser.Physics.Arcade.Sprite {
   declare active: boolean;
   declare setVelocity: (x: number, y?: number) => this;
   declare setRotation: (rotation: number) => this;
+  declare setVisible: (value: boolean) => this;
 
   private graphics: Phaser.GameObjects.Graphics;
   public isDead: boolean = false;
@@ -29,7 +30,12 @@ export class StickFigure extends Phaser.Physics.Arcade.Sprite {
   public pathIndex: number = 0;
   public lastPathTime: number = 0;
   public lastLOSTime: number = 0; // Line of Sight throttle
+  public hasLOS: boolean = false; // Persisted Line of Sight check
   
+  // Aim Mechanics
+  public aimSway: number = 0;
+  private swayTime: number = 0;
+
   private color: number;
   private weaponContainer: Phaser.GameObjects.Container;
   private nameText: Phaser.GameObjects.Text;
@@ -39,6 +45,9 @@ export class StickFigure extends Phaser.Physics.Arcade.Sprite {
 
   constructor(scene: Phaser.Scene, x: number, y: number, color: number, name: string, weaponType: WeaponType = WeaponType.AK47) {
     super(scene, x, y, 'placeholder');
+    // Hide the base sprite texture so we only see the drawn stick figure logic
+    this.setVisible(false);
+    
     this.color = color;
     this.weaponType = weaponType;
 
@@ -81,9 +90,11 @@ export class StickFigure extends Phaser.Physics.Arcade.Sprite {
       let offset = 30; // Default barrel length
       if (this.weaponType === WeaponType.AK47) offset = 55; // Slightly longer for new visuals
       if (this.weaponType === WeaponType.UZI) offset = 35;
+      if (this.weaponType === WeaponType.SHOTGUN) offset = 45; // Reduced from 60 to be more compact
       
+      // Use rotation + aimSway so bullets follow the visual barrel
       const vec = new Phaser.Math.Vector2(offset, 0);
-      vec.rotate(this.rotation);
+      vec.rotate(this.rotation + this.aimSway);
       vec.add(new Phaser.Math.Vector2(this.x, this.y));
       return vec;
   }
@@ -137,6 +148,15 @@ export class StickFigure extends Phaser.Physics.Arcade.Sprite {
               this.weaponContainer.add([uBody, uHandle, uBarrel, uMag]);
               break;
 
+          case WeaponType.SHOTGUN:
+              // Compact Shotgun: Wood stock, Metal body
+              const sStock = scene.add.rectangle(0, 0, 12, 6, 0x5d4037);
+              const sBody = scene.add.rectangle(18, 0, 20, 6, 0x333333); 
+              const sBarrel = scene.add.rectangle(38, -1, 18, 4, 0x111111);
+              const sPump = scene.add.rectangle(32, 3, 8, 5, 0x5d4037); 
+              this.weaponContainer.add([sStock, sBody, sBarrel, sPump]);
+              break;
+
           case WeaponType.AK47:
           default:
               // AK-47: Wood stock, metal body, curved mag
@@ -149,6 +169,27 @@ export class StickFigure extends Phaser.Physics.Arcade.Sprite {
               this.weaponContainer.add([akStock, akBody, akBarrel, akHandguard, akMag]);
               break;
       }
+  }
+
+  // Visuals for reloading
+  public playReloadAnimation() {
+      if (!this.weaponContainer) return;
+
+      this.scene.tweens.add({
+          targets: this.weaponContainer,
+          alpha: 0.5,
+          scaleX: 0.8,
+          scaleY: 0.8,
+          duration: 200,
+          yoyo: true,
+          repeat: 2,
+          onComplete: () => {
+              if (this.weaponContainer && this.weaponContainer.active) {
+                  this.weaponContainer.setAlpha(1);
+                  this.weaponContainer.setScale(1);
+              }
+          }
+      });
   }
 
   // Visuals for attacking (Swing or Recoil)
@@ -171,9 +212,12 @@ export class StickFigure extends Phaser.Physics.Arcade.Sprite {
       } else {
           // Gun Recoil
           this.recoilOffset = 0;
+          let recoilDist = -6;
+          if (this.weaponType === WeaponType.SHOTGUN) recoilDist = -10; // Kick harder
+
           this.scene.tweens.add({
               targets: this,
-              recoilOffset: -6,
+              recoilOffset: recoilDist,
               duration: 50,
               yoyo: true
           });
@@ -186,11 +230,13 @@ export class StickFigure extends Phaser.Physics.Arcade.Sprite {
           let barrelLen = 30;
           if (this.weaponType === WeaponType.AK47) barrelLen = 50;
           if (this.weaponType === WeaponType.UZI) barrelLen = 35;
+          if (this.weaponType === WeaponType.SHOTGUN) barrelLen = 45; // Reduced to match sprite
           
           flash.setPosition(barrelLen, -1); 
 
           // Randomize flash size slightly
           flash.setScale(0.8 + Math.random() * 0.4);
+          if (this.weaponType === WeaponType.SHOTGUN) flash.setScale(1.5); // Big boom
 
           this.scene.tweens.add({
               targets: flash,
@@ -215,6 +261,16 @@ export class StickFigure extends Phaser.Physics.Arcade.Sprite {
         this.walkCycle = 0;
     }
 
+    // --- Aim Sway Logic ---
+    this.swayTime += delta;
+    const isMoving = speed > 10;
+    // High speed = erratic sway. Idle = slight breathing sway.
+    const swaySpeed = isMoving ? 0.008 : 0.002; 
+    const swayMagnitude = isMoving ? 0.15 : 0.03; // Radians (0.15 is ~8 degrees)
+
+    // Composite sine wave for less predictable motion
+    this.aimSway = (Math.sin(this.swayTime * swaySpeed) + Math.sin(this.swayTime * swaySpeed * 0.7)) * swayMagnitude;
+
     this.draw();
     this.updateAttachments();
   }
@@ -229,9 +285,11 @@ export class StickFigure extends Phaser.Physics.Arcade.Sprite {
 
         if (!this.isAttacking) {
              this.weaponContainer.setPosition(this.x + recoilX, this.y + recoilY);
-             this.weaponContainer.setRotation(this.rotation);
+             // Add Aim Sway to the visual weapon rotation
+             this.weaponContainer.setRotation(this.rotation + this.aimSway);
         } else {
             this.weaponContainer.setPosition(this.x + recoilX, this.y + recoilY);
+            // During attack animations (melee), let the tween control rotation
         }
     }
   }
@@ -252,11 +310,11 @@ export class StickFigure extends Phaser.Physics.Arcade.Sprite {
     };
 
     // --- LEGS ---
-    this.graphics.lineStyle(3, 0x000000, 1); 
     this.graphics.lineStyle(3, this.color, 1);
     
-    const stride = 10;
-    const footSideOffset = 6;
+    // Adjusted for better visibility without the base circle
+    const stride = 16; 
+    const footSideOffset = 8; 
     
     const leftLegProgress = Math.sin(this.walkCycle);
     const rightLegProgress = Math.sin(this.walkCycle + Math.PI);
@@ -296,6 +354,11 @@ export class StickFigure extends Phaser.Physics.Arcade.Sprite {
         leftHandY = -2;
         rightHandX = 10 + this.recoilOffset;
         rightHandY = 4; 
+    } else if (this.weaponType === WeaponType.SHOTGUN) {
+        leftHandX = 32 + this.recoilOffset; // On pump (adjusted for compact size)
+        leftHandY = 4;
+        rightHandX = 5 + this.recoilOffset; // On stock/grip
+        rightHandY = 2;
     }
 
     const leftHandPos = calcPoint(leftHandX, leftHandY);
@@ -317,10 +380,11 @@ export class StickFigure extends Phaser.Physics.Arcade.Sprite {
     this.graphics.fillCircle(rightHandPos.x, rightHandPos.y, 3);
 
     // --- HEAD ---
+    // Slightly larger head to serve as the "body" anchor
     this.graphics.fillStyle(this.color, 1);
-    this.graphics.fillCircle(cx, cy, 11); 
+    this.graphics.fillCircle(cx, cy, 13); 
     this.graphics.lineStyle(1, 0x000000, 0.3);
-    this.graphics.strokeCircle(cx, cy, 11);
+    this.graphics.strokeCircle(cx, cy, 13);
   }
 
   takeDamage(amount: number) {
