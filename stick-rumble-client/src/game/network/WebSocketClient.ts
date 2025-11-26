@@ -1,7 +1,7 @@
 export interface Message {
   type: string;
   timestamp: number;
-  data?: any;
+  data?: unknown;
 }
 
 export class WebSocketClient {
@@ -10,7 +10,7 @@ export class WebSocketClient {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 3;
   private reconnectDelay = 1000; // ms
-  private messageHandlers: Map<string, (data: any) => void> = new Map();
+  private messageHandlers: Map<string, (data: unknown) => void> = new Map();
 
   constructor(url: string) {
     this.url = url;
@@ -59,7 +59,7 @@ export class WebSocketClient {
     }
   }
 
-  on(messageType: string, handler: (data: any) => void): void {
+  on(messageType: string, handler: (data: unknown) => void): void {
     this.messageHandlers.set(messageType, handler);
   }
 
