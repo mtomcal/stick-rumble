@@ -1,0 +1,349 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>1</epicId>
+    <storyId>1.3</storyId>
+    <title>Establish WebSocket Connection Between Client and Server</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-26</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/1-3-establish-websocket-connection-between-client-and-server.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>developer</asA>
+    <iWant>the client and server to establish a persistent WebSocket connection</iWant>
+    <soThat>real-time bidirectional communication is possible</soThat>
+    <tasks>
+      1. Implement server-side WebSocket upgrade (AC: #1, #6)
+         - Update `internal/network/websocket_handler.go` to use gorilla/websocket Upgrader
+         - Configure `CheckOrigin` to allow localhost development (CORS)
+         - Upgrade HTTP connection to WebSocket in HandleWebSocket function
+         - Generate unique connection ID for each client
+         - Log "Client connected: [connection_id]" on successful upgrade
+         - Handle upgrade errors gracefully
+
+      2. Implement server message handling loop (AC: #3, #4, #7)
+         - Create read message loop using `conn.ReadMessage()`
+         - Parse incoming JSON messages
+         - Log received messages for debugging
+         - Implement echo functionality for testing (send messages back)
+         - Handle connection close and errors gracefully
+         - Clean up resources on disconnect
+
+      3. Create client WebSocket wrapper class (AC: #1, #3, #5)
+         - Create `src/game/network/WebSocketClient.ts` file
+         - Define Message interface: `{type: string, timestamp: number, data?: any}`
+         - Implement `connect()` method returning Promise
+         - Handle `onopen` event and log "Connected to server"
+         - Implement `send(message: Message)` method with JSON serialization
+         - Handle `onmessage` event and parse JSON
+
+      4. Implement client reconnection logic (AC: #2, #4)
+         - Implement `onclose` event handler
+         - Add reconnection counter (max 3 attempts)
+         - Implement exponential backoff (1s, 2s, 4s delays)
+         - Create `attemptReconnect()` private method
+         - Log reconnection attempts
+         - Stop reconnection after max attempts
+
+      5. Implement message routing system (AC: #3, #8)
+         - Create message handler registry on client (Map&lt;string, handler&gt;)
+         - Implement `on(messageType, handler)` method for registering handlers
+         - Create `handleMessage()` private method to route by type
+         - Log warning for unhandled message types
+
+      6. Integrate WebSocket client into Phaser GameScene (AC: #5, #8)
+         - Update `src/game/scenes/GameScene.ts` to use WebSocketClient
+         - Initialize WebSocketClient with URL from environment variable
+         - Call `connect()` in scene's `create()` method
+         - Send test message with type "test" after connection
+         - Register handler for "test" message type to log echo
+         - Display "Connected to server!" text on canvas
+
+      7. Create environment configuration (AC: #1)
+         - Create `.env.local` file with `VITE_WS_URL=ws://localhost:8080/ws`
+         - Configure Vite to expose VITE_WS_URL via `import.meta.env`
+         - Use environment variable in WebSocketClient instantiation
+         - Document environment variable in README
+
+      8. Write unit tests for WebSocket components (Testing standard)
+         - Create `internal/network/websocket_handler_test.go`
+         - Test WebSocket upgrade using httptest
+         - Test message echo functionality
+         - Create `src/game/network/WebSocketClient.test.ts`
+         - Mock WebSocket constructor
+         - Test message sending with JSON serialization
+         - Verify tests pass with `go test ./...` and `npm test`
+
+      9. Manual integration testing (AC: #2, #4, #7, #8)
+         - Start backend server: `go run cmd/server/main.go`
+         - Start frontend: `npm run dev`
+         - Open browser and verify connection in console
+         - Verify test message roundtrip in both client and server logs
+         - Test graceful disconnect (close browser tab)
+         - Test reconnection (restart server while client open)
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    AC1: Both frontend and backend servers are running and the Phaser client connects via `new WebSocket('ws://localhost:8080/ws')`, and the Go server upgrades the HTTP connection to WebSocket using gorilla/websocket
+
+    AC2: The connection remains open and stable
+
+    AC3: Both sides can send/receive JSON messages
+
+    AC4: Connection close events are handled gracefully on both sides
+
+    AC5: Client shows "Connected" status in console
+
+    AC6: Server logs "Client connected: [connection_id]"
+
+    AC7: Test message sent from client appears on server
+
+    AC8: Test message sent from server appears in client console
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <!-- Documentation Artifacts -->
+      <doc>
+        <path>docs/game-architecture.md</path>
+        <title>Game Architecture</title>
+        <section>WebSocket Message Protocol</section>
+        <snippet>WebSocket communication uses JSON message format: {type: string, timestamp: number, data?: any}. Type field enables message routing. gorilla/websocket v1.5.3 chosen for server-side implementation. Client-side uses browser native WebSocket API.</snippet>
+      </doc>
+      <doc>
+        <path>docs/game-architecture.md</path>
+        <title>Game Architecture</title>
+        <section>Backend Technology Stack</section>
+        <snippet>Backend: Go 1.23+, gorilla/websocket v1.5.3 for WebSocket protocol, net/http for HTTP server. Server-authoritative architecture pattern with 60 Hz tick rate.</snippet>
+      </doc>
+      <doc>
+        <path>docs/game-architecture.md</path>
+        <title>Game Architecture</title>
+        <section>Error Handling</section>
+        <snippet>WebSocket errors: Upgrade failures logged and connection rejected. Read/write errors trigger disconnect and cleanup. Client reconnection with exponential backoff (max 3 attempts: 1s, 2s, 4s delays).</snippet>
+      </doc>
+      <doc>
+        <path>docs/epic-1-tech-spec.md</path>
+        <title>Epic 1 Technical Specification</title>
+        <section>Story 1.3 - WebSocket Connection</section>
+        <snippet>Complete implementation guide for WebSocket connection including server upgrader configuration, client wrapper class with reconnection logic, message routing system, and integration with GameScene. CORS configured for localhost development (CheckOrigin allows all origins).</snippet>
+      </doc>
+      <doc>
+        <path>docs/epics.md</path>
+        <title>Epic 1: Foundation &amp; Project Setup</title>
+        <section>Story 1.3 Requirements</section>
+        <snippet>Story 1.3 establishes persistent WebSocket connection for real-time bidirectional communication. Prerequisites: Story 1.1 (frontend) and 1.2 (backend with gorilla/websocket) complete. Estimated effort: 2 hours.</snippet>
+      </doc>
+    </docs>
+
+    <code>
+      <!-- Existing Code to Modify -->
+      <file>
+        <path>stick-rumble-server/internal/network/websocket_handler.go</path>
+        <kind>handler</kind>
+        <symbol>HandleWebSocket</symbol>
+        <lines>9-13</lines>
+        <reason>Currently a stub returning HTTP 501. Must be replaced with full gorilla/websocket upgrade implementation including Upgrader configuration, connection upgrade, message handling loop, and error handling.</reason>
+      </file>
+      <file>
+        <path>stick-rumble-server/cmd/server/main.go</path>
+        <kind>server</kind>
+        <symbol>main</symbol>
+        <lines>24</lines>
+        <reason>Already registers /ws endpoint with HandleWebSocket. No changes needed - just update the handler implementation.</reason>
+      </file>
+      <file>
+        <path>stick-rumble-client/src/game/scenes/GameScene.ts</path>
+        <kind>scene</kind>
+        <symbol>GameScene</symbol>
+        <lines>1-49</lines>
+        <reason>Must be updated to initialize WebSocketClient in create() method, send test message after connection, register message handlers, and display connection status text.</reason>
+      </file>
+
+      <!-- New Files to Create -->
+      <file>
+        <path>stick-rumble-client/src/game/network/WebSocketClient.ts</path>
+        <kind>class</kind>
+        <symbol>WebSocketClient</symbol>
+        <lines>new</lines>
+        <reason>New WebSocket wrapper class with Message interface, connect/send/disconnect methods, message handler registry, reconnection logic with exponential backoff, and error handling.</reason>
+      </file>
+      <file>
+        <path>stick-rumble-client/src/game/network/WebSocketClient.test.ts</path>
+        <kind>test</kind>
+        <symbol>WebSocketClient tests</symbol>
+        <lines>new</lines>
+        <reason>Unit tests for WebSocketClient: mock WebSocket constructor, test message sending with JSON serialization, test handler registration and routing.</reason>
+      </file>
+      <file>
+        <path>stick-rumble-server/internal/network/websocket_handler_test.go</path>
+        <kind>test</kind>
+        <symbol>TestWebSocketUpgrade</symbol>
+        <lines>new</lines>
+        <reason>Unit tests for WebSocket handler: test upgrade success using httptest, test message echo functionality, use gorilla/websocket.DefaultDialer to simulate client.</reason>
+      </file>
+      <file>
+        <path>stick-rumble-client/.env.local</path>
+        <kind>config</kind>
+        <symbol>VITE_WS_URL</symbol>
+        <lines>new</lines>
+        <reason>Environment configuration for WebSocket URL. Set to ws://localhost:8080/ws for development. Gitignored file.</reason>
+      </file>
+    </code>
+
+    <dependencies>
+      <!-- Backend Dependencies (Go) -->
+      <go>
+        <dependency name="gorilla/websocket" version="v1.5.3" status="installed">WebSocket protocol implementation for Go server</dependency>
+        <dependency name="stretchr/testify" version="v1.11.1" status="installed">Testing assertions for unit tests</dependency>
+        <dependency name="net/http" version="stdlib" status="available">Standard library HTTP server</dependency>
+        <dependency name="net/http/httptest" version="stdlib" status="available">HTTP testing utilities</dependency>
+      </go>
+
+      <!-- Frontend Dependencies (Node/TypeScript) -->
+      <node>
+        <dependency name="phaser" version="^3.90.0" status="installed">Game engine with scene management</dependency>
+        <dependency name="react" version="^19.2.0" status="installed">UI framework</dependency>
+        <dependency name="typescript" version="~5.9.3" status="installed">TypeScript compiler</dependency>
+        <dependency name="vite" version="^7.2.4" status="installed">Build tool with env variable support</dependency>
+        <dependency name="vitest" version="^4.0.13" status="installed">Testing framework for client tests</dependency>
+        <dependency name="WebSocket API" version="browser" status="available">Native browser WebSocket support</dependency>
+      </node>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <!-- Development Constraints from Architecture and Story -->
+    <constraint type="protocol">
+      All WebSocket messages MUST follow JSON format: {type: string, timestamp: number, data?: any}. Type field required for message routing. Timestamp in milliseconds (JavaScript Date.now(), Go time.Now().UnixMilli()).
+    </constraint>
+    <constraint type="connection">
+      Client initiates connection, server accepts. Reconnection with exponential backoff: max 3 attempts with delays of 1s, 2s, 4s. Graceful disconnect handling on both sides with resource cleanup.
+    </constraint>
+    <constraint type="cors">
+      CORS CheckOrigin for development: return true (allows all origins for localhost testing). Production MUST restrict to specific frontend domain for security.
+    </constraint>
+    <constraint type="error-handling">
+      Upgrade failures logged and connection rejected. Read/write errors trigger immediate disconnect and cleanup. Client errors logged to console for developer visibility.
+    </constraint>
+    <constraint type="testing">
+      Server tests: Use net/http/httptest and gorilla/websocket.DefaultDialer. Client tests: Mock WebSocket constructor with vi.fn(). All tests must pass before story completion.
+    </constraint>
+    <constraint type="file-structure">
+      Server networking: internal/network/. Client networking: src/game/network/. Tests colocated with source files. Follow existing project structure from Stories 1.1 and 1.2.
+    </constraint>
+    <constraint type="message-naming">
+      Message type convention: lowercase with colon separator (e.g., "test", "player:move", "game:state"). Enables clear categorization and routing.
+    </constraint>
+  </constraints>
+
+  <interfaces>
+    <!-- Server Interfaces -->
+    <interface>
+      <name>HandleWebSocket</name>
+      <kind>Go HTTP handler</kind>
+      <signature>func HandleWebSocket(w http.ResponseWriter, r *http.Request)</signature>
+      <path>stick-rumble-server/internal/network/websocket_handler.go</path>
+      <description>HTTP handler that upgrades connection to WebSocket, manages message loop, handles disconnect. Already registered at /ws endpoint in main.go.</description>
+    </interface>
+    <interface>
+      <name>websocket.Upgrader</name>
+      <kind>gorilla/websocket struct</kind>
+      <signature>var upgrader = websocket.Upgrader{ReadBufferSize: 1024, WriteBufferSize: 1024, CheckOrigin: func(r *http.Request) bool}</signature>
+      <path>stick-rumble-server/internal/network/websocket_handler.go</path>
+      <description>Configures WebSocket upgrade parameters. CheckOrigin controls CORS policy. Buffer sizes set to 1024 bytes for MVP.</description>
+    </interface>
+
+    <!-- Client Interfaces -->
+    <interface>
+      <name>Message interface</name>
+      <kind>TypeScript interface</kind>
+      <signature>interface Message { type: string; timestamp: number; data?: any; }</signature>
+      <path>stick-rumble-client/src/game/network/WebSocketClient.ts</path>
+      <description>Standard message format for all WebSocket communication. Type required for routing, timestamp for lag compensation, data is optional payload.</description>
+    </interface>
+    <interface>
+      <name>WebSocketClient class</name>
+      <kind>TypeScript class</kind>
+      <signature>class WebSocketClient { connect(): Promise&lt;void&gt;; send(message: Message): void; on(messageType: string, handler: Function): void; disconnect(): void; }</signature>
+      <path>stick-rumble-client/src/game/network/WebSocketClient.ts</path>
+      <description>Wrapper for browser WebSocket API with reconnection logic, message routing, and error handling. Used by GameScene and future game components.</description>
+    </interface>
+    <interface>
+      <name>GameScene.create</name>
+      <kind>Phaser Scene method</kind>
+      <signature>create(): void</signature>
+      <path>stick-rumble-client/src/game/scenes/GameScene.ts</path>
+      <description>Phaser scene initialization. Must initialize WebSocketClient with VITE_WS_URL environment variable, connect to server, register message handlers, display connection status.</description>
+    </interface>
+
+    <!-- Environment Configuration -->
+    <interface>
+      <name>VITE_WS_URL</name>
+      <kind>Environment variable</kind>
+      <signature>VITE_WS_URL=ws://localhost:8080/ws</signature>
+      <path>stick-rumble-client/.env.local</path>
+      <description>WebSocket server URL. Accessed via import.meta.env.VITE_WS_URL in TypeScript. Defaults to ws://localhost:8080/ws if not set.</description>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      Server tests use Go testing framework with net/http/httptest for HTTP/WebSocket testing and gorilla/websocket.DefaultDialer to simulate client connections. Use testify assertions for cleaner test code. Tests colocated: internal/network/websocket_handler_test.go next to websocket_handler.go.
+
+      Client tests use Vitest testing framework with vi.fn() to mock WebSocket constructor and instance methods. Test message serialization to JSON, handler registration and routing, reconnection logic. Tests colocated: src/game/network/WebSocketClient.test.ts next to WebSocketClient.ts.
+
+      Integration tests are manual: Start both servers (go run cmd/server/main.go and npm run dev), open browser console, verify connection message, test message roundtrip, test disconnect/reconnect scenarios.
+    </standards>
+
+    <locations>
+      stick-rumble-server/internal/network/*_test.go
+      stick-rumble-server/cmd/server/*_test.go
+      stick-rumble-client/src/game/network/*.test.ts
+      stick-rumble-client/src/**/*.test.ts
+    </locations>
+
+    <ideas>
+      <!-- Server Test Ideas -->
+      <test ac="AC1" framework="Go testing">
+        Test WebSocket upgrade: Use httptest.NewServer to create test server, connect with websocket.DefaultDialer, verify upgrade succeeds, verify connection established.
+      </test>
+      <test ac="AC3,AC7" framework="Go testing">
+        Test message echo: Send JSON test message via WebSocket, read echoed message back, verify message content matches, verify JSON parsing works.
+      </test>
+      <test ac="AC4" framework="Go testing">
+        Test graceful disconnect: Close client connection, verify server logs disconnect, verify resources cleaned up, verify no goroutine leaks.
+      </test>
+
+      <!-- Client Test Ideas -->
+      <test ac="AC1,AC5" framework="Vitest">
+        Test WebSocketClient connection: Mock WebSocket constructor, call connect(), verify WebSocket instantiated with correct URL, verify console.log called with "WebSocket connected".
+      </test>
+      <test ac="AC3" framework="Vitest">
+        Test message sending: Mock WebSocket instance, call send() with Message object, verify ws.send() called with JSON.stringify result, verify correct JSON format.
+      </test>
+      <test ac="AC3,AC8" framework="Vitest">
+        Test message routing: Mock WebSocket, register handler via on(), simulate onmessage event with JSON, verify handler called with correct data, verify unhandled types log warning.
+      </test>
+      <test ac="AC2,AC4" framework="Vitest">
+        Test reconnection logic: Mock WebSocket, simulate connection close, verify attemptReconnect called, verify exponential backoff delays (1s, 2s, 4s), verify max 3 attempts.
+      </test>
+
+      <!-- Integration Test Ideas -->
+      <test ac="AC1,AC2,AC5,AC6" framework="Manual">
+        End-to-end connection test: Start server, start client, open browser console, verify "Connected to server!" in client console, verify "Client connected: [IP]" in server logs, verify connection stable for 30+ seconds.
+      </test>
+      <test ac="AC3,AC7,AC8" framework="Manual">
+        Message roundtrip test: After connection, send test message from client, verify message appears in server logs ("Received: ..."), verify echoed message appears in client console handler ("Received echo from server: ...").
+      </test>
+      <test ac="AC4" framework="Manual">
+        Disconnect test: With connection established, close browser tab, verify server logs "Client disconnected: ...", verify no errors or panics in server.
+      </test>
+      <test ac="AC2,AC4" framework="Manual">
+        Reconnection test: With connection established, kill server (Ctrl+C), restart server, verify client logs reconnection attempts ("Reconnecting in Xms..."), verify successful reconnection after server restart.
+      </test>
+    </ideas>
+  </tests>
+</story-context>
