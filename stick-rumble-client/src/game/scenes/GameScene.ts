@@ -1,6 +1,9 @@
 import Phaser from 'phaser';
+import { WebSocketClient } from '../network/WebSocketClient';
 
 export class GameScene extends Phaser.Scene {
+  private wsClient!: WebSocketClient;
+
   constructor() {
     super({ key: 'GameScene' });
   }
@@ -40,6 +43,42 @@ export class GameScene extends Phaser.Scene {
       ease: 'Sine.easeInOut',
       yoyo: true,
       repeat: -1,
+    });
+
+    // Connect to WebSocket server
+    const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws';
+    this.wsClient = new WebSocketClient(wsUrl);
+
+    this.wsClient.connect()
+      .then(() => {
+        console.log('Connected to server!');
+
+        // Display connection status on canvas
+        this.add.text(10, 10, 'Connected to server!', {
+          fontSize: '18px',
+          color: '#00ff00'
+        });
+
+        // Send test message
+        this.wsClient.send({
+          type: 'test',
+          timestamp: Date.now(),
+          data: { message: 'Hello from client!' }
+        });
+      })
+      .catch(err => {
+        console.error('Failed to connect:', err);
+
+        // Display connection error on canvas
+        this.add.text(10, 10, 'Failed to connect to server', {
+          fontSize: '18px',
+          color: '#ff0000'
+        });
+      });
+
+    // Setup message handlers
+    this.wsClient.on('test', (data) => {
+      console.log('Received echo from server:', data);
     });
   }
 
