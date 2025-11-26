@@ -12,6 +12,15 @@ dist
 dist-ssr
 *.local
 
+# Test coverage
+coverage
+.nyc_output
+*.lcov
+
+# Build artifacts
+.tsbuildinfo
+*.tsbuildinfo
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

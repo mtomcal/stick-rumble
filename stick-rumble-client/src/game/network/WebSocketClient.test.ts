@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { WebSocketClient, Message } from './WebSocketClient';
+import { WebSocketClient, type Message } from './WebSocketClient';
 
 describe('WebSocketClient', () => {
   let mockWebSocket: any;
@@ -8,7 +8,7 @@ describe('WebSocketClient', () => {
 
   beforeEach(() => {
     // Save original WebSocket
-    originalWebSocket = global.WebSocket;
+    originalWebSocket = globalThis.WebSocket;
 
     // Create mock WebSocket instance
     mockWebSocketInstance = {
@@ -28,18 +28,18 @@ describe('WebSocketClient', () => {
       return mockWebSocketInstance;
     });
 
-    global.WebSocket = mockWebSocket as any;
+    globalThis.WebSocket = mockWebSocket as any;
 
     // Mock WebSocket constants
-    (global.WebSocket as any).OPEN = 1;
-    (global.WebSocket as any).CONNECTING = 0;
-    (global.WebSocket as any).CLOSING = 2;
-    (global.WebSocket as any).CLOSED = 3;
+    (globalThis.WebSocket as any).OPEN = 1;
+    (globalThis.WebSocket as any).CONNECTING = 0;
+    (globalThis.WebSocket as any).CLOSING = 2;
+    (globalThis.WebSocket as any).CLOSED = 3;
   });
 
   afterEach(() => {
     // Restore original WebSocket
-    global.WebSocket = originalWebSocket;
+    globalThis.WebSocket = originalWebSocket;
     vi.clearAllMocks();
   });
 

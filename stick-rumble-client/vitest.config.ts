@@ -1,15 +1,39 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
+import path from 'path';
 
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: {
+      phaser: path.resolve(__dirname, './tests/__mocks__/phaser.ts'),
+    },
+  },
   test: {
     globals: true,
     environment: 'jsdom',
     setupFiles: './tests/setup.ts',
     coverage: {
-      reporter: ['text', 'html'],
-      exclude: ['node_modules/', 'tests/'],
+      provider: 'v8',
+      reporter: ['text', 'html', 'json-summary'],
+      exclude: [
+        'node_modules/',
+        'tests/',
+        '**/*.config.*',
+        '**/vite.config.ts',
+        'src/**/*.test.ts',
+        'src/**/*.test.tsx',
+        '**/*.css',
+        'package.json',
+        'src/main.tsx', // App entry point, difficult to test
+      ],
+      include: ['src/**/*.ts', 'src/**/*.tsx'],
+      thresholds: {
+        lines: 90,
+        functions: 90,
+        branches: 80, // Adjusted for edge cases in WebSocket error handling and conditional rendering
+        statements: 90,
+      },
     },
   },
 });
