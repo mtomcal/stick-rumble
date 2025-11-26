@@ -39,9 +39,9 @@ development_status:
   # Epic 1: Foundation & Project Setup
   epic-1: contexted
   1-1-initialize-frontend-project-with-phaser-react: done
-  1-2-initialize-backend-golang-server: ready-for-dev
-  1-3-establish-websocket-connection-between-client-and-server: backlog
-  1-4-implement-basic-game-room-with-2-player-synchronization: backlog
+  1-2-initialize-backend-golang-server: done  # COMPLETED: All dependencies installed via correct-course workflow 2025-11-25
+  1-3-establish-websocket-connection-between-client-and-server: done
+  1-4-implement-basic-game-room-with-2-player-synchronization: drafted  # DRAFTED: Story file created 2025-11-26
   1-5-deploy-to-cloud-vps-for-remote-testing: backlog
   epic-1-retrospective: optional
 
