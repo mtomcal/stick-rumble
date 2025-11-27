@@ -71,7 +71,7 @@ func TestMessageEcho(t *testing.T) {
 	assert.Equal(t, testMsg.Timestamp, responseMsg.Timestamp, "Timestamp should match")
 
 	// Verify data field
-	responseData, ok := responseMsg.Data.(map[string]interface{})
+	responseData, ok := responseMsg.Data.(map[string]any)
 	assert.True(t, ok, "Data should be a map")
 	assert.Equal(t, "Hello from test!", responseData["message"], "Message content should match")
 }
