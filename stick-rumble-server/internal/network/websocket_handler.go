@@ -20,9 +20,9 @@ var upgrader = websocket.Upgrader{
 
 // Message represents the standard WebSocket message format
 type Message struct {
-	Type      string      `json:"type"`
-	Timestamp int64       `json:"timestamp"`
-	Data      interface{} `json:"data,omitempty"`
+	Type      string `json:"type"`
+	Timestamp int64  `json:"timestamp"`
+	Data      any    `json:"data,omitempty"`
 }
 
 // HandleWebSocket upgrades HTTP connection to WebSocket and manages message loop
