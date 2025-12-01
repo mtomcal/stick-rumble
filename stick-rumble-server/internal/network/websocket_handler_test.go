@@ -31,42 +31,57 @@ func TestWebSocketUpgrade(t *testing.T) {
 }
 
 func TestMessageEcho(t *testing.T) {
-	// Create test server
-	server := httptest.NewServer(http.HandlerFunc(HandleWebSocket))
+	// Note: This test now verifies room-based messaging (Story 1.4)
+	// Single player won't receive echo since they're not in a room yet
+
+	// Create test server with room management
+	handler := NewWebSocketHandler()
+	server := httptest.NewServer(http.HandlerFunc(handler.HandleWebSocket))
 	defer server.Close()
 
 	// Convert http:// to ws://
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
 
-	// Connect as client
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	assert.NoError(t, err, "Should connect successfully")
-	defer conn.Close()
+	// Connect TWO clients to create a room
+	conn1, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	assert.NoError(t, err, "Should connect client 1")
+	defer conn1.Close()
 
-	// Create test message
+	conn2, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	assert.NoError(t, err, "Should connect client 2")
+	defer conn2.Close()
+
+	// Consume room:joined messages
+	conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
+	conn1.ReadMessage()
+	conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
+	conn2.ReadMessage()
+
+	// Create test message from client 1
 	testMsg := Message{
 		Type:      "test",
 		Timestamp: time.Now().UnixMilli(),
 		Data:      map[string]string{"message": "Hello from test!"},
 	}
 
-	// Send message
+	// Send message from client 1
 	msgBytes, err := json.Marshal(testMsg)
 	assert.NoError(t, err, "Should marshal message")
 
-	err = conn.WriteMessage(websocket.TextMessage, msgBytes)
+	err = conn1.WriteMessage(websocket.TextMessage, msgBytes)
 	assert.NoError(t, err, "Should send message")
 
-	// Read echo response
-	_, responseBytes, err := conn.ReadMessage()
-	assert.NoError(t, err, "Should receive echo response")
+	// Client 2 should receive the broadcast
+	conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_, responseBytes, err := conn2.ReadMessage()
+	assert.NoError(t, err, "Should receive broadcast message")
 
 	// Parse response
 	var responseMsg Message
 	err = json.Unmarshal(responseBytes, &responseMsg)
-	assert.NoError(t, err, "Should parse echo response")
+	assert.NoError(t, err, "Should parse broadcast message")
 
-	// Verify echo matches original
+	// Verify message matches original
 	assert.Equal(t, testMsg.Type, responseMsg.Type, "Type should match")
 	assert.Equal(t, testMsg.Timestamp, responseMsg.Timestamp, "Timestamp should match")
 
@@ -101,20 +116,31 @@ func TestGracefulDisconnect(t *testing.T) {
 }
 
 func TestInvalidJSON(t *testing.T) {
-	// Create test server
-	server := httptest.NewServer(http.HandlerFunc(HandleWebSocket))
+	// Create test server with room management
+	handler := NewWebSocketHandler()
+	server := httptest.NewServer(http.HandlerFunc(handler.HandleWebSocket))
 	defer server.Close()
 
 	// Convert http:// to ws://
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
 
-	// Connect as client
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	assert.NoError(t, err, "Should connect successfully")
-	defer conn.Close()
+	// Connect TWO clients to create a room
+	conn1, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	assert.NoError(t, err, "Should connect client 1")
+	defer conn1.Close()
 
-	// Send invalid JSON
-	err = conn.WriteMessage(websocket.TextMessage, []byte("not valid json"))
+	conn2, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	assert.NoError(t, err, "Should connect client 2")
+	defer conn2.Close()
+
+	// Consume room:joined messages
+	conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
+	conn1.ReadMessage()
+	conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
+	conn2.ReadMessage()
+
+	// Send invalid JSON from client 1
+	err = conn1.WriteMessage(websocket.TextMessage, []byte("not valid json"))
 	assert.NoError(t, err, "Should send invalid JSON")
 
 	// Server should continue running (not crash)
@@ -124,10 +150,11 @@ func TestInvalidJSON(t *testing.T) {
 		Timestamp: time.Now().UnixMilli(),
 	}
 	msgBytes, _ := json.Marshal(testMsg)
-	err = conn.WriteMessage(websocket.TextMessage, msgBytes)
+	err = conn1.WriteMessage(websocket.TextMessage, msgBytes)
 	assert.NoError(t, err, "Should send valid message after invalid one")
 
-	// Read response
-	_, _, err = conn.ReadMessage()
-	assert.NoError(t, err, "Should still receive echo after invalid message")
+	// Client 2 should receive the valid broadcast
+	conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_, _, err = conn2.ReadMessage()
+	assert.NoError(t, err, "Should receive broadcast after invalid message was sent")
 }

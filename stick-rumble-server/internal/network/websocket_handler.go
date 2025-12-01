@@ -5,7 +5,9 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/mtomcal/stick-rumble-server/internal/game"
 )
 
 var upgrader = websocket.Upgrader{
@@ -25,8 +27,20 @@ type Message struct {
 	Data      any    `json:"data,omitempty"`
 }
 
+// WebSocketHandler manages WebSocket connections and room management
+type WebSocketHandler struct {
+	roomManager *game.RoomManager
+}
+
+// NewWebSocketHandler creates a new WebSocket handler with room management
+func NewWebSocketHandler() *WebSocketHandler {
+	return &WebSocketHandler{
+		roomManager: game.NewRoomManager(),
+	}
+}
+
 // HandleWebSocket upgrades HTTP connection to WebSocket and manages message loop
-func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
+func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// Upgrade HTTP connection to WebSocket
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -35,19 +49,40 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
-	// Generate connection identifier and log connection
-	connectionID := conn.RemoteAddr().String()
-	log.Printf("Client connected: %s", connectionID)
+	// Create player with unique ID
+	playerID := uuid.New().String()
+	sendChan := make(chan []byte, 256)
+	player := &game.Player{
+		ID:       playerID,
+		SendChan: sendChan,
+	}
+
+	log.Printf("Client connected: %s", playerID)
+
+	// Add player to room manager
+	h.roomManager.AddPlayer(player)
+
+	// Start goroutine to send messages to client
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for msg := range sendChan {
+			if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+				log.Printf("Write error for %s: %v", playerID, err)
+				return
+			}
+		}
+	}()
 
 	// Message handling loop
 	for {
 		// Read message from client
-		messageType, messageBytes, err := conn.ReadMessage()
+		_, messageBytes, err := conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				log.Printf("WebSocket error: %v", err)
 			} else {
-				log.Printf("Client disconnected: %s", connectionID)
+				log.Printf("Client disconnected: %s", playerID)
 			}
 			break
 		}
@@ -59,14 +94,26 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		log.Printf("Received from %s: type=%s, timestamp=%d", connectionID, msg.Type, msg.Timestamp)
+		log.Printf("Received from %s: type=%s, timestamp=%d", playerID, msg.Type, msg.Timestamp)
 
-		// Echo message back to client (for testing in Story 1.3)
-		if err := conn.WriteMessage(messageType, messageBytes); err != nil {
-			log.Printf("Write error for %s: %v", connectionID, err)
-			break
+		// Broadcast message to room
+		room := h.roomManager.GetRoomByPlayerID(playerID)
+		if room != nil {
+			room.Broadcast(messageBytes, playerID)
 		}
 	}
 
-	log.Printf("Connection closed: %s", connectionID)
+	// Clean up on disconnect
+	h.roomManager.RemovePlayer(playerID)
+	close(sendChan)
+	<-done // Wait for send goroutine to finish
+
+	log.Printf("Connection closed: %s", playerID)
+}
+
+// HandleWebSocket is the legacy function for backward compatibility
+func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
+	// Use a global handler instance for the legacy function
+	handler := NewWebSocketHandler()
+	handler.HandleWebSocket(w, r)
 }
