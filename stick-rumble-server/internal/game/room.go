@@ -61,6 +61,20 @@ func (r *Room) RemovePlayer(playerID string) bool {
 	return false
 }
 
+// IsEmpty returns true if the room has no players (thread-safe)
+func (r *Room) IsEmpty() bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return len(r.Players) == 0
+}
+
+// PlayerCount returns the number of players in the room (thread-safe)
+func (r *Room) PlayerCount() int {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return len(r.Players)
+}
+
 // Broadcast sends a message to all players in the room, optionally excluding a sender
 func (r *Room) Broadcast(message []byte, excludePlayerID string) {
 	r.mu.RLock()
@@ -68,12 +82,21 @@ func (r *Room) Broadcast(message []byte, excludePlayerID string) {
 
 	for _, player := range r.Players {
 		if player.ID != excludePlayerID {
-			select {
-			case player.SendChan <- message:
-				// Message sent successfully
-			default:
-				log.Printf("Warning: Could not send message to player %s (channel full)", player.ID)
-			}
+			// Use recover to handle closed channel panics gracefully
+			func() {
+				defer func() {
+					if rec := recover(); rec != nil {
+						log.Printf("Warning: Could not send message to player %s (channel closed)", player.ID)
+					}
+				}()
+
+				select {
+				case player.SendChan <- message:
+					// Message sent successfully
+				default:
+					log.Printf("Warning: Could not send message to player %s (channel full)", player.ID)
+				}
+			}()
 		}
 	}
 }
@@ -154,12 +177,21 @@ func (rm *RoomManager) sendRoomJoinedMessage(player *Player, room *Room) {
 		return
 	}
 
-	select {
-	case player.SendChan <- msgBytes:
-		// Message sent successfully
-	default:
-		log.Printf("Warning: Could not send room:joined message to player %s", player.ID)
-	}
+	// Use recover to handle closed channel panics gracefully
+	func() {
+		defer func() {
+			if rec := recover(); rec != nil {
+				log.Printf("Warning: Could not send room:joined message to player %s (channel closed)", player.ID)
+			}
+		}()
+
+		select {
+		case player.SendChan <- msgBytes:
+			// Message sent successfully
+		default:
+			log.Printf("Warning: Could not send room:joined message to player %s (channel full)", player.ID)
+		}
+	}()
 }
 
 // RemovePlayer removes a player from their room and notifies other players
@@ -209,7 +241,7 @@ func (rm *RoomManager) RemovePlayer(playerID string) {
 	delete(rm.playerToRoom, playerID)
 
 	// If room is empty, remove it
-	if len(room.Players) == 0 {
+	if room.IsEmpty() {
 		delete(rm.rooms, roomID)
 		log.Printf("Room %s removed (no players remaining)", roomID)
 	}

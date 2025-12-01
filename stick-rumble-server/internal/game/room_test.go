@@ -1,7 +1,9 @@
 package game
 
 import (
+	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -179,16 +181,34 @@ func TestRoomJoinedMessage(t *testing.T) {
 	require.NotNil(t, room)
 
 	// Both players should receive room:joined messages
-	msg1 := <-player1Chan
-	msg2 := <-player2Chan
+	msg1Bytes := <-player1Chan
+	msg2Bytes := <-player2Chan
 
-	assert.Contains(t, string(msg1), "room:joined")
-	assert.Contains(t, string(msg1), player1.ID)
-	assert.Contains(t, string(msg1), room.ID)
+	// Parse and verify player 1's message
+	var msg1 map[string]interface{}
+	err := json.Unmarshal(msg1Bytes, &msg1)
+	require.NoError(t, err, "Should unmarshal player 1's room:joined message")
 
-	assert.Contains(t, string(msg2), "room:joined")
-	assert.Contains(t, string(msg2), player2.ID)
-	assert.Contains(t, string(msg2), room.ID)
+	assert.Equal(t, "room:joined", msg1["type"])
+	assert.NotNil(t, msg1["timestamp"])
+
+	data1, ok := msg1["data"].(map[string]interface{})
+	require.True(t, ok, "Data should be a map")
+	assert.Equal(t, player1.ID, data1["playerId"])
+	assert.Equal(t, room.ID, data1["roomId"])
+
+	// Parse and verify player 2's message
+	var msg2 map[string]interface{}
+	err = json.Unmarshal(msg2Bytes, &msg2)
+	require.NoError(t, err, "Should unmarshal player 2's room:joined message")
+
+	assert.Equal(t, "room:joined", msg2["type"])
+	assert.NotNil(t, msg2["timestamp"])
+
+	data2, ok := msg2["data"].(map[string]interface{})
+	require.True(t, ok, "Data should be a map")
+	assert.Equal(t, player2.ID, data2["playerId"])
+	assert.Equal(t, room.ID, data2["roomId"])
 }
 
 // TestPlayerDisconnection tests player:left event on disconnection
@@ -214,9 +234,19 @@ func TestPlayerDisconnection(t *testing.T) {
 	manager.RemovePlayer("player1")
 
 	// Player2 should receive player:left message
-	msg := <-player2Chan
-	assert.Contains(t, string(msg), "player:left")
-	assert.Contains(t, string(msg), "player1")
+	msgBytes := <-player2Chan
+
+	// Parse and verify the player:left message
+	var msg map[string]interface{}
+	err := json.Unmarshal(msgBytes, &msg)
+	require.NoError(t, err, "Should unmarshal player:left message")
+
+	assert.Equal(t, "player:left", msg["type"])
+	assert.NotNil(t, msg["timestamp"])
+
+	data, ok := msg["data"].(map[string]interface{})
+	require.True(t, ok, "Data should be a map")
+	assert.Equal(t, "player1", data["playerId"])
 }
 
 // TestGetRoomByPlayerID tests finding a room by player ID
@@ -323,4 +353,117 @@ func TestRoomCleanupOnLastPlayerLeave(t *testing.T) {
 
 	manager.RemovePlayer("player2")
 	assert.Len(t, manager.rooms, 0, "Room should be removed when empty")
+}
+
+// TestSendRoomJoinedMessageWithClosedChannel tests graceful handling when channel is closed
+func TestSendRoomJoinedMessageWithClosedChannel(t *testing.T) {
+	manager := NewRoomManager()
+
+	// Create player with a channel we'll close
+	player1Chan := make(chan []byte, 10)
+	player1 := &Player{ID: "player1", SendChan: player1Chan}
+
+	// Close the channel before sending message to simulate disconnection
+	close(player1Chan)
+
+	// This should not panic - it logs a warning and continues
+	manager.AddPlayer(player1)
+
+	// Should still be in waiting list
+	assert.Len(t, manager.waitingPlayers, 1)
+}
+
+// TestRemovePlayerWithJSONMarshalError tests RemovePlayer handles marshal errors gracefully
+func TestRemovePlayerWithJSONMarshalError(t *testing.T) {
+	manager := NewRoomManager()
+
+	player1Chan := make(chan []byte, 10)
+	player2Chan := make(chan []byte, 10)
+
+	player1 := &Player{ID: "player1", SendChan: player1Chan}
+	player2 := &Player{ID: "player2", SendChan: player2Chan}
+
+	// Create room
+	manager.AddPlayer(player1)
+	room := manager.AddPlayer(player2)
+	require.NotNil(t, room)
+
+	// Clear room:joined messages
+	<-player1Chan
+	<-player2Chan
+
+	// Remove player - this should successfully broadcast player:left
+	// Even if there were a JSON marshal error, it would log and continue
+	manager.RemovePlayer("player1")
+
+	// Player 2 should receive player:left message
+	msg := <-player2Chan
+	assert.Contains(t, string(msg), "player:left")
+	assert.Contains(t, string(msg), "player1")
+}
+
+// TestIsEmptyAndPlayerCount tests the new thread-safe helper methods
+func TestIsEmptyAndPlayerCount(t *testing.T) {
+	room := NewRoom()
+
+	// Room should start empty
+	assert.True(t, room.IsEmpty(), "New room should be empty")
+	assert.Equal(t, 0, room.PlayerCount(), "New room should have 0 players")
+
+	// Add a player
+	player1 := &Player{ID: "player1"}
+	err := room.AddPlayer(player1)
+	require.NoError(t, err)
+
+	assert.False(t, room.IsEmpty(), "Room with 1 player should not be empty")
+	assert.Equal(t, 1, room.PlayerCount(), "Room should have 1 player")
+
+	// Add another player
+	player2 := &Player{ID: "player2"}
+	err = room.AddPlayer(player2)
+	require.NoError(t, err)
+
+	assert.False(t, room.IsEmpty(), "Room with 2 players should not be empty")
+	assert.Equal(t, 2, room.PlayerCount(), "Room should have 2 players")
+
+	// Remove both players
+	room.RemovePlayer("player1")
+	assert.False(t, room.IsEmpty(), "Room with 1 player should not be empty")
+	assert.Equal(t, 1, room.PlayerCount(), "Room should have 1 player")
+
+	room.RemovePlayer("player2")
+	assert.True(t, room.IsEmpty(), "Room with no players should be empty")
+	assert.Equal(t, 0, room.PlayerCount(), "Room should have 0 players")
+}
+
+// TestBroadcastToClosedChannel tests that broadcasting to a closed channel doesn't panic
+func TestBroadcastToClosedChannel(t *testing.T) {
+	room := NewRoom()
+
+	// Create two players
+	player1Chan := make(chan []byte, 10)
+	player2Chan := make(chan []byte, 10)
+
+	player1 := &Player{ID: "player1", SendChan: player1Chan}
+	player2 := &Player{ID: "player2", SendChan: player2Chan}
+
+	room.AddPlayer(player1)
+	room.AddPlayer(player2)
+
+	// Close player1's channel to simulate disconnection
+	close(player1Chan)
+
+	// Broadcast should not panic even with closed channel
+	testMsg := []byte(`{"type":"test","data":"hello"}`)
+	room.Broadcast(testMsg, "")
+
+	// Player 2 should still receive the message
+	select {
+	case msg := <-player2Chan:
+		assert.Equal(t, testMsg, msg)
+	case <-time.After(1 * time.Second):
+		t.Fatal("Player 2 should have received the message")
+	}
+
+	// Test passes if no panic occurred
 }
