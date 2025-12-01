@@ -158,3 +158,20 @@ func TestInvalidJSON(t *testing.T) {
 	_, _, err = conn2.ReadMessage()
 	assert.NoError(t, err, "Should receive broadcast after invalid message was sent")
 }
+
+func TestWebSocketUpgradeFailure(t *testing.T) {
+	// Create test server
+	handler := NewWebSocketHandler()
+	server := httptest.NewServer(http.HandlerFunc(handler.HandleWebSocket))
+	defer server.Close()
+
+	// Make a regular HTTP request (not WebSocket upgrade)
+	// This should fail to upgrade and return an error
+	resp, err := http.Get(server.URL)
+	assert.NoError(t, err, "HTTP request should succeed")
+	defer resp.Body.Close()
+
+	// WebSocket upgrade should have failed
+	// The handler returns without upgrading, so we get a non-WebSocket response
+	assert.NotEqual(t, http.StatusSwitchingProtocols, resp.StatusCode, "Should not upgrade to WebSocket")
+}

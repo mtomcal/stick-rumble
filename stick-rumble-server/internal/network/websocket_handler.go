@@ -39,6 +39,9 @@ func NewWebSocketHandler() *WebSocketHandler {
 	}
 }
 
+// Global handler instance for the legacy function to share room state
+var globalHandler = NewWebSocketHandler()
+
 // HandleWebSocket upgrades HTTP connection to WebSocket and manages message loop
 func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// Upgrade HTTP connection to WebSocket
@@ -51,6 +54,8 @@ func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Reques
 
 	// Create player with unique ID
 	playerID := uuid.New().String()
+	// Buffer size 256: Allows burst messages while preventing memory exhaustion.
+	// If buffer fills (slow/unresponsive client), messages are dropped with log warning.
 	sendChan := make(chan []byte, 256)
 	player := &game.Player{
 		ID:       playerID,
@@ -112,8 +117,7 @@ func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Reques
 }
 
 // HandleWebSocket is the legacy function for backward compatibility
+// It uses a shared global handler to ensure all connections share the same room state
 func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
-	// Use a global handler instance for the legacy function
-	handler := NewWebSocketHandler()
-	handler.HandleWebSocket(w, r)
+	globalHandler.HandleWebSocket(w, r)
 }

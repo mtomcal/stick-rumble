@@ -157,7 +157,8 @@ func TestPlayerDisconnection(t *testing.T) {
 
 	// Extract player1's ID from room:joined message
 	var joinMsg Message
-	json.Unmarshal(msgBytes1, &joinMsg)
+	err = json.Unmarshal(msgBytes1, &joinMsg)
+	require.NoError(t, err, "Should unmarshal player1's join message")
 	joinData := joinMsg.Data.(map[string]interface{})
 	player1ID := joinData["playerId"].(string)
 
@@ -213,7 +214,8 @@ func TestBidirectionalBroadcast(t *testing.T) {
 	_, received1, err := conn2.ReadMessage()
 	require.NoError(t, err)
 	var receivedMsg1 Message
-	json.Unmarshal(received1, &receivedMsg1)
+	err = json.Unmarshal(received1, &receivedMsg1)
+	require.NoError(t, err, "Should unmarshal message from player 1")
 	assert.Equal(t, "hello", receivedMsg1.Data)
 
 	// Player 2 sends "world"
@@ -226,6 +228,7 @@ func TestBidirectionalBroadcast(t *testing.T) {
 	_, received2, err := conn1.ReadMessage()
 	require.NoError(t, err)
 	var receivedMsg2 Message
-	json.Unmarshal(received2, &receivedMsg2)
+	err = json.Unmarshal(received2, &receivedMsg2)
+	require.NoError(t, err, "Should unmarshal message from player 2")
 	assert.Equal(t, "world", receivedMsg2.Data)
 }
