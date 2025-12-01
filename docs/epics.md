@@ -13,6 +13,41 @@ This document provides the complete epic and story breakdown for Stick Rumble, d
 
 **Living Document Notice:** This is the initial version created from GDD + Architecture. Stories include tactical implementation details.
 
+## Story Implementation Standards
+
+**Based on completed Epic 1 stories (1.1-1.3), all future stories must adhere to these quality standards:**
+
+### 1. Test Coverage Requirements
+- **Minimum 90% statement coverage** for all business logic
+- **Integration tests** for end-to-end workflows
+- **Unit tests** for all critical functions and edge cases
+- Test suites must pass before marking story as complete
+
+### 2. Code Quality Gates
+- **TypeScript:** `tsc -b --noEmit` passes with zero errors
+- **ESLint:** Zero errors, zero warnings
+- **Go:** `go vet ./...` and `go fmt` pass
+- **Modern idioms:** Use current language best practices (e.g., `any` not `interface{}` in Go)
+- **No commented-out code** or debug statements in final commits
+
+### 3. Documentation
+- **Session logs** in ReadyQ capture implementation learnings and decisions
+- **Code review checklist** completed before marking done
+- **README updates** where applicable (setup, configuration, usage)
+- **Inline comments** for complex business logic
+
+### 4. Definition of Done
+- ✅ All acceptance criteria met and verified
+- ✅ All tests passing (unit + integration)
+- ✅ Code reviewed and refactored for clarity
+- ✅ No known bugs or unresolved technical debt
+- ✅ Documentation updated
+- ✅ Changes committed with descriptive commit messages
+
+**Quality Note:** These standards were derived from the excellent work completed in Stories 1.1, 1.2, and 1.3, which achieved 95%+ test coverage, comprehensive integration testing, and production-ready code quality.
+
+---
+
 ## Functional Requirements Inventory
 
 **Game Capabilities (extracted from GDD):**
@@ -214,68 +249,56 @@ So that real-time bidirectional communication is possible.
 
 ### Story 1.4: Implement Basic Game Room with 2-Player Synchronization
 
+**UPDATED 2025-12-01:** Simplified to proof-of-concept scope. Game mechanics moved to Epic 2.
+
 As a developer,
-I want a basic game room that synchronizes player positions between 2 clients,
+I want a basic game room that proves 2 clients can join and communicate,
 So that the multiplayer foundation is proven to work.
 
 **Acceptance Criteria:**
 
 **Given** 2 clients connect to the server
-**When** the server creates a room and assigns both players
-**Then** both clients receive `room:joined` messages with player IDs
+**When** the server detects 2 connections
+**Then** a room is automatically created and both players are assigned to it
 
-**And** when Player 1 sends `player:move` with position {x: 100, y: 200}
-**Then** Player 2 receives `game:state` update showing Player 1 at {x: 100, y: 200}
+**And** both clients receive `room:joined` messages with their player IDs and room ID
 
-**And** when Player 2 sends `player:move` with position {x: 300, y: 400}
-**Then** Player 1 receives `game:state` update showing Player 2 at {x: 300, y: 400}
+**And** when Player 1 sends a test message `{type: 'test', data: 'hello'}`
+**Then** Player 2 receives the message via room broadcast
 
-**And** both players' stick figures render on screen at synchronized positions
-**And** movement feels responsive (<100ms visual update)
-**And** disconnection of one player removes them from other player's view
+**And** when Player 2 sends a test message `{type: 'test', data: 'world'}`
+**Then** Player 1 receives the message via room broadcast
+
+**And** server logs show room creation: "Room created: [room_id] with players: [player1_id, player2_id]"
+
+**And** when one player disconnects, the other player receives `player:left` event
+
+**And** comprehensive test suite covers room creation, joining, broadcasting, disconnection
+
+**And** test coverage exceeds 90% for room management code
+
+**And** integration tests verify 2-client room workflow end-to-end
 
 **Prerequisites:** Story 1.3
 
 **Technical Notes:**
-- Server `internal/game/room.go` manages room state (max 8 players)
-- Server runs 60Hz tick loop broadcasting game state at 20Hz to clients
-- Client renders received positions using Phaser sprites (basic black stick figure placeholder)
-- Use WASD keys for movement input on client
-- Server validates positions (basic bounds checking)
-- Message protocol matches Architecture doc format
+- Server `internal/game/room.go` manages basic room state (max 8 players for future)
+- Simple room manager: when 2 players connect without a room, create one
+- Message broadcast: when room receives message from one player, send to all others in room
+- No game loop yet - just message routing proof-of-concept
+- No movement, no rendering, no game state - that's Epic 2
+- Focus: prove room joining and message broadcast works reliably
 
----
+**Scope Removed (moved to Epic 2, Story 2.1):**
+- ❌ 60Hz tick loop → Story 2.1
+- ❌ WASD movement input → Story 2.1
+- ❌ Player position synchronization → Story 2.1
+- ❌ Phaser sprite rendering → Story 2.1
+- ❌ Server position validation → Story 2.1
 
-### Story 1.5: Deploy to Cloud VPS for Remote Testing
+**Rationale:** Original scope contained premature game mechanics. Epic 1 should focus on infrastructure foundation. Gameplay belongs in Epic 2.
 
-As a developer,
-I want the server deployed to a cloud VPS with public IP,
-So that multiplayer can be tested remotely from different networks.
-
-**Acceptance Criteria:**
-
-**Given** a VPS instance (DigitalOcean/Hetzner/Fly.io)
-**When** I deploy the Go server binary
-**Then** the server is accessible at `wss://[domain-or-ip]/ws` (secure WebSocket)
-
-**And** clients can connect from any network (not just localhost)
-**And** server runs as a systemd service (auto-restart on crash)
-**And** TLS/SSL certificate configured for secure WebSocket (wss://)
-**And** firewall allows WebSocket traffic on port 443
-**And** server logs are accessible via `journalctl` or log files
-
-**And** frontend build deployed to Vercel/Netlify with production WebSocket URL
-**And** environment variable `VITE_WS_URL` configures WebSocket endpoint
-
-**Prerequisites:** Story 1.4
-
-**Technical Notes:**
-- Use Let's Encrypt for free TLS certificate (Caddy or Certbot)
-- Systemd service file: `/etc/systemd/system/stick-rumble.service`
-- Deploy script automates: build binary, transfer to VPS, restart service
-- Frontend environment variable: `VITE_WS_URL=wss://yourdomain.com/ws`
-- Monitor server with basic health check endpoint `/health`
-- Document deployment process in README.md
+**Note:** Story 1.5 (Cloud Deployment) has been moved to Epic 9 as Stories 9.5A and 9.5B. See Epic 9 section below.
 
 ---
 
@@ -1942,6 +1965,76 @@ So that updates are deployed reliably and quickly.
 - Zero-downtime: use systemd socket activation or blue-green deployment
 - Rollback: keep last 5 binaries, script to revert: `cp server.backup server && systemctl restart`
 - Notifications: use GitHub Actions Discord webhook action
+
+---
+
+### Story 9.5A: Backend Server Deployment to Cloud VPS
+
+**MOVED FROM EPIC 1:** Production deployment belongs in polish/launch epic.
+**NOTE:** Not yet added to ReadyQ - will be added when Epic 8 is complete.
+
+As a developer,
+I want the backend Go server deployed to a cloud VPS with systemd service,
+So that the game can be tested and played remotely in production.
+
+**Acceptance Criteria:**
+
+**Given** a VPS instance (DigitalOcean/Hetzner/Fly.io) provisioned
+**When** I deploy the Go server binary
+**Then** the server is accessible at `ws://[public-ip]:8080/ws`
+
+**And** server runs as a systemd service (auto-restart on crash)
+**And** systemd service file exists at `/etc/systemd/system/stick-rumble.service`
+**And** firewall allows traffic on port 8080 (WebSocket) and port 443 (HTTPS)
+**And** server logs are accessible via `journalctl -u stick-rumble -f`
+**And** basic health check endpoint `/health` responds with 200 OK
+**And** deploy script automates: build binary, transfer to VPS, restart service
+
+**Prerequisites:** Core game features complete (Epic 2-8)
+
+**Technical Notes:**
+- VPS requirements: 2GB RAM, 2 vCPUs minimum, Ubuntu 22.04 LTS
+- Systemd service: runs as non-root user `stickrumble`
+- Deploy script: `deploy.sh` automates build + rsync + restart
+- Server binary location: `/opt/stick-rumble/server`
+- Environment variables: configure via `/etc/stick-rumble/.env`
+- Basic deployment first (HTTP/WS), SSL/TLS added in Story 9.5B
+
+---
+
+### Story 9.5B: Frontend Deployment and SSL/TLS Configuration
+
+**MOVED FROM EPIC 1:** SSL/TLS configuration for production launch.
+**NOTE:** Not yet added to ReadyQ - will be added when Epic 8 is complete.
+
+As a developer,
+I want the frontend deployed with SSL/TLS and configured to connect to the production backend,
+So that players can access the game securely from anywhere.
+
+**Acceptance Criteria:**
+
+**Given** Story 9.5A backend is deployed and running
+**When** I configure TLS/SSL certificate with Let's Encrypt
+**Then** the server is accessible at `wss://[domain]/ws` (secure WebSocket)
+
+**And** TLS/SSL certificate configured using Caddy or Certbot
+**And** certificate auto-renews before expiration
+**And** clients can connect from any network using wss:// protocol
+**And** HTTP traffic redirects to HTTPS (port 80 → 443)
+**And** frontend build deployed to Vercel/Netlify
+**And** environment variable `VITE_WS_URL=wss://yourdomain.com/ws` configured
+**And** production frontend connects successfully to production backend
+**And** deployment process documented in README.md
+
+**Prerequisites:** Story 9.5A
+
+**Technical Notes:**
+- Use Caddy for automatic Let's Encrypt SSL (simpler than Certbot)
+- Caddyfile config: reverse proxy from domain to localhost:8080
+- Frontend deployment: Vercel (preferred) or Netlify with auto-deploy on git push
+- Environment variables: separate `.env.production` for production WebSocket URL
+- Test end-to-end: open production URL, verify WebSocket connection established
+- Document: deployment process, domain DNS setup, troubleshooting
 
 ---
 
