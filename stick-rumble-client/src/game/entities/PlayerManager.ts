@@ -37,6 +37,13 @@ export class PlayerManager {
   }
 
   /**
+   * Get the local player ID
+   */
+  getLocalPlayerId(): string | null {
+    return this.localPlayerId;
+  }
+
+  /**
    * Update all players from server state
    */
   updatePlayers(playerStates: PlayerState[]): void {

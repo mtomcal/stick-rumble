@@ -26,8 +26,12 @@ func TestWebSocketUpgrade(t *testing.T) {
 	assert.Equal(t, http.StatusSwitchingProtocols, resp.StatusCode, "Should return 101 Switching Protocols")
 	defer conn.Close()
 
-	// Verify connection is established
+	// Verify connection is established and functional
 	assert.NotNil(t, conn, "Connection should be established")
+
+	// Verify we can send a ping to test connection is working
+	err = conn.WriteMessage(websocket.PingMessage, []byte{})
+	assert.NoError(t, err, "Should be able to send ping message")
 }
 
 func TestMessageEcho(t *testing.T) {
@@ -107,12 +111,19 @@ func TestGracefulDisconnect(t *testing.T) {
 	err = conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "Test close"))
 	assert.NoError(t, err, "Should send close message")
 
-	// Wait a moment for server to process
-	time.Sleep(100 * time.Millisecond)
+	// Set read deadline to avoid hanging
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+
+	// Read the close response from server
+	_, _, err = conn.ReadMessage()
+	assert.Error(t, err, "Should receive close error after sending close message")
+
+	// Verify it's a close error (not a timeout or other error)
+	if closeErr, ok := err.(*websocket.CloseError); ok {
+		assert.Equal(t, websocket.CloseNormalClosure, closeErr.Code, "Should receive normal closure")
+	}
 
 	conn.Close()
-
-	// Test passes if no panic occurred and connection closed cleanly
 }
 
 func TestInvalidJSON(t *testing.T) {

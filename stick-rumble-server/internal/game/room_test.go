@@ -298,12 +298,14 @@ func TestRemoveWaitingPlayer(t *testing.T) {
 func TestRemoveNonExistentPlayer(t *testing.T) {
 	manager := NewRoomManager()
 
-	// Try to remove non-existent player (should not panic)
-	manager.RemovePlayer("nonexistent")
+	// Remove non-existent player should complete without panic or state corruption
+	assert.NotPanics(t, func() {
+		manager.RemovePlayer("nonexistent")
+	}, "RemovePlayer should handle non-existent player gracefully")
 
-	// Verify no issues occurred
-	assert.Empty(t, manager.waitingPlayers)
-	assert.Empty(t, manager.rooms)
+	// Verify manager state remains consistent
+	assert.Empty(t, manager.waitingPlayers, "Waiting players should remain empty")
+	assert.Empty(t, manager.rooms, "Rooms should remain empty")
 }
 
 // TestBroadcastChannelFull tests broadcast when channel is full
@@ -464,6 +466,4 @@ func TestBroadcastToClosedChannel(t *testing.T) {
 	case <-time.After(1 * time.Second):
 		t.Fatal("Player 2 should have received the message")
 	}
-
-	// Test passes if no panic occurred
 }
