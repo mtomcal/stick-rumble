@@ -70,6 +70,22 @@ describe('PlayerManager', () => {
   });
 
   describe('updatePlayers', () => {
+    it('should handle null scene.add gracefully', () => {
+      const sceneWithoutAdd = {} as Phaser.Scene;
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const manager = new PlayerManager(sceneWithoutAdd);
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+
+      // Should not throw, just log error and skip player creation
+      expect(() => manager.updatePlayers(playerStates)).not.toThrow();
+      expect(consoleSpy).toHaveBeenCalledWith('Scene add system not available');
+
+      consoleSpy.mockRestore();
+    });
+
     it('should create player sprites for new players', () => {
       const playerStates: PlayerState[] = [
         { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },

@@ -103,6 +103,22 @@ describe('InputManager', () => {
 
       consoleSpy.mockRestore();
     });
+
+    it('should handle missing scene.input gracefully', () => {
+      const sceneWithoutInput = {} as Phaser.Scene;
+
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const manager = new InputManager(
+        sceneWithoutInput as unknown as Phaser.Scene,
+        mockWsClient as unknown as WebSocketClient
+      );
+
+      expect(() => manager.init()).not.toThrow();
+      expect(consoleSpy).toHaveBeenCalledWith('Keyboard input not available');
+
+      consoleSpy.mockRestore();
+    });
   });
 
   describe('update', () => {
