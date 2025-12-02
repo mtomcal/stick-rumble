@@ -11,6 +11,7 @@ export class WebSocketClient {
   private maxReconnectAttempts = 3;
   private reconnectDelay = 1000; // ms
   private messageHandlers: Map<string, (data: unknown) => void> = new Map();
+  private shouldReconnect = true;
 
   constructor(url: string) {
     this.url = url;
@@ -67,12 +68,17 @@ export class WebSocketClient {
     const handler = this.messageHandlers.get(message.type);
     if (handler) {
       handler(message.data);
-    } else {
-      console.warn('No handler for message type:', message.type);
     }
+    // Silently ignore messages without handlers - this is expected behavior
+    // as not all clients will handle all message types
   }
 
   private attemptReconnect(): void {
+    // Don't reconnect if disconnect was intentional
+    if (!this.shouldReconnect) {
+      return;
+    }
+
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       console.error('Max reconnection attempts reached');
       return;
@@ -90,6 +96,7 @@ export class WebSocketClient {
   }
 
   disconnect(): void {
+    this.shouldReconnect = false; // Prevent reconnection attempts
     if (this.ws) {
       this.ws.close(1000, 'Client disconnect');
       this.ws = null;

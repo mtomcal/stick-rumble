@@ -46,7 +46,7 @@ func NewWebSocketHandler() *WebSocketHandler {
 	return handler
 }
 
-// broadcastPlayerStates sends player position updates to all players in rooms
+// broadcastPlayerStates sends player position updates to all players
 func (h *WebSocketHandler) broadcastPlayerStates(playerStates []game.PlayerState) {
 	if len(playerStates) == 0 {
 		return
@@ -67,13 +67,16 @@ func (h *WebSocketHandler) broadcastPlayerStates(playerStates []game.PlayerState
 		return
 	}
 
-	// Broadcast to all players in all rooms
-	// Note: This broadcasts to all players, not just room-specific
-	// For now this is fine, later we can optimize to only broadcast to players in the same room
+	// Broadcast to all players (both in rooms and waiting)
+	// This ensures all connected clients receive game state updates
 	for i := range playerStates {
 		room := h.roomManager.GetRoomByPlayerID(playerStates[i].ID)
 		if room != nil {
+			// Player is in a room - broadcast to room
 			room.Broadcast(msgBytes, "")
+		} else {
+			// Player is not in a room yet (waiting) - send directly to their channel
+			h.roomManager.SendToWaitingPlayer(playerStates[i].ID, msgBytes)
 		}
 	}
 }
