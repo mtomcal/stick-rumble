@@ -1,8 +1,13 @@
 import Phaser from 'phaser';
 import { WebSocketClient } from '../network/WebSocketClient';
+import { InputManager } from '../input/InputManager';
+import { PlayerManager, type PlayerState } from '../entities/PlayerManager';
+import { ARENA } from '../../shared/constants';
 
 export class GameScene extends Phaser.Scene {
   private wsClient!: WebSocketClient;
+  private inputManager!: InputManager;
+  private playerManager!: PlayerManager;
 
   constructor() {
     super({ key: 'GameScene' });
@@ -13,37 +18,25 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
-    // Add welcome text
-    const welcomeText = this.add.text(
-      this.cameras.main.centerX,
-      this.cameras.main.centerY,
-      'Stick Rumble\nPhaser 3.90 + React + TypeScript',
-      {
-        fontSize: '32px',
-        color: '#ffffff',
-        align: 'center',
-      }
-    );
-    welcomeText.setOrigin(0.5);
+    // Set world bounds to match arena size
+    this.cameras.main.setBounds(0, 0, ARENA.WIDTH, ARENA.HEIGHT);
 
-    // Add a simple animated circle to demonstrate Phaser is working
-    const circle = this.add.circle(
-      this.cameras.main.centerX,
-      this.cameras.main.centerY + 100,
-      30,
-      0x00ff00
-    );
+    // Add arena background
+    this.add.rectangle(0, 0, ARENA.WIDTH, ARENA.HEIGHT, 0x222222).setOrigin(0, 0);
 
-    // Animate the circle
-    this.tweens.add({
-      targets: circle,
-      scaleX: 1.2,
-      scaleY: 1.2,
-      duration: 1000,
-      ease: 'Sine.easeInOut',
-      yoyo: true,
-      repeat: -1,
+    // Add arena border
+    this.add.rectangle(0, 0, ARENA.WIDTH, ARENA.HEIGHT, 0xffffff, 0)
+      .setOrigin(0, 0)
+      .setStrokeStyle(2, 0xffffff);
+
+    // Add title
+    this.add.text(10, 10, 'Stick Rumble - WASD to move', {
+      fontSize: '18px',
+      color: '#ffffff'
     });
+
+    // Initialize player manager
+    this.playerManager = new PlayerManager(this);
 
     // Connect to WebSocket server
     const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws';
@@ -53,36 +46,48 @@ export class GameScene extends Phaser.Scene {
       .then(() => {
         console.log('Connected to server!');
 
-        // Display connection status on canvas
-        this.add.text(10, 10, 'Connected to server!', {
-          fontSize: '18px',
-          color: '#00ff00'
-        });
+        // Initialize input manager after connection
+        this.inputManager = new InputManager(this, this.wsClient);
+        this.inputManager.init();
 
-        // Send test message
-        this.wsClient.send({
-          type: 'test',
-          timestamp: Date.now(),
-          data: { message: 'Hello from client!' }
+        // Add connection status
+        this.add.text(10, 30, 'Connected! Use WASD to move', {
+          fontSize: '14px',
+          color: '#00ff00'
         });
       })
       .catch(err => {
         console.error('Failed to connect:', err);
 
-        // Display connection error on canvas
-        this.add.text(10, 10, 'Failed to connect to server', {
-          fontSize: '18px',
+        // Display connection error
+        this.add.text(10, 30, 'Failed to connect to server', {
+          fontSize: '14px',
           color: '#ff0000'
         });
       });
 
     // Setup message handlers
-    this.wsClient.on('test', (data) => {
-      console.log('Received echo from server:', data);
+    this.wsClient.on('player:move', (data) => {
+      const messageData = data as { players: PlayerState[] };
+      if (messageData.players) {
+        this.playerManager.updatePlayers(messageData.players);
+      }
+    });
+
+    this.wsClient.on('room:joined', (data) => {
+      const messageData = data as { playerId: string };
+      console.log('Joined room as player:', messageData.playerId);
+      // Set local player ID so we can highlight our player
+      if (messageData.playerId) {
+        this.playerManager.setLocalPlayerId(messageData.playerId);
+      }
     });
   }
 
   update(): void {
-    // Game loop - will be used in future stories
+    // Update input manager to send player input to server
+    if (this.inputManager) {
+      this.inputManager.update();
+    }
   }
 }
