@@ -467,3 +467,84 @@ func TestBroadcastToClosedChannel(t *testing.T) {
 		t.Fatal("Player 2 should have received the message")
 	}
 }
+
+// TestSendToWaitingPlayer tests sending messages to players not yet in rooms
+func TestSendToWaitingPlayer(t *testing.T) {
+	manager := NewRoomManager()
+
+	playerChan := make(chan []byte, 10)
+	player := &Player{ID: "player1", SendChan: playerChan}
+
+	// Add player to waiting list
+	manager.AddPlayer(player)
+	assert.Len(t, manager.waitingPlayers, 1)
+
+	// Send message to waiting player
+	testMsg := []byte(`{"type":"test","data":"hello"}`)
+	manager.SendToWaitingPlayer("player1", testMsg)
+
+	// Player should receive the message
+	select {
+	case msg := <-playerChan:
+		assert.Equal(t, testMsg, msg)
+	case <-time.After(1 * time.Second):
+		t.Fatal("Waiting player should have received the message")
+	}
+}
+
+// TestSendToWaitingPlayerNotFound tests sending to non-existent waiting player
+func TestSendToWaitingPlayerNotFound(t *testing.T) {
+	manager := NewRoomManager()
+
+	// Send message to non-existent player should not panic
+	testMsg := []byte(`{"type":"test","data":"hello"}`)
+	assert.NotPanics(t, func() {
+		manager.SendToWaitingPlayer("nonexistent", testMsg)
+	}, "SendToWaitingPlayer should handle non-existent player gracefully")
+}
+
+// TestSendToWaitingPlayerWithClosedChannel tests sending to player with closed channel
+func TestSendToWaitingPlayerWithClosedChannel(t *testing.T) {
+	manager := NewRoomManager()
+
+	playerChan := make(chan []byte, 10)
+	player := &Player{ID: "player1", SendChan: playerChan}
+
+	// Add player to waiting list
+	manager.AddPlayer(player)
+
+	// Close the player's channel to simulate disconnection
+	close(playerChan)
+
+	// Send message should not panic (uses recover)
+	testMsg := []byte(`{"type":"test","data":"hello"}`)
+	assert.NotPanics(t, func() {
+		manager.SendToWaitingPlayer("player1", testMsg)
+	}, "SendToWaitingPlayer should handle closed channel gracefully")
+}
+
+// TestSendToWaitingPlayerWithFullChannel tests sending to player with full channel
+func TestSendToWaitingPlayerWithFullChannel(t *testing.T) {
+	manager := NewRoomManager()
+
+	// Create player with small buffer that we'll fill
+	playerChan := make(chan []byte, 1)
+	player := &Player{ID: "player1", SendChan: playerChan}
+
+	// Add player to waiting list
+	manager.AddPlayer(player)
+
+	// Fill the channel
+	playerChan <- []byte("filling")
+
+	// Send message should not block (uses select with default)
+	testMsg := []byte(`{"type":"test","data":"hello"}`)
+	assert.NotPanics(t, func() {
+		manager.SendToWaitingPlayer("player1", testMsg)
+	}, "SendToWaitingPlayer should handle full channel gracefully")
+
+	// Channel should still only have the first message
+	assert.Len(t, playerChan, 1)
+	msg := <-playerChan
+	assert.Equal(t, []byte("filling"), msg)
+}

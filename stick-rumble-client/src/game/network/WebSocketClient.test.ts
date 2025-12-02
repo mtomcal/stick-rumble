@@ -183,8 +183,9 @@ describe('WebSocketClient', () => {
       expect(handler).toHaveBeenCalledWith({ foo: 'bar' });
     });
 
-    it('should warn for unhandled message types', async () => {
-      const consoleSpy = vi.spyOn(console, 'warn');
+    it('should silently ignore unhandled message types', async () => {
+      const consoleWarnSpy = vi.spyOn(console, 'warn');
+      const consoleErrorSpy = vi.spyOn(console, 'error');
       const client = new WebSocketClient('ws://localhost:8080/ws');
 
       const connectPromise = client.connect();
@@ -205,11 +206,11 @@ describe('WebSocketClient', () => {
         });
       }
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        'No handler for message type:',
-        'unknown'
-      );
-      consoleSpy.mockRestore();
+      // Should not log any warnings or errors for unhandled message types
+      expect(consoleWarnSpy).not.toHaveBeenCalled();
+      expect(consoleErrorSpy).not.toHaveBeenCalled();
+      consoleWarnSpy.mockRestore();
+      consoleErrorSpy.mockRestore();
     });
 
     it('should handle JSON parse errors gracefully', async () => {
@@ -349,6 +350,40 @@ describe('WebSocketClient', () => {
 
       // Should not throw error
       expect(() => client.disconnect()).not.toThrow();
+    });
+
+    it('should prevent reconnection attempts after intentional disconnect', async () => {
+      vi.useFakeTimers();
+      const consoleSpy = vi.spyOn(console, 'log');
+      const client = new WebSocketClient('ws://localhost:8080/ws');
+
+      const connectPromise = client.connect();
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen({});
+      }
+      await connectPromise;
+
+      // Intentionally disconnect
+      client.disconnect();
+
+      // Clear the disconnect log
+      consoleSpy.mockClear();
+
+      // Simulate connection close event
+      if (mockWebSocketInstance.onclose) {
+        mockWebSocketInstance.onclose({ code: 1000, reason: 'Client disconnect' });
+      }
+
+      // Advance timers to allow reconnection attempt
+      vi.advanceTimersByTime(2000);
+
+      // Should NOT attempt to reconnect after intentional disconnect
+      expect(consoleSpy).not.toHaveBeenCalledWith(
+        expect.stringContaining('Reconnecting')
+      );
+
+      consoleSpy.mockRestore();
+      vi.useRealTimers();
     });
   });
 });

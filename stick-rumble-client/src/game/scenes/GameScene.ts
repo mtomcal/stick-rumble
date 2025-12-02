@@ -42,31 +42,7 @@ export class GameScene extends Phaser.Scene {
     const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws';
     this.wsClient = new WebSocketClient(wsUrl);
 
-    this.wsClient.connect()
-      .then(() => {
-        console.log('Connected to server!');
-
-        // Initialize input manager after connection
-        this.inputManager = new InputManager(this, this.wsClient);
-        this.inputManager.init();
-
-        // Add connection status
-        this.add.text(10, 30, 'Connected! Use WASD to move', {
-          fontSize: '14px',
-          color: '#00ff00'
-        });
-      })
-      .catch(err => {
-        console.error('Failed to connect:', err);
-
-        // Display connection error
-        this.add.text(10, 30, 'Failed to connect to server', {
-          fontSize: '14px',
-          color: '#ff0000'
-        });
-      });
-
-    // Setup message handlers
+    // Setup message handlers before connecting
     this.wsClient.on('player:move', (data) => {
       const messageData = data as { players: PlayerState[] };
       if (messageData.players) {
@@ -81,6 +57,33 @@ export class GameScene extends Phaser.Scene {
       if (messageData.playerId) {
         this.playerManager.setLocalPlayerId(messageData.playerId);
       }
+    });
+
+    // Defer connection until next frame to ensure scene is fully initialized
+    this.time.delayedCall(100, () => {
+      this.wsClient.connect()
+        .then(() => {
+          console.log('Connected to server!');
+
+          // Initialize input manager after connection and scene is ready
+          this.inputManager = new InputManager(this, this.wsClient);
+          this.inputManager.init();
+
+          // Add connection status
+          this.add.text(10, 30, 'Connected! Use WASD to move', {
+            fontSize: '14px',
+            color: '#00ff00'
+          });
+        })
+        .catch(err => {
+          console.error('Failed to connect:', err);
+
+          // Display connection error
+          this.add.text(10, 30, 'Failed to connect to server', {
+            fontSize: '14px',
+            color: '#ff0000'
+          });
+        });
     });
   }
 
