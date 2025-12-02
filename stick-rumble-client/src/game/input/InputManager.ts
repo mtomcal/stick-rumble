@@ -37,7 +37,7 @@ export class InputManager {
    * Initialize keyboard input
    */
   init(): void {
-    if (!this.scene.input.keyboard) {
+    if (!this.scene.input || !this.scene.input.keyboard) {
       console.error('Keyboard input not available');
       return;
     }

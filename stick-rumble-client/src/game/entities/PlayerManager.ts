@@ -68,6 +68,12 @@ export class PlayerManager {
       let sprite = this.players.get(state.id);
 
       if (!sprite) {
+        // Check if scene.add is available
+        if (!this.scene.add) {
+          console.error('Scene add system not available');
+          continue;
+        }
+
         // Create new player sprite
         const isLocal = state.id === this.localPlayerId;
         const color = isLocal ? 0x00ff00 : 0xff0000;
