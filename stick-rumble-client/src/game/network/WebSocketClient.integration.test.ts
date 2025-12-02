@@ -25,6 +25,9 @@ async function waitForServer(): Promise<void> {
 }
 
 describe('WebSocket Integration Tests', () => {
+  let consoleErrorSpy: any;
+  let consoleWarnSpy: any;
+
   beforeAll(async () => {
     // Verify server is running before tests
     await waitForServer();
@@ -33,12 +36,24 @@ describe('WebSocket Integration Tests', () => {
   beforeEach(() => {
     // Clear console spies
     vi.restoreAllMocks();
+
+    // Spy on console errors and warnings to ensure clean execution
+    consoleErrorSpy = vi.spyOn(console, 'error');
+    consoleWarnSpy = vi.spyOn(console, 'warn');
   });
 
   afterEach(() => {
+    // Assert no console errors or warnings occurred during the test
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
+    expect(consoleWarnSpy).not.toHaveBeenCalled();
+
     // Clean up clients after each test
     clients.forEach(client => client.disconnect());
     clients = [];
+
+    // Restore console spies
+    consoleErrorSpy.mockRestore();
+    consoleWarnSpy.mockRestore();
   });
 
   describe('AC1: WebSocket Connection Establishment', () => {
@@ -365,6 +380,10 @@ describe('WebSocket Integration Tests', () => {
 
   describe('Connection Error Handling with Retry Logic', () => {
     it('should implement retry logic with 3 attempts', async () => {
+      // Clear the global error spy for this test since we expect connection errors
+      consoleErrorSpy.mockRestore();
+      consoleWarnSpy.mockRestore();
+
       const consoleSpy = vi.spyOn(console, 'log');
       const errorSpy = vi.spyOn(console, 'error');
 
@@ -392,6 +411,10 @@ describe('WebSocket Integration Tests', () => {
 
       consoleSpy.mockRestore();
       errorSpy.mockRestore();
+
+      // Recreate the global spies for subsequent tests
+      consoleErrorSpy = vi.spyOn(console, 'error');
+      consoleWarnSpy = vi.spyOn(console, 'warn');
     });
   });
 

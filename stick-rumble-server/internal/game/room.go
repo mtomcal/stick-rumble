@@ -259,3 +259,30 @@ func (rm *RoomManager) GetRoomByPlayerID(playerID string) *Room {
 
 	return rm.rooms[roomID]
 }
+
+// SendToWaitingPlayer sends a message to a waiting player (not in a room yet)
+func (rm *RoomManager) SendToWaitingPlayer(playerID string, msgBytes []byte) {
+	rm.mu.RLock()
+	defer rm.mu.RUnlock()
+
+	for _, player := range rm.waitingPlayers {
+		if player.ID == playerID {
+			// Use recover to handle closed channel panics gracefully
+			func() {
+				defer func() {
+					if rec := recover(); rec != nil {
+						log.Printf("Warning: Could not send message to waiting player %s (channel closed)", playerID)
+					}
+				}()
+
+				select {
+				case player.SendChan <- msgBytes:
+					// Message sent successfully
+				default:
+					log.Printf("Warning: Could not send message to waiting player %s (channel full)", playerID)
+				}
+			}()
+			return
+		}
+	}
+}
