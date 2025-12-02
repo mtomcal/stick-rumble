@@ -82,6 +82,8 @@ type Message struct {
 **Key message types:**
 - `room:joined` - Player successfully joined a room
 - `player:left` - Player disconnected from room
+- `input:state` - Client sends WASD input state to server
+- `player:move` - Server broadcasts player position updates (20Hz)
 - `test` - Test message for bidirectional communication
 
 ### Room Management
@@ -150,21 +152,6 @@ Based on completed Epic 1 stories, all code must meet these standards:
 - Each story has acceptance criteria, session logs, and implementation notes
 - Follow TDD: Write tests first, then implement features
 - Code reviews happen before marking stories complete
-
-## Current Development State
-
-**Completed (Epic 1):**
-- Story 1.1: Frontend scaffolding (Phaser 3.90 + React 19 + TypeScript + Vite)
-- Story 1.2: Backend Go server (Go 1.24.1 + gorilla/websocket)
-- Story 1.3: WebSocket bidirectional communication between client and server
-- Story 1.4: Basic 2-player room system with message broadcasting
-
-**In Progress:**
-- Story 2.1: Server-authoritative player movement (blocked, waiting for Story 1.4 completion)
-
-**Next Steps:**
-- Complete Story 1.4 implementation and testing
-- Implement 60Hz server tick loop and WASD movement (Story 2.1)
 
 ## Common Workflows
 
