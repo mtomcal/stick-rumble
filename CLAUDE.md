@@ -47,14 +47,23 @@ make help                 # Show all available commands
 ```
 
 **REQUIRED workflow for agents:**
-- **ALWAYS run commands from the project root directory**
-- **DO NOT cd into stick-rumble-client/ or stick-rumble-server/ directories**
+- **ALWAYS check your current directory with `pwd` before running commands**
+- **Project root is `/home/mtomcal/code/stick-rumble`** - most commands should run from here
+- **ALWAYS run commands from the project root directory** unless explicitly working on a single package
+- **DO NOT cd into stick-rumble-client/ or stick-rumble-server/ directories** for most operations
 - Starting work: `make dev-server` (for backend work) or `make dev` (for full stack)
 - Running tests: `make test` to verify all changes
 - Running server tests: `make test-server` (NOT `cd stick-rumble-server && go test`)
 - Running client tests: `make test-client` (NOT `cd stick-rumble-client && npm test`)
 - Integration tests: `make test-integration` (handles server startup/shutdown automatically)
 - Pre-commit checks: `make lint && make typecheck && make test`
+
+**Directory awareness best practices:**
+- Before running any command, verify you're in the correct directory with `pwd`
+- The Bash tool does not automatically change directories between commands
+- If you run `cd stick-rumble-client`, all subsequent commands will run from that directory until you `cd` back
+- Use absolute paths or `cd /home/mtomcal/code/stick-rumble` to return to project root
+- Prefer using the Makefile from root rather than navigating into subdirectories
 
 ### Frontend (stick-rumble-client/)
 
@@ -65,7 +74,12 @@ npm install                  # Install dependencies
 npm run dev                  # Start dev server (http://localhost:5173)
 
 # Testing
-npm test                     # Run tests in watch mode
+npm test                     # Run unit tests once (--run mode, good for agents/CI)
+npm run test:watch           # Run unit tests in watch mode (interactive development)
+npm run test:unit            # Explicit alias for unit tests
+npm run test:unit:coverage   # Unit tests with coverage
+npm run test:integration     # Run integration tests only (requires server)
+npm run test:all             # Run all tests (unit + integration)
 npm run test:ui              # Run tests with UI
 npm run test:coverage        # Generate coverage report (requires >90% for PRs)
 

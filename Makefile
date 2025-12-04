@@ -58,7 +58,7 @@ dev-server:
 # Run all tests
 test:
 	@echo "Running client tests..."
-	cd stick-rumble-client && npm test -- --run
+	cd stick-rumble-client && npm test
 	@echo ""
 	@echo "Running server tests..."
 	cd stick-rumble-server && go test ./...
@@ -68,7 +68,7 @@ test:
 # Run client tests only
 test-client:
 	@echo "Running client tests..."
-	cd stick-rumble-client && npm test -- --run
+	cd stick-rumble-client && npm test
 
 # Run server tests only
 test-server:
@@ -78,15 +78,16 @@ test-server:
 # Run integration tests (starts server automatically)
 test-integration:
 	@echo "Starting server for integration tests..."
-	@cd stick-rumble-server && go run cmd/server/main.go & \
+	@(cd stick-rumble-server && go run cmd/server/main.go) & \
 	SERVER_PID=$$!; \
 	echo "Server PID: $$SERVER_PID"; \
 	sleep 2; \
 	echo "Running integration tests..."; \
-	cd stick-rumble-client && npm test -- WebSocketClient.integration.test.ts --run; \
+	cd stick-rumble-client && npm run test:integration; \
 	TEST_EXIT=$$?; \
-	echo "Stopping server..."; \
-	kill $$SERVER_PID 2>/dev/null || true; \
+	echo "Stopping server (PID: $$SERVER_PID)..."; \
+	kill -TERM $$SERVER_PID 2>/dev/null || true; \
+	wait $$SERVER_PID 2>/dev/null || true; \
 	exit $$TEST_EXIT
 
 # Run tests with coverage
