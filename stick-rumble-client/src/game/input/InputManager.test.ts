@@ -18,7 +18,7 @@ vi.mock('phaser', () => ({
   },
 }));
 
-// Create mock Phaser scene with mouse support
+// Create mock Phaser scene with mouse support and camera
 const createMockScene = () => {
   const mockKeys = {
     W: { isDown: false },
@@ -34,6 +34,20 @@ const createMockScene = () => {
     worldY: 0,
   };
 
+  // Mock camera with getWorldPoint method
+  const mockCamera = {
+    scrollX: 0,
+    scrollY: 0,
+    getWorldPoint: vi.fn((x: number, y: number) => {
+      // Default implementation returns screen coords + scroll offset
+      // This simulates basic coordinate transformation
+      return {
+        x: x + mockCamera.scrollX,
+        y: y + mockCamera.scrollY,
+      };
+    }),
+  };
+
   return {
     scene: mockKeys,
     input: {
@@ -42,8 +56,12 @@ const createMockScene = () => {
       },
       activePointer: mockActivePointer,
     },
+    cameras: {
+      main: mockCamera,
+    },
     mockKeys,
     mockActivePointer,
+    mockCamera,
   };
 };
 
@@ -343,22 +361,25 @@ describe('InputManager', () => {
       // Set player position at center
       inputManager.setPlayerPosition(400, 300);
 
-      // Mouse to the right of player
-      mockScene.mockActivePointer.worldX = 500;
-      mockScene.mockActivePointer.worldY = 300;
+      // Mouse to the right of player (screen coordinates)
+      mockScene.mockActivePointer.x = 500;
+      mockScene.mockActivePointer.y = 300;
 
       inputManager.update();
 
       // Angle should be 0 (pointing right)
       expect(inputManager.getAimAngle()).toBeCloseTo(0, 2);
+
+      // Verify getWorldPoint was called with screen coordinates
+      expect(mockScene.mockCamera.getWorldPoint).toHaveBeenCalledWith(500, 300);
     });
 
     it('should calculate aim angle pointing up (negative Y)', () => {
       inputManager.setPlayerPosition(400, 300);
 
-      // Mouse above player
-      mockScene.mockActivePointer.worldX = 400;
-      mockScene.mockActivePointer.worldY = 200;
+      // Mouse above player (screen coordinates)
+      mockScene.mockActivePointer.x = 400;
+      mockScene.mockActivePointer.y = 200;
 
       inputManager.update();
 
@@ -369,9 +390,9 @@ describe('InputManager', () => {
     it('should calculate aim angle pointing down', () => {
       inputManager.setPlayerPosition(400, 300);
 
-      // Mouse below player
-      mockScene.mockActivePointer.worldX = 400;
-      mockScene.mockActivePointer.worldY = 400;
+      // Mouse below player (screen coordinates)
+      mockScene.mockActivePointer.x = 400;
+      mockScene.mockActivePointer.y = 400;
 
       inputManager.update();
 
@@ -382,9 +403,9 @@ describe('InputManager', () => {
     it('should calculate aim angle pointing left', () => {
       inputManager.setPlayerPosition(400, 300);
 
-      // Mouse to the left of player
-      mockScene.mockActivePointer.worldX = 300;
-      mockScene.mockActivePointer.worldY = 300;
+      // Mouse to the left of player (screen coordinates)
+      mockScene.mockActivePointer.x = 300;
+      mockScene.mockActivePointer.y = 300;
 
       inputManager.update();
 
@@ -395,9 +416,9 @@ describe('InputManager', () => {
     it('should calculate aim angle for diagonal directions', () => {
       inputManager.setPlayerPosition(400, 300);
 
-      // Mouse diagonally up-right (45 degrees)
-      mockScene.mockActivePointer.worldX = 500;
-      mockScene.mockActivePointer.worldY = 200;
+      // Mouse diagonally up-right (45 degrees, screen coordinates)
+      mockScene.mockActivePointer.x = 500;
+      mockScene.mockActivePointer.y = 200;
 
       inputManager.update();
 
@@ -408,9 +429,9 @@ describe('InputManager', () => {
     it('should include aim angle in input state message', () => {
       inputManager.setPlayerPosition(400, 300);
 
-      // Mouse to the right
-      mockScene.mockActivePointer.worldX = 500;
-      mockScene.mockActivePointer.worldY = 300;
+      // Mouse to the right (screen coordinates)
+      mockScene.mockActivePointer.x = 500;
+      mockScene.mockActivePointer.y = 300;
 
       // Press a key to trigger state change
       mockScene.mockKeys.W.isDown = true;
@@ -437,9 +458,9 @@ describe('InputManager', () => {
     it('should send update when aim angle changes significantly', () => {
       inputManager.setPlayerPosition(400, 300);
 
-      // Initial mouse position
-      mockScene.mockActivePointer.worldX = 500;
-      mockScene.mockActivePointer.worldY = 300;
+      // Initial mouse position (screen coordinates)
+      mockScene.mockActivePointer.x = 500;
+      mockScene.mockActivePointer.y = 300;
 
       // Press key to trigger initial send
       mockScene.mockKeys.W.isDown = true;
@@ -447,8 +468,8 @@ describe('InputManager', () => {
       expect(mockWsClient.send).toHaveBeenCalledTimes(1);
 
       // Move mouse significantly (more than threshold)
-      mockScene.mockActivePointer.worldX = 400;
-      mockScene.mockActivePointer.worldY = 200; // Now pointing up
+      mockScene.mockActivePointer.x = 400;
+      mockScene.mockActivePointer.y = 200; // Now pointing up
 
       inputManager.update();
       expect(mockWsClient.send).toHaveBeenCalledTimes(2);
@@ -457,9 +478,9 @@ describe('InputManager', () => {
     it('should not send update for small aim angle changes', () => {
       inputManager.setPlayerPosition(400, 300);
 
-      // Initial mouse position
-      mockScene.mockActivePointer.worldX = 500;
-      mockScene.mockActivePointer.worldY = 300;
+      // Initial mouse position (screen coordinates)
+      mockScene.mockActivePointer.x = 500;
+      mockScene.mockActivePointer.y = 300;
 
       // Press key to trigger initial send
       mockScene.mockKeys.W.isDown = true;
@@ -467,8 +488,8 @@ describe('InputManager', () => {
       expect(mockWsClient.send).toHaveBeenCalledTimes(1);
 
       // Very small mouse movement (below threshold)
-      mockScene.mockActivePointer.worldX = 501;
-      mockScene.mockActivePointer.worldY = 301;
+      mockScene.mockActivePointer.x = 501;
+      mockScene.mockActivePointer.y = 301;
 
       inputManager.update();
       // Should not send because change is too small
@@ -482,14 +503,52 @@ describe('InputManager', () => {
     it('should handle zero distance from player gracefully', () => {
       inputManager.setPlayerPosition(400, 300);
 
-      // Mouse at exact player position
-      mockScene.mockActivePointer.worldX = 400;
-      mockScene.mockActivePointer.worldY = 300;
+      // Mouse at exact player position (screen coordinates)
+      mockScene.mockActivePointer.x = 400;
+      mockScene.mockActivePointer.y = 300;
 
       inputManager.update();
 
-      // Should not throw and should return last valid angle or 0
+      // Should not throw and should return last valid angle (0 by default)
       expect(() => inputManager.getAimAngle()).not.toThrow();
+      expect(inputManager.getAimAngle()).toBe(0);
+    });
+
+    it('should use camera.getWorldPoint for coordinate transformation', () => {
+      inputManager.setPlayerPosition(400, 300);
+
+      // Set screen coordinates
+      mockScene.mockActivePointer.x = 500;
+      mockScene.mockActivePointer.y = 300;
+
+      inputManager.update();
+
+      // Verify getWorldPoint was called (not relying on worldX/worldY)
+      expect(mockScene.mockCamera.getWorldPoint).toHaveBeenCalledWith(500, 300);
+    });
+
+    it('should handle camera scroll offset correctly', () => {
+      // Set camera scroll offset
+      mockScene.mockCamera.scrollX = 100;
+      mockScene.mockCamera.scrollY = 50;
+
+      // Player at (400, 300) in world space
+      inputManager.setPlayerPosition(400, 300);
+
+      // Mouse at (300, 250) in screen space
+      // With scroll (100, 50), this becomes (400, 300) in world space
+      mockScene.mockActivePointer.x = 300;
+      mockScene.mockActivePointer.y = 250;
+
+      inputManager.update();
+
+      // getWorldPoint should be called with screen coordinates
+      expect(mockScene.mockCamera.getWorldPoint).toHaveBeenCalledWith(300, 250);
+
+      // With our mock, world point = (300 + 100, 250 + 50) = (400, 300)
+      // This is same as player position, so angle shouldn't change (dx=0, dy=0)
+      // The angle should remain at its previous value (0 by default)
+      expect(inputManager.getAimAngle()).toBe(0);
     });
   });
 });
