@@ -10,7 +10,51 @@ Stick Rumble is a multiplayer stick figure arena shooter built with a dual-appli
 
 The architecture prioritizes server-authoritative gameplay to prevent cheating while maintaining responsive controls through client-side prediction.
 
+**IMPORTANT FOR AGENTS: Always use the root-level Makefile commands (e.g., `make test`, `make dev-server`) instead of cd-ing into subdirectories. The Makefile handles all directory navigation automatically.**
+
 ## Development Commands
+
+### Quick Start (Root-level Makefile)
+
+The project root contains a Makefile that provides unified commands for both client and server:
+
+```bash
+# Setup
+make install              # Install all dependencies (client + server)
+
+# Development
+make dev                  # Run both client and server in parallel
+make dev-client           # Run client only (http://localhost:5173)
+make dev-server           # Run server only (http://localhost:8080)
+
+# Testing
+make test                 # Run all tests (client + server)
+make test-client          # Run client tests only
+make test-server          # Run server tests only
+make test-integration     # Run integration tests (auto-starts server)
+make test-coverage        # Generate coverage reports for both
+
+# Code Quality
+make lint                 # Run all linters (ESLint + go vet + gofmt)
+make typecheck            # TypeScript type checking
+
+# Build
+make build                # Build both for production
+make clean                # Remove build artifacts
+
+# Help
+make help                 # Show all available commands
+```
+
+**REQUIRED workflow for agents:**
+- **ALWAYS run commands from the project root directory**
+- **DO NOT cd into stick-rumble-client/ or stick-rumble-server/ directories**
+- Starting work: `make dev-server` (for backend work) or `make dev` (for full stack)
+- Running tests: `make test` to verify all changes
+- Running server tests: `make test-server` (NOT `cd stick-rumble-server && go test`)
+- Running client tests: `make test-client` (NOT `cd stick-rumble-client && npm test`)
+- Integration tests: `make test-integration` (handles server startup/shutdown automatically)
+- Pre-commit checks: `make lint && make typecheck && make test`
 
 ### Frontend (stick-rumble-client/)
 
