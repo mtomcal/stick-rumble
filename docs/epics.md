@@ -21,6 +21,8 @@ This document provides the complete epic and story breakdown for Stick Rumble, d
 - **Minimum 90% statement coverage** for all business logic
 - **Integration tests** for end-to-end workflows
 - **Unit tests** for all critical functions and edge cases
+- **Integration tests must verify coordinate transformations with real Phaser scenes** (not just mocked APIs)
+- **Unit tests that mock Phaser APIs must document what real-world behavior they're testing**
 - Test suites must pass before marking story as complete
 
 ### 2. Code Quality Gates
