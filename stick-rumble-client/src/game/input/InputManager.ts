@@ -29,8 +29,8 @@ export class InputManager {
   };
   private currentState: InputState;
   private lastSentState: InputState;
-  private playerX: number = 0;
-  private playerY: number = 0;
+  private playerX: number = 960; // Default to center of arena (1920/2)
+  private playerY: number = 540; // Default to center of arena (1080/2)
   private aimAngle: number = 0;
   private lastSentAimAngle: number = 0;
 
@@ -94,17 +94,19 @@ export class InputManager {
    * Update aim angle based on mouse position
    */
   private updateAimAngle(): void {
-    if (!this.scene.input || !this.scene.input.activePointer) {
+    if (!this.scene.input || !this.scene.input.activePointer || !this.scene.cameras || !this.scene.cameras.main) {
       return;
     }
 
     const pointer = this.scene.input.activePointer;
-    const mouseX = pointer.worldX;
-    const mouseY = pointer.worldY;
+
+    // Convert screen coordinates to world coordinates accounting for scale mode
+    // This properly handles Phaser.Scale.FIT mode transformations
+    const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
 
     // Calculate delta from player position
-    const dx = mouseX - this.playerX;
-    const dy = mouseY - this.playerY;
+    const dx = worldPoint.x - this.playerX;
+    const dy = worldPoint.y - this.playerY;
 
     // Avoid division by zero when mouse is exactly on player
     if (dx === 0 && dy === 0) {
