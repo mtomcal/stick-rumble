@@ -10,12 +10,13 @@ type Vector2 struct {
 	Y float64 `json:"y"`
 }
 
-// InputState represents the player's current input (WASD keys)
+// InputState represents the player's current input (WASD keys and aim)
 type InputState struct {
-	Up    bool `json:"up"`    // W key
-	Down  bool `json:"down"`  // S key
-	Left  bool `json:"left"`  // A key
-	Right bool `json:"right"` // D key
+	Up       bool    `json:"up"`       // W key
+	Down     bool    `json:"down"`     // S key
+	Left     bool    `json:"left"`     // A key
+	Right    bool    `json:"right"`    // D key
+	AimAngle float64 `json:"aimAngle"` // Aim angle in radians
 }
 
 // PlayerState represents a player's physics state in the game world
@@ -23,6 +24,7 @@ type PlayerState struct {
 	ID       string     `json:"id"`
 	Position Vector2    `json:"position"`
 	Velocity Vector2    `json:"velocity"`
+	AimAngle float64    `json:"aimAngle"` // Aim angle in radians
 	input    InputState // Private field, accessed via methods
 	mu       sync.RWMutex
 }
@@ -82,6 +84,20 @@ func (p *PlayerState) GetVelocity() Vector2 {
 	return p.Velocity
 }
 
+// SetAimAngle updates the player's aim angle (thread-safe)
+func (p *PlayerState) SetAimAngle(angle float64) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.AimAngle = angle
+}
+
+// GetAimAngle retrieves the player's aim angle (thread-safe)
+func (p *PlayerState) GetAimAngle() float64 {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.AimAngle
+}
+
 // Snapshot returns a thread-safe copy of the player's current state
 func (p *PlayerState) Snapshot() PlayerState {
 	p.mu.RLock()
@@ -90,5 +106,6 @@ func (p *PlayerState) Snapshot() PlayerState {
 		ID:       p.ID,
 		Position: p.Position,
 		Velocity: p.Velocity,
+		AimAngle: p.AimAngle,
 	}
 }

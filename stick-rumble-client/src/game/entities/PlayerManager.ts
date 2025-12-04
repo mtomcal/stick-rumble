@@ -14,7 +14,11 @@ export interface PlayerState {
     x: number;
     y: number;
   };
+  aimAngle?: number; // Aim angle in radians (optional for backward compatibility)
 }
+
+// Length of the aim indicator line in pixels
+const AIM_INDICATOR_LENGTH = 50;
 
 /**
  * PlayerManager handles rendering and updating all players
@@ -23,6 +27,7 @@ export class PlayerManager {
   private scene: Phaser.Scene;
   private players: Map<string, Phaser.GameObjects.Rectangle> = new Map();
   private playerLabels: Map<string, Phaser.GameObjects.Text> = new Map();
+  private aimIndicators: Map<string, Phaser.GameObjects.Line> = new Map();
   private localPlayerId: string | null = null;
 
   constructor(scene: Phaser.Scene) {
@@ -59,6 +64,12 @@ export class PlayerManager {
         if (label) {
           label.destroy();
           this.playerLabels.delete(id);
+        }
+
+        const aimIndicator = this.aimIndicators.get(id);
+        if (aimIndicator) {
+          aimIndicator.destroy();
+          this.aimIndicators.delete(id);
         }
       }
     }
@@ -100,6 +111,18 @@ export class PlayerManager {
         );
         label.setOrigin(0.5);
         this.playerLabels.set(state.id, label);
+
+        // Create aim indicator line
+        const aimAngle = state.aimAngle ?? 0;
+        const endX = state.position.x + Math.cos(aimAngle) * AIM_INDICATOR_LENGTH;
+        const endY = state.position.y + Math.sin(aimAngle) * AIM_INDICATOR_LENGTH;
+        const aimLine = this.scene.add.line(
+          0, 0, // Origin point (line coordinates are absolute)
+          state.position.x, state.position.y, // Start point
+          endX, endY, // End point
+          isLocal ? 0x00ff00 : 0xffff00 // Green for local, yellow for others
+        );
+        this.aimIndicators.set(state.id, aimLine);
       }
 
       // Update position
@@ -111,6 +134,18 @@ export class PlayerManager {
         label.setPosition(
           state.position.x,
           state.position.y - PLAYER.HEIGHT / 2 - 10
+        );
+      }
+
+      // Update aim indicator
+      const aimIndicator = this.aimIndicators.get(state.id);
+      if (aimIndicator) {
+        const aimAngle = state.aimAngle ?? 0;
+        const endX = state.position.x + Math.cos(aimAngle) * AIM_INDICATOR_LENGTH;
+        const endY = state.position.y + Math.sin(aimAngle) * AIM_INDICATOR_LENGTH;
+        aimIndicator.setTo(
+          state.position.x, state.position.y,
+          endX, endY
         );
       }
     }
@@ -129,5 +164,10 @@ export class PlayerManager {
       label.destroy();
     }
     this.playerLabels.clear();
+
+    for (const aimIndicator of this.aimIndicators.values()) {
+      aimIndicator.destroy();
+    }
+    this.aimIndicators.clear();
   }
 }

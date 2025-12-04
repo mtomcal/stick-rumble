@@ -68,5 +68,7 @@ func (w *World) UpdatePlayerInput(playerID string, input InputState) bool {
 		return false
 	}
 	player.SetInput(input)
+	// Also update the player's aim angle for broadcasting
+	player.SetAimAngle(input.AimAngle)
 	return true
 }

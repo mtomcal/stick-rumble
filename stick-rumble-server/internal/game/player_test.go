@@ -130,3 +130,76 @@ func TestPlayerStateThreadSafety(t *testing.T) {
 	wg.Wait()
 	// If we get here without a data race, the test passes
 }
+
+func TestPlayerStateAimAngle(t *testing.T) {
+	player := NewPlayerState("test-player")
+
+	// Should start with zero aim angle
+	if player.GetAimAngle() != 0 {
+		t.Errorf("NewPlayerState() AimAngle = %v, want 0", player.GetAimAngle())
+	}
+
+	// Test setting and getting aim angle
+	testAngle := 1.5708 // ~90 degrees in radians
+	player.SetAimAngle(testAngle)
+
+	if player.GetAimAngle() != testAngle {
+		t.Errorf("SetAimAngle/GetAimAngle mismatch: got %v, want %v", player.GetAimAngle(), testAngle)
+	}
+}
+
+func TestInputStateWithAimAngle(t *testing.T) {
+	player := NewPlayerState("test-player")
+
+	input := InputState{
+		Up:       true,
+		Down:     false,
+		Left:     true,
+		Right:    false,
+		AimAngle: 0.7854, // ~45 degrees
+	}
+
+	player.SetInput(input)
+	retrieved := player.GetInput()
+
+	if retrieved.AimAngle != input.AimAngle {
+		t.Errorf("AimAngle in InputState mismatch: got %v, want %v", retrieved.AimAngle, input.AimAngle)
+	}
+}
+
+func TestPlayerStateSnapshotIncludesAimAngle(t *testing.T) {
+	player := NewPlayerState("test-player")
+
+	// Set aim angle
+	testAngle := 3.14159
+	player.SetAimAngle(testAngle)
+
+	snapshot := player.Snapshot()
+
+	if snapshot.AimAngle != testAngle {
+		t.Errorf("Snapshot AimAngle = %v, want %v", snapshot.AimAngle, testAngle)
+	}
+}
+
+func TestPlayerStateAimAngleThreadSafety(t *testing.T) {
+	player := NewPlayerState("test-player")
+	var wg sync.WaitGroup
+
+	// Run concurrent reads and writes of aim angle
+	for i := 0; i < 100; i++ {
+		wg.Add(2)
+
+		go func() {
+			defer wg.Done()
+			player.SetAimAngle(1.234)
+		}()
+
+		go func() {
+			defer wg.Done()
+			player.GetAimAngle()
+		}()
+	}
+
+	wg.Wait()
+	// If we get here without a data race, the test passes
+}

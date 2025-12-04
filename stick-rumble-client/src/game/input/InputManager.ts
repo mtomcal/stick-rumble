@@ -9,10 +9,14 @@ export interface InputState {
   down: boolean;  // S key
   left: boolean;  // A key
   right: boolean; // D key
+  aimAngle: number; // Aim angle in radians
 }
 
+// Minimum angle change threshold to send update (about 5 degrees)
+const AIM_ANGLE_THRESHOLD = 0.087;
+
 /**
- * InputManager handles keyboard input and sends state to server
+ * InputManager handles keyboard input and mouse aim, sending state to server
  */
 export class InputManager {
   private scene: Phaser.Scene;
@@ -25,12 +29,16 @@ export class InputManager {
   };
   private currentState: InputState;
   private lastSentState: InputState;
+  private playerX: number = 0;
+  private playerY: number = 0;
+  private aimAngle: number = 0;
+  private lastSentAimAngle: number = 0;
 
   constructor(scene: Phaser.Scene, wsClient: WebSocketClient) {
     this.scene = scene;
     this.wsClient = wsClient;
-    this.currentState = { up: false, down: false, left: false, right: false };
-    this.lastSentState = { up: false, down: false, left: false, right: false };
+    this.currentState = { up: false, down: false, left: false, right: false, aimAngle: 0 };
+    this.lastSentState = { up: false, down: false, left: false, right: false, aimAngle: 0 };
   }
 
   /**
@@ -64,18 +72,62 @@ export class InputManager {
       return;
     }
 
+    // Calculate aim angle from mouse position
+    this.updateAimAngle();
+
     // Update current state from keyboard
     this.currentState = {
       up: this.keys.W.isDown,
       down: this.keys.S.isDown,
       left: this.keys.A.isDown,
       right: this.keys.D.isDown,
+      aimAngle: this.aimAngle,
     };
 
     // Only send if state has changed
     if (this.hasStateChanged()) {
       this.sendInputState();
     }
+  }
+
+  /**
+   * Update aim angle based on mouse position
+   */
+  private updateAimAngle(): void {
+    if (!this.scene.input || !this.scene.input.activePointer) {
+      return;
+    }
+
+    const pointer = this.scene.input.activePointer;
+    const mouseX = pointer.worldX;
+    const mouseY = pointer.worldY;
+
+    // Calculate delta from player position
+    const dx = mouseX - this.playerX;
+    const dy = mouseY - this.playerY;
+
+    // Avoid division by zero when mouse is exactly on player
+    if (dx === 0 && dy === 0) {
+      return; // Keep last valid angle
+    }
+
+    // Calculate angle using atan2
+    this.aimAngle = Math.atan2(dy, dx);
+  }
+
+  /**
+   * Set player position for aim angle calculation
+   */
+  setPlayerPosition(x: number, y: number): void {
+    this.playerX = x;
+    this.playerY = y;
+  }
+
+  /**
+   * Get current aim angle in radians
+   */
+  getAimAngle(): number {
+    return this.aimAngle;
   }
 
   /**
@@ -89,12 +141,17 @@ export class InputManager {
    * Check if input state has changed since last send
    */
   private hasStateChanged(): boolean {
-    return (
+    // Check WASD keys
+    const keysChanged =
       this.currentState.up !== this.lastSentState.up ||
       this.currentState.down !== this.lastSentState.down ||
       this.currentState.left !== this.lastSentState.left ||
-      this.currentState.right !== this.lastSentState.right
-    );
+      this.currentState.right !== this.lastSentState.right;
+
+    // Check if aim angle changed significantly
+    const aimAngleChanged = Math.abs(this.currentState.aimAngle - this.lastSentAimAngle) > AIM_ANGLE_THRESHOLD;
+
+    return keysChanged || aimAngleChanged;
   }
 
   /**
@@ -109,6 +166,7 @@ export class InputManager {
 
     // Update last sent state
     this.lastSentState = { ...this.currentState };
+    this.lastSentAimAngle = this.currentState.aimAngle;
   }
 
   /**
