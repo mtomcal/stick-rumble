@@ -147,31 +147,48 @@ The server automatically creates rooms when 2+ players connect:
 
 ### Project Structure
 
-**Frontend:**
+**Complete Folder Tree:**
 ```
-stick-rumble-client/
-├── src/
-│   ├── game/              # Phaser game code
-│   │   ├── scenes/        # Phaser scenes (GameScene, etc.)
-│   │   ├── network/       # WebSocket client
-│   │   └── config/        # Game configuration
-│   ├── ui/                # React components
-│   │   └── common/        # Shared components (PhaserGame bridge)
-│   ├── shared/            # Shared types/constants
-│   └── main.tsx           # Entry point
-├── tests/                 # Test setup and mocks
-└── vitest.config.ts       # Test configuration
-```
-
-**Backend:**
-```
-stick-rumble-server/
-├── cmd/server/            # Application entry point
-│   └── main.go            # HTTP server with graceful shutdown
-├── internal/              # Private packages (unexported)
-│   ├── game/              # Game logic (rooms, players)
-│   └── network/           # WebSocket handling
-└── go.mod                 # Go module definition
+stick-rumble/
+├── .claude/                       # Claude Code configuration
+├── docs/                          # Project documentation
+│   └── archive/                   # Archived documentation
+│       └── 20251125-055521-pre-bmm/  # Pre-BMM architecture snapshot
+│           ├── components/
+│           ├── game/
+│           │   ├── objects/
+│           │   ├── scenes/
+│           │   ├── systems/
+│           │   ├── utils/
+│           │   └── world/
+│           └── services/
+├── internal/                      # Root-level shared packages
+│   └── game/                      # Shared game logic (if needed)
+├── stick-rumble-client/           # Frontend application
+│   ├── public/                    # Static assets served by Vite
+│   │   └── assets/                # Game assets (images, audio, etc.)
+│   ├── src/
+│   │   ├── assets/                # Source assets
+│   │   ├── game/                  # Phaser game code
+│   │   │   ├── config/            # Game configuration
+│   │   │   ├── entities/          # Game entities (Player, etc.)
+│   │   │   ├── input/             # Input handling
+│   │   │   ├── network/           # WebSocket client
+│   │   │   └── scenes/            # Phaser scenes (GameScene, etc.)
+│   │   ├── shared/                # Shared types/constants
+│   │   └── ui/                    # React components
+│   │       └── common/            # Shared components (PhaserGame bridge)
+│   └── tests/                     # Test setup and mocks
+│       └── __mocks__/             # Mock implementations
+└── stick-rumble-server/           # Backend application (Go)
+    ├── cmd/
+    │   └── server/                # Application entry point
+    ├── internal/                  # Private packages (unexported)
+    │   ├── auth/                  # Authentication logic
+    │   ├── db/                    # Database layer
+    │   ├── game/                  # Game logic (rooms, players)
+    │   └── network/               # WebSocket handling
+    └── (go.mod, go.sum)           # Go module definition
 ```
 
 ## Quality Standards
