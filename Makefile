@@ -1,4 +1,4 @@
-.PHONY: help install dev-client dev-server dev test test-client test-server test-integration test-coverage lint build clean
+.PHONY: help install dev-client dev-server dev test test-client test-server test-integration test-coverage lint build clean check-zombies kill-dev
 
 # Default target - show help
 help:
@@ -11,6 +11,8 @@ help:
 	@echo "  make dev              Run both client and server in parallel"
 	@echo "  make dev-client       Run client dev server only (http://localhost:5173)"
 	@echo "  make dev-server       Run server only (http://localhost:8080)"
+	@echo "  make check-zombies    Check for orphaned dev processes"
+	@echo "  make kill-dev         Kill any orphaned dev processes"
 	@echo ""
 	@echo "Testing:"
 	@echo "  make test             Run all tests (client + server)"
@@ -140,3 +142,18 @@ clean:
 	rm -rf stick-rumble-client/coverage
 	rm -f stick-rumble-server/server
 	@echo "✓ Clean complete"
+
+# Check for zombie processes
+check-zombies:
+	@echo "Checking for orphaned dev processes..."
+	@lsof -ti:8080 && echo "⚠️  Port 8080 is in use" || echo "✓ Port 8080 is free"
+	@lsof -ti:5173 && echo "⚠️  Port 5173 is in use" || echo "✓ Port 5173 is free"
+	@ps aux | grep -E "go run.*server/main.go" | grep -v grep && echo "⚠️  Zombie Go server found" || echo "✓ No zombie Go servers"
+	@ps aux | grep -E "vite.*dev" | grep -v grep && echo "⚠️  Zombie Vite server found" || echo "✓ No zombie Vite servers"
+
+# Kill any orphaned dev processes
+kill-dev:
+	@echo "Killing orphaned dev processes..."
+	@lsof -ti:8080 | xargs kill -9 2>/dev/null || echo "Port 8080 was already free"
+	@lsof -ti:5173 | xargs kill -9 2>/dev/null || echo "Port 5173 was already free"
+	@echo "✓ Cleanup complete"
