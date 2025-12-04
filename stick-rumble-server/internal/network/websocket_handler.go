@@ -200,10 +200,11 @@ func (h *WebSocketHandler) handleInputState(playerID string, data any) {
 	}
 
 	input := game.InputState{
-		Up:    getBool(dataMap, "up"),
-		Down:  getBool(dataMap, "down"),
-		Left:  getBool(dataMap, "left"),
-		Right: getBool(dataMap, "right"),
+		Up:       getBool(dataMap, "up"),
+		Down:     getBool(dataMap, "down"),
+		Left:     getBool(dataMap, "left"),
+		Right:    getBool(dataMap, "right"),
+		AimAngle: getFloat64(dataMap, "aimAngle"),
 	}
 
 	// Update game server with input
@@ -224,6 +225,19 @@ func getBool(m map[string]interface{}, key string) bool {
 		return false
 	}
 	return boolVal
+}
+
+// getFloat64 safely extracts a float64 value from a map
+func getFloat64(m map[string]interface{}, key string) float64 {
+	val, ok := m[key]
+	if !ok {
+		return 0
+	}
+	floatVal, ok := val.(float64)
+	if !ok {
+		return 0
+	}
+	return floatVal
 }
 
 // HandleWebSocket is the legacy function for backward compatibility

@@ -18,6 +18,11 @@ const createMockScene = () => {
     destroy: ReturnType<typeof vi.fn>;
   }> = [];
 
+  const lines: Array<{
+    setTo: ReturnType<typeof vi.fn>;
+    destroy: ReturnType<typeof vi.fn>;
+  }> = [];
+
   return {
     add: {
       rectangle: vi.fn((x: number, y: number) => {
@@ -41,9 +46,18 @@ const createMockScene = () => {
         texts.push(text);
         return text;
       }),
+      line: vi.fn(() => {
+        const line = {
+          setTo: vi.fn(),
+          destroy: vi.fn(),
+        };
+        lines.push(line);
+        return line;
+      }),
     },
     rectangles,
     texts,
+    lines,
   };
 };
 
@@ -311,6 +325,110 @@ describe('PlayerManager', () => {
 
     it('should handle destroy when no players exist', () => {
       expect(() => playerManager.destroy()).not.toThrow();
+    });
+  });
+
+  describe('aim indicator', () => {
+    it('should create aim indicator line for new players', () => {
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: 0 },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      expect(mockScene.add.line).toHaveBeenCalled();
+    });
+
+    it('should update aim indicator based on aim angle', () => {
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: 0 },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      const line = mockScene.lines[0];
+
+      // Update with new aim angle (pointing right, angle = 0)
+      const updatedStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: 0 },
+      ];
+
+      playerManager.updatePlayers(updatedStates);
+
+      // Line should be updated from player center to point in aim direction
+      // For angle = 0 (pointing right), line should extend 50px to the right
+      // Expected: setTo(100, 200, 100 + 50*cos(0), 200 + 50*sin(0)) = setTo(100, 200, 150, 200)
+      expect(line.setTo).toHaveBeenCalled();
+      const lastCall = line.setTo.mock.calls[line.setTo.mock.calls.length - 1];
+      expect(lastCall[0]).toBe(100); // x1: player x
+      expect(lastCall[1]).toBe(200); // y1: player y
+      expect(lastCall[2]).toBeCloseTo(150, 1); // x2: player x + 50*cos(0)
+      expect(lastCall[3]).toBeCloseTo(200, 1); // y2: player y + 50*sin(0)
+    });
+
+    it('should update aim indicator when aim angle changes', () => {
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: 0 },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      const line = mockScene.lines[0];
+
+      // Update with different aim angle (pointing up, angle = -PI/2)
+      const updatedStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: -Math.PI / 2 },
+      ];
+
+      playerManager.updatePlayers(updatedStates);
+
+      // For angle = -PI/2 (pointing up), line should extend 50px upward (negative Y)
+      // Expected: setTo(100, 200, 100 + 50*cos(-PI/2), 200 + 50*sin(-PI/2)) = setTo(100, 200, 100, 150)
+      expect(line.setTo).toHaveBeenCalled();
+      const lastCall = line.setTo.mock.calls[line.setTo.mock.calls.length - 1];
+      expect(lastCall[0]).toBe(100); // x1: player x
+      expect(lastCall[1]).toBe(200); // y1: player y
+      expect(lastCall[2]).toBeCloseTo(100, 1); // x2: player x + 50*cos(-PI/2) ≈ 100
+      expect(lastCall[3]).toBeCloseTo(150, 1); // y2: player y + 50*sin(-PI/2) = 200 - 50
+    });
+
+    it('should destroy aim indicator when player is removed', () => {
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: 0 },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      const line = mockScene.lines[0];
+
+      // Remove player
+      playerManager.updatePlayers([]);
+
+      expect(line.destroy).toHaveBeenCalled();
+    });
+
+    it('should handle players without aim angle (defaults to 0)', () => {
+      // Test backward compatibility - players without aimAngle field
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+
+      expect(() => playerManager.updatePlayers(playerStates)).not.toThrow();
+      expect(mockScene.add.line).toHaveBeenCalled();
+    });
+
+    it('should destroy aim indicators on manager destroy', () => {
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: 0 },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      playerManager.destroy();
+
+      for (const line of mockScene.lines) {
+        expect(line.destroy).toHaveBeenCalled();
+      }
     });
   });
 });

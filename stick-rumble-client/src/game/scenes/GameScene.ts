@@ -47,6 +47,19 @@ export class GameScene extends Phaser.Scene {
       const messageData = data as { players: PlayerState[] };
       if (messageData.players) {
         this.playerManager.updatePlayers(messageData.players);
+
+        // Update input manager with local player position for aim calculation
+        if (this.inputManager && this.playerManager.getLocalPlayerId()) {
+          const localPlayer = messageData.players.find(
+            p => p.id === this.playerManager.getLocalPlayerId()
+          );
+          if (localPlayer) {
+            this.inputManager.setPlayerPosition(
+              localPlayer.position.x,
+              localPlayer.position.y
+            );
+          }
+        }
       }
     });
 

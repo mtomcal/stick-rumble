@@ -40,6 +40,11 @@ const createMockScene = () => {
     setBounds: vi.fn(),
   };
 
+  const mockLine = {
+    setTo: vi.fn().mockReturnThis(),
+    destroy: vi.fn(),
+  };
+
   const delayedCallCallbacks: Array<() => void> = [];
   const mockTime = {
     delayedCall: vi.fn((_delay: number, callback: () => void) => {
@@ -52,6 +57,7 @@ const createMockScene = () => {
     add: {
       text: vi.fn().mockReturnValue(mockText),
       rectangle: vi.fn().mockReturnValue(mockRectangle),
+      line: vi.fn().mockReturnValue(mockLine),
     },
     cameras: {
       main: mockCamera,
@@ -484,14 +490,17 @@ describe('GameScene', () => {
       // Spy on PlayerManager.updatePlayers to verify it gets called
       const updatePlayersSpy = vi.spyOn(scene['playerManager'], 'updatePlayers');
 
-      // Simulate player:move message
+      // Spy on InputManager.setPlayerPosition to verify aim calculation setup
+      const setPlayerPositionSpy = vi.spyOn(scene['inputManager'], 'setPlayerPosition');
+
+      // Simulate player:move message with aim angle
       const playerMoveMessage = {
         data: JSON.stringify({
           type: 'player:move',
           timestamp: Date.now(),
           data: {
             players: [
-              { id: 'player1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } }
+              { id: 'player1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: 1.57 }
             ]
           }
         })
@@ -501,10 +510,65 @@ describe('GameScene', () => {
         mockWebSocketInstance.onmessage(playerMoveMessage as MessageEvent);
       }
 
-      // Verify PlayerManager.updatePlayers was called with correct data
+      // Verify PlayerManager.updatePlayers was called with correct data including aim angle
       expect(updatePlayersSpy).toHaveBeenCalledWith([
-        { id: 'player1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } }
+        { id: 'player1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: 1.57 }
       ]);
+
+      // Verify InputManager.setPlayerPosition is NOT called (player ID doesn't match local player)
+      expect(setPlayerPositionSpy).not.toHaveBeenCalled();
+    });
+
+    it('should update InputManager position when local player moves', async () => {
+      const mockSceneContext = createMockScene();
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      // Trigger the delayed callback to start connection
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Set readyState to OPEN and trigger onopen
+      mockWebSocketInstance.readyState = 1;
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen(new Event('open'));
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Set local player ID
+      scene['playerManager'].setLocalPlayerId('local-player-id');
+
+      // Spy on InputManager.setPlayerPosition and mock updatePlayers to avoid scene.add issues
+      const setPlayerPositionSpy = vi.spyOn(scene['inputManager'], 'setPlayerPosition');
+      const updatePlayersSpy = vi.spyOn(scene['playerManager'], 'updatePlayers').mockImplementation(() => {});
+
+      // Simulate player:move message with local player
+      const playerMoveMessage = {
+        data: JSON.stringify({
+          type: 'player:move',
+          timestamp: Date.now(),
+          data: {
+            players: [
+              { id: 'local-player-id', position: { x: 300, y: 400 }, velocity: { x: 10, y: 20 }, aimAngle: 0.5 }
+            ]
+          }
+        })
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(playerMoveMessage as MessageEvent);
+      }
+
+      // Verify PlayerManager.updatePlayers was called with the correct data
+      expect(updatePlayersSpy).toHaveBeenCalledWith([
+        { id: 'local-player-id', position: { x: 300, y: 400 }, velocity: { x: 10, y: 20 }, aimAngle: 0.5 }
+      ]);
+
+      // Verify InputManager.setPlayerPosition was called with local player's position for aim calculation
+      expect(setPlayerPositionSpy).toHaveBeenCalledWith(300, 400);
     });
 
     it('should handle room:joined messages and set local player ID', async () => {
