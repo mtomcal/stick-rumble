@@ -101,6 +101,19 @@ func (r *Room) Broadcast(message []byte, excludePlayerID string) {
 	}
 }
 
+// GetPlayer returns a player by ID, or nil if not found
+func (r *Room) GetPlayer(playerID string) *Player {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	for _, player := range r.Players {
+		if player.ID == playerID {
+			return player
+		}
+	}
+	return nil
+}
+
 // RoomManager manages all game rooms and player assignments
 type RoomManager struct {
 	rooms          map[string]*Room
@@ -284,5 +297,35 @@ func (rm *RoomManager) SendToWaitingPlayer(playerID string, msgBytes []byte) {
 			}()
 			return
 		}
+	}
+}
+
+// BroadcastToAll sends a message to all players (in rooms and waiting)
+func (rm *RoomManager) BroadcastToAll(msgBytes []byte) {
+	rm.mu.RLock()
+	defer rm.mu.RUnlock()
+
+	// Broadcast to all rooms
+	for _, room := range rm.rooms {
+		room.Broadcast(msgBytes, "")
+	}
+
+	// Send to all waiting players
+	for _, player := range rm.waitingPlayers {
+		// Use recover to handle closed channel panics gracefully
+		func() {
+			defer func() {
+				if rec := recover(); rec != nil {
+					log.Printf("Warning: Could not send message to waiting player %s (channel closed)", player.ID)
+				}
+			}()
+
+			select {
+			case player.SendChan <- msgBytes:
+				// Message sent successfully
+			default:
+				log.Printf("Warning: Could not send message to waiting player %s (channel full)", player.ID)
+			}
+		}()
 	}
 }

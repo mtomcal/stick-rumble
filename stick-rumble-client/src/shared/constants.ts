@@ -52,3 +52,46 @@ export const PLAYER = {
   /** Player sprite height (placeholder until actual sprites) */
   HEIGHT: 64,
 } as const;
+
+/**
+ * Weapon constants (must match server-side values)
+ */
+export const WEAPON = {
+  /** Pistol damage per shot */
+  PISTOL_DAMAGE: 15,
+
+  /** Pistol fire rate in rounds per second */
+  PISTOL_FIRE_RATE: 3,
+
+  /** Pistol magazine size */
+  PISTOL_MAGAZINE_SIZE: 15,
+
+  /** Pistol reload time in milliseconds */
+  PISTOL_RELOAD_TIME: 1500,
+
+  /** Projectile speed in pixels per second */
+  PROJECTILE_SPEED: 800,
+
+  /** Maximum projectile lifetime in milliseconds */
+  PROJECTILE_MAX_LIFETIME: 1000,
+} as const;
+
+/**
+ * Visual effects constants
+ */
+export const EFFECTS = {
+  /** Bullet tracer line width in pixels */
+  TRACER_WIDTH: 2,
+
+  /** Bullet tracer fade duration in milliseconds */
+  TRACER_FADE_DURATION: 100,
+
+  /** Muzzle flash radius in pixels */
+  MUZZLE_FLASH_RADIUS: 8,
+
+  /** Muzzle flash duration in milliseconds */
+  MUZZLE_FLASH_DURATION: 50,
+
+  /** Projectile diameter in pixels */
+  PROJECTILE_DIAMETER: 4,
+} as const;

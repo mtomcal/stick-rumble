@@ -7,15 +7,36 @@ import (
 	"time"
 )
 
+// Shoot failure reasons
+const (
+	ShootFailedNoPlayer = "no_player"
+	ShootFailedCooldown = "cooldown"
+	ShootFailedEmpty    = "empty"
+	ShootFailedReload   = "reloading"
+)
+
+// ShootResult contains the result of a shoot attempt
+type ShootResult struct {
+	Success    bool
+	Reason     string
+	Projectile *Projectile
+}
+
 // GameServer manages the game loop and physics simulation
 type GameServer struct {
-	world      *World
-	physics    *Physics
-	tickRate   time.Duration
-	updateRate time.Duration // Rate at which to broadcast updates to clients
+	world             *World
+	physics           *Physics
+	projectileManager *ProjectileManager
+	weaponStates      map[string]*WeaponState
+	weaponMu          sync.RWMutex
+	tickRate          time.Duration
+	updateRate        time.Duration // Rate at which to broadcast updates to clients
 
 	// Broadcast function to send state updates to clients
 	broadcastFunc func(playerStates []PlayerState)
+
+	// Callback for when a player's reload completes
+	onReloadComplete func(playerID string)
 
 	running bool
 	mu      sync.RWMutex
@@ -25,12 +46,14 @@ type GameServer struct {
 // NewGameServer creates a new game server
 func NewGameServer(broadcastFunc func(playerStates []PlayerState)) *GameServer {
 	return &GameServer{
-		world:         NewWorld(),
-		physics:       NewPhysics(),
-		tickRate:      time.Duration(ServerTickInterval) * time.Millisecond,
-		updateRate:    time.Duration(ClientUpdateInterval) * time.Millisecond,
-		broadcastFunc: broadcastFunc,
-		running:       false,
+		world:             NewWorld(),
+		physics:           NewPhysics(),
+		projectileManager: NewProjectileManager(),
+		weaponStates:      make(map[string]*WeaponState),
+		tickRate:          time.Duration(ServerTickInterval) * time.Millisecond,
+		updateRate:        time.Duration(ClientUpdateInterval) * time.Millisecond,
+		broadcastFunc:     broadcastFunc,
+		running:           false,
 	}
 }
 
@@ -79,6 +102,12 @@ func (gs *GameServer) tickLoop(ctx context.Context) {
 
 			// Update all players
 			gs.updateAllPlayers(deltaTime)
+
+			// Update all projectiles
+			gs.projectileManager.Update(deltaTime)
+
+			// Check for reload completions
+			gs.checkReloads()
 		}
 	}
 }
@@ -125,12 +154,24 @@ func (gs *GameServer) updateAllPlayers(deltaTime float64) {
 
 // AddPlayer adds a new player to the game world
 func (gs *GameServer) AddPlayer(playerID string) *PlayerState {
-	return gs.world.AddPlayer(playerID)
+	player := gs.world.AddPlayer(playerID)
+
+	// Create weapon state for the player (everyone starts with a pistol)
+	gs.weaponMu.Lock()
+	gs.weaponStates[playerID] = NewWeaponState(NewPistol())
+	gs.weaponMu.Unlock()
+
+	return player
 }
 
 // RemovePlayer removes a player from the game world
 func (gs *GameServer) RemovePlayer(playerID string) {
 	gs.world.RemovePlayer(playerID)
+
+	// Remove weapon state
+	gs.weaponMu.Lock()
+	delete(gs.weaponStates, playerID)
+	gs.weaponMu.Unlock()
 }
 
 // UpdatePlayerInput updates a player's input state
@@ -152,4 +193,105 @@ func (gs *GameServer) IsRunning() bool {
 	gs.mu.RLock()
 	defer gs.mu.RUnlock()
 	return gs.running
+}
+
+// SetOnReloadComplete sets the callback for when a player's reload completes
+func (gs *GameServer) SetOnReloadComplete(callback func(playerID string)) {
+	gs.onReloadComplete = callback
+}
+
+// GetWeaponState returns the weapon state for a player
+func (gs *GameServer) GetWeaponState(playerID string) *WeaponState {
+	gs.weaponMu.RLock()
+	defer gs.weaponMu.RUnlock()
+	return gs.weaponStates[playerID]
+}
+
+// PlayerShoot attempts to fire a projectile for the given player
+func (gs *GameServer) PlayerShoot(playerID string, aimAngle float64) ShootResult {
+	// Check if player exists
+	player, exists := gs.world.GetPlayer(playerID)
+	if !exists {
+		return ShootResult{Success: false, Reason: ShootFailedNoPlayer}
+	}
+
+	// Get weapon state
+	gs.weaponMu.RLock()
+	ws := gs.weaponStates[playerID]
+	gs.weaponMu.RUnlock()
+
+	if ws == nil {
+		return ShootResult{Success: false, Reason: ShootFailedNoPlayer}
+	}
+
+	// Check if reloading
+	if ws.IsReloading {
+		return ShootResult{Success: false, Reason: ShootFailedReload}
+	}
+
+	// Check if magazine is empty
+	if ws.IsEmpty() {
+		return ShootResult{Success: false, Reason: ShootFailedEmpty}
+	}
+
+	// Check fire rate cooldown
+	if !ws.CanShoot() {
+		return ShootResult{Success: false, Reason: ShootFailedCooldown}
+	}
+
+	// Create projectile at player position
+	pos := player.GetPosition()
+	proj := gs.projectileManager.CreateProjectile(
+		playerID,
+		pos,
+		aimAngle,
+		ws.Weapon.ProjectileSpeed,
+	)
+
+	// Record the shot (decrements ammo, sets cooldown)
+	ws.RecordShot()
+
+	return ShootResult{
+		Success:    true,
+		Projectile: proj,
+	}
+}
+
+// PlayerReload starts the reload process for a player
+func (gs *GameServer) PlayerReload(playerID string) bool {
+	gs.weaponMu.RLock()
+	ws := gs.weaponStates[playerID]
+	gs.weaponMu.RUnlock()
+
+	if ws == nil {
+		return false
+	}
+
+	// Check if magazine is already full
+	if ws.CurrentAmmo >= ws.Weapon.MagazineSize {
+		return false
+	}
+
+	ws.StartReload()
+	return ws.IsReloading
+}
+
+// checkReloads checks all players for completed reloads
+func (gs *GameServer) checkReloads() {
+	gs.weaponMu.RLock()
+	defer gs.weaponMu.RUnlock()
+
+	for playerID, ws := range gs.weaponStates {
+		if ws.CheckReloadComplete() {
+			// Reload just completed - notify via callback
+			if gs.onReloadComplete != nil {
+				gs.onReloadComplete(playerID)
+			}
+		}
+	}
+}
+
+// GetActiveProjectiles returns snapshots of all active projectiles
+func (gs *GameServer) GetActiveProjectiles() []ProjectileSnapshot {
+	return gs.projectileManager.GetProjectileSnapshots()
 }

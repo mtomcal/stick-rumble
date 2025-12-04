@@ -43,7 +43,16 @@ func NewWebSocketHandler() *WebSocketHandler {
 	// Create game server with broadcast function
 	handler.gameServer = game.NewGameServer(handler.broadcastPlayerStates)
 
+	// Register callback for reload completion to notify clients
+	handler.gameServer.SetOnReloadComplete(handler.onReloadComplete)
+
 	return handler
+}
+
+// onReloadComplete is called when a player's reload finishes
+func (h *WebSocketHandler) onReloadComplete(playerID string) {
+	// Send updated weapon state to the player
+	h.sendWeaponState(playerID)
 }
 
 // broadcastPlayerStates sends player position updates to all players
@@ -172,6 +181,14 @@ func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Reques
 			// Handle player input
 			h.handleInputState(playerID, msg.Data)
 
+		case "player:shoot":
+			// Handle player shooting
+			h.handlePlayerShoot(playerID, msg.Data)
+
+		case "player:reload":
+			// Handle player reloading
+			h.handlePlayerReload(playerID)
+
 		default:
 			// Broadcast other messages to room (for backward compatibility with tests)
 			room := h.roomManager.GetRoomByPlayerID(playerID)
@@ -244,4 +261,136 @@ func getFloat64(m map[string]interface{}, key string) float64 {
 // It uses a shared global handler to ensure all connections share the same room state
 func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	globalHandler.HandleWebSocket(w, r)
+}
+
+// handlePlayerShoot processes player shoot messages
+func (h *WebSocketHandler) handlePlayerShoot(playerID string, data any) {
+	// Convert data to get aim angle
+	dataMap, ok := data.(map[string]interface{})
+	if !ok {
+		log.Printf("Invalid player:shoot data format from %s", playerID)
+		return
+	}
+
+	aimAngle := getFloat64(dataMap, "aimAngle")
+
+	// Attempt to shoot
+	result := h.gameServer.PlayerShoot(playerID, aimAngle)
+
+	if result.Success {
+		// Broadcast projectile spawn to all players
+		h.broadcastProjectileSpawn(result.Projectile)
+
+		// Send weapon state update to the shooter
+		h.sendWeaponState(playerID)
+	} else {
+		// Send failure reason to player (for empty click sound, etc.)
+		h.sendShootFailed(playerID, result.Reason)
+	}
+}
+
+// handlePlayerReload processes player reload messages
+func (h *WebSocketHandler) handlePlayerReload(playerID string) {
+	success := h.gameServer.PlayerReload(playerID)
+
+	if success {
+		// Send weapon state update to the player
+		h.sendWeaponState(playerID)
+	}
+}
+
+// broadcastProjectileSpawn sends projectile spawn event to all clients
+func (h *WebSocketHandler) broadcastProjectileSpawn(proj *game.Projectile) {
+	message := Message{
+		Type:      "projectile:spawn",
+		Timestamp: 0,
+		Data: map[string]interface{}{
+			"id":       proj.ID,
+			"ownerId":  proj.OwnerID,
+			"position": proj.Position,
+			"velocity": proj.Velocity,
+		},
+	}
+
+	msgBytes, err := json.Marshal(message)
+	if err != nil {
+		log.Printf("Error marshaling projectile:spawn message: %v", err)
+		return
+	}
+
+	// Broadcast to all rooms and waiting players
+	h.roomManager.BroadcastToAll(msgBytes)
+}
+
+// sendWeaponState sends weapon state update to a specific player
+func (h *WebSocketHandler) sendWeaponState(playerID string) {
+	ws := h.gameServer.GetWeaponState(playerID)
+	if ws == nil {
+		return
+	}
+
+	current, max := ws.GetAmmoInfo()
+	message := Message{
+		Type:      "weapon:state",
+		Timestamp: 0,
+		Data: map[string]interface{}{
+			"currentAmmo": current,
+			"maxAmmo":     max,
+			"isReloading": ws.IsReloading,
+			"canShoot":    ws.CanShoot(),
+		},
+	}
+
+	msgBytes, err := json.Marshal(message)
+	if err != nil {
+		log.Printf("Error marshaling weapon:state message: %v", err)
+		return
+	}
+
+	// Send to the specific player
+	room := h.roomManager.GetRoomByPlayerID(playerID)
+	if room != nil {
+		player := room.GetPlayer(playerID)
+		if player != nil {
+			select {
+			case player.SendChan <- msgBytes:
+			default:
+				log.Printf("Failed to send weapon:state to player %s (channel full)", playerID)
+			}
+		}
+	} else {
+		h.roomManager.SendToWaitingPlayer(playerID, msgBytes)
+	}
+}
+
+// sendShootFailed sends a shoot failure message to the player
+func (h *WebSocketHandler) sendShootFailed(playerID string, reason string) {
+	message := Message{
+		Type:      "shoot:failed",
+		Timestamp: 0,
+		Data: map[string]interface{}{
+			"reason": reason,
+		},
+	}
+
+	msgBytes, err := json.Marshal(message)
+	if err != nil {
+		log.Printf("Error marshaling shoot:failed message: %v", err)
+		return
+	}
+
+	// Send to the specific player
+	room := h.roomManager.GetRoomByPlayerID(playerID)
+	if room != nil {
+		player := room.GetPlayer(playerID)
+		if player != nil {
+			select {
+			case player.SendChan <- msgBytes:
+			default:
+				log.Printf("Failed to send shoot:failed to player %s (channel full)", playerID)
+			}
+		}
+	} else {
+		h.roomManager.SendToWaitingPlayer(playerID, msgBytes)
+	}
 }

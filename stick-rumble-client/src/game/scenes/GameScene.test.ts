@@ -53,11 +53,12 @@ const createMockScene = () => {
     }),
   };
 
-  return {
+  const mockContext = {
     add: {
       text: vi.fn().mockReturnValue(mockText),
       rectangle: vi.fn().mockReturnValue(mockRectangle),
       line: vi.fn().mockReturnValue(mockLine),
+      circle: vi.fn().mockReturnValue({ destroy: vi.fn() }),
     },
     cameras: {
       main: mockCamera,
@@ -70,11 +71,19 @@ const createMockScene = () => {
           S: { isDown: false },
           D: { isDown: false },
         }),
+        addKey: vi.fn().mockReturnValue({
+          on: vi.fn(),
+        }),
       },
+      on: vi.fn(),
+    },
+    tweens: {
+      add: vi.fn().mockReturnValue({ remove: vi.fn() }),
     },
     time: mockTime,
     delayedCallCallbacks,
   };
+  return mockContext;
 };
 
 describe('GameScene', () => {
@@ -434,7 +443,7 @@ describe('GameScene', () => {
       expect(typeof scene.update).toBe('function');
 
       // Should not throw when called before create (inputManager not initialized)
-      expect(() => scene.update()).not.toThrow();
+      expect(() => scene.update(0, 16.67)).not.toThrow();
     });
 
     it('should call inputManager.update when connected', async () => {
@@ -460,7 +469,7 @@ describe('GameScene', () => {
       const updateSpy = vi.spyOn(scene['inputManager'], 'update');
 
       // Call scene.update which should call inputManager.update
-      scene.update();
+      scene.update(0, 16.67);
 
       // Verify inputManager.update was called
       expect(updateSpy).toHaveBeenCalledTimes(1);
@@ -603,6 +612,641 @@ describe('GameScene', () => {
       expect(consoleSpy).toHaveBeenCalledWith('Joined room as player:', 'my-player-id');
 
       consoleSpy.mockRestore();
+    });
+
+    it('should handle projectile:spawn messages and create projectiles', async () => {
+      const mockSceneContext = createMockScene();
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      // Trigger the delayed callback to create WebSocket
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Mock projectileManager methods to avoid scene.add issues
+      const spawnSpy = vi.spyOn(scene['projectileManager'], 'spawnProjectile').mockImplementation(() => {});
+      const muzzleFlashSpy = vi.spyOn(scene['projectileManager'], 'createMuzzleFlash').mockImplementation(() => {});
+
+      // Simulate projectile:spawn message
+      const projectileSpawnMessage = {
+        data: JSON.stringify({
+          type: 'projectile:spawn',
+          timestamp: Date.now(),
+          data: {
+            id: 'proj-1',
+            ownerId: 'player-1',
+            position: { x: 100, y: 200 },
+            velocity: { x: 800, y: 0 }
+          }
+        })
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(projectileSpawnMessage as MessageEvent);
+      }
+
+      expect(spawnSpy).toHaveBeenCalledWith({
+        id: 'proj-1',
+        ownerId: 'player-1',
+        position: { x: 100, y: 200 },
+        velocity: { x: 800, y: 0 }
+      });
+
+      expect(muzzleFlashSpy).toHaveBeenCalledWith(100, 200);
+    });
+
+    it('should handle projectile:destroy messages and remove projectiles', async () => {
+      const mockSceneContext = createMockScene();
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      // Trigger the delayed callback to create WebSocket
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Spy on projectileManager.removeProjectile
+      const removeSpy = vi.spyOn(scene['projectileManager'], 'removeProjectile');
+
+      // Simulate projectile:destroy message
+      const projectileDestroyMessage = {
+        data: JSON.stringify({
+          type: 'projectile:destroy',
+          timestamp: Date.now(),
+          data: {
+            id: 'proj-1'
+          }
+        })
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(projectileDestroyMessage as MessageEvent);
+      }
+
+      expect(removeSpy).toHaveBeenCalledWith('proj-1');
+    });
+
+    it('should handle weapon:state messages and update shooting manager', async () => {
+      const mockSceneContext = createMockScene();
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      // Trigger connection
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Connect successfully to initialize shootingManager
+      mockWebSocketInstance.readyState = 1;
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen(new Event('open'));
+      }
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Spy on shootingManager.updateWeaponState
+      const updateWeaponStateSpy = vi.spyOn(scene['shootingManager'], 'updateWeaponState');
+
+      // Simulate weapon:state message
+      const weaponStateMessage = {
+        data: JSON.stringify({
+          type: 'weapon:state',
+          timestamp: Date.now(),
+          data: {
+            currentAmmo: 10,
+            maxAmmo: 15,
+            isReloading: false,
+            canShoot: true
+          }
+        })
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(weaponStateMessage as MessageEvent);
+      }
+
+      expect(updateWeaponStateSpy).toHaveBeenCalledWith({
+        currentAmmo: 10,
+        maxAmmo: 15,
+        isReloading: false,
+        canShoot: true
+      });
+    });
+
+    it('should handle shoot:failed messages with empty reason', async () => {
+      const mockSceneContext = createMockScene();
+      Object.assign(scene, mockSceneContext);
+
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      scene.create();
+
+      // Trigger the delayed callback to create WebSocket
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Simulate shoot:failed message with empty reason
+      const shootFailedMessage = {
+        data: JSON.stringify({
+          type: 'shoot:failed',
+          timestamp: Date.now(),
+          data: {
+            reason: 'empty'
+          }
+        })
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(shootFailedMessage as MessageEvent);
+      }
+
+      expect(consoleSpy).toHaveBeenCalledWith('Click! Magazine empty');
+
+      consoleSpy.mockRestore();
+    });
+
+    it('should not log for shoot:failed with non-empty reason', async () => {
+      const mockSceneContext = createMockScene();
+      Object.assign(scene, mockSceneContext);
+
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      scene.create();
+
+      // Trigger the delayed callback to create WebSocket
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Simulate shoot:failed message with cooldown reason
+      const shootFailedMessage = {
+        data: JSON.stringify({
+          type: 'shoot:failed',
+          timestamp: Date.now(),
+          data: {
+            reason: 'cooldown'
+          }
+        })
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(shootFailedMessage as MessageEvent);
+      }
+
+      // Should NOT log the empty click message
+      expect(consoleSpy).not.toHaveBeenCalledWith('Click! Magazine empty');
+
+      consoleSpy.mockRestore();
+    });
+  });
+
+  describe('update with projectiles', () => {
+    it('should update projectileManager on each frame', async () => {
+      const mockSceneContext = createMockScene();
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      // Spy on projectileManager.update
+      const updateSpy = vi.spyOn(scene['projectileManager'], 'update');
+
+      // Call update with 16.67ms delta (60 FPS)
+      scene.update(0, 16.67);
+
+      // Verify projectileManager.update was called with delta in seconds
+      expect(updateSpy).toHaveBeenCalledWith(0.01667);
+    });
+  });
+
+  describe('shooting and reload input', () => {
+    it('should setup pointerdown handler for shooting after connection', async () => {
+      const mockSceneContext = createMockScene();
+      // Add input.on mock
+      const inputOnMock = vi.fn();
+      mockSceneContext.input = {
+        ...mockSceneContext.input,
+        on: inputOnMock,
+        keyboard: {
+          addKey: vi.fn().mockReturnValue({
+            on: vi.fn(),
+          }),
+          addKeys: mockSceneContext.input.keyboard.addKeys,
+        },
+      };
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      // Trigger the delayed callback to start connection
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Set readyState to OPEN and trigger onopen
+      mockWebSocketInstance.readyState = 1;
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen(new Event('open'));
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Verify input.on was called for pointerdown
+      expect(inputOnMock).toHaveBeenCalledWith('pointerdown', expect.any(Function));
+    });
+
+    it('should setup R key for reload after connection', async () => {
+      const mockSceneContext = createMockScene();
+      const reloadKeyOnMock = vi.fn();
+      const addKeyMock = vi.fn().mockReturnValue({
+        on: reloadKeyOnMock,
+      });
+      mockSceneContext.input = {
+        ...mockSceneContext.input,
+        on: vi.fn(),
+        keyboard: {
+          addKey: addKeyMock,
+          addKeys: mockSceneContext.input.keyboard.addKeys,
+        },
+      };
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      // Trigger the delayed callback to start connection
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Set readyState to OPEN and trigger onopen
+      mockWebSocketInstance.readyState = 1;
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen(new Event('open'));
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Verify R key was added
+      expect(addKeyMock).toHaveBeenCalledWith('R');
+
+      // Verify 'down' handler was registered
+      expect(reloadKeyOnMock).toHaveBeenCalledWith('down', expect.any(Function));
+    });
+
+    it('should trigger reload when R key is pressed', async () => {
+      const mockSceneContext = createMockScene();
+      let reloadKeyHandler: (() => void) | null = null;
+      const reloadKeyOnMock = vi.fn((_event: string, handler: () => void) => {
+        reloadKeyHandler = handler;
+      });
+      mockSceneContext.input = {
+        ...mockSceneContext.input,
+        on: vi.fn(),
+        keyboard: {
+          addKey: vi.fn().mockReturnValue({
+            on: reloadKeyOnMock,
+          }),
+          addKeys: mockSceneContext.input.keyboard.addKeys,
+        },
+      };
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      // Trigger the delayed callback to start connection
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Set readyState to OPEN and trigger onopen
+      mockWebSocketInstance.readyState = 1;
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen(new Event('open'));
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Spy on shootingManager.reload
+      const reloadSpy = vi.spyOn(scene['shootingManager'], 'reload');
+
+      // Trigger the reload key handler
+      expect(reloadKeyHandler).not.toBeNull();
+      reloadKeyHandler!();
+
+      expect(reloadSpy).toHaveBeenCalled();
+    });
+
+    it('should trigger shoot with correct aim angle on pointerdown', async () => {
+      const mockSceneContext = createMockScene();
+      let pointerdownHandler: (() => void) | null = null;
+      const inputOnMock = vi.fn((_event: string, handler: () => void) => {
+        if (_event === 'pointerdown') {
+          pointerdownHandler = handler;
+        }
+      });
+      mockSceneContext.input = {
+        ...mockSceneContext.input,
+        on: inputOnMock,
+        keyboard: {
+          addKey: vi.fn().mockReturnValue({
+            on: vi.fn(),
+          }),
+          addKeys: mockSceneContext.input.keyboard.addKeys,
+        },
+      };
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      // Trigger the delayed callback to start connection
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Set readyState to OPEN and trigger onopen
+      mockWebSocketInstance.readyState = 1;
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen(new Event('open'));
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Spy on shootingManager methods
+      const setAimAngleSpy = vi.spyOn(scene['shootingManager'], 'setAimAngle');
+      const shootSpy = vi.spyOn(scene['shootingManager'], 'shoot');
+
+      // Mock inputManager.getAimAngle to return a specific angle
+      vi.spyOn(scene['inputManager'], 'getAimAngle').mockReturnValue(1.5);
+
+      // Trigger the pointerdown handler
+      expect(pointerdownHandler).not.toBeNull();
+      pointerdownHandler!();
+
+      expect(setAimAngleSpy).toHaveBeenCalledWith(1.5);
+      expect(shootSpy).toHaveBeenCalled();
+    });
+
+    it('should handle missing keyboard gracefully', async () => {
+      const mockSceneContext = createMockScene();
+      // Test when keyboard is not available (mobile devices, etc.)
+      (mockSceneContext.input as { keyboard: unknown }).keyboard = null;
+      mockSceneContext.input.on = vi.fn();
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      // Trigger the delayed callback to start connection
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Set readyState to OPEN and trigger onopen
+      mockWebSocketInstance.readyState = 1;
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen(new Event('open'));
+      }
+
+      // Should not throw error
+      await expect(new Promise(resolve => setTimeout(resolve, 10))).resolves.toBeUndefined();
+    });
+  });
+
+  describe('ammo display', () => {
+    it('should create ammo text display after connection', async () => {
+      const mockSceneContext = createMockScene();
+      mockSceneContext.input = {
+        ...mockSceneContext.input,
+        on: vi.fn(),
+        keyboard: {
+          addKey: vi.fn().mockReturnValue({ on: vi.fn() }),
+          addKeys: mockSceneContext.input.keyboard.addKeys,
+        },
+      };
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      // Trigger the delayed callback to start connection
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Set readyState to OPEN and trigger onopen
+      mockWebSocketInstance.readyState = 1;
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen(new Event('open'));
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Verify ammo text was created (multiple text calls: title, connection status, ammo)
+      const textCalls = mockSceneContext.add.text.mock.calls;
+      expect(textCalls.length).toBeGreaterThanOrEqual(3);
+
+      // Check ammo text specifically (at position 10, 50)
+      const ammoTextCall = textCalls.find((call: unknown[]) => call[0] === 10 && call[1] === 50);
+      expect(ammoTextCall).toBeDefined();
+    });
+
+    it('should update ammo display when weapon:state received', async () => {
+      const mockSceneContext = createMockScene();
+      const mockAmmoText = {
+        setText: vi.fn(),
+        setOrigin: vi.fn().mockReturnThis(),
+      };
+      let textCallCount = 0;
+      mockSceneContext.add.text = vi.fn().mockImplementation(() => {
+        textCallCount++;
+        // Third text call is the ammo display
+        if (textCallCount === 3) {
+          return mockAmmoText;
+        }
+        return { setOrigin: vi.fn().mockReturnThis() };
+      });
+      mockSceneContext.input = {
+        ...mockSceneContext.input,
+        on: vi.fn(),
+        keyboard: {
+          addKey: vi.fn().mockReturnValue({ on: vi.fn() }),
+          addKeys: mockSceneContext.input.keyboard.addKeys,
+        },
+      };
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      // Trigger the delayed callback to start connection
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Set readyState to OPEN and trigger onopen
+      mockWebSocketInstance.readyState = 1;
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen(new Event('open'));
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Now send weapon:state message
+      const weaponStateMessage = {
+        data: JSON.stringify({
+          type: 'weapon:state',
+          timestamp: Date.now(),
+          data: {
+            currentAmmo: 10,
+            maxAmmo: 15,
+            isReloading: false,
+            canShoot: true
+          }
+        })
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(weaponStateMessage as MessageEvent);
+      }
+
+      // Verify ammo text was updated
+      expect(mockAmmoText.setText).toHaveBeenCalledWith('10/15');
+    });
+
+    it('should display RELOADING indicator when reloading', async () => {
+      const mockSceneContext = createMockScene();
+      const mockAmmoText = {
+        setText: vi.fn(),
+        setOrigin: vi.fn().mockReturnThis(),
+      };
+      let textCallCount = 0;
+      mockSceneContext.add.text = vi.fn().mockImplementation(() => {
+        textCallCount++;
+        if (textCallCount === 3) {
+          return mockAmmoText;
+        }
+        return { setOrigin: vi.fn().mockReturnThis() };
+      });
+      mockSceneContext.input = {
+        ...mockSceneContext.input,
+        on: vi.fn(),
+        keyboard: {
+          addKey: vi.fn().mockReturnValue({ on: vi.fn() }),
+          addKeys: mockSceneContext.input.keyboard.addKeys,
+        },
+      };
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      // Trigger the delayed callback to start connection
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Set readyState to OPEN and trigger onopen
+      mockWebSocketInstance.readyState = 1;
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen(new Event('open'));
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Send weapon:state with isReloading true
+      const weaponStateMessage = {
+        data: JSON.stringify({
+          type: 'weapon:state',
+          timestamp: Date.now(),
+          data: {
+            currentAmmo: 5,
+            maxAmmo: 15,
+            isReloading: true,
+            canShoot: false
+          }
+        })
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(weaponStateMessage as MessageEvent);
+      }
+
+      // Verify ammo text shows reloading indicator
+      expect(mockAmmoText.setText).toHaveBeenCalledWith('5/15 [RELOADING]');
+    });
+  });
+
+  describe('connection status display', () => {
+    it('should display connection status text after successful connection', async () => {
+      const mockSceneContext = createMockScene();
+      mockSceneContext.input = {
+        ...mockSceneContext.input,
+        on: vi.fn(),
+        keyboard: {
+          addKey: vi.fn().mockReturnValue({ on: vi.fn() }),
+          addKeys: mockSceneContext.input.keyboard.addKeys,
+        },
+      };
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      // Trigger the delayed callback to start connection
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Set readyState to OPEN and trigger onopen
+      mockWebSocketInstance.readyState = 1;
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen(new Event('open'));
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Check for green connection status text
+      const textCalls = mockSceneContext.add.text.mock.calls;
+      const connectionStatusCall = textCalls.find(
+        (call: unknown[]) => {
+          const text = call[2] as string | undefined;
+          const style = call[3] as { color?: string } | undefined;
+          return text?.includes('Connected') && style?.color === '#00ff00';
+        }
+      );
+      expect(connectionStatusCall).toBeDefined();
+    });
+
+    it('should display error text after connection failure', async () => {
+      const mockSceneContext = createMockScene();
+      Object.assign(scene, mockSceneContext);
+
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      scene.create();
+
+      // Trigger the delayed callback to start connection
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Simulate connection failure
+      if (mockWebSocketInstance.onerror) {
+        mockWebSocketInstance.onerror(new Event('error'));
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Check for red error text
+      const textCalls = mockSceneContext.add.text.mock.calls;
+      const errorTextCall = textCalls.find(
+        (call: unknown[]) => {
+          const text = call[2] as string | undefined;
+          const style = call[3] as { color?: string } | undefined;
+          return text?.includes('Failed') && style?.color === '#ff0000';
+        }
+      );
+      expect(errorTextCall).toBeDefined();
+
+      consoleErrorSpy.mockRestore();
     });
   });
 });
