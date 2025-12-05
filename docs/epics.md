@@ -312,7 +312,7 @@ So that the multiplayer foundation is proven to work.
 
 **FRs Covered:** FR2 (movement/aim), FR3 (shooting), FR7 (respawn), FR10 (deathmatch), FR12 (server authority), FR16 (performance), FR17 (browser access)
 
-**Epic Status:** 🟢 IN PROGRESS (4/7 stories complete, ~57% done)
+**Epic Status:** 🟢 IN PROGRESS (5/9 stories complete, ~56% done)
 
 ---
 
@@ -326,28 +326,37 @@ So that the multiplayer foundation is proven to work.
   - Includes Story 2.2.1: Fix aim coordinate transformation for Scale.FIT mode
 - ✅ **Story 2.3**: Basic Shooting with Pistol (99.34% client, 90.2% network coverage)
 - ✅ **Story 2.4**: Server-Authoritative Hit Detection (99.36% client, 85.4% network, 92.6% game coverage)
+- ✅ **Story 2.5**: Health System and Death (92.24% client, 93.0% server coverage)
+  - Includes acceptance testing with Playwright browser automation
+  - Includes client-side prediction bug fix for aim indicators
 
 **Remaining Stories:**
-- 🔵 **Story 2.5**: Health System and Death (NEXT - ready to start, unblocks 2.6 & 2.7)
-- ⏸️ **Story 2.6**: Free-For-All Deathmatch Win Condition (blocked by 2.5)
-- ⏸️ **Story 2.7**: Health Regeneration (blocked by 2.5)
+- 🔵 **Story 2.6.1**: Match Timer and Kill Target Tracking (NEXT - ready to start)
+- ⏸️ **Story 2.6.2**: Match End Detection and Winner Determination (blocked by 2.6.1)
+- ⏸️ **Story 2.6.3**: Match End Screen and Lobby Return (blocked by 2.6.2)
+- 🔵 **Story 2.7.1**: Server-Side Health Regeneration (NEXT - ready to start)
+- ⏸️ **Story 2.7.2**: Client-Side Regeneration Feedback (blocked by 2.7.1)
 
 **Deferred Enhancements:**
 - 📋 **Story 2.4.1**: Lag Compensation for Hit Detection (deferred to Epic 4, Story 4.5)
 
 **Key Achievements:**
 - All completed stories exceed 90% test coverage requirement
-- Proactive bug fixes: coordinate transformation (2.2.1), network coverage (2.1.1)
-- Comprehensive integration testing established (53 integration tests passing)
+- Proactive bug fixes: coordinate transformation (2.2.1), network coverage (2.1.1), client-side prediction (2.5)
+- Comprehensive integration testing established (39 integration tests passing)
 - High code quality: zero TypeScript errors, zero ESLint warnings, go vet/gofmt clean
 - Server-authoritative architecture proven with hit detection, movement validation, and projectile physics
+- Full combat loop complete: movement, aim, shoot, hit detection, health, death, respawn, kill tracking
 
 **Key Learnings:**
 - **Integration tests critical for Phaser apps**: Story 2.2.1 revealed that unit tests with mocked Phaser APIs can pass while real implementation fails due to coordinate transformation bugs. Now require integration tests for coordinate-dependent features.
 - **Test quality standards paying off**: Catching issues before "done" status (e.g., network coverage in 2.1, test assertions in 2.4) prevents technical debt.
 - **Incremental refinement works**: Stories 2.1.1, 2.2.1, and 2.2 follow-up show value of addressing quality issues immediately rather than deferring.
+- **Client-side prediction is critical for responsive gameplay**: Story 2.5 revealed that server-authoritative state (20Hz) without client-side prediction causes laggy visuals. Now require immediate local updates for aim indicators and movement feedback.
+- **Acceptance testing with real browsers catches issues unit tests miss**: Playwright MCP testing revealed visual feedback bugs that passed all unit/integration tests. Browser automation now recommended for story completion validation.
+- **Smaller stories improve agent success rate**: Breaking Story 2.6 (6-8 systems) into 3 sub-stories and Story 2.7 (4 systems) into 2 sub-stories creates more focused tasks that agents can complete in 1-3 hours.
 
-**Estimated Completion:** 3-4 more stories to deliver fully playable deathmatch (Epic 2 goal achieved when Story 2.7 complete).
+**Estimated Completion:** 4 more stories to deliver fully playable deathmatch (Epic 2 goal achieved when Story 2.7.2 complete).
 
 ---
 
@@ -519,69 +528,161 @@ So that combat has meaningful consequences.
 
 ---
 
-### Story 2.6: Implement Free-For-All Deathmatch Win Condition
+### Story 2.6.1: Implement Match Timer and Kill Target Tracking
 
 As a player,
-I want matches to end when someone reaches the kill target,
-So that games have clear winners and limited duration.
+I want to see how much time remains in the match,
+So that I can adjust my strategy accordingly.
 
 **Acceptance Criteria:**
 
-**Given** a Free-For-All match with 8 players
-**When** any player reaches 20 kills OR 7 minutes elapse
-**Then** the match ends and winner is determined
+**Given** a Free-For-All match starts
+**When** the match is in progress
+**Then** a countdown timer displays at top-center showing remaining time (MM:SS format)
 
-**And** if kill target reached: player with 20 kills wins
-**And** if time expires: player with most kills wins
-**And** tie: multiple players can share victory
-
-**And** match end screen displays:
-- Winner(s) name and final score
-- All players ranked by kills
-- XP earned breakdown
-- "Play Again" button for quick re-queue
-
-**And** match results are saved to database (kills, deaths, winner)
-**And** players return to lobby after 10 seconds or "Play Again" click
+**And** server tracks match start time and calculates elapsed time
+**And** server broadcasts remaining time every second via `match:timer` message
+**And** match ends when any player reaches 20 kills
+**And** match ends when 420 seconds (7 minutes) elapse
+**And** server checks kill target after each kill event
+**And** server checks time limit in game loop every tick
 
 **Prerequisites:** Story 2.5
 
 **Technical Notes:**
-- Match config: `{mode: 'FFA', killTarget: 20, timeLimitSeconds: 420}`
-- Server tracks kills per player in `room.playerStats`
-- Timer runs on server, broadcasts remaining time every second
-- Win condition checked after each kill event
-- Match end message: `match:ended` with {winnerId, finalScores, xpEarned}
-- XP calculation: `(kills * 100) + (win ? 100 : 0) + (topThree ? 50 : 0) + 50`
+- Match config: `{killTarget: 20, timeLimitSeconds: 420}`
+- Server broadcasts `match:timer` with {remainingSeconds: number}
+- Client displays timer as "7:00" → "6:59" → ... → "0:00"
+- Kill target checked in onKillCredit callback
+- Time limit checked in game server tick loop
+- Match ends by calling endMatch() method
 
 ---
 
-### Story 2.7: Implement Health Regeneration
+### Story 2.6.2: Implement Match End Detection and Winner Determination
 
 As a player,
-I want my health to regenerate after not taking damage,
+I want to know who won the match,
+So that I can celebrate victory or learn from defeat.
+
+**Acceptance Criteria:**
+
+**Given** a match ends (via kill target or time limit)
+**When** the server determines the match outcome
+**Then** the correct winner is identified
+
+**And** if kill target reached: player with 20 kills wins
+**And** if time expires: player with most kills wins
+**And** if tie: multiple players share victory (winner array)
+**And** server broadcasts `match:ended` message with {winners: string[], finalScores: PlayerScore[], reason: string}
+**And** client receives match end event and freezes gameplay (disables input)
+**And** all players see the same match result simultaneously
+
+**Prerequisites:** Story 2.6.1
+
+**Technical Notes:**
+- Winner determination logic in `internal/game/gameserver.go`
+- PlayerScore: `{playerId, playerName, kills, deaths, xp}`
+- Reason: "kill_target" | "time_limit"
+- Freeze gameplay: disable input handlers on client
+- Server stops accepting input:state messages after match end
+- Match state: "active" → "ended"
+
+---
+
+### Story 2.6.3: Implement Match End Screen and Lobby Return
+
+As a player,
+I want to see detailed match results after the game ends,
+So that I can review my performance and play again quickly.
+
+**Acceptance Criteria:**
+
+**Given** a match has ended
+**When** I view the match end screen
+**Then** I see winner(s) name(s) and final scores
+
+**And** all players are ranked by kills (descending order)
+**And** my XP earned is displayed with breakdown
+**And** XP calculation: `(kills * 100) + (win ? 100 : 0) + (topThree ? 50 : 0) + 50`
+**And** "Play Again" button is visible and clickable
+**And** 10-second countdown shows before auto-return to lobby
+**And** clicking "Play Again" immediately returns to lobby
+**And** match results are saved to database (kills, deaths, winner, timestamp)
+**And** after 10 seconds OR button click, all players return to lobby
+
+**Prerequisites:** Story 2.6.2
+
+**Technical Notes:**
+- Match end screen UI in React component (MatchEndScreen.tsx)
+- Rankings sorted by kills descending, then by deaths ascending
+- XP breakdown shows: base (50) + kills + win bonus + top 3 bonus
+- Database schema: matches table (id, timestamp, winnerId, mode, duration)
+- Database schema: match_participants table (matchId, playerId, kills, deaths, xp)
+- Lobby return: transition to lobby scene or disconnect/reconnect flow
+- Auto-return timer: 10 second countdown on match end screen
+
+---
+
+### Story 2.7.1: Implement Server-Side Health Regeneration
+
+As a player,
+I want my health to regenerate when I avoid combat,
 So that tactical disengagement is rewarded.
 
 **Acceptance Criteria:**
 
-**Given** my health is at 40 HP
+**Given** my health is at 40 HP after taking damage
 **When** I avoid damage for 5 consecutive seconds
 **Then** my health begins regenerating at 10 HP per second
 
 **And** regeneration continues until health reaches 100 HP (full)
 **And** taking any damage instantly stops regeneration and resets the 5-second timer
-**And** regenerating health is visible on health bar with distinct color (lighter green)
-**And** regeneration sound effect plays (subtle pulsing)
+**And** regeneration is server-authoritative (calculated on server, not client)
+**And** server broadcasts health updates during regeneration via existing player:move or new player:health_update message
+**And** regeneration state is included in player state for all clients
 
 **Prerequisites:** Story 2.5
 
 **Technical Notes:**
-- Regeneration delay: 5 seconds after last damage taken
-- Regeneration rate: 10 HP/second (takes 6 seconds to heal from 40 to 100)
-- Server tracks `lastDamageTime` per player
-- Server applies regeneration in tick loop: `if (now - lastDamageTime > 5000) { health = min(100, health + 10 * deltaTime) }`
-- Client renders regeneration visual: health bar pulses with glow effect
-- Regeneration stops immediately on damage (`lastDamageTime = now`)
+- Add `lastDamageTime` field to PlayerState in `internal/game/player.go`
+- Regeneration delay: 5000ms (5 seconds)
+- Regeneration rate: 10 HP/second in game loop
+- Server tick loop: `if (now - lastDamageTime > 5000 && health < 100) { health = min(100, health + 10 * deltaTime) }`
+- Update lastDamageTime in TakeDamage() method
+- Broadcast health updates: piggyback on player:move or create player:health_update message
+- Add `isRegenerating` boolean to player state for client feedback
+
+---
+
+### Story 2.7.2: Implement Client-Side Regeneration Feedback
+
+As a player,
+I want clear visual and audio feedback when my health is regenerating,
+So that I know when to stay safe versus re-engage.
+
+**Acceptance Criteria:**
+
+**Given** my health is regenerating on the server
+**When** the client receives regeneration state updates
+**Then** my health bar displays a distinct visual style
+
+**And** health bar shows lighter green color during regeneration (vs normal dark green)
+**And** health bar pulses with glow effect while regenerating (CSS animation or Phaser tween)
+**And** regeneration sound effect plays (subtle pulsing audio, looped)
+**And** visual and audio feedback stops immediately when regeneration ends
+**And** feedback works for both local player and remote players (see others regenerating)
+
+**Prerequisites:** Story 2.7.1
+
+**Technical Notes:**
+- Update HealthBarUI component to accept `isRegenerating` prop
+- Regenerating style: lighter green (#90EE90 vs #228B22)
+- Glow effect: scale pulse (1.0 → 1.05 → 1.0) over 1 second, repeat
+- Audio: load regeneration sound (regen.mp3), play looped when isRegenerating = true
+- Stop audio when isRegenerating = false
+- PlayerManager updates health bar state based on server messages
+- Remote players: show same visual feedback on their health bars (if visible)
 
 ---
 
