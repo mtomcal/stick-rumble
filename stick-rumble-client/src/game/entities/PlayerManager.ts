@@ -138,13 +138,15 @@ export class PlayerManager {
 
       // Apply death visual effects
       if (state.deathTime !== undefined) {
-        // Dead player: fade to 50% opacity and gray tint
+        // Dead player: fade to 50% opacity and gray color
         sprite.setAlpha(0.5);
-        (sprite as Phaser.GameObjects.Rectangle & { setTint: (color: number) => void }).setTint(0x888888);
+        sprite.setFillStyle(0x888888);
       } else {
-        // Alive player: full opacity and no tint
+        // Alive player: full opacity and restore original color
         sprite.setAlpha(1.0);
-        (sprite as Phaser.GameObjects.Rectangle & { clearTint: () => void }).clearTint();
+        const isLocal = state.id === this.localPlayerId;
+        const color = isLocal ? 0x00ff00 : 0xff0000;
+        sprite.setFillStyle(color);
       }
 
       // Update label position
