@@ -402,6 +402,11 @@ func (gs *GameServer) checkRespawns() {
 			// Respawn the player
 			player.Respawn(spawnPos)
 
+			// Reset weapon state to default pistol (AC: "respawn with default pistol")
+			gs.mu.Lock()
+			gs.weaponStates[player.ID] = NewWeaponState(NewPistol())
+			gs.mu.Unlock()
+
 			// Notify via callback
 			if gs.onRespawn != nil {
 				gs.onRespawn(player.ID, spawnPos)
