@@ -24,6 +24,7 @@ export class GameScene extends Phaser.Scene {
   private respawnCountdownText: Phaser.GameObjects.Text | null = null;
   private localPlayerHealth: number = 100;
   private damageFlashOverlay: Phaser.GameObjects.Rectangle | null = null;
+  private matchTimerText: Phaser.GameObjects.Text | null = null;
 
   constructor() {
     super({ key: 'GameScene' });
@@ -50,6 +51,14 @@ export class GameScene extends Phaser.Scene {
       fontSize: '18px',
       color: '#ffffff'
     });
+
+    // Add match timer at top-center
+    this.matchTimerText = this.add.text(ARENA.WIDTH / 2, 10, '7:00', {
+      fontSize: '24px',
+      color: '#ffffff',
+      fontStyle: 'bold',
+    });
+    this.matchTimerText.setOrigin(0.5, 0); // Center horizontally
 
     // Initialize player manager
     this.playerManager = new PlayerManager(this);
@@ -226,6 +235,12 @@ export class GameScene extends Phaser.Scene {
       }
     });
 
+    // Handle match timer updates
+    this.wsClient.on('match:timer', (data) => {
+      const timerData = data as { remainingSeconds: number };
+      this.updateMatchTimer(timerData.remainingSeconds);
+    });
+
     // Defer connection until next frame to ensure scene is fully initialized
     this.time.delayedCall(100, () => {
       this.wsClient.connect()
@@ -291,6 +306,30 @@ export class GameScene extends Phaser.Scene {
       const [current, max] = this.shootingManager.getAmmoInfo();
       const reloading = this.shootingManager.isReloading() ? ' [RELOADING]' : '';
       this.ammoText.setText(`${current}/${max}${reloading}`);
+    }
+  }
+
+  /**
+   * Update the match timer display with formatted time (MM:SS)
+   */
+  private updateMatchTimer(remainingSeconds: number): void {
+    if (!this.matchTimerText) {
+      return;
+    }
+
+    const minutes = Math.floor(remainingSeconds / 60);
+    const seconds = remainingSeconds % 60;
+    const formattedTime = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+    this.matchTimerText.setText(formattedTime);
+
+    // Change color when time is running out (< 60 seconds)
+    if (remainingSeconds < 60) {
+      this.matchTimerText.setColor('#ff0000'); // Red
+    } else if (remainingSeconds < 120) {
+      this.matchTimerText.setColor('#ffff00'); // Yellow
+    } else {
+      this.matchTimerText.setColor('#ffffff'); // White
     }
   }
 

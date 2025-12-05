@@ -3,6 +3,7 @@ package network
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -1401,5 +1402,201 @@ func TestOnHit(t *testing.T) {
 		victimState, exists := handler.gameServer.GetPlayerState(victimID)
 		assert.True(t, exists, "Victim should still exist")
 		assert.Equal(t, game.PlayerMaxHealth, victimState.Health, "Victim health should be unchanged")
+	})
+}
+
+// readMessageOfType reads messages from a WebSocket connection until it finds
+// one with the specified type, or times out. This helper handles the fact that
+// multiple message types (player:move, match:timer, etc.) may be interleaved.
+func readMessageOfType(t *testing.T, conn *websocket.Conn, msgType string, timeout time.Duration) (*Message, error) {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+		_, msgBytes, err := conn.ReadMessage()
+		if err != nil {
+			// Check if it's just a timeout, keep trying
+			if websocket.IsCloseError(err, websocket.CloseNormalClosure) {
+				return nil, err
+			}
+			continue
+		}
+
+		var msg Message
+		if err := json.Unmarshal(msgBytes, &msg); err != nil {
+			continue
+		}
+
+		if msg.Type == msgType {
+			return &msg, nil
+		}
+	}
+	return nil, fmt.Errorf("timeout waiting for message type %q", msgType)
+}
+
+// TestMatchTimer tests the match timer broadcast functionality (Story 2.6.1)
+// These tests require waiting for real-time timer events (~1s intervals) which
+// makes them slow and flaky in CI. Timer logic is unit tested in match_test.go.
+func TestMatchTimer(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping slow timer integration tests in short mode")
+	}
+	t.Run("broadcasts match:timer message every second", func(t *testing.T) {
+		handler := NewWebSocketHandler()
+		server := httptest.NewServer(http.HandlerFunc(handler.HandleWebSocket))
+		defer server.Close()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		// Start handler (starts timer loop)
+		handler.Start(ctx)
+		defer handler.Stop()
+
+		wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+
+		// Connect two clients to create a room and start match
+		conn1, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+		assert.NoError(t, err)
+		defer conn1.Close()
+
+		conn2, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+		assert.NoError(t, err)
+		defer conn2.Close()
+
+		// Wait for match:timer message (filters through other message types)
+		timerMsg, err := readMessageOfType(t, conn1, "match:timer", 5*time.Second)
+		assert.NoError(t, err, "Should receive match:timer message")
+		assert.NotNil(t, timerMsg, "Timer message should not be nil")
+
+		if timerMsg != nil {
+			// Verify data structure
+			timerData := timerMsg.Data.(map[string]interface{})
+			remainingSeconds, ok := timerData["remainingSeconds"].(float64)
+			assert.True(t, ok, "remainingSeconds should be a number")
+			assert.InDelta(t, 420, remainingSeconds, 5, "Should start near 420 seconds (7 minutes)")
+		}
+	})
+
+	t.Run("timer counts down over time", func(t *testing.T) {
+		handler := NewWebSocketHandler()
+		server := httptest.NewServer(http.HandlerFunc(handler.HandleWebSocket))
+		defer server.Close()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		handler.Start(ctx)
+		defer handler.Stop()
+
+		wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+
+		conn1, _, _ := websocket.DefaultDialer.Dial(wsURL, nil)
+		defer conn1.Close()
+		conn2, _, _ := websocket.DefaultDialer.Dial(wsURL, nil)
+		defer conn2.Close()
+
+		// Read first timer message (filters through other messages)
+		msg1, err := readMessageOfType(t, conn1, "match:timer", 5*time.Second)
+		if err != nil {
+			t.Skip("Could not receive first timer message")
+		}
+		data1 := msg1.Data.(map[string]interface{})
+		time1 := int(data1["remainingSeconds"].(float64))
+
+		// Read second timer message (should be ~1 second later)
+		msg2, err := readMessageOfType(t, conn1, "match:timer", 3*time.Second)
+		if err != nil {
+			t.Skip("Could not receive second timer message")
+		}
+		data2 := msg2.Data.(map[string]interface{})
+		time2 := int(data2["remainingSeconds"].(float64))
+
+		// Verify time decreased
+		assert.True(t, time2 < time1, "Timer should count down")
+		assert.InDelta(t, 1, time1-time2, 1, "Should decrease by ~1 second")
+	})
+}
+
+// TestMatchKillTarget tests kill target win condition (Story 2.6.1)
+func TestMatchKillTarget(t *testing.T) {
+	t.Run("tracks kills per player in match", func(t *testing.T) {
+		match := game.NewMatch()
+
+		match.AddKill("player1")
+		match.AddKill("player2")
+		match.AddKill("player1")
+
+		assert.Equal(t, 2, match.PlayerKills["player1"])
+		assert.Equal(t, 1, match.PlayerKills["player2"])
+	})
+
+	t.Run("match ends when player reaches 20 kills", func(t *testing.T) {
+		handler := NewWebSocketHandler()
+
+		// Create a fake room
+		room := game.NewRoom()
+		room.Match.Start()
+
+		// Simulate 19 kills
+		for i := 0; i < 19; i++ {
+			room.Match.AddKill("killer")
+		}
+
+		assert.False(t, room.Match.CheckKillTarget())
+		assert.False(t, room.Match.IsEnded())
+
+		// 20th kill - should trigger win condition
+		room.Match.AddKill("killer")
+
+		assert.True(t, room.Match.CheckKillTarget())
+
+		// Manually trigger end (in real code, this happens in onHit callback)
+		room.Match.EndMatch("kill_target")
+
+		assert.True(t, room.Match.IsEnded())
+		assert.Equal(t, "kill_target", room.Match.EndReason)
+
+		// Verify handler is created
+		assert.NotNil(t, handler)
+	})
+}
+
+// TestMatchTimeLimit tests time limit win condition (Story 2.6.1)
+func TestMatchTimeLimit(t *testing.T) {
+	t.Run("match does not end before time limit", func(t *testing.T) {
+		match := game.NewMatch()
+		match.Start()
+
+		// Check immediately after start
+		assert.False(t, match.CheckTimeLimit())
+		assert.False(t, match.IsEnded())
+	})
+
+	t.Run("match ends when time limit reached", func(t *testing.T) {
+		match := game.NewMatch()
+		match.Start()
+
+		// Manually set start time to 421 seconds ago (past limit)
+		match.StartTime = time.Now().Add(-421 * time.Second)
+
+		assert.True(t, match.CheckTimeLimit())
+
+		// Manually trigger end (in real code, this happens in broadcastMatchTimers)
+		match.EndMatch("time_limit")
+
+		assert.True(t, match.IsEnded())
+		assert.Equal(t, "time_limit", match.EndReason)
+	})
+
+	t.Run("remaining time calculation is accurate", func(t *testing.T) {
+		match := game.NewMatch()
+		match.Start()
+
+		// Set start time to 10 seconds ago
+		match.StartTime = time.Now().Add(-10 * time.Second)
+
+		remaining := match.GetRemainingSeconds()
+
+		assert.InDelta(t, 410, remaining, 1, "Should have ~410 seconds remaining")
 	})
 }

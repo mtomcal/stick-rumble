@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -173,6 +174,16 @@ func (h *WebSocketHandler) onHit(hit game.HitEvent) {
 
 		if room != nil {
 			room.Broadcast(creditBytes, "")
+
+			// Track kill in match and check win conditions
+			room.Match.AddKill(hit.AttackerID)
+
+			// Check if kill target reached
+			if room.Match.CheckKillTarget() {
+				room.Match.EndMatch("kill_target")
+				log.Printf("Match ended in room %s: kill target reached", room.ID)
+				// TODO Story 2.6.2: Broadcast match:ended message
+			}
 		}
 	}
 }
@@ -200,6 +211,61 @@ func (h *WebSocketHandler) onRespawn(playerID string, position game.Vector2) {
 	room := h.roomManager.GetRoomByPlayerID(playerID)
 	if room != nil {
 		room.Broadcast(msgBytes, "")
+	}
+}
+
+// matchTimerLoop broadcasts match timer updates every second
+func (h *WebSocketHandler) matchTimerLoop(ctx context.Context) {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Println("Match timer loop stopped")
+			return
+		case <-ticker.C:
+			h.broadcastMatchTimers()
+		}
+	}
+}
+
+// broadcastMatchTimers broadcasts timer updates to all active rooms
+func (h *WebSocketHandler) broadcastMatchTimers() {
+	rooms := h.roomManager.GetAllRooms()
+
+	for _, room := range rooms {
+		// Skip if match ended
+		if room.Match.IsEnded() {
+			continue
+		}
+
+		remainingSeconds := room.Match.GetRemainingSeconds()
+
+		// Create match:timer message
+		timerMessage := Message{
+			Type:      "match:timer",
+			Timestamp: 0,
+			Data: map[string]interface{}{
+				"remainingSeconds": remainingSeconds,
+			},
+		}
+
+		msgBytes, err := json.Marshal(timerMessage)
+		if err != nil {
+			log.Printf("Error marshaling match:timer message: %v", err)
+			continue
+		}
+
+		// Broadcast to all players in room
+		room.Broadcast(msgBytes, "")
+
+		// Check if time limit reached
+		if room.Match.CheckTimeLimit() {
+			room.Match.EndMatch("time_limit")
+			log.Printf("Match ended in room %s: time limit reached", room.ID)
+			// TODO Story 2.6.2: Broadcast match:ended message
+		}
 	}
 }
 
@@ -241,9 +307,10 @@ func (h *WebSocketHandler) broadcastPlayerStates(playerStates []game.PlayerState
 // Global handler instance for the legacy function to share room state
 var globalHandler = NewWebSocketHandler()
 
-// Start starts the game server tick loop
+// Start starts the game server tick loop and match timer broadcasts
 func (h *WebSocketHandler) Start(ctx context.Context) {
 	h.gameServer.Start(ctx)
+	go h.matchTimerLoop(ctx)
 }
 
 // Stop stops the game server

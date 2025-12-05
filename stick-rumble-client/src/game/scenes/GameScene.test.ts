@@ -813,6 +813,188 @@ describe('GameScene', () => {
 
       consoleSpy.mockRestore();
     });
+
+    it('should handle match:timer messages and update timer display', async () => {
+      const mockSceneContext = createMockScene();
+      const mockTimerText = {
+        setText: vi.fn(),
+        setColor: vi.fn(),
+        setOrigin: vi.fn().mockReturnThis(),
+      };
+
+      // Track text creation to identify match timer text (created during scene setup)
+      let textCallCount = 0;
+      mockSceneContext.add.text = vi.fn().mockImplementation(() => {
+        textCallCount++;
+        // Second text call is the match timer (after title text)
+        if (textCallCount === 2) {
+          return mockTimerText;
+        }
+        return { setOrigin: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn() };
+      });
+
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      // Trigger the delayed callback to create WebSocket
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Simulate match:timer message with 420 seconds (7:00)
+      const timerMessage = {
+        data: JSON.stringify({
+          type: 'match:timer',
+          timestamp: Date.now(),
+          data: {
+            remainingSeconds: 420
+          }
+        })
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(timerMessage as MessageEvent);
+      }
+
+      // Verify timer text was updated with formatted time
+      expect(mockTimerText.setText).toHaveBeenCalledWith('7:00');
+
+      // Verify color is white for > 2 minutes
+      expect(mockTimerText.setColor).toHaveBeenCalledWith('#ffffff');
+    });
+
+    it('should update timer color to yellow when under 2 minutes', async () => {
+      const mockSceneContext = createMockScene();
+      const mockTimerText = {
+        setText: vi.fn(),
+        setColor: vi.fn(),
+        setOrigin: vi.fn().mockReturnThis(),
+      };
+
+      let textCallCount = 0;
+      mockSceneContext.add.text = vi.fn().mockImplementation(() => {
+        textCallCount++;
+        if (textCallCount === 2) {
+          return mockTimerText;
+        }
+        return { setOrigin: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn() };
+      });
+
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Simulate match:timer message with 90 seconds (1:30)
+      const timerMessage = {
+        data: JSON.stringify({
+          type: 'match:timer',
+          timestamp: Date.now(),
+          data: {
+            remainingSeconds: 90
+          }
+        })
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(timerMessage as MessageEvent);
+      }
+
+      expect(mockTimerText.setText).toHaveBeenCalledWith('1:30');
+      expect(mockTimerText.setColor).toHaveBeenCalledWith('#ffff00'); // Yellow
+    });
+
+    it('should update timer color to red when under 1 minute', async () => {
+      const mockSceneContext = createMockScene();
+      const mockTimerText = {
+        setText: vi.fn(),
+        setColor: vi.fn(),
+        setOrigin: vi.fn().mockReturnThis(),
+      };
+
+      let textCallCount = 0;
+      mockSceneContext.add.text = vi.fn().mockImplementation(() => {
+        textCallCount++;
+        if (textCallCount === 2) {
+          return mockTimerText;
+        }
+        return { setOrigin: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn() };
+      });
+
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Simulate match:timer message with 30 seconds (0:30)
+      const timerMessage = {
+        data: JSON.stringify({
+          type: 'match:timer',
+          timestamp: Date.now(),
+          data: {
+            remainingSeconds: 30
+          }
+        })
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(timerMessage as MessageEvent);
+      }
+
+      expect(mockTimerText.setText).toHaveBeenCalledWith('0:30');
+      expect(mockTimerText.setColor).toHaveBeenCalledWith('#ff0000'); // Red
+    });
+
+    it('should format timer correctly at 0:00', async () => {
+      const mockSceneContext = createMockScene();
+      const mockTimerText = {
+        setText: vi.fn(),
+        setColor: vi.fn(),
+        setOrigin: vi.fn().mockReturnThis(),
+      };
+
+      let textCallCount = 0;
+      mockSceneContext.add.text = vi.fn().mockImplementation(() => {
+        textCallCount++;
+        if (textCallCount === 2) {
+          return mockTimerText;
+        }
+        return { setOrigin: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn() };
+      });
+
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Simulate match:timer message with 0 seconds
+      const timerMessage = {
+        data: JSON.stringify({
+          type: 'match:timer',
+          timestamp: Date.now(),
+          data: {
+            remainingSeconds: 0
+          }
+        })
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(timerMessage as MessageEvent);
+      }
+
+      expect(mockTimerText.setText).toHaveBeenCalledWith('0:00');
+      expect(mockTimerText.setColor).toHaveBeenCalledWith('#ff0000'); // Red
+    });
   });
 
   describe('update with projectiles', () => {
@@ -1071,8 +1253,8 @@ describe('GameScene', () => {
       let textCallCount = 0;
       mockSceneContext.add.text = vi.fn().mockImplementation(() => {
         textCallCount++;
-        // Fourth text call is the ammo display (after title, health bar text, connection status)
-        if (textCallCount === 4) {
+        // Fifth text call is the ammo display (after title, match timer, health bar text, connection status)
+        if (textCallCount === 5) {
           return mockAmmoText;
         }
         return { setOrigin: vi.fn().mockReturnThis() };
@@ -1133,8 +1315,8 @@ describe('GameScene', () => {
       let textCallCount = 0;
       mockSceneContext.add.text = vi.fn().mockImplementation(() => {
         textCallCount++;
-        // Fourth text call is the ammo display (after title, health bar text, connection status)
-        if (textCallCount === 4) {
+        // Fifth text call is the ammo display (after title, match timer, health bar text, connection status)
+        if (textCallCount === 5) {
           return mockAmmoText;
         }
         return { setOrigin: vi.fn().mockReturnThis() };

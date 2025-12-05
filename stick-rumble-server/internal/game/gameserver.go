@@ -44,6 +44,12 @@ type GameServer struct {
 	// Callback for when a player respawns
 	onRespawn func(playerID string, position Vector2)
 
+	// Callback for match timer updates
+	onMatchTimer func(roomID string, remainingSeconds int)
+
+	// Callback for checking time limit across all rooms
+	onCheckTimeLimit func()
+
 	running bool
 	mu      sync.RWMutex
 	wg      sync.WaitGroup

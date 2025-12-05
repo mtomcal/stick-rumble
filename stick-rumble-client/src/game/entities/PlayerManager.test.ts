@@ -10,6 +10,7 @@ const createMockScene = () => {
     setAlpha: ReturnType<typeof vi.fn>;
     setTint: ReturnType<typeof vi.fn>;
     clearTint: ReturnType<typeof vi.fn>;
+    setFillStyle: ReturnType<typeof vi.fn>;
     destroy: ReturnType<typeof vi.fn>;
   }> = [];
 
@@ -36,6 +37,7 @@ const createMockScene = () => {
           setAlpha: vi.fn().mockReturnThis(),
           setTint: vi.fn().mockReturnThis(),
           clearTint: vi.fn().mockReturnThis(),
+          setFillStyle: vi.fn().mockReturnThis(),
           destroy: vi.fn(),
         };
         rectangles.push(rect);
@@ -463,9 +465,9 @@ describe('PlayerManager', () => {
 
       const sprite = mockScene.rectangles[0];
       const setAlphaSpy = vi.fn();
-      const setTintSpy = vi.fn();
+      const setFillStyleSpy = vi.fn();
       sprite.setAlpha = setAlphaSpy;
-      sprite.setTint = setTintSpy;
+      sprite.setFillStyle = setFillStyleSpy;
 
       // Mark as dead
       const deadState: PlayerState[] = [
@@ -475,7 +477,7 @@ describe('PlayerManager', () => {
       playerManager.updatePlayers(deadState);
 
       expect(setAlphaSpy).toHaveBeenCalledWith(0.5);
-      expect(setTintSpy).toHaveBeenCalledWith(0x888888);
+      expect(setFillStyleSpy).toHaveBeenCalledWith(0x888888);
     });
 
     it('should restore visual effects when player respawns', () => {
@@ -487,9 +489,9 @@ describe('PlayerManager', () => {
 
       const sprite = mockScene.rectangles[0];
       const setAlphaSpy = vi.fn();
-      const clearTintSpy = vi.fn();
+      const setFillStyleSpy = vi.fn();
       sprite.setAlpha = setAlphaSpy;
-      sprite.clearTint = clearTintSpy;
+      sprite.setFillStyle = setFillStyleSpy;
 
       // Respawn (deathTime removed)
       const aliveState: PlayerState[] = [
@@ -499,7 +501,7 @@ describe('PlayerManager', () => {
       playerManager.updatePlayers(aliveState);
 
       expect(setAlphaSpy).toHaveBeenCalledWith(1.0);
-      expect(clearTintSpy).toHaveBeenCalled();
+      expect(setFillStyleSpy).toHaveBeenCalledWith(0xff0000); // Red for non-local player
     });
 
     it('should return list of living players excluding dead ones', () => {
