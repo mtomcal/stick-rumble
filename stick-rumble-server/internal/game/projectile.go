@@ -10,12 +10,13 @@ import (
 
 // Projectile represents a bullet/projectile in the game world
 type Projectile struct {
-	ID        string    `json:"id"`
-	OwnerID   string    `json:"ownerId"`
-	Position  Vector2   `json:"position"`
-	Velocity  Vector2   `json:"velocity"`
-	CreatedAt time.Time `json:"-"`
-	Active    bool      `json:"-"`
+	ID            string    `json:"id"`
+	OwnerID       string    `json:"ownerId"`
+	Position      Vector2   `json:"position"`
+	Velocity      Vector2   `json:"velocity"`
+	SpawnPosition Vector2   `json:"-"` // Initial position for range validation
+	CreatedAt     time.Time `json:"-"`
+	Active        bool      `json:"-"`
 }
 
 // ProjectileSnapshot is the network-transmittable version of Projectile
@@ -29,9 +30,10 @@ type ProjectileSnapshot struct {
 // NewProjectile creates a new projectile with calculated velocity from angle
 func NewProjectile(ownerID string, startPos Vector2, aimAngle float64, speed float64) *Projectile {
 	return &Projectile{
-		ID:       uuid.New().String(),
-		OwnerID:  ownerID,
-		Position: startPos,
+		ID:            uuid.New().String(),
+		OwnerID:       ownerID,
+		Position:      startPos,
+		SpawnPosition: startPos, // Store spawn position for range validation
 		Velocity: Vector2{
 			X: math.Cos(aimAngle) * speed,
 			Y: math.Sin(aimAngle) * speed,

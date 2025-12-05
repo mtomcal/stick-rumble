@@ -1,0 +1,585 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>network: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">github.com/mtomcal/stick-rumble-server/internal/network/websocket_handler.go (85.4%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package network
+
+import (
+        "context"
+        "encoding/json"
+        "log"
+        "net/http"
+
+        "github.com/google/uuid"
+        "github.com/gorilla/websocket"
+        "github.com/mtomcal/stick-rumble-server/internal/game"
+)
+
+var upgrader = websocket.Upgrader{
+        ReadBufferSize:  1024,
+        WriteBufferSize: 1024,
+        CheckOrigin: func(r *http.Request) bool <span class="cov8" title="1">{
+                // MVP: Allow all origins (for localhost development)
+                // Production: Restrict to your domain
+                return true
+        }</span>,
+}
+
+// Message represents the standard WebSocket message format
+type Message struct {
+        Type      string `json:"type"`
+        Timestamp int64  `json:"timestamp"`
+        Data      any    `json:"data,omitempty"`
+}
+
+// WebSocketHandler manages WebSocket connections and room management
+type WebSocketHandler struct {
+        roomManager *game.RoomManager
+        gameServer  *game.GameServer
+}
+
+// NewWebSocketHandler creates a new WebSocket handler with room management
+func NewWebSocketHandler() *WebSocketHandler <span class="cov8" title="1">{
+        handler := &amp;WebSocketHandler{
+                roomManager: game.NewRoomManager(),
+        }
+
+        // Create game server with broadcast function
+        handler.gameServer = game.NewGameServer(handler.broadcastPlayerStates)
+
+        // Register callback for reload completion to notify clients
+        handler.gameServer.SetOnReloadComplete(handler.onReloadComplete)
+
+        // Register callback for hit events
+        handler.gameServer.SetOnHit(handler.onHit)
+
+        return handler
+}</span>
+
+// onReloadComplete is called when a player's reload finishes
+func (h *WebSocketHandler) onReloadComplete(playerID string) <span class="cov8" title="1">{
+        // Send updated weapon state to the player
+        h.sendWeaponState(playerID)
+}</span>
+
+// onHit is called when a projectile hits a player
+func (h *WebSocketHandler) onHit(hit game.HitEvent) <span class="cov8" title="1">{
+        // Get victim's current state (including updated health)
+        victimState, victimExists := h.gameServer.GetPlayerState(hit.VictimID)
+        if !victimExists </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        // Get attacker's weapon to determine damage dealt
+        <span class="cov8" title="1">attackerWeapon := h.gameServer.GetWeaponState(hit.AttackerID)
+        if attackerWeapon == nil </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">damage := attackerWeapon.Weapon.Damage
+
+        // Broadcast player:damaged to all players in the room
+        damagedMessage := Message{
+                Type:      "player:damaged",
+                Timestamp: 0,
+                Data: map[string]interface{}{
+                        "victimId":     hit.VictimID,
+                        "attackerId":   hit.AttackerID,
+                        "damage":       damage,
+                        "newHealth":    victimState.Health,
+                        "projectileId": hit.ProjectileID,
+                },
+        }
+
+        msgBytes, err := json.Marshal(damagedMessage)
+        if err != nil </span><span class="cov0" title="0">{
+                log.Printf("Error marshaling player:damaged message: %v", err)
+                return
+        }</span>
+
+        // Broadcast to all players in the room
+        <span class="cov8" title="1">room := h.roomManager.GetRoomByPlayerID(hit.VictimID)
+        if room != nil </span><span class="cov8" title="1">{
+                room.Broadcast(msgBytes, "")
+        }</span>
+
+        // Send hit confirmation to the attacker
+        <span class="cov8" title="1">hitConfirmedMessage := Message{
+                Type:      "hit:confirmed",
+                Timestamp: 0,
+                Data: map[string]interface{}{
+                        "victimId":     hit.VictimID,
+                        "damage":       damage,
+                        "projectileId": hit.ProjectileID,
+                },
+        }
+
+        confirmBytes, err := json.Marshal(hitConfirmedMessage)
+        if err != nil </span><span class="cov0" title="0">{
+                log.Printf("Error marshaling hit:confirmed message: %v", err)
+                return
+        }</span>
+
+        <span class="cov8" title="1">h.roomManager.SendToWaitingPlayer(hit.AttackerID, confirmBytes)
+
+        // If victim died, broadcast player:death
+        if !victimState.IsAlive() </span><span class="cov0" title="0">{
+                deathMessage := Message{
+                        Type:      "player:death",
+                        Timestamp: 0,
+                        Data: map[string]interface{}{
+                                "victimId":   hit.VictimID,
+                                "attackerId": hit.AttackerID,
+                        },
+                }
+
+                deathBytes, err := json.Marshal(deathMessage)
+                if err != nil </span><span class="cov0" title="0">{
+                        log.Printf("Error marshaling player:death message: %v", err)
+                        return
+                }</span>
+
+                <span class="cov0" title="0">if room != nil </span><span class="cov0" title="0">{
+                        room.Broadcast(deathBytes, "")
+                }</span>
+        }
+}
+
+// broadcastPlayerStates sends player position updates to all players
+func (h *WebSocketHandler) broadcastPlayerStates(playerStates []game.PlayerState) <span class="cov8" title="1">{
+        if len(playerStates) == 0 </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        // Create player:move message
+        <span class="cov8" title="1">message := Message{
+                Type:      "player:move",
+                Timestamp: 0, // Will be set by each client
+                Data: map[string]interface{}{
+                        "players": playerStates,
+                },
+        }
+
+        msgBytes, err := json.Marshal(message)
+        if err != nil </span><span class="cov0" title="0">{
+                log.Printf("Error marshaling player:move message: %v", err)
+                return
+        }</span>
+
+        // Broadcast to all players (both in rooms and waiting)
+        // This ensures all connected clients receive game state updates
+        <span class="cov8" title="1">for i := range playerStates </span><span class="cov8" title="1">{
+                room := h.roomManager.GetRoomByPlayerID(playerStates[i].ID)
+                if room != nil </span><span class="cov0" title="0">{
+                        // Player is in a room - broadcast to room
+                        room.Broadcast(msgBytes, "")
+                }</span> else<span class="cov8" title="1"> {
+                        // Player is not in a room yet (waiting) - send directly to their channel
+                        h.roomManager.SendToWaitingPlayer(playerStates[i].ID, msgBytes)
+                }</span>
+        }
+}
+
+// Global handler instance for the legacy function to share room state
+var globalHandler = NewWebSocketHandler()
+
+// Start starts the game server tick loop
+func (h *WebSocketHandler) Start(ctx context.Context) <span class="cov8" title="1">{
+        h.gameServer.Start(ctx)
+}</span>
+
+// Stop stops the game server
+func (h *WebSocketHandler) Stop() <span class="cov8" title="1">{
+        h.gameServer.Stop()
+}</span>
+
+// StartGlobalHandler starts the global handler's game server
+func StartGlobalHandler(ctx context.Context) <span class="cov8" title="1">{
+        globalHandler.Start(ctx)
+}</span>
+
+// StopGlobalHandler stops the global handler's game server
+func StopGlobalHandler() <span class="cov8" title="1">{
+        globalHandler.Stop()
+}</span>
+
+// HandleWebSocket upgrades HTTP connection to WebSocket and manages message loop
+func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        // Upgrade HTTP connection to WebSocket
+        conn, err := upgrader.Upgrade(w, r, nil)
+        if err != nil </span><span class="cov8" title="1">{
+                log.Println("WebSocket upgrade failed:", err)
+                return
+        }</span>
+        <span class="cov8" title="1">defer conn.Close()
+
+        // Create player with unique ID
+        playerID := uuid.New().String()
+        // Buffer size 256: Allows burst messages while preventing memory exhaustion.
+        // If buffer fills (slow/unresponsive client), messages are dropped with log warning.
+        sendChan := make(chan []byte, 256)
+        player := &amp;game.Player{
+                ID:       playerID,
+                SendChan: sendChan,
+        }
+
+        log.Printf("Client connected: %s", playerID)
+
+        // Add player to room manager
+        h.roomManager.AddPlayer(player)
+
+        // Add player to game server
+        h.gameServer.AddPlayer(playerID)
+
+        // Start goroutine to send messages to client
+        done := make(chan struct{})
+        go func() </span><span class="cov8" title="1">{
+                defer close(done)
+                for msg := range sendChan </span><span class="cov8" title="1">{
+                        if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil </span><span class="cov0" title="0">{
+                                log.Printf("Write error for %s: %v", playerID, err)
+                                return
+                        }</span>
+                }
+        }()
+
+        // Message handling loop
+        <span class="cov8" title="1">for </span><span class="cov8" title="1">{
+                // Read message from client
+                _, messageBytes, err := conn.ReadMessage()
+                if err != nil </span><span class="cov8" title="1">{
+                        if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) </span><span class="cov8" title="1">{
+                                log.Printf("WebSocket error: %v", err)
+                        }</span> else<span class="cov8" title="1"> {
+                                log.Printf("Client disconnected: %s", playerID)
+                        }</span>
+                        <span class="cov8" title="1">break</span>
+                }
+
+                // Parse JSON message
+                <span class="cov8" title="1">var msg Message
+                if err := json.Unmarshal(messageBytes, &amp;msg); err != nil </span><span class="cov8" title="1">{
+                        log.Printf("Failed to parse message: %v", err)
+                        continue</span>
+                }
+
+                <span class="cov8" title="1">log.Printf("Received from %s: type=%s, timestamp=%d", playerID, msg.Type, msg.Timestamp)
+
+                // Handle different message types
+                switch msg.Type </span>{
+                case "input:state":<span class="cov8" title="1">
+                        // Handle player input
+                        h.handleInputState(playerID, msg.Data)</span>
+
+                case "player:shoot":<span class="cov8" title="1">
+                        // Handle player shooting
+                        h.handlePlayerShoot(playerID, msg.Data)</span>
+
+                case "player:reload":<span class="cov8" title="1">
+                        // Handle player reloading
+                        h.handlePlayerReload(playerID)</span>
+
+                default:<span class="cov8" title="1">
+                        // Broadcast other messages to room (for backward compatibility with tests)
+                        room := h.roomManager.GetRoomByPlayerID(playerID)
+                        if room != nil </span><span class="cov8" title="1">{
+                                room.Broadcast(messageBytes, playerID)
+                        }</span>
+                }
+        }
+
+        // Clean up on disconnect
+        <span class="cov8" title="1">h.roomManager.RemovePlayer(playerID)
+        h.gameServer.RemovePlayer(playerID)
+        close(sendChan)
+        &lt;-done // Wait for send goroutine to finish
+
+        log.Printf("Connection closed: %s", playerID)</span>
+}
+
+// handleInputState processes player input state updates
+func (h *WebSocketHandler) handleInputState(playerID string, data any) <span class="cov8" title="1">{
+        // Convert data to InputState
+        dataMap, ok := data.(map[string]interface{})
+        if !ok </span><span class="cov8" title="1">{
+                log.Printf("Invalid input:state data format from %s", playerID)
+                return
+        }</span>
+
+        <span class="cov8" title="1">input := game.InputState{
+                Up:       getBool(dataMap, "up"),
+                Down:     getBool(dataMap, "down"),
+                Left:     getBool(dataMap, "left"),
+                Right:    getBool(dataMap, "right"),
+                AimAngle: getFloat64(dataMap, "aimAngle"),
+        }
+
+        // Update game server with input
+        success := h.gameServer.UpdatePlayerInput(playerID, input)
+        if !success </span><span class="cov8" title="1">{
+                log.Printf("Failed to update input for player %s", playerID)
+        }</span>
+}
+
+// getBool safely extracts a boolean value from a map
+func getBool(m map[string]interface{}, key string) bool <span class="cov8" title="1">{
+        val, ok := m[key]
+        if !ok </span><span class="cov8" title="1">{
+                return false
+        }</span>
+        <span class="cov8" title="1">boolVal, ok := val.(bool)
+        if !ok </span><span class="cov8" title="1">{
+                return false
+        }</span>
+        <span class="cov8" title="1">return boolVal</span>
+}
+
+// getFloat64 safely extracts a float64 value from a map
+func getFloat64(m map[string]interface{}, key string) float64 <span class="cov8" title="1">{
+        val, ok := m[key]
+        if !ok </span><span class="cov8" title="1">{
+                return 0
+        }</span>
+        <span class="cov8" title="1">floatVal, ok := val.(float64)
+        if !ok </span><span class="cov8" title="1">{
+                return 0
+        }</span>
+        <span class="cov8" title="1">return floatVal</span>
+}
+
+// HandleWebSocket is the legacy function for backward compatibility
+// It uses a shared global handler to ensure all connections share the same room state
+func HandleWebSocket(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        globalHandler.HandleWebSocket(w, r)
+}</span>
+
+// handlePlayerShoot processes player shoot messages
+func (h *WebSocketHandler) handlePlayerShoot(playerID string, data any) <span class="cov8" title="1">{
+        // Convert data to get aim angle
+        dataMap, ok := data.(map[string]interface{})
+        if !ok </span><span class="cov8" title="1">{
+                log.Printf("Invalid player:shoot data format from %s", playerID)
+                return
+        }</span>
+
+        <span class="cov8" title="1">aimAngle := getFloat64(dataMap, "aimAngle")
+
+        // Attempt to shoot
+        result := h.gameServer.PlayerShoot(playerID, aimAngle)
+
+        if result.Success </span><span class="cov8" title="1">{
+                // Broadcast projectile spawn to all players
+                h.broadcastProjectileSpawn(result.Projectile)
+
+                // Send weapon state update to the shooter
+                h.sendWeaponState(playerID)
+        }</span> else<span class="cov8" title="1"> {
+                // Send failure reason to player (for empty click sound, etc.)
+                h.sendShootFailed(playerID, result.Reason)
+        }</span>
+}
+
+// handlePlayerReload processes player reload messages
+func (h *WebSocketHandler) handlePlayerReload(playerID string) <span class="cov8" title="1">{
+        success := h.gameServer.PlayerReload(playerID)
+
+        if success </span><span class="cov8" title="1">{
+                // Send weapon state update to the player
+                h.sendWeaponState(playerID)
+        }</span>
+}
+
+// broadcastProjectileSpawn sends projectile spawn event to all clients
+func (h *WebSocketHandler) broadcastProjectileSpawn(proj *game.Projectile) <span class="cov8" title="1">{
+        message := Message{
+                Type:      "projectile:spawn",
+                Timestamp: 0,
+                Data: map[string]interface{}{
+                        "id":       proj.ID,
+                        "ownerId":  proj.OwnerID,
+                        "position": proj.Position,
+                        "velocity": proj.Velocity,
+                },
+        }
+
+        msgBytes, err := json.Marshal(message)
+        if err != nil </span><span class="cov0" title="0">{
+                log.Printf("Error marshaling projectile:spawn message: %v", err)
+                return
+        }</span>
+
+        // Broadcast to all rooms and waiting players
+        <span class="cov8" title="1">h.roomManager.BroadcastToAll(msgBytes)</span>
+}
+
+// sendWeaponState sends weapon state update to a specific player
+func (h *WebSocketHandler) sendWeaponState(playerID string) <span class="cov8" title="1">{
+        ws := h.gameServer.GetWeaponState(playerID)
+        if ws == nil </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">current, max := ws.GetAmmoInfo()
+        message := Message{
+                Type:      "weapon:state",
+                Timestamp: 0,
+                Data: map[string]interface{}{
+                        "currentAmmo": current,
+                        "maxAmmo":     max,
+                        "isReloading": ws.IsReloading,
+                        "canShoot":    ws.CanShoot(),
+                },
+        }
+
+        msgBytes, err := json.Marshal(message)
+        if err != nil </span><span class="cov0" title="0">{
+                log.Printf("Error marshaling weapon:state message: %v", err)
+                return
+        }</span>
+
+        // Send to the specific player
+        <span class="cov8" title="1">room := h.roomManager.GetRoomByPlayerID(playerID)
+        if room != nil </span><span class="cov8" title="1">{
+                player := room.GetPlayer(playerID)
+                if player != nil </span><span class="cov8" title="1">{
+                        select </span>{
+                        case player.SendChan &lt;- msgBytes:<span class="cov8" title="1"></span>
+                        default:<span class="cov0" title="0">
+                                log.Printf("Failed to send weapon:state to player %s (channel full)", playerID)</span>
+                        }
+                }
+        } else<span class="cov8" title="1"> {
+                h.roomManager.SendToWaitingPlayer(playerID, msgBytes)
+        }</span>
+}
+
+// sendShootFailed sends a shoot failure message to the player
+func (h *WebSocketHandler) sendShootFailed(playerID string, reason string) <span class="cov8" title="1">{
+        message := Message{
+                Type:      "shoot:failed",
+                Timestamp: 0,
+                Data: map[string]interface{}{
+                        "reason": reason,
+                },
+        }
+
+        msgBytes, err := json.Marshal(message)
+        if err != nil </span><span class="cov0" title="0">{
+                log.Printf("Error marshaling shoot:failed message: %v", err)
+                return
+        }</span>
+
+        // Send to the specific player
+        <span class="cov8" title="1">room := h.roomManager.GetRoomByPlayerID(playerID)
+        if room != nil </span><span class="cov8" title="1">{
+                player := room.GetPlayer(playerID)
+                if player != nil </span><span class="cov8" title="1">{
+                        select </span>{
+                        case player.SendChan &lt;- msgBytes:<span class="cov8" title="1"></span>
+                        default:<span class="cov0" title="0">
+                                log.Printf("Failed to send shoot:failed to player %s (channel full)", playerID)</span>
+                        }
+                }
+        } else<span class="cov8" title="1"> {
+                h.roomManager.SendToWaitingPlayer(playerID, msgBytes)
+        }</span>
+}
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>
