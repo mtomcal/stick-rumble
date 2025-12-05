@@ -5,6 +5,7 @@ import { ShootingManager, type WeaponState } from '../input/ShootingManager';
 import { PlayerManager, type PlayerState } from '../entities/PlayerManager';
 import { ProjectileManager, type ProjectileData } from '../entities/ProjectileManager';
 import { HealthBarUI } from '../ui/HealthBarUI';
+import { KillFeedUI } from '../ui/KillFeedUI';
 import { ARENA } from '../../shared/constants';
 
 export class GameScene extends Phaser.Scene {
@@ -14,6 +15,7 @@ export class GameScene extends Phaser.Scene {
   private playerManager!: PlayerManager;
   private projectileManager!: ProjectileManager;
   private healthBarUI!: HealthBarUI;
+  private killFeedUI!: KillFeedUI;
   private ammoText!: Phaser.GameObjects.Text;
   private lastDeltaTime: number = 0;
   private isSpectating: boolean = false;
@@ -57,6 +59,9 @@ export class GameScene extends Phaser.Scene {
 
     // Initialize health bar UI (top-left corner)
     this.healthBarUI = new HealthBarUI(this, 10, 70);
+
+    // Initialize kill feed UI (top-right corner)
+    this.killFeedUI = new KillFeedUI(this, ARENA.WIDTH - 10, 100);
 
     // Create damage flash overlay (initially invisible)
     this.damageFlashOverlay = this.add.rectangle(
@@ -188,6 +193,20 @@ export class GameScene extends Phaser.Scene {
       if (deathData.victimId === this.playerManager.getLocalPlayerId()) {
         this.enterSpectatorMode();
       }
+    });
+
+    // Handle player kill credit events
+    this.wsClient.on('player:kill_credit', (data) => {
+      const killData = data as {
+        killerId: string;
+        victimId: string;
+        killerKills: number;
+        killerXP: number;
+      };
+      console.log(`Kill credit: ${killData.killerId} killed ${killData.victimId} (Kills: ${killData.killerKills}, XP: ${killData.killerXP})`);
+
+      // Add kill to feed (using player IDs for now - will be replaced with names later)
+      this.killFeedUI.addKill(killData.killerId.substring(0, 8), killData.victimId.substring(0, 8));
     });
 
     // Handle player respawn events
