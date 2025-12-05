@@ -57,13 +57,13 @@ dev-server:
 	@echo "Starting server..."
 	cd stick-rumble-server && go run cmd/server/main.go
 
-# Run all tests
+# Run all tests (use -short to skip slow integration tests)
 test:
 	@echo "Running client tests..."
 	cd stick-rumble-client && npm test
 	@echo ""
 	@echo "Running server tests..."
-	cd stick-rumble-server && go test ./...
+	cd stick-rumble-server && go test ./... -short
 	@echo ""
 	@echo "✓ All tests passed"
 
@@ -72,10 +72,10 @@ test-client:
 	@echo "Running client tests..."
 	cd stick-rumble-client && npm test
 
-# Run server tests only
+# Run server tests only (use -short to skip slow integration tests)
 test-server:
 	@echo "Running server tests..."
-	cd stick-rumble-server && go test ./... -v
+	cd stick-rumble-server && go test ./... -v -short
 
 # Run integration tests (starts server automatically)
 test-integration:

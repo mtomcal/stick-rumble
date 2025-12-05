@@ -21,6 +21,7 @@ type Room struct {
 	ID         string
 	Players    []*Player
 	MaxPlayers int
+	Match      *Match // Match state tracking
 	mu         sync.RWMutex
 }
 
@@ -30,6 +31,7 @@ func NewRoom() *Room {
 		ID:         uuid.New().String(),
 		Players:    make([]*Player, 0, 8),
 		MaxPlayers: 8,
+		Match:      NewMatch(),
 	}
 }
 
@@ -158,6 +160,9 @@ func (rm *RoomManager) AddPlayer(player *Player) *Room {
 		rm.rooms[room.ID] = room
 		rm.playerToRoom[player1.ID] = room.ID
 		rm.playerToRoom[player2.ID] = room.ID
+
+		// Start the match
+		room.Match.Start()
 
 		// Log room creation
 		log.Printf("Room created: %s with players: [%s, %s]", room.ID, player1.ID, player2.ID)
@@ -328,4 +333,16 @@ func (rm *RoomManager) BroadcastToAll(msgBytes []byte) {
 			}
 		}()
 	}
+}
+
+// GetAllRooms returns a snapshot of all active rooms (thread-safe)
+func (rm *RoomManager) GetAllRooms() []*Room {
+	rm.mu.RLock()
+	defer rm.mu.RUnlock()
+
+	rooms := make([]*Room, 0, len(rm.rooms))
+	for _, room := range rm.rooms {
+		rooms = append(rooms, room)
+	}
+	return rooms
 }
