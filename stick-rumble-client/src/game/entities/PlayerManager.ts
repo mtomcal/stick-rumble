@@ -224,4 +224,26 @@ export class PlayerManager {
     const playerState = this.playerStates.get(playerId);
     return playerState ? playerState.position : null;
   }
+
+  /**
+   * Update local player's aim indicator from current aim angle
+   * This provides immediate visual feedback without waiting for server echo
+   */
+  updateLocalPlayerAim(aimAngle: number): void {
+    if (!this.localPlayerId) {
+      return;
+    }
+
+    const aimIndicator = this.aimIndicators.get(this.localPlayerId);
+    const playerState = this.playerStates.get(this.localPlayerId);
+
+    if (aimIndicator && playerState) {
+      const endX = playerState.position.x + Math.cos(aimAngle) * AIM_INDICATOR_LENGTH;
+      const endY = playerState.position.y + Math.sin(aimAngle) * AIM_INDICATOR_LENGTH;
+      aimIndicator.setTo(
+        playerState.position.x, playerState.position.y,
+        endX, endY
+      );
+    }
+  }
 }
