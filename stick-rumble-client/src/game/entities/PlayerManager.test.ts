@@ -558,6 +558,47 @@ describe('PlayerManager', () => {
     });
   });
 
+  describe('getLocalPlayerSprite', () => {
+    it('should return null when no local player ID is set', () => {
+      expect(playerManager.getLocalPlayerSprite()).toBeNull();
+    });
+
+    it('should return null when local player sprite does not exist', () => {
+      playerManager.setLocalPlayerId('local-player');
+      expect(playerManager.getLocalPlayerSprite()).toBeNull();
+    });
+
+    it('should return the local player sprite when it exists', () => {
+      playerManager.setLocalPlayerId('local-player');
+
+      const playerStates: PlayerState[] = [
+        { id: 'local-player', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      const sprite = playerManager.getLocalPlayerSprite();
+      expect(sprite).not.toBeNull();
+      expect(sprite?.x).toBe(100);
+      expect(sprite?.y).toBe(200);
+    });
+
+    it('should return null after local player is removed', () => {
+      playerManager.setLocalPlayerId('local-player');
+
+      const playerStates: PlayerState[] = [
+        { id: 'local-player', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      // Remove local player
+      playerManager.updatePlayers([]);
+
+      expect(playerManager.getLocalPlayerSprite()).toBeNull();
+    });
+  });
+
   describe('updateLocalPlayerAim', () => {
     it('should update local player aim indicator immediately', () => {
       playerManager.setLocalPlayerId('local-player');

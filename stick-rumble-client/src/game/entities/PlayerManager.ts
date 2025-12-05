@@ -228,6 +228,17 @@ export class PlayerManager {
   }
 
   /**
+   * Get the local player's sprite (for camera follow)
+   * Returns null if local player doesn't exist yet
+   */
+  getLocalPlayerSprite(): Phaser.GameObjects.Rectangle | null {
+    if (!this.localPlayerId) {
+      return null;
+    }
+    return this.players.get(this.localPlayerId) ?? null;
+  }
+
+  /**
    * Update local player's aim indicator from current aim angle
    * This provides immediate visual feedback without waiting for server echo
    */

@@ -31,9 +31,9 @@ type Message struct {
 
 // WebSocketHandler manages WebSocket connections and room management
 type WebSocketHandler struct {
-	roomManager       *game.RoomManager
-	gameServer        *game.GameServer
-	timerInterval     time.Duration // Interval for match timer broadcasts (default 1s)
+	roomManager   *game.RoomManager
+	gameServer    *game.GameServer
+	timerInterval time.Duration // Interval for match timer broadcasts (default 1s)
 }
 
 // NewWebSocketHandler creates a new WebSocket handler with room management

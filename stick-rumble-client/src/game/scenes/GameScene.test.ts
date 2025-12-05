@@ -35,12 +35,23 @@ const createMockScene = () => {
 
   const mockText = {
     setOrigin: vi.fn().mockReturnThis(),
+    setScrollFactor: vi.fn().mockReturnThis(),
+    setDepth: vi.fn().mockReturnThis(),
+    setText: vi.fn().mockReturnThis(),
+    setColor: vi.fn().mockReturnThis(),
+    destroy: vi.fn().mockReturnThis(),
   };
 
   const mockCamera = {
     centerX: 960,
     centerY: 540,
+    width: 1920,
+    height: 1080,
+    scrollX: 0,
+    scrollY: 0,
     setBounds: vi.fn(),
+    startFollow: vi.fn(),
+    stopFollow: vi.fn(),
   };
 
   const mockLine = {
@@ -820,6 +831,9 @@ describe('GameScene', () => {
         setText: vi.fn(),
         setColor: vi.fn(),
         setOrigin: vi.fn().mockReturnThis(),
+        setScrollFactor: vi.fn().mockReturnThis(),
+        setDepth: vi.fn().mockReturnThis(),
+        destroy: vi.fn(),
       };
 
       // Track text creation to identify match timer text (created during scene setup)
@@ -830,7 +844,7 @@ describe('GameScene', () => {
         if (textCallCount === 2) {
           return mockTimerText;
         }
-        return { setOrigin: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn() };
+        return { setOrigin: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), destroy: vi.fn() };
       });
 
       Object.assign(scene, mockSceneContext);
@@ -870,6 +884,9 @@ describe('GameScene', () => {
         setText: vi.fn(),
         setColor: vi.fn(),
         setOrigin: vi.fn().mockReturnThis(),
+        setScrollFactor: vi.fn().mockReturnThis(),
+        setDepth: vi.fn().mockReturnThis(),
+        destroy: vi.fn(),
       };
 
       let textCallCount = 0;
@@ -878,7 +895,7 @@ describe('GameScene', () => {
         if (textCallCount === 2) {
           return mockTimerText;
         }
-        return { setOrigin: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn() };
+        return { setOrigin: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), destroy: vi.fn() };
       });
 
       Object.assign(scene, mockSceneContext);
@@ -914,6 +931,9 @@ describe('GameScene', () => {
         setText: vi.fn(),
         setColor: vi.fn(),
         setOrigin: vi.fn().mockReturnThis(),
+        setScrollFactor: vi.fn().mockReturnThis(),
+        setDepth: vi.fn().mockReturnThis(),
+        destroy: vi.fn(),
       };
 
       let textCallCount = 0;
@@ -922,7 +942,7 @@ describe('GameScene', () => {
         if (textCallCount === 2) {
           return mockTimerText;
         }
-        return { setOrigin: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn() };
+        return { setOrigin: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), destroy: vi.fn() };
       });
 
       Object.assign(scene, mockSceneContext);
@@ -958,6 +978,9 @@ describe('GameScene', () => {
         setText: vi.fn(),
         setColor: vi.fn(),
         setOrigin: vi.fn().mockReturnThis(),
+        setScrollFactor: vi.fn().mockReturnThis(),
+        setDepth: vi.fn().mockReturnThis(),
+        destroy: vi.fn(),
       };
 
       let textCallCount = 0;
@@ -966,7 +989,7 @@ describe('GameScene', () => {
         if (textCallCount === 2) {
           return mockTimerText;
         }
-        return { setOrigin: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn() };
+        return { setOrigin: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), destroy: vi.fn() };
       });
 
       Object.assign(scene, mockSceneContext);
@@ -1257,7 +1280,7 @@ describe('GameScene', () => {
         if (textCallCount === 5) {
           return mockAmmoText;
         }
-        return { setOrigin: vi.fn().mockReturnThis() };
+        return { setOrigin: vi.fn().mockReturnThis(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), destroy: vi.fn() };
       });
       mockSceneContext.input = {
         ...mockSceneContext.input,
@@ -1319,7 +1342,7 @@ describe('GameScene', () => {
         if (textCallCount === 5) {
           return mockAmmoText;
         }
-        return { setOrigin: vi.fn().mockReturnThis() };
+        return { setOrigin: vi.fn().mockReturnThis(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), destroy: vi.fn() };
       });
       mockSceneContext.input = {
         ...mockSceneContext.input,
@@ -1811,7 +1834,7 @@ describe('GameScene', () => {
       // Mock the health bar updateHealth method
       (scene as any).healthBarUI = { updateHealth: mockUpdateHealth };
 
-      // Set local player ID
+      // Set local player ID (this now triggers health bar initialization)
       const roomJoinedMessage = {
         data: JSON.stringify({
           type: 'room:joined',
@@ -1823,6 +1846,13 @@ describe('GameScene', () => {
       if (mockWebSocketInstance.onmessage) {
         mockWebSocketInstance.onmessage(roomJoinedMessage as MessageEvent);
       }
+
+      // Verify room:joined initialized health bar to 100/100
+      expect(mockUpdateHealth).toHaveBeenCalledWith(100, 100);
+      expect(mockUpdateHealth).toHaveBeenCalledTimes(1);
+
+      // Reset mock to check damage message behavior
+      mockUpdateHealth.mockClear();
 
       // Simulate other player taking damage
       const damagedMessage = {
@@ -1843,7 +1873,7 @@ describe('GameScene', () => {
         mockWebSocketInstance.onmessage(damagedMessage as MessageEvent);
       }
 
-      // Verify health bar was NOT updated (only called 0 times)
+      // Verify health bar was NOT updated by the damage message (other player's damage)
       expect(mockUpdateHealth).not.toHaveBeenCalled();
     });
 
@@ -1901,6 +1931,301 @@ describe('GameScene', () => {
 
       // Verify health bar was updated to full health
       expect(mockUpdateHealth).toHaveBeenCalledWith(100, 100);
+    });
+  });
+
+  describe('Camera Follow', () => {
+    it('should start camera follow when local player sprite is created via player:move', async () => {
+      const mockSceneContext = createMockScene();
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      // Trigger the delayed callback to create WebSocket
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Set local player ID
+      const roomJoinedMessage = {
+        data: JSON.stringify({
+          type: 'room:joined',
+          timestamp: Date.now(),
+          data: { playerId: 'local-player' }
+        })
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(roomJoinedMessage as MessageEvent);
+      }
+
+      // Mock playerManager.getLocalPlayerSprite to return a sprite
+      const mockSprite = { x: 100, y: 100 };
+      vi.spyOn(scene['playerManager'], 'getLocalPlayerSprite').mockReturnValue(mockSprite as any);
+      vi.spyOn(scene['playerManager'], 'updatePlayers').mockImplementation(() => {});
+
+      // Simulate player:move message
+      const playerMoveMessage = {
+        data: JSON.stringify({
+          type: 'player:move',
+          timestamp: Date.now(),
+          data: {
+            players: [
+              { id: 'local-player', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } }
+            ]
+          }
+        })
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(playerMoveMessage as MessageEvent);
+      }
+
+      // Verify camera.startFollow was called with the player sprite
+      expect(mockSceneContext.cameras.main.startFollow).toHaveBeenCalledWith(
+        mockSprite,
+        true,
+        0.1,
+        0.1
+      );
+    });
+
+    it('should not call startFollow multiple times (only once)', async () => {
+      const mockSceneContext = createMockScene();
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      // Trigger the delayed callback to create WebSocket
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Set local player ID
+      const roomJoinedMessage = {
+        data: JSON.stringify({
+          type: 'room:joined',
+          timestamp: Date.now(),
+          data: { playerId: 'local-player' }
+        })
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(roomJoinedMessage as MessageEvent);
+      }
+
+      // Mock playerManager.getLocalPlayerSprite to return a sprite
+      const mockSprite = { x: 100, y: 100 };
+      vi.spyOn(scene['playerManager'], 'getLocalPlayerSprite').mockReturnValue(mockSprite as any);
+      vi.spyOn(scene['playerManager'], 'updatePlayers').mockImplementation(() => {});
+
+      // Simulate multiple player:move messages
+      for (let i = 0; i < 5; i++) {
+        const playerMoveMessage = {
+          data: JSON.stringify({
+            type: 'player:move',
+            timestamp: Date.now(),
+            data: {
+              players: [
+                { id: 'local-player', position: { x: 100 + i * 10, y: 200 }, velocity: { x: 0, y: 0 } }
+              ]
+            }
+          })
+        };
+
+        if (mockWebSocketInstance.onmessage) {
+          mockWebSocketInstance.onmessage(playerMoveMessage as MessageEvent);
+        }
+      }
+
+      // Verify camera.startFollow was called only once
+      expect(mockSceneContext.cameras.main.startFollow).toHaveBeenCalledTimes(1);
+    });
+
+    it('should stop camera follow when entering spectator mode', async () => {
+      const mockSceneContext = createMockScene();
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      // Trigger the delayed callback to create WebSocket
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Set local player ID
+      const roomJoinedMessage = {
+        data: JSON.stringify({
+          type: 'room:joined',
+          timestamp: Date.now(),
+          data: { playerId: 'local-player' }
+        })
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(roomJoinedMessage as MessageEvent);
+      }
+
+      // Simulate local player death
+      const deathMessage = {
+        data: JSON.stringify({
+          type: 'player:death',
+          timestamp: Date.now(),
+          data: {
+            victimId: 'local-player',
+            attackerId: 'attacker-1'
+          }
+        })
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(deathMessage as MessageEvent);
+      }
+
+      // Verify camera.stopFollow was called
+      expect(mockSceneContext.cameras.main.stopFollow).toHaveBeenCalled();
+    });
+
+    it('should restart camera follow after respawn', async () => {
+      const mockSceneContext = createMockScene();
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      // Trigger the delayed callback to create WebSocket
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Set local player ID
+      const roomJoinedMessage = {
+        data: JSON.stringify({
+          type: 'room:joined',
+          timestamp: Date.now(),
+          data: { playerId: 'local-player' }
+        })
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(roomJoinedMessage as MessageEvent);
+      }
+
+      // Mock playerManager.getLocalPlayerSprite to return a sprite
+      const mockSprite = { x: 100, y: 100 };
+      vi.spyOn(scene['playerManager'], 'getLocalPlayerSprite').mockReturnValue(mockSprite as any);
+      vi.spyOn(scene['playerManager'], 'updatePlayers').mockImplementation(() => {});
+
+      // First player:move to start following
+      const playerMoveMessage1 = {
+        data: JSON.stringify({
+          type: 'player:move',
+          timestamp: Date.now(),
+          data: {
+            players: [
+              { id: 'local-player', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } }
+            ]
+          }
+        })
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(playerMoveMessage1 as MessageEvent);
+      }
+
+      // Verify initial follow
+      expect(mockSceneContext.cameras.main.startFollow).toHaveBeenCalledTimes(1);
+
+      // Simulate local player death (stops following)
+      const deathMessage = {
+        data: JSON.stringify({
+          type: 'player:death',
+          timestamp: Date.now(),
+          data: {
+            victimId: 'local-player',
+            attackerId: 'attacker-1'
+          }
+        })
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(deathMessage as MessageEvent);
+      }
+
+      // Verify stop was called
+      expect(mockSceneContext.cameras.main.stopFollow).toHaveBeenCalledTimes(1);
+
+      // Simulate respawn
+      const respawnMessage = {
+        data: JSON.stringify({
+          type: 'player:respawn',
+          timestamp: Date.now(),
+          data: {
+            playerId: 'local-player',
+            position: { x: 500, y: 300 },
+            health: 100
+          }
+        })
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(respawnMessage as MessageEvent);
+      }
+
+      // After respawn, next player:move should restart camera follow
+      const playerMoveMessage2 = {
+        data: JSON.stringify({
+          type: 'player:move',
+          timestamp: Date.now(),
+          data: {
+            players: [
+              { id: 'local-player', position: { x: 500, y: 300 }, velocity: { x: 0, y: 0 } }
+            ]
+          }
+        })
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(playerMoveMessage2 as MessageEvent);
+      }
+
+      // Verify camera.startFollow was called again after respawn
+      expect(mockSceneContext.cameras.main.startFollow).toHaveBeenCalledTimes(2);
+    });
+
+    it('should not start camera follow if no local player sprite exists', async () => {
+      const mockSceneContext = createMockScene();
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      // Trigger the delayed callback to create WebSocket
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Mock playerManager.getLocalPlayerSprite to return null (sprite not created yet)
+      vi.spyOn(scene['playerManager'], 'getLocalPlayerSprite').mockReturnValue(null);
+      vi.spyOn(scene['playerManager'], 'updatePlayers').mockImplementation(() => {});
+
+      // Simulate player:move message
+      const playerMoveMessage = {
+        data: JSON.stringify({
+          type: 'player:move',
+          timestamp: Date.now(),
+          data: {
+            players: [
+              { id: 'other-player', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } }
+            ]
+          }
+        })
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(playerMoveMessage as MessageEvent);
+      }
+
+      // Verify camera.startFollow was NOT called
+      expect(mockSceneContext.cameras.main.startFollow).not.toHaveBeenCalled();
     });
   });
 });
