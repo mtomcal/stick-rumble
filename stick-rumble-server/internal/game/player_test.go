@@ -554,3 +554,175 @@ func TestPlayerState_Snapshot_IncludesRespawnFields(t *testing.T) {
 		t.Error("Snapshot should show invulnerability after respawn")
 	}
 }
+
+// Kill/Death Stats Tests
+
+func TestPlayerState_NewPlayer_StatsInitialized(t *testing.T) {
+	player := NewPlayerState("test-player")
+
+	if player.Kills != 0 {
+		t.Errorf("New player Kills = %v, want 0", player.Kills)
+	}
+
+	if player.Deaths != 0 {
+		t.Errorf("New player Deaths = %v, want 0", player.Deaths)
+	}
+
+	if player.XP != 0 {
+		t.Errorf("New player XP = %v, want 0", player.XP)
+	}
+}
+
+func TestPlayerState_IncrementKills(t *testing.T) {
+	player := NewPlayerState("test-player")
+
+	player.IncrementKills()
+
+	if player.Kills != 1 {
+		t.Errorf("Kills after increment = %v, want 1", player.Kills)
+	}
+
+	// Increment again
+	player.IncrementKills()
+
+	if player.Kills != 2 {
+		t.Errorf("Kills after second increment = %v, want 2", player.Kills)
+	}
+}
+
+func TestPlayerState_IncrementDeaths(t *testing.T) {
+	player := NewPlayerState("test-player")
+
+	player.IncrementDeaths()
+
+	if player.Deaths != 1 {
+		t.Errorf("Deaths after increment = %v, want 1", player.Deaths)
+	}
+
+	// Increment again
+	player.IncrementDeaths()
+
+	if player.Deaths != 2 {
+		t.Errorf("Deaths after second increment = %v, want 2", player.Deaths)
+	}
+}
+
+func TestPlayerState_AddXP(t *testing.T) {
+	player := NewPlayerState("test-player")
+
+	// Add kill XP (100 points)
+	player.AddXP(100)
+
+	if player.XP != 100 {
+		t.Errorf("XP after adding 100 = %v, want 100", player.XP)
+	}
+
+	// Add more XP
+	player.AddXP(250)
+
+	if player.XP != 350 {
+		t.Errorf("XP after adding 250 more = %v, want 350", player.XP)
+	}
+}
+
+func TestPlayerState_StatsThreadSafety(t *testing.T) {
+	player := NewPlayerState("test-player")
+	var wg sync.WaitGroup
+
+	// Run concurrent stat updates
+	for i := 0; i < 100; i++ {
+		wg.Add(3)
+
+		go func() {
+			defer wg.Done()
+			player.IncrementKills()
+		}()
+
+		go func() {
+			defer wg.Done()
+			player.IncrementDeaths()
+		}()
+
+		go func() {
+			defer wg.Done()
+			player.AddXP(10)
+		}()
+	}
+
+	wg.Wait()
+
+	// Verify all concurrent updates were applied
+	if player.Kills != 100 {
+		t.Errorf("Kills after concurrent updates = %v, want 100", player.Kills)
+	}
+
+	if player.Deaths != 100 {
+		t.Errorf("Deaths after concurrent updates = %v, want 100", player.Deaths)
+	}
+
+	if player.XP != 1000 {
+		t.Errorf("XP after concurrent updates = %v, want 1000", player.XP)
+	}
+}
+
+func TestPlayerState_Snapshot_IncludesStats(t *testing.T) {
+	player := NewPlayerState("test-player")
+
+	// Set up some stats
+	player.IncrementKills()
+	player.IncrementKills()
+	player.IncrementDeaths()
+	player.AddXP(200)
+
+	snapshot := player.Snapshot()
+
+	if snapshot.Kills != 2 {
+		t.Errorf("Snapshot Kills = %v, want 2", snapshot.Kills)
+	}
+
+	if snapshot.Deaths != 1 {
+		t.Errorf("Snapshot Deaths = %v, want 1", snapshot.Deaths)
+	}
+
+	if snapshot.XP != 200 {
+		t.Errorf("Snapshot XP = %v, want 200", snapshot.XP)
+	}
+}
+
+func TestPlayerState_GetKDRatio(t *testing.T) {
+	player := NewPlayerState("test-player")
+
+	// Test with no deaths (avoid division by zero)
+	player.IncrementKills()
+	player.IncrementKills()
+
+	ratio := player.GetKDRatio()
+	if ratio != 2.0 {
+		t.Errorf("K/D ratio with 2 kills, 0 deaths = %v, want 2.0", ratio)
+	}
+
+	// Test with deaths
+	player.IncrementDeaths()
+
+	ratio = player.GetKDRatio()
+	if ratio != 2.0 {
+		t.Errorf("K/D ratio with 2 kills, 1 death = %v, want 2.0", ratio)
+	}
+
+	// Test with more deaths than kills
+	player.IncrementDeaths()
+	player.IncrementDeaths()
+
+	ratio = player.GetKDRatio()
+	expected := 2.0 / 3.0
+	if ratio != expected {
+		t.Errorf("K/D ratio with 2 kills, 3 deaths = %v, want %v", ratio, expected)
+	}
+
+	// Test with no kills or deaths
+	newPlayer := NewPlayerState("new-player")
+	ratio = newPlayer.GetKDRatio()
+	if ratio != 0.0 {
+		t.Errorf("K/D ratio with 0 kills, 0 deaths = %v, want 0.0", ratio)
+	}
+}

@@ -59,3 +59,9 @@ const (
 	// SpawnInvulnerabilityDuration is the time in seconds of spawn protection
 	SpawnInvulnerabilityDuration = 2.0
 )
+
+// Kill credit and stats
+const (
+	// KillXPReward is the amount of XP awarded for each kill
+	KillXPReward = 100
+)

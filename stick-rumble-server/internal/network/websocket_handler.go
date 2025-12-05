@@ -126,6 +126,14 @@ func (h *WebSocketHandler) onHit(hit game.HitEvent) {
 		// Mark player as dead
 		h.gameServer.MarkPlayerDead(hit.VictimID)
 
+		// Update stats: increment attacker kills and victim deaths
+		attackerState, attackerExists := h.gameServer.GetPlayerState(hit.AttackerID)
+		if attackerExists {
+			attackerState.IncrementKills()
+			attackerState.AddXP(game.KillXPReward)
+		}
+		victimState.IncrementDeaths()
+
 		deathMessage := Message{
 			Type:      "player:death",
 			Timestamp: 0,
@@ -143,6 +151,28 @@ func (h *WebSocketHandler) onHit(hit game.HitEvent) {
 
 		if room != nil {
 			room.Broadcast(deathBytes, "")
+		}
+
+		// Broadcast kill credit with updated stats
+		killCreditMessage := Message{
+			Type:      "player:kill_credit",
+			Timestamp: 0,
+			Data: map[string]interface{}{
+				"killerId":    hit.AttackerID,
+				"victimId":    hit.VictimID,
+				"killerKills": attackerState.Kills,
+				"killerXP":    attackerState.XP,
+			},
+		}
+
+		creditBytes, err := json.Marshal(killCreditMessage)
+		if err != nil {
+			log.Printf("Error marshaling player:kill_credit message: %v", err)
+			return
+		}
+
+		if room != nil {
+			room.Broadcast(creditBytes, "")
 		}
 	}
 }

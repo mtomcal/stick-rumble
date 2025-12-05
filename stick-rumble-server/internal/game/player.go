@@ -30,6 +30,9 @@ type PlayerState struct {
 	IsInvulnerable         bool       `json:"isInvulnerable"`      // Spawn protection flag
 	InvulnerabilityEndTime time.Time  `json:"invulnerabilityEnd"`  // When spawn protection ends
 	DeathTime              *time.Time `json:"deathTime,omitempty"` // When player died (nil if alive)
+	Kills                  int        `json:"kills"`               // Number of kills
+	Deaths                 int        `json:"deaths"`              // Number of deaths
+	XP                     int        `json:"xp"`                  // Experience points
 	input                  InputState // Private field, accessed via methods
 	mu                     sync.RWMutex
 }
@@ -135,6 +138,9 @@ func (p *PlayerState) Snapshot() PlayerState {
 		IsInvulnerable:         p.IsInvulnerable,
 		InvulnerabilityEndTime: p.InvulnerabilityEndTime,
 		DeathTime:              p.DeathTime,
+		Kills:                  p.Kills,
+		Deaths:                 p.Deaths,
+		XP:                     p.XP,
 	}
 }
 
@@ -183,4 +189,36 @@ func (p *PlayerState) UpdateInvulnerability() {
 	if p.IsInvulnerable && time.Now().After(p.InvulnerabilityEndTime) {
 		p.IsInvulnerable = false
 	}
+}
+
+// IncrementKills increments the player's kill count (thread-safe)
+func (p *PlayerState) IncrementKills() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.Kills++
+}
+
+// IncrementDeaths increments the player's death count (thread-safe)
+func (p *PlayerState) IncrementDeaths() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.Deaths++
+}
+
+// AddXP adds experience points to the player (thread-safe)
+func (p *PlayerState) AddXP(amount int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.XP += amount
+}
+
+// GetKDRatio calculates the kill/death ratio (thread-safe)
+// Returns 0 if player has no kills or deaths
+func (p *PlayerState) GetKDRatio() float64 {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	if p.Deaths == 0 {
+		return float64(p.Kills)
+	}
+	return float64(p.Kills) / float64(p.Deaths)
 }
