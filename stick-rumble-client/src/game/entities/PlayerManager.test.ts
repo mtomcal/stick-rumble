@@ -555,4 +555,84 @@ describe('PlayerManager', () => {
       expect(playerManager.isLocalPlayerDead()).toBe(false);
     });
   });
+
+  describe('updateLocalPlayerAim', () => {
+    it('should update local player aim indicator immediately', () => {
+      playerManager.setLocalPlayerId('local-player');
+
+      const playerStates: PlayerState[] = [
+        { id: 'local-player', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: 0 },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      const line = mockScene.lines[0];
+      const setToSpy = vi.fn();
+      line.setTo = setToSpy;
+
+      // Update aim angle to point up (90 degrees = PI/2 radians)
+      const newAimAngle = Math.PI / 2;
+      playerManager.updateLocalPlayerAim(newAimAngle);
+
+      expect(setToSpy).toHaveBeenCalledWith(
+        100, 200, // Start position (player position)
+        100, 200 + 50, // End position (pointing up, 50 pixels)
+      );
+    });
+
+    it('should do nothing if local player ID is not set', () => {
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: 0 },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      const line = mockScene.lines[0];
+      const setToSpy = vi.fn();
+      line.setTo = setToSpy;
+
+      playerManager.updateLocalPlayerAim(Math.PI / 2);
+
+      expect(setToSpy).not.toHaveBeenCalled();
+    });
+
+    it('should do nothing if local player does not exist', () => {
+      playerManager.setLocalPlayerId('non-existent');
+
+      playerManager.updateLocalPlayerAim(Math.PI / 2);
+
+      // Should not throw error, just silently skip
+      expect(mockScene.lines).toHaveLength(0);
+    });
+
+    it('should correctly calculate aim line end position for different angles', () => {
+      playerManager.setLocalPlayerId('local-player');
+
+      const playerStates: PlayerState[] = [
+        { id: 'local-player', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: 0 },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      const line = mockScene.lines[0];
+      const setToSpy = vi.fn();
+      line.setTo = setToSpy;
+
+      // Test pointing right (0 radians)
+      playerManager.updateLocalPlayerAim(0);
+      expect(setToSpy).toHaveBeenCalledWith(100, 200, 150, 200);
+
+      // Test pointing left (PI radians)
+      playerManager.updateLocalPlayerAim(Math.PI);
+      expect(setToSpy).toHaveBeenCalledWith(100, 200, 50, 200);
+
+      // Test pointing down (PI/2 radians)
+      playerManager.updateLocalPlayerAim(Math.PI / 2);
+      expect(setToSpy).toHaveBeenCalledWith(100, 200, 100, 250);
+
+      // Test pointing up (-PI/2 radians)
+      playerManager.updateLocalPlayerAim(-Math.PI / 2);
+      expect(setToSpy).toHaveBeenCalledWith(100, 200, 100, 150);
+    });
+  });
 });

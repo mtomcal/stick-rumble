@@ -301,6 +301,11 @@ export class GameScene extends Phaser.Scene {
     // Update input manager to send player input to server (only when not spectating)
     if (this.inputManager && !this.isSpectating) {
       this.inputManager.update();
+
+      // Update local player's aim indicator immediately for responsive controls
+      // This provides client-side prediction without waiting for server echo
+      const currentAimAngle = this.inputManager.getAimAngle();
+      this.playerManager.updateLocalPlayerAim(currentAimAngle);
     }
 
     // Update projectiles
