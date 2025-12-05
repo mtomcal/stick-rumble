@@ -1251,15 +1251,119 @@ describe('GameScene', () => {
   });
 
   describe('Damage Event Handlers', () => {
-    it('should register message handlers for damage events', () => {
+    it('should register player:damaged message handler', async () => {
       const mockSceneContext = createMockScene();
       Object.assign(scene, mockSceneContext);
 
-      // Should not throw when registering damage event handlers
-      expect(() => scene.create()).not.toThrow();
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-      // Handlers are registered via wsClient.on() which is tested via WebSocketClient tests
-      // Detailed testing of damage feedback (visual effects) deferred to Story 2.5
+      scene.create();
+
+      // Trigger the delayed callback to create WebSocket
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Simulate player:damaged message
+      const damagedMessage = {
+        data: JSON.stringify({
+          type: 'player:damaged',
+          timestamp: Date.now(),
+          data: {
+            victimId: 'victim-1',
+            attackerId: 'attacker-1',
+            damage: 25,
+            newHealth: 75,
+            projectileId: 'proj-1'
+          }
+        })
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(damagedMessage as MessageEvent);
+      }
+
+      // Verify handler was called and logged damage
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Player victim-1 took 25 damage from attacker-1 (health: 75)'
+      );
+
+      consoleSpy.mockRestore();
+    });
+
+    it('should register hit:confirmed message handler', async () => {
+      const mockSceneContext = createMockScene();
+      Object.assign(scene, mockSceneContext);
+
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      scene.create();
+
+      // Trigger the delayed callback to create WebSocket
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Simulate hit:confirmed message
+      const hitConfirmedMessage = {
+        data: JSON.stringify({
+          type: 'hit:confirmed',
+          timestamp: Date.now(),
+          data: {
+            victimId: 'victim-1',
+            damage: 25,
+            projectileId: 'proj-1'
+          }
+        })
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(hitConfirmedMessage as MessageEvent);
+      }
+
+      // Verify handler was called and logged hit confirmation
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Hit confirmed! Dealt 25 damage to victim-1'
+      );
+
+      consoleSpy.mockRestore();
+    });
+
+    it('should register player:death message handler', async () => {
+      const mockSceneContext = createMockScene();
+      Object.assign(scene, mockSceneContext);
+
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      scene.create();
+
+      // Trigger the delayed callback to create WebSocket
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Simulate player:death message
+      const deathMessage = {
+        data: JSON.stringify({
+          type: 'player:death',
+          timestamp: Date.now(),
+          data: {
+            victimId: 'victim-1',
+            attackerId: 'attacker-1'
+          }
+        })
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(deathMessage as MessageEvent);
+      }
+
+      // Verify handler was called and logged death event
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Player victim-1 was killed by attacker-1'
+      );
+
+      consoleSpy.mockRestore();
     });
   });
 });
