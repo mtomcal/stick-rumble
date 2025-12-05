@@ -7,6 +7,9 @@ const createMockScene = () => {
     x: number;
     y: number;
     setPosition: ReturnType<typeof vi.fn>;
+    setAlpha: ReturnType<typeof vi.fn>;
+    setTint: ReturnType<typeof vi.fn>;
+    clearTint: ReturnType<typeof vi.fn>;
     destroy: ReturnType<typeof vi.fn>;
   }> = [];
 
@@ -30,6 +33,9 @@ const createMockScene = () => {
           x,
           y,
           setPosition: vi.fn(),
+          setAlpha: vi.fn().mockReturnThis(),
+          setTint: vi.fn().mockReturnThis(),
+          clearTint: vi.fn().mockReturnThis(),
           destroy: vi.fn(),
         };
         rectangles.push(rect);
@@ -429,6 +435,124 @@ describe('PlayerManager', () => {
       for (const line of mockScene.lines) {
         expect(line.destroy).toHaveBeenCalled();
       }
+    });
+  });
+
+  describe('death state', () => {
+    it('should mark player as dead when deathTime is provided', () => {
+      const aliveState: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+
+      playerManager.updatePlayers(aliveState);
+
+      // Mark as dead
+      const deadState: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, deathTime: Date.now() },
+      ];
+
+      expect(() => playerManager.updatePlayers(deadState)).not.toThrow();
+    });
+
+    it('should apply death visual effects (fade + gray) to dead players', () => {
+      const aliveState: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+
+      playerManager.updatePlayers(aliveState);
+
+      const sprite = mockScene.rectangles[0];
+      const setAlphaSpy = vi.fn();
+      const setTintSpy = vi.fn();
+      sprite.setAlpha = setAlphaSpy;
+      sprite.setTint = setTintSpy;
+
+      // Mark as dead
+      const deadState: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, deathTime: Date.now() },
+      ];
+
+      playerManager.updatePlayers(deadState);
+
+      expect(setAlphaSpy).toHaveBeenCalledWith(0.5);
+      expect(setTintSpy).toHaveBeenCalledWith(0x888888);
+    });
+
+    it('should restore visual effects when player respawns', () => {
+      const deadState: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, deathTime: Date.now() },
+      ];
+
+      playerManager.updatePlayers(deadState);
+
+      const sprite = mockScene.rectangles[0];
+      const setAlphaSpy = vi.fn();
+      const clearTintSpy = vi.fn();
+      sprite.setAlpha = setAlphaSpy;
+      sprite.clearTint = clearTintSpy;
+
+      // Respawn (deathTime removed)
+      const aliveState: PlayerState[] = [
+        { id: 'player-1', position: { x: 500, y: 300 }, velocity: { x: 0, y: 0 } },
+      ];
+
+      playerManager.updatePlayers(aliveState);
+
+      expect(setAlphaSpy).toHaveBeenCalledWith(1.0);
+      expect(clearTintSpy).toHaveBeenCalled();
+    });
+
+    it('should return list of living players excluding dead ones', () => {
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+        { id: 'player-2', position: { x: 300, y: 400 }, velocity: { x: 0, y: 0 }, deathTime: Date.now() },
+        { id: 'player-3', position: { x: 500, y: 600 }, velocity: { x: 0, y: 0 } },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      const livingPlayers = playerManager.getLivingPlayers();
+
+      expect(livingPlayers).toHaveLength(2);
+      expect(livingPlayers).toContainEqual({ id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } });
+      expect(livingPlayers).toContainEqual({ id: 'player-3', position: { x: 500, y: 600 }, velocity: { x: 0, y: 0 } });
+    });
+
+    it('should return empty array when no living players exist', () => {
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, deathTime: Date.now() },
+        { id: 'player-2', position: { x: 300, y: 400 }, velocity: { x: 0, y: 0 }, deathTime: Date.now() },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      const livingPlayers = playerManager.getLivingPlayers();
+
+      expect(livingPlayers).toHaveLength(0);
+    });
+
+    it('should check if local player is dead', () => {
+      playerManager.setLocalPlayerId('player-1');
+
+      const aliveState: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+
+      playerManager.updatePlayers(aliveState);
+
+      expect(playerManager.isLocalPlayerDead()).toBe(false);
+
+      const deadState: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, deathTime: Date.now() },
+      ];
+
+      playerManager.updatePlayers(deadState);
+
+      expect(playerManager.isLocalPlayerDead()).toBe(true);
+    });
+
+    it('should return false for isLocalPlayerDead when no local player', () => {
+      expect(playerManager.isLocalPlayerDead()).toBe(false);
     });
   });
 });

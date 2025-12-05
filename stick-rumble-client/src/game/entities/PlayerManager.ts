@@ -15,6 +15,7 @@ export interface PlayerState {
     y: number;
   };
   aimAngle?: number; // Aim angle in radians (optional for backward compatibility)
+  deathTime?: number; // Timestamp when player died (ms since epoch), undefined if alive
 }
 
 // Length of the aim indicator line in pixels
@@ -29,6 +30,7 @@ export class PlayerManager {
   private playerLabels: Map<string, Phaser.GameObjects.Text> = new Map();
   private aimIndicators: Map<string, Phaser.GameObjects.Line> = new Map();
   private localPlayerId: string | null = null;
+  private playerStates: Map<string, PlayerState> = new Map();
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -53,6 +55,12 @@ export class PlayerManager {
    */
   updatePlayers(playerStates: PlayerState[]): void {
     const currentPlayerIds = new Set(playerStates.map(p => p.id));
+
+    // Store player states for death tracking
+    this.playerStates.clear();
+    for (const state of playerStates) {
+      this.playerStates.set(state.id, state);
+    }
 
     // Remove players that no longer exist
     for (const [id, sprite] of this.players) {
@@ -128,6 +136,17 @@ export class PlayerManager {
       // Update position
       sprite.setPosition(state.position.x, state.position.y);
 
+      // Apply death visual effects
+      if (state.deathTime !== undefined) {
+        // Dead player: fade to 50% opacity and gray tint
+        sprite.setAlpha(0.5);
+        (sprite as Phaser.GameObjects.Rectangle & { setTint: (color: number) => void }).setTint(0x888888);
+      } else {
+        // Alive player: full opacity and no tint
+        sprite.setAlpha(1.0);
+        (sprite as Phaser.GameObjects.Rectangle & { clearTint: () => void }).clearTint();
+      }
+
       // Update label position
       const label = this.playerLabels.get(state.id);
       if (label) {
@@ -169,5 +188,31 @@ export class PlayerManager {
       aimIndicator.destroy();
     }
     this.aimIndicators.clear();
+
+    this.playerStates.clear();
+  }
+
+  /**
+   * Get list of living players (excludes dead players)
+   */
+  getLivingPlayers(): PlayerState[] {
+    const livingPlayers: PlayerState[] = [];
+    for (const state of this.playerStates.values()) {
+      if (state.deathTime === undefined) {
+        livingPlayers.push(state);
+      }
+    }
+    return livingPlayers;
+  }
+
+  /**
+   * Check if the local player is dead
+   */
+  isLocalPlayerDead(): boolean {
+    if (!this.localPlayerId) {
+      return false;
+    }
+    const localPlayerState = this.playerStates.get(this.localPlayerId);
+    return localPlayerState?.deathTime !== undefined;
   }
 }
