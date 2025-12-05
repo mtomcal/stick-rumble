@@ -25,6 +25,7 @@ export class GameScene extends Phaser.Scene {
   private localPlayerHealth: number = 100;
   private damageFlashOverlay: Phaser.GameObjects.Rectangle | null = null;
   private matchTimerText: Phaser.GameObjects.Text | null = null;
+  private isCameraFollowing: boolean = false;
 
   constructor() {
     super({ key: 'GameScene' });
@@ -46,19 +47,21 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0, 0)
       .setStrokeStyle(2, 0xffffff);
 
-    // Add title
-    this.add.text(10, 10, 'Stick Rumble - WASD to move', {
+    // Add title (fixed to screen)
+    const titleText = this.add.text(10, 10, 'Stick Rumble - WASD to move', {
       fontSize: '18px',
       color: '#ffffff'
     });
+    titleText.setScrollFactor(0);
 
-    // Add match timer at top-center
+    // Add match timer at top-center (fixed to screen)
     this.matchTimerText = this.add.text(ARENA.WIDTH / 2, 10, '7:00', {
       fontSize: '24px',
       color: '#ffffff',
       fontStyle: 'bold',
     });
     this.matchTimerText.setOrigin(0.5, 0); // Center horizontally
+    this.matchTimerText.setScrollFactor(0);
 
     // Initialize player manager
     this.playerManager = new PlayerManager(this);
@@ -106,6 +109,9 @@ export class GameScene extends Phaser.Scene {
             );
           }
         }
+
+        // Start camera follow on local player sprite (if not already following)
+        this.startCameraFollowIfNeeded();
       }
     });
 
@@ -115,6 +121,9 @@ export class GameScene extends Phaser.Scene {
       // Set local player ID so we can highlight our player
       if (messageData.playerId) {
         this.playerManager.setLocalPlayerId(messageData.playerId);
+        // Initialize health bar to full health on join
+        this.localPlayerHealth = 100;
+        this.healthBarUI.updateHealth(this.localPlayerHealth, 100);
       }
     });
 
@@ -232,6 +241,9 @@ export class GameScene extends Phaser.Scene {
         this.localPlayerHealth = respawnData.health;
         this.healthBarUI.updateHealth(this.localPlayerHealth, 100);
         this.exitSpectatorMode();
+
+        // Camera follow will be restarted automatically on next player:move
+        // via startCameraFollowIfNeeded() since isCameraFollowing was reset
       }
     });
 
@@ -273,17 +285,19 @@ export class GameScene extends Phaser.Scene {
             });
           }
 
-          // Add connection status
-          this.add.text(10, 30, 'Connected! WASD=move, Click=shoot, R=reload', {
+          // Add connection status (fixed to screen)
+          const connectionText = this.add.text(10, 30, 'Connected! WASD=move, Click=shoot, R=reload', {
             fontSize: '14px',
             color: '#00ff00'
           });
+          connectionText.setScrollFactor(0);
 
-          // Add ammo display
+          // Add ammo display (fixed to screen)
           this.ammoText = this.add.text(10, 50, '15/15', {
             fontSize: '16px',
             color: '#ffffff'
           });
+          this.ammoText.setScrollFactor(0);
           this.updateAmmoDisplay();
         })
         .catch(err => {
@@ -365,10 +379,18 @@ export class GameScene extends Phaser.Scene {
     this.isSpectating = true;
     this.localPlayerDeathTime = Date.now();
 
-    // Create spectator UI
+    // Stop following local player when dead
+    this.stopCameraFollow();
+
+    // Get camera dimensions for centered positioning
+    const camera = this.cameras.main;
+    const centerX = camera.width / 2;
+    const centerY = camera.height / 2;
+
+    // Create spectator UI (fixed to screen)
     this.spectatorText = this.add.text(
-      ARENA.WIDTH / 2,
-      ARENA.HEIGHT / 2 - 50,
+      centerX,
+      centerY - 50,
       'Spectating...',
       {
         fontSize: '24px',
@@ -378,11 +400,13 @@ export class GameScene extends Phaser.Scene {
       }
     );
     this.spectatorText.setOrigin(0.5);
+    this.spectatorText.setScrollFactor(0);
+    this.spectatorText.setDepth(1001);
 
-    // Create respawn countdown UI
+    // Create respawn countdown UI (fixed to screen)
     this.respawnCountdownText = this.add.text(
-      ARENA.WIDTH / 2,
-      ARENA.HEIGHT / 2,
+      centerX,
+      centerY,
       'Respawning in 3...',
       {
         fontSize: '20px',
@@ -392,6 +416,8 @@ export class GameScene extends Phaser.Scene {
       }
     );
     this.respawnCountdownText.setOrigin(0.5);
+    this.respawnCountdownText.setScrollFactor(0);
+    this.respawnCountdownText.setDepth(1001);
   }
 
   /**
@@ -512,6 +538,30 @@ export class GameScene extends Phaser.Scene {
       duration: 200,
       ease: 'Linear',
     });
+  }
+
+  /**
+   * Start camera follow on local player sprite if not already following
+   */
+  private startCameraFollowIfNeeded(): void {
+    if (this.isCameraFollowing) {
+      return;
+    }
+
+    const localPlayerSprite = this.playerManager.getLocalPlayerSprite();
+    if (localPlayerSprite) {
+      // Start following with smooth lerp (0.1 = smooth follow, 1 = instant)
+      this.cameras.main.startFollow(localPlayerSprite, true, 0.1, 0.1);
+      this.isCameraFollowing = true;
+    }
+  }
+
+  /**
+   * Stop camera follow (used when entering spectator mode)
+   */
+  private stopCameraFollow(): void {
+    this.cameras.main.stopFollow();
+    this.isCameraFollowing = false;
   }
 
   /**
