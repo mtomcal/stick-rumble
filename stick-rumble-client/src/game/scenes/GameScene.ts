@@ -4,6 +4,7 @@ import { InputManager } from '../input/InputManager';
 import { ShootingManager, type WeaponState } from '../input/ShootingManager';
 import { PlayerManager, type PlayerState } from '../entities/PlayerManager';
 import { ProjectileManager, type ProjectileData } from '../entities/ProjectileManager';
+import { HealthBarUI } from '../ui/HealthBarUI';
 import { ARENA } from '../../shared/constants';
 
 export class GameScene extends Phaser.Scene {
@@ -12,12 +13,15 @@ export class GameScene extends Phaser.Scene {
   private shootingManager!: ShootingManager;
   private playerManager!: PlayerManager;
   private projectileManager!: ProjectileManager;
+  private healthBarUI!: HealthBarUI;
   private ammoText!: Phaser.GameObjects.Text;
   private lastDeltaTime: number = 0;
   private isSpectating: boolean = false;
   private localPlayerDeathTime: number | null = null;
   private spectatorText: Phaser.GameObjects.Text | null = null;
   private respawnCountdownText: Phaser.GameObjects.Text | null = null;
+  private localPlayerHealth: number = 100;
+  private damageFlashOverlay: Phaser.GameObjects.Rectangle | null = null;
 
   constructor() {
     super({ key: 'GameScene' });
@@ -50,6 +54,21 @@ export class GameScene extends Phaser.Scene {
 
     // Initialize projectile manager
     this.projectileManager = new ProjectileManager(this);
+
+    // Initialize health bar UI (top-left corner)
+    this.healthBarUI = new HealthBarUI(this, 10, 70);
+
+    // Create damage flash overlay (initially invisible)
+    this.damageFlashOverlay = this.add.rectangle(
+      ARENA.WIDTH / 2,
+      ARENA.HEIGHT / 2,
+      ARENA.WIDTH,
+      ARENA.HEIGHT,
+      0xff0000,
+      0 // Fully transparent initially
+    );
+    this.damageFlashOverlay.setScrollFactor(0); // Fixed to screen
+    this.damageFlashOverlay.setDepth(999); // Below health bar but above everything else
 
     // Connect to WebSocket server
     const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws';
@@ -133,7 +152,16 @@ export class GameScene extends Phaser.Scene {
       console.log(
         `Player ${damageData.victimId} took ${damageData.damage} damage from ${damageData.attackerId} (health: ${damageData.newHealth})`
       );
-      // TODO: Visual damage feedback (screen flash, damage numbers, health bar) in Story 2.5
+
+      // Update health bar if local player was damaged
+      if (damageData.victimId === this.playerManager.getLocalPlayerId()) {
+        this.localPlayerHealth = damageData.newHealth;
+        this.healthBarUI.updateHealth(this.localPlayerHealth, 100);
+        this.showDamageFlash();
+      }
+
+      // Show damage numbers above damaged player
+      this.showDamageNumber(damageData.victimId, damageData.damage);
     });
 
     // Handle hit confirmation (for hit marker feedback)
@@ -144,7 +172,8 @@ export class GameScene extends Phaser.Scene {
         projectileId: string;
       };
       console.log(`Hit confirmed! Dealt ${hitData.damage} damage to ${hitData.victimId}`);
-      // TODO: Show hit marker (visual + audio) in Story 2.5
+      this.showHitMarker();
+      // TODO: Audio feedback (ding sound) - deferred to audio story
     });
 
     // Handle player death events
@@ -170,8 +199,10 @@ export class GameScene extends Phaser.Scene {
       };
       console.log(`Player ${respawnData.playerId} respawned at (${respawnData.position.x}, ${respawnData.position.y})`);
 
-      // If local player respawned, exit spectator mode
+      // If local player respawned, exit spectator mode and reset health
       if (respawnData.playerId === this.playerManager.getLocalPlayerId()) {
+        this.localPlayerHealth = respawnData.health;
+        this.healthBarUI.updateHealth(this.localPlayerHealth, 100);
         this.exitSpectatorMode();
       }
     });
@@ -361,5 +392,123 @@ export class GameScene extends Phaser.Scene {
         this.spectatorText.setText('No players to spectate');
       }
     }
+  }
+
+  /**
+   * Show floating damage number above damaged player
+   */
+  private showDamageNumber(victimId: string, damage: number): void {
+    const position = this.playerManager.getPlayerPosition(victimId);
+    if (!position) {
+      return; // Player not found or already removed
+    }
+
+    // Create damage number text
+    const damageText = this.add.text(
+      position.x,
+      position.y - 30, // Above player
+      `-${damage}`,
+      {
+        fontSize: '24px',
+        color: '#ff0000',
+        fontStyle: 'bold',
+        stroke: '#000000',
+        strokeThickness: 3,
+      }
+    );
+    damageText.setOrigin(0.5);
+
+    // Animate: float up and fade out
+    this.tweens.add({
+      targets: damageText,
+      y: position.y - 80, // Move up 50 pixels
+      alpha: 0, // Fade to transparent
+      duration: 1000, // 1 second
+      ease: 'Cubic.easeOut',
+      onComplete: () => {
+        damageText.destroy(); // Clean up after animation
+      },
+    });
+  }
+
+  /**
+   * Show red screen flash when local player takes damage
+   */
+  private showDamageFlash(): void {
+    if (!this.damageFlashOverlay) {
+      return;
+    }
+
+    // Reset alpha to 50% opacity
+    this.damageFlashOverlay.setAlpha(0.5);
+
+    // Fade out over 200ms
+    this.tweens.add({
+      targets: this.damageFlashOverlay,
+      alpha: 0,
+      duration: 200,
+      ease: 'Linear',
+    });
+  }
+
+  /**
+   * Show hit marker (crosshair confirmation) at screen center
+   */
+  private showHitMarker(): void {
+    const camera = this.cameras.main;
+    const centerX = camera.scrollX + camera.width / 2;
+    const centerY = camera.scrollY + camera.height / 2;
+    const lineLength = 15;
+    const gap = 10; // Gap from center
+
+    // Create 4 lines forming a crosshair (top, bottom, left, right)
+    const lines = [
+      // Top line
+      this.add.line(
+        0, 0,
+        centerX, centerY - gap,
+        centerX, centerY - gap - lineLength,
+        0xffffff
+      ),
+      // Bottom line
+      this.add.line(
+        0, 0,
+        centerX, centerY + gap,
+        centerX, centerY + gap + lineLength,
+        0xffffff
+      ),
+      // Left line
+      this.add.line(
+        0, 0,
+        centerX - gap, centerY,
+        centerX - gap - lineLength, centerY,
+        0xffffff
+      ),
+      // Right line
+      this.add.line(
+        0, 0,
+        centerX + gap, centerY,
+        centerX + gap + lineLength, centerY,
+        0xffffff
+      ),
+    ];
+
+    // Set high depth so crosshair appears above everything
+    lines.forEach(line => {
+      line.setDepth(1001);
+      line.setLineWidth(3);
+    });
+
+    // Animate: expand slightly and fade out, then clean up
+    this.tweens.add({
+      targets: lines,
+      alpha: 0,
+      duration: 200,
+      ease: 'Cubic.easeOut',
+      onComplete: () => {
+        // Clean up lines after animation
+        lines.forEach(line => line.destroy());
+      },
+    });
   }
 }

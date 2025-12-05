@@ -28,6 +28,9 @@ const createMockScene = () => {
   const mockRectangle = {
     setOrigin: vi.fn().mockReturnThis(),
     setStrokeStyle: vi.fn().mockReturnThis(),
+    setScrollFactor: vi.fn().mockReturnThis(),
+    setDepth: vi.fn().mockReturnThis(),
+    setAlpha: vi.fn().mockReturnThis(),
   };
 
   const mockText = {
@@ -53,12 +56,19 @@ const createMockScene = () => {
     }),
   };
 
+  const mockContainer = {
+    add: vi.fn().mockReturnThis(),
+    setScrollFactor: vi.fn().mockReturnThis(),
+    setDepth: vi.fn().mockReturnThis(),
+  };
+
   const mockContext = {
     add: {
       text: vi.fn().mockReturnValue(mockText),
       rectangle: vi.fn().mockReturnValue(mockRectangle),
       line: vi.fn().mockReturnValue(mockLine),
       circle: vi.fn().mockReturnValue({ destroy: vi.fn() }),
+      container: vi.fn().mockReturnValue(mockContainer),
     },
     cameras: {
       main: mockCamera,
@@ -223,9 +233,10 @@ describe('GameScene', () => {
 
       scene.create();
 
-      // Should create exactly 2 rectangles (background + border)
+      // Should create 5 rectangles (arena bg, arena border, health bar bg, health bar, damage flash)
       const rectangleCalls = mockSceneContext.add.rectangle.mock.calls;
-      expect(rectangleCalls.length).toBe(2);
+      expect(rectangleCalls.length).toBe(5);
+      // Second rectangle is the arena border
       expect(rectangleCalls[1]).toEqual([0, 0, 1920, 1080, 0xffffff, 0]);
 
       // Verify setStrokeStyle was called on the border rectangle
@@ -1060,8 +1071,8 @@ describe('GameScene', () => {
       let textCallCount = 0;
       mockSceneContext.add.text = vi.fn().mockImplementation(() => {
         textCallCount++;
-        // Third text call is the ammo display
-        if (textCallCount === 3) {
+        // Fourth text call is the ammo display (after title, health bar text, connection status)
+        if (textCallCount === 4) {
           return mockAmmoText;
         }
         return { setOrigin: vi.fn().mockReturnThis() };
@@ -1122,7 +1133,8 @@ describe('GameScene', () => {
       let textCallCount = 0;
       mockSceneContext.add.text = vi.fn().mockImplementation(() => {
         textCallCount++;
-        if (textCallCount === 3) {
+        // Fourth text call is the ammo display (after title, health bar text, connection status)
+        if (textCallCount === 4) {
           return mockAmmoText;
         }
         return { setOrigin: vi.fn().mockReturnThis() };
@@ -1523,6 +1535,190 @@ describe('GameScene', () => {
       );
 
       consoleSpy.mockRestore();
+    });
+  });
+
+  describe('Health Bar UI', () => {
+    it('should create health bar UI on scene creation', () => {
+      const mockSceneContext = createMockScene();
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      // Verify container was created (health bar uses container)
+      expect(mockSceneContext.add.container).toHaveBeenCalled();
+    });
+
+    it('should update health bar when local player takes damage', async () => {
+      const mockSceneContext = createMockScene();
+      Object.assign(scene, mockSceneContext);
+
+      // Create a mock updateHealth method
+      const mockUpdateHealth = vi.fn();
+
+      scene.create();
+
+      // Trigger the delayed callback to create WebSocket
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Wait for connection
+      await vi.waitFor(() => {
+        return mockWebSocketInstance !== null;
+      });
+
+      // Mock the health bar updateHealth method
+      (scene as any).healthBarUI = { updateHealth: mockUpdateHealth };
+
+      // Set local player ID
+      const roomJoinedMessage = {
+        data: JSON.stringify({
+          type: 'room:joined',
+          timestamp: Date.now(),
+          data: { playerId: 'local-player' }
+        })
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(roomJoinedMessage as MessageEvent);
+      }
+
+      // Simulate local player taking damage
+      const damagedMessage = {
+        data: JSON.stringify({
+          type: 'player:damaged',
+          timestamp: Date.now(),
+          data: {
+            victimId: 'local-player',
+            attackerId: 'attacker-1',
+            damage: 25,
+            newHealth: 75,
+            projectileId: 'proj-1'
+          }
+        })
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(damagedMessage as MessageEvent);
+      }
+
+      // Verify health bar was updated
+      expect(mockUpdateHealth).toHaveBeenCalledWith(75, 100);
+    });
+
+    it('should not update health bar when other player takes damage', async () => {
+      const mockSceneContext = createMockScene();
+      Object.assign(scene, mockSceneContext);
+
+      // Create a mock updateHealth method
+      const mockUpdateHealth = vi.fn();
+
+      scene.create();
+
+      // Trigger the delayed callback to create WebSocket
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Wait for connection
+      await vi.waitFor(() => {
+        return mockWebSocketInstance !== null;
+      });
+
+      // Mock the health bar updateHealth method
+      (scene as any).healthBarUI = { updateHealth: mockUpdateHealth };
+
+      // Set local player ID
+      const roomJoinedMessage = {
+        data: JSON.stringify({
+          type: 'room:joined',
+          timestamp: Date.now(),
+          data: { playerId: 'local-player' }
+        })
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(roomJoinedMessage as MessageEvent);
+      }
+
+      // Simulate other player taking damage
+      const damagedMessage = {
+        data: JSON.stringify({
+          type: 'player:damaged',
+          timestamp: Date.now(),
+          data: {
+            victimId: 'other-player',
+            attackerId: 'attacker-1',
+            damage: 25,
+            newHealth: 75,
+            projectileId: 'proj-1'
+          }
+        })
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(damagedMessage as MessageEvent);
+      }
+
+      // Verify health bar was NOT updated (only called 0 times)
+      expect(mockUpdateHealth).not.toHaveBeenCalled();
+    });
+
+    it('should reset health bar to full on respawn', async () => {
+      const mockSceneContext = createMockScene();
+      Object.assign(scene, mockSceneContext);
+
+      // Create a mock updateHealth method
+      const mockUpdateHealth = vi.fn();
+
+      scene.create();
+
+      // Trigger the delayed callback to create WebSocket
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Wait for connection
+      await vi.waitFor(() => {
+        return mockWebSocketInstance !== null;
+      });
+
+      // Mock the health bar updateHealth method
+      (scene as any).healthBarUI = { updateHealth: mockUpdateHealth };
+
+      // Set local player ID
+      const roomJoinedMessage = {
+        data: JSON.stringify({
+          type: 'room:joined',
+          timestamp: Date.now(),
+          data: { playerId: 'local-player' }
+        })
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(roomJoinedMessage as MessageEvent);
+      }
+
+      // Simulate local player respawn
+      const respawnMessage = {
+        data: JSON.stringify({
+          type: 'player:respawn',
+          timestamp: Date.now(),
+          data: {
+            playerId: 'local-player',
+            position: { x: 500, y: 300 },
+            health: 100
+          }
+        })
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(respawnMessage as MessageEvent);
+      }
+
+      // Verify health bar was updated to full health
+      expect(mockUpdateHealth).toHaveBeenCalledWith(100, 100);
     });
   });
 });

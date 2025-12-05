@@ -215,4 +215,13 @@ export class PlayerManager {
     const localPlayerState = this.playerStates.get(this.localPlayerId);
     return localPlayerState?.deathTime !== undefined;
   }
+
+  /**
+   * Get a player's current position by ID
+   * Returns null if player not found
+   */
+  getPlayerPosition(playerId: string): { x: number; y: number } | null {
+    const playerState = this.playerStates.get(playerId);
+    return playerState ? playerState.position : null;
+  }
 }
