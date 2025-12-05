@@ -203,3 +203,148 @@ func TestPlayerStateAimAngleThreadSafety(t *testing.T) {
 	wg.Wait()
 	// If we get here without a data race, the test passes
 }
+
+func TestNewPlayerState_Health(t *testing.T) {
+	player := NewPlayerState("test-player")
+
+	if player.Health != PlayerMaxHealth {
+		t.Errorf("NewPlayerState() Health = %v, want %v", player.Health, PlayerMaxHealth)
+	}
+
+	if !player.IsAlive() {
+		t.Error("NewPlayerState() should be alive")
+	}
+}
+
+func TestPlayerState_TakeDamage(t *testing.T) {
+	player := NewPlayerState("test-player")
+
+	// Take 25 damage
+	player.TakeDamage(25)
+
+	if player.Health != 75 {
+		t.Errorf("Health after 25 damage = %v, want 75", player.Health)
+	}
+
+	if !player.IsAlive() {
+		t.Error("Player should still be alive")
+	}
+}
+
+func TestPlayerState_TakeDamage_FatalDamage(t *testing.T) {
+	player := NewPlayerState("test-player")
+
+	// Take 100 damage (should kill)
+	player.TakeDamage(100)
+
+	if player.Health != 0 {
+		t.Errorf("Health after fatal damage = %v, want 0", player.Health)
+	}
+
+	if player.IsAlive() {
+		t.Error("Player should be dead")
+	}
+}
+
+func TestPlayerState_TakeDamage_Overkill(t *testing.T) {
+	player := NewPlayerState("test-player")
+
+	// Take 150 damage (more than max health)
+	player.TakeDamage(150)
+
+	if player.Health != 0 {
+		t.Errorf("Health after overkill = %v, want 0 (should not go negative)", player.Health)
+	}
+
+	if player.IsAlive() {
+		t.Error("Player should be dead")
+	}
+}
+
+func TestPlayerState_TakeDamage_MultipleTimes(t *testing.T) {
+	player := NewPlayerState("test-player")
+
+	// Take 25 damage four times (4 shots from pistol = 100 damage)
+	player.TakeDamage(25)
+	player.TakeDamage(25)
+	player.TakeDamage(25)
+
+	if player.Health != 25 {
+		t.Errorf("Health after 3 shots = %v, want 25", player.Health)
+	}
+
+	if !player.IsAlive() {
+		t.Error("Player should still be alive")
+	}
+
+	// Fourth shot kills
+	player.TakeDamage(25)
+
+	if player.Health != 0 {
+		t.Errorf("Health after 4 shots = %v, want 0", player.Health)
+	}
+
+	if player.IsAlive() {
+		t.Error("Player should be dead after 4 shots")
+	}
+}
+
+func TestPlayerState_IsAlive_EdgeCase(t *testing.T) {
+	player := NewPlayerState("test-player")
+
+	// Reduce health to 1 HP
+	player.TakeDamage(99)
+
+	if player.Health != 1 {
+		t.Errorf("Health = %v, want 1", player.Health)
+	}
+
+	if !player.IsAlive() {
+		t.Error("Player with 1 HP should be alive")
+	}
+
+	// One more damage point kills
+	player.TakeDamage(1)
+
+	if player.IsAlive() {
+		t.Error("Player with 0 HP should be dead")
+	}
+}
+
+func TestPlayerState_HealthThreadSafety(t *testing.T) {
+	player := NewPlayerState("test-player")
+	var wg sync.WaitGroup
+
+	// Run concurrent damage and alive checks
+	for i := 0; i < 50; i++ {
+		wg.Add(2)
+
+		go func() {
+			defer wg.Done()
+			player.TakeDamage(1)
+		}()
+
+		go func() {
+			defer wg.Done()
+			player.IsAlive()
+		}()
+	}
+
+	wg.Wait()
+	// If we get here without a data race, the test passes
+	// Player should have taken 50 damage
+	if player.Health != 50 {
+		t.Errorf("Health after 50 concurrent damage calls = %v, want 50", player.Health)
+	}
+}
+
+func TestPlayerState_Snapshot_IncludesHealth(t *testing.T) {
+	player := NewPlayerState("test-player")
+	player.TakeDamage(30)
+
+	snapshot := player.Snapshot()
+
+	if snapshot.Health != 70 {
+		t.Errorf("Snapshot Health = %v, want 70", snapshot.Health)
+	}
+}

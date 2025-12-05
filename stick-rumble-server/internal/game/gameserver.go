@@ -38,6 +38,9 @@ type GameServer struct {
 	// Callback for when a player's reload completes
 	onReloadComplete func(playerID string)
 
+	// Callback for when a projectile hits a player
+	onHit func(hit HitEvent)
+
 	running bool
 	mu      sync.RWMutex
 	wg      sync.WaitGroup
@@ -105,6 +108,9 @@ func (gs *GameServer) tickLoop(ctx context.Context) {
 
 			// Update all projectiles
 			gs.projectileManager.Update(deltaTime)
+
+			// Check for projectile-player collisions (hit detection)
+			gs.checkHitDetection()
 
 			// Check for reload completions
 			gs.checkReloads()
@@ -294,4 +300,63 @@ func (gs *GameServer) checkReloads() {
 // GetActiveProjectiles returns snapshots of all active projectiles
 func (gs *GameServer) GetActiveProjectiles() []ProjectileSnapshot {
 	return gs.projectileManager.GetProjectileSnapshots()
+}
+
+// SetOnHit sets the callback for when a projectile hits a player
+func (gs *GameServer) SetOnHit(callback func(hit HitEvent)) {
+	gs.onHit = callback
+}
+
+// checkHitDetection checks for projectile-player collisions and processes hits
+func (gs *GameServer) checkHitDetection() {
+	// Get all active projectiles
+	projectiles := gs.projectileManager.GetActiveProjectiles()
+	if len(projectiles) == 0 {
+		return
+	}
+
+	// Get all players
+	gs.world.mu.RLock()
+	players := make([]*PlayerState, 0, len(gs.world.players))
+	for _, player := range gs.world.players {
+		players = append(players, player)
+	}
+	gs.world.mu.RUnlock()
+
+	if len(players) == 0 {
+		return
+	}
+
+	// Check for collisions
+	hits := gs.physics.CheckAllProjectileCollisions(projectiles, players)
+
+	// Process each hit
+	for _, hit := range hits {
+		// Get the attacker's weapon to determine damage
+		gs.weaponMu.RLock()
+		weaponState := gs.weaponStates[hit.AttackerID]
+		gs.weaponMu.RUnlock()
+
+		if weaponState == nil {
+			continue
+		}
+
+		damage := weaponState.Weapon.Damage
+
+		// Apply damage to victim
+		victim, exists := gs.world.GetPlayer(hit.VictimID)
+		if !exists {
+			continue
+		}
+
+		victim.TakeDamage(damage)
+
+		// Deactivate the projectile
+		gs.projectileManager.RemoveProjectile(hit.ProjectileID)
+
+		// Notify via callback
+		if gs.onHit != nil {
+			gs.onHit(hit)
+		}
+	}
 }

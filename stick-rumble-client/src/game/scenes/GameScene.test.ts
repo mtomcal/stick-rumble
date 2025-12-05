@@ -1249,4 +1249,17 @@ describe('GameScene', () => {
       consoleErrorSpy.mockRestore();
     });
   });
+
+  describe('Damage Event Handlers', () => {
+    it('should register message handlers for damage events', () => {
+      const mockSceneContext = createMockScene();
+      Object.assign(scene, mockSceneContext);
+
+      // Should not throw when registering damage event handlers
+      expect(() => scene.create()).not.toThrow();
+
+      // Handlers are registered via wsClient.on() which is tested via WebSocketClient tests
+      // Detailed testing of damage feedback (visual effects) deferred to Story 2.5
+    });
+  });
 });
