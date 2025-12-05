@@ -23,6 +23,10 @@ const (
 
 	// ProjectileMaxLifetime is the maximum time a projectile exists (1 second)
 	ProjectileMaxLifetime = 1 * time.Second
+
+	// ProjectileMaxRange is the maximum range for hit detection (px)
+	// Set to projectile speed * lifetime = 800px/s * 1s = 800px
+	ProjectileMaxRange = 800.0
 )
 
 // Weapon defines a weapon type with its properties

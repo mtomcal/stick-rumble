@@ -131,6 +131,13 @@ type HitEvent struct {
 	AttackerID   string
 }
 
+// calculateDistance returns the Euclidean distance between two positions
+func calculateDistance(pos1, pos2 Vector2) float64 {
+	dx := pos2.X - pos1.X
+	dy := pos2.Y - pos1.Y
+	return math.Sqrt(dx*dx + dy*dy)
+}
+
 // CheckProjectilePlayerCollision checks if a projectile intersects a player's hitbox using AABB
 // Hitbox is 32x64 pixels (PlayerWidth x PlayerHeight) centered on player position
 // Returns true if collision detected
@@ -146,6 +153,13 @@ func (p *Physics) CheckProjectilePlayerCollision(proj *Projectile, player *Playe
 	}
 
 	playerPos := player.GetPosition()
+
+	// Validate range: reject hits beyond max projectile range
+	// This prevents impossible long-range hits
+	distanceTraveled := calculateDistance(proj.SpawnPosition, proj.Position)
+	if distanceTraveled > ProjectileMaxRange {
+		return false
+	}
 
 	// Calculate half-sizes for AABB collision
 	halfWidth := PlayerWidth / 2

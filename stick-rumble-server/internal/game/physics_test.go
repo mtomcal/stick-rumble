@@ -329,10 +329,11 @@ func TestCheckProjectilePlayerCollision_Hit(t *testing.T) {
 
 	// Create projectile at position (500, 500)
 	proj := &Projectile{
-		ID:       "proj-1",
-		OwnerID:  "player-1",
-		Position: Vector2{X: 500, Y: 500},
-		Active:   true,
+		ID:            "proj-1",
+		OwnerID:       "player-1",
+		Position:      Vector2{X: 500, Y: 500},
+		SpawnPosition: Vector2{X: 500, Y: 500},
+		Active:        true,
 	}
 
 	// Create target player at same position (should hit)
@@ -351,10 +352,11 @@ func TestCheckProjectilePlayerCollision_Miss(t *testing.T) {
 
 	// Create projectile at position (500, 500)
 	proj := &Projectile{
-		ID:       "proj-1",
-		OwnerID:  "player-1",
-		Position: Vector2{X: 500, Y: 500},
-		Active:   true,
+		ID:            "proj-1",
+		OwnerID:       "player-1",
+		Position:      Vector2{X: 500, Y: 500},
+		SpawnPosition: Vector2{X: 500, Y: 500},
+		Active:        true,
 	}
 
 	// Create target player far away (should miss)
@@ -373,10 +375,11 @@ func TestCheckProjectilePlayerCollision_EdgeOfHitbox(t *testing.T) {
 
 	// Create projectile
 	proj := &Projectile{
-		ID:       "proj-1",
-		OwnerID:  "player-1",
-		Position: Vector2{X: 500, Y: 500},
-		Active:   true,
+		ID:            "proj-1",
+		OwnerID:       "player-1",
+		Position:      Vector2{X: 500, Y: 500},
+		SpawnPosition: Vector2{X: 500, Y: 500},
+		Active:        true,
 	}
 
 	// Create target just at edge of hitbox (should still hit)
@@ -396,10 +399,11 @@ func TestCheckProjectilePlayerCollision_BarelyMiss(t *testing.T) {
 
 	// Create projectile
 	proj := &Projectile{
-		ID:       "proj-1",
-		OwnerID:  "player-1",
-		Position: Vector2{X: 500, Y: 500},
-		Active:   true,
+		ID:            "proj-1",
+		OwnerID:       "player-1",
+		Position:      Vector2{X: 500, Y: 500},
+		SpawnPosition: Vector2{X: 500, Y: 500},
+		Active:        true,
 	}
 
 	// Create target just outside hitbox (should miss)
@@ -419,10 +423,11 @@ func TestCheckProjectilePlayerCollision_DeadPlayer(t *testing.T) {
 
 	// Create projectile
 	proj := &Projectile{
-		ID:       "proj-1",
-		OwnerID:  "player-1",
-		Position: Vector2{X: 500, Y: 500},
-		Active:   true,
+		ID:            "proj-1",
+		OwnerID:       "player-1",
+		Position:      Vector2{X: 500, Y: 500},
+		SpawnPosition: Vector2{X: 500, Y: 500},
+		Active:        true,
 	}
 
 	// Create dead player at same position
@@ -443,10 +448,11 @@ func TestCheckAllProjectileCollisions_SingleHit(t *testing.T) {
 	// Create one projectile
 	projectiles := []*Projectile{
 		{
-			ID:       "proj-1",
-			OwnerID:  "player-1",
-			Position: Vector2{X: 500, Y: 500},
-			Active:   true,
+			ID:            "proj-1",
+			OwnerID:       "player-1",
+			Position:      Vector2{X: 500, Y: 500},
+			SpawnPosition: Vector2{X: 500, Y: 500},
+			Active:        true,
 		},
 	}
 
@@ -482,16 +488,18 @@ func TestCheckAllProjectileCollisions_MultipleHits(t *testing.T) {
 	// Create two projectiles
 	projectiles := []*Projectile{
 		{
-			ID:       "proj-1",
-			OwnerID:  "player-1",
-			Position: Vector2{X: 500, Y: 500},
-			Active:   true,
+			ID:            "proj-1",
+			OwnerID:       "player-1",
+			Position:      Vector2{X: 500, Y: 500},
+			SpawnPosition: Vector2{X: 500, Y: 500},
+			Active:        true,
 		},
 		{
-			ID:       "proj-2",
-			OwnerID:  "player-2",
-			Position: Vector2{X: 700, Y: 700},
-			Active:   true,
+			ID:            "proj-2",
+			OwnerID:       "player-2",
+			Position:      Vector2{X: 700, Y: 700},
+			SpawnPosition: Vector2{X: 700, Y: 700},
+			Active:        true,
 		},
 	}
 
@@ -518,10 +526,11 @@ func TestCheckAllProjectileCollisions_NoHits(t *testing.T) {
 	// Create projectiles and players that don't collide
 	projectiles := []*Projectile{
 		{
-			ID:       "proj-1",
-			OwnerID:  "player-1",
-			Position: Vector2{X: 100, Y: 100},
-			Active:   true,
+			ID:            "proj-1",
+			OwnerID:       "player-1",
+			Position:      Vector2{X: 100, Y: 100},
+			SpawnPosition: Vector2{X: 100, Y: 100},
+			Active:        true,
 		},
 	}
 
@@ -545,10 +554,11 @@ func TestCheckAllProjectileCollisions_OwnerImmunity(t *testing.T) {
 	// Create projectile from player-1
 	projectiles := []*Projectile{
 		{
-			ID:       "proj-1",
-			OwnerID:  "player-1",
-			Position: Vector2{X: 500, Y: 500},
-			Active:   true,
+			ID:            "proj-1",
+			OwnerID:       "player-1",
+			Position:      Vector2{X: 500, Y: 500},
+			SpawnPosition: Vector2{X: 500, Y: 500},
+			Active:        true,
 		},
 	}
 
@@ -562,5 +572,97 @@ func TestCheckAllProjectileCollisions_OwnerImmunity(t *testing.T) {
 
 	if len(hits) != 0 {
 		t.Error("Projectile should not hit its owner")
+	}
+}
+
+func TestCheckProjectilePlayerCollision_WithinMaxRange(t *testing.T) {
+	physics := NewPhysics()
+
+	// Create projectile that spawned at (100, 100) and traveled 700px (within 800px max range)
+	proj := &Projectile{
+		ID:            "proj-1",
+		OwnerID:       "player-1",
+		SpawnPosition: Vector2{X: 100, Y: 100},
+		Position:      Vector2{X: 800, Y: 100}, // 700px traveled horizontally
+		Active:        true,
+	}
+
+	// Create target player at projectile position (should hit - within range)
+	target := NewPlayerState("player-2")
+	target.SetPosition(Vector2{X: 800, Y: 100})
+
+	result := physics.CheckProjectilePlayerCollision(proj, target)
+
+	if !result {
+		t.Error("Expected collision when projectile is within max range (700px < 800px)")
+	}
+}
+
+func TestCheckProjectilePlayerCollision_ExceedsMaxRange(t *testing.T) {
+	physics := NewPhysics()
+
+	// Create projectile that spawned at (100, 100) and traveled 900px (exceeds 800px max range)
+	proj := &Projectile{
+		ID:            "proj-1",
+		OwnerID:       "player-1",
+		SpawnPosition: Vector2{X: 100, Y: 100},
+		Position:      Vector2{X: 1000, Y: 100}, // 900px traveled horizontally
+		Active:        true,
+	}
+
+	// Create target player at projectile position (should NOT hit - out of range)
+	target := NewPlayerState("player-2")
+	target.SetPosition(Vector2{X: 1000, Y: 100})
+
+	result := physics.CheckProjectilePlayerCollision(proj, target)
+
+	if result {
+		t.Error("Expected no collision when projectile exceeds max range (900px > 800px)")
+	}
+}
+
+func TestCheckProjectilePlayerCollision_ExactlyMaxRange(t *testing.T) {
+	physics := NewPhysics()
+
+	// Create projectile that traveled exactly 800px (at max range boundary)
+	proj := &Projectile{
+		ID:            "proj-1",
+		OwnerID:       "player-1",
+		SpawnPosition: Vector2{X: 100, Y: 100},
+		Position:      Vector2{X: 900, Y: 100}, // exactly 800px traveled
+		Active:        true,
+	}
+
+	// Create target player at projectile position (should hit - exactly at boundary)
+	target := NewPlayerState("player-2")
+	target.SetPosition(Vector2{X: 900, Y: 100})
+
+	result := physics.CheckProjectilePlayerCollision(proj, target)
+
+	if !result {
+		t.Error("Expected collision when projectile is exactly at max range (800px = 800px)")
+	}
+}
+
+func TestCheckProjectilePlayerCollision_DiagonalRange(t *testing.T) {
+	physics := NewPhysics()
+
+	// Create projectile that traveled diagonally ~707px (500^2 + 500^2 = 707px < 800px max)
+	proj := &Projectile{
+		ID:            "proj-1",
+		OwnerID:       "player-1",
+		SpawnPosition: Vector2{X: 100, Y: 100},
+		Position:      Vector2{X: 600, Y: 600}, // sqrt(500^2 + 500^2) = ~707px
+		Active:        true,
+	}
+
+	// Create target player at projectile position (should hit - diagonal within range)
+	target := NewPlayerState("player-2")
+	target.SetPosition(Vector2{X: 600, Y: 600})
+
+	result := physics.CheckProjectilePlayerCollision(proj, target)
+
+	if !result {
+		t.Error("Expected collision when diagonal travel is within max range (~707px < 800px)")
 	}
 }

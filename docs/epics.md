@@ -312,6 +312,43 @@ So that the multiplayer foundation is proven to work.
 
 **FRs Covered:** FR2 (movement/aim), FR3 (shooting), FR7 (respawn), FR10 (deathmatch), FR12 (server authority), FR16 (performance), FR17 (browser access)
 
+**Epic Status:** 🟢 IN PROGRESS (4/7 stories complete, ~57% done)
+
+---
+
+### Epic 2 Progress Summary
+
+**Completed Stories (✅):**
+- ✅ **Story 2.1**: Server-Authoritative Player Movement (96.1% coverage)
+  - Includes Story 2.1.1: Network package test coverage improvement (93.4%)
+- ✅ **Story 2.2**: 360-Degree Mouse Aim (94.0% network, 96.4% game coverage)
+  - Includes Story 2.2 Follow-up: End-to-end integration tests (33 passing)
+  - Includes Story 2.2.1: Fix aim coordinate transformation for Scale.FIT mode
+- ✅ **Story 2.3**: Basic Shooting with Pistol (99.34% client, 90.2% network coverage)
+- ✅ **Story 2.4**: Server-Authoritative Hit Detection (99.36% client, 85.4% network, 92.6% game coverage)
+
+**Remaining Stories:**
+- 🔵 **Story 2.5**: Health System and Death (NEXT - ready to start, unblocks 2.6 & 2.7)
+- ⏸️ **Story 2.6**: Free-For-All Deathmatch Win Condition (blocked by 2.5)
+- ⏸️ **Story 2.7**: Health Regeneration (blocked by 2.5)
+
+**Deferred Enhancements:**
+- 📋 **Story 2.4.1**: Lag Compensation for Hit Detection (deferred to Epic 4, Story 4.5)
+
+**Key Achievements:**
+- All completed stories exceed 90% test coverage requirement
+- Proactive bug fixes: coordinate transformation (2.2.1), network coverage (2.1.1)
+- Comprehensive integration testing established (53 integration tests passing)
+- High code quality: zero TypeScript errors, zero ESLint warnings, go vet/gofmt clean
+- Server-authoritative architecture proven with hit detection, movement validation, and projectile physics
+
+**Key Learnings:**
+- **Integration tests critical for Phaser apps**: Story 2.2.1 revealed that unit tests with mocked Phaser APIs can pass while real implementation fails due to coordinate transformation bugs. Now require integration tests for coordinate-dependent features.
+- **Test quality standards paying off**: Catching issues before "done" status (e.g., network coverage in 2.1, test assertions in 2.4) prevents technical debt.
+- **Incremental refinement works**: Stories 2.1.1, 2.2.1, and 2.2 follow-up show value of addressing quality issues immediately rather than deferring.
+
+**Estimated Completion:** 3-4 more stories to deliver fully playable deathmatch (Epic 2 goal achieved when Story 2.7 complete).
+
 ---
 
 ### Story 2.1: Implement Server-Authoritative Player Movement
@@ -552,9 +589,13 @@ So that tactical disengagement is rewarded.
 
 **Goal:** Players experience diverse, satisfying combat with multiple weapon types
 
-**Value Delivered:** 5 distinct weapons (Bat, Katana, Uzi, AK47, Shotgun) with unique feel
+**Value Delivered:** 5 distinct weapons (Bat, Katana, Uzi, AK47, Shotgun) with unique feel + basic visual polish
 
 **FRs Covered:** FR4 (weapon pickups), FR5 (reload/switch), FR6 (sprint/dodge)
+
+**Epic Status:** ⏳ NOT STARTED (0/7 stories complete, blocked by Epic 2)
+
+**Key Addition:** Story 3.7 added for basic visual polish after weapon systems complete. Makes game shareable before tackling Epic 4's technical netcode work. Scope: simple sprites, health bars, minimal hit effects (1-2 days, using Kenney.nl free assets).
 
 ---
 
@@ -779,6 +820,88 @@ So that I can outplay opponents with skillful timing.
 - Animation: 6-frame roll animation, sprite rotates 360°
 - Cooldown enforcement: client shows UI, server validates (prevent spam)
 - Roll cancels: stopped if hitting wall/obstacle
+
+---
+
+### Story 3.7: Basic Visual Polish for Weapons and Characters
+
+As a player,
+I want visually distinct characters and weapons,
+So that the game looks presentable and weapons are easily identifiable.
+
+**Acceptance Criteria:**
+
+**Given** I am playing the game after completing Epic 3
+**When** I look at my character and weapons
+**Then** I see proper stick figure sprites (not primitive shapes)
+
+**And** stick figure character has:
+- Simple but clean 16×32 pixel sprite (head, body, limbs clearly visible)
+- 4-frame walk animation (8-12 FPS, cycles smoothly)
+- Distinct idle pose vs moving pose
+- Color customization working (black default, other colors unlocked)
+
+**And** all 5 weapons have unique sprites:
+- Pistol: small handgun shape, 8×8 pixels, silver/gray
+- Bat: wooden bat, 16×4 pixels, brown
+- Katana: sleek blade, 20×4 pixels, silver with black handle
+- Uzi: compact SMG shape, 12×8 pixels, black/gray
+- AK47: rifle shape, 20×8 pixels, wood/metal colors
+- Shotgun: pump-action shape, 18×8 pixels, dark gray/brown
+
+**And** weapons rotate correctly with aim angle (anchor point at handle)
+**And** weapons visible when held by other players (rendered at player position + aim angle)
+
+**And** basic hit effects (minimal, not full particle systems):
+- Bullet impact: small yellow flash sprite (4×4 pixels, fades in 0.1s)
+- Melee hit: white impact lines (simple graphic, not particles)
+- Muzzle flash: small orange/yellow flash at gun barrel (fades in 0.1s)
+
+**And** health bar UI visible above each player:
+- Green bar (health), gray background, 32×4 pixels
+- Updates in real-time as health changes
+- Positioned 8 pixels above player head
+
+**Prerequisites:** Story 3.6 (completes Epic 3 gameplay features)
+
+**Technical Notes:**
+
+**Art Sourcing Strategy:**
+- Use free assets from Kenney.nl (Micro Roguelike pack, Top-Down Shooter pack)
+- Or create simple pixel art (1-2 day scope, 16×16 or smaller)
+- No custom animations needed (frame-by-frame sprite sheets are fine)
+- Prioritize clarity over detail (needs to read well at small size)
+
+**Implementation:**
+- Client assets: `public/assets/sprites/character.png`, `weapons/*.png`
+- Phaser sprite loading: `this.load.spritesheet('player', 'assets/sprites/character.png', {frameWidth: 16, frameHeight: 32})`
+- Animation config: `this.anims.create({key: 'walk', frames: this.anims.generateFrameNumbers('player', {start: 0, end: 3}), frameRate: 10, repeat: -1})`
+- Weapon rendering: `this.add.sprite(x, y, 'weapon_pistol').setRotation(aimAngle)`
+- Health bar: Phaser Graphics object, rectangle drawn above player each frame
+- Hit effects: Simple sprites with tween alpha: `this.add.sprite(x, y, 'impact_flash').setAlpha(1).tween({alpha: 0, duration: 100, onComplete: destroy})`
+
+**Scope Boundaries (Keep It Small):**
+- ❌ NO particle systems (deferred to Story 9.1)
+- ❌ NO advanced animations (idle breathing, run cycles, etc.)
+- ❌ NO death animations or ragdolls (deferred to Story 9.1)
+- ❌ NO screen shake or camera effects (deferred to Story 9.1)
+- ✅ YES basic sprites that make the game shareable and clear
+- ✅ YES health bars and minimal hit feedback
+
+**Quality Requirements:**
+- Sprites must be readable at 1920×1080 resolution
+- Weapons must be visually distinct at a glance
+- Health bars must be clearly visible during combat
+- All assets optimized: PNG with compression, <500KB total for all sprites
+- Tests updated: mock new sprite paths, verify rendering methods called
+
+**Estimated Effort:** 1-2 days (asset sourcing + integration + testing)
+
+**Why After Epic 3:**
+- All 5 weapons implemented (can do all weapon art at once)
+- Combat mechanics proven (won't waste art on cut features)
+- Makes game shareable for early playtesting feedback
+- Motivational boost before tackling Epic 4's technical netcode work
 
 ---
 
@@ -2134,13 +2257,13 @@ So that players can access the game securely from anywhere.
 **Epic Breakdown Complete!**
 
 **Total Epics:** 9
-**Total Stories:** 56
+**Total Stories:** 57 (updated: added Story 3.7 for basic visual polish)
 **All FRs Covered:** ✅ (20/20 mapped to stories)
 
 **Epic Flow:**
 1. **Foundation** → Dev environment + multiplayer proof-of-concept
-2. **Core Combat** → Playable deathmatch with shooting/respawn
-3. **Weapon Systems** → 5 weapons + movement mechanics
+2. **Core Combat** → Playable deathmatch with shooting/respawn (4/7 complete ✅)
+3. **Weapon Systems** → 5 weapons + movement mechanics + basic visual polish
 4. **Netcode** → Smooth lag-compensated gameplay
 5. **Matchmaking** → Automated queues + lobbies
 6. **Progression** → OAuth, XP, stats, cosmetics
