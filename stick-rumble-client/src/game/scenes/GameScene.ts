@@ -14,6 +14,10 @@ export class GameScene extends Phaser.Scene {
   private projectileManager!: ProjectileManager;
   private ammoText!: Phaser.GameObjects.Text;
   private lastDeltaTime: number = 0;
+  private isSpectating: boolean = false;
+  private localPlayerDeathTime: number | null = null;
+  private spectatorText: Phaser.GameObjects.Text | null = null;
+  private respawnCountdownText: Phaser.GameObjects.Text | null = null;
 
   constructor() {
     super({ key: 'GameScene' });
@@ -150,7 +154,26 @@ export class GameScene extends Phaser.Scene {
         attackerId: string;
       };
       console.log(`Player ${deathData.victimId} was killed by ${deathData.attackerId}`);
-      // TODO: Death animations and respawn logic in future story
+
+      // If local player died, enter spectator mode
+      if (deathData.victimId === this.playerManager.getLocalPlayerId()) {
+        this.enterSpectatorMode();
+      }
+    });
+
+    // Handle player respawn events
+    this.wsClient.on('player:respawn', (data) => {
+      const respawnData = data as {
+        playerId: string;
+        position: { x: number; y: number };
+        health: number;
+      };
+      console.log(`Player ${respawnData.playerId} respawned at (${respawnData.position.x}, ${respawnData.position.y})`);
+
+      // If local player respawned, exit spectator mode
+      if (respawnData.playerId === this.playerManager.getLocalPlayerId()) {
+        this.exitSpectatorMode();
+      }
     });
 
     // Defer connection until next frame to ensure scene is fully initialized
@@ -225,14 +248,118 @@ export class GameScene extends Phaser.Scene {
     // Convert delta from ms to seconds
     this.lastDeltaTime = delta / 1000;
 
-    // Update input manager to send player input to server
-    if (this.inputManager) {
+    // Update input manager to send player input to server (only when not spectating)
+    if (this.inputManager && !this.isSpectating) {
       this.inputManager.update();
     }
 
     // Update projectiles
     if (this.projectileManager) {
       this.projectileManager.update(this.lastDeltaTime);
+    }
+
+    // Update spectator mode
+    if (this.isSpectating) {
+      this.updateSpectatorMode();
+    }
+  }
+
+  /**
+   * Enter spectator mode when local player dies
+   */
+  private enterSpectatorMode(): void {
+    this.isSpectating = true;
+    this.localPlayerDeathTime = Date.now();
+
+    // Create spectator UI
+    this.spectatorText = this.add.text(
+      ARENA.WIDTH / 2,
+      ARENA.HEIGHT / 2 - 50,
+      'Spectating...',
+      {
+        fontSize: '24px',
+        color: '#ffffff',
+        backgroundColor: '#000000',
+        padding: { x: 10, y: 5 },
+      }
+    );
+    this.spectatorText.setOrigin(0.5);
+
+    // Create respawn countdown UI
+    this.respawnCountdownText = this.add.text(
+      ARENA.WIDTH / 2,
+      ARENA.HEIGHT / 2,
+      'Respawning in 3...',
+      {
+        fontSize: '20px',
+        color: '#00ff00',
+        backgroundColor: '#000000',
+        padding: { x: 10, y: 5 },
+      }
+    );
+    this.respawnCountdownText.setOrigin(0.5);
+  }
+
+  /**
+   * Exit spectator mode when local player respawns
+   */
+  private exitSpectatorMode(): void {
+    this.isSpectating = false;
+    this.localPlayerDeathTime = null;
+
+    // Remove spectator UI
+    if (this.spectatorText) {
+      this.spectatorText.destroy();
+      this.spectatorText = null;
+    }
+
+    if (this.respawnCountdownText) {
+      this.respawnCountdownText.destroy();
+      this.respawnCountdownText = null;
+    }
+  }
+
+  /**
+   * Update spectator camera to follow nearest living player
+   */
+  private updateSpectatorMode(): void {
+    // Update respawn countdown
+    if (this.respawnCountdownText && this.localPlayerDeathTime) {
+      const elapsed = (Date.now() - this.localPlayerDeathTime) / 1000;
+      const remaining = Math.max(0, 3 - elapsed);
+      this.respawnCountdownText.setText(`Respawning in ${remaining.toFixed(1)}...`);
+    }
+
+    // Follow nearest living player with camera
+    const livingPlayers = this.playerManager.getLivingPlayers();
+    if (livingPlayers.length > 0) {
+      // Find nearest living player (excluding self)
+      const localPlayerId = this.playerManager.getLocalPlayerId();
+      const otherPlayers = livingPlayers.filter(p => p.id !== localPlayerId);
+
+      if (otherPlayers.length > 0) {
+        const targetPlayer = otherPlayers[0];
+        const camera = this.cameras.main;
+
+        // Smoothly pan camera to target player
+        const targetX = targetPlayer.position.x - camera.width / 2;
+        const targetY = targetPlayer.position.y - camera.height / 2;
+
+        // Lerp camera position for smooth follow
+        const lerpFactor = 0.1;
+        camera.scrollX += (targetX - camera.scrollX) * lerpFactor;
+        camera.scrollY += (targetY - camera.scrollY) * lerpFactor;
+
+        // Update spectator text to show who we're watching
+        if (this.spectatorText) {
+          this.spectatorText.setText(`Spectating Player`);
+        }
+      }
+    } else {
+      // No living players to spectate
+      if (this.spectatorText) {
+        this.spectatorText.setText('No players to spectate');
+      }
     }
   }
 }
