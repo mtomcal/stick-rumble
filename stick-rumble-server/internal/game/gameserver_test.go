@@ -843,3 +843,52 @@ func TestGameServerHitDetection_DeadPlayerNoHit(t *testing.T) {
 		t.Error("Should not hit dead players")
 	}
 }
+
+func TestGameServerRespawn_WeaponStateReset(t *testing.T) {
+	gs := NewGameServer(nil)
+	playerID := "test-player-1"
+
+	// Add player and get weapon state
+	gs.AddPlayer(playerID)
+	ws := gs.GetWeaponState(playerID)
+
+	// Deplete ammo by shooting
+	for i := 0; i < 10; i++ {
+		if ws.CanShoot() {
+			ws.RecordShot()
+		}
+	}
+
+	// Start reloading
+	ws.StartReload()
+
+	// Verify weapon is not in default state
+	if ws.CurrentAmmo >= PistolMagazineSize {
+		t.Error("Ammo should be depleted before respawn")
+	}
+	if !ws.IsReloading {
+		t.Error("Weapon should be reloading before respawn")
+	}
+
+	// Kill the player
+	player, _ := gs.world.GetPlayer(playerID)
+	player.MarkDead()
+
+	// Wait for respawn delay and manually call checkRespawns
+	time.Sleep(time.Duration(RespawnDelay*1000+100) * time.Millisecond)
+	gs.checkRespawns()
+
+	// Get weapon state after respawn
+	wsAfterRespawn := gs.GetWeaponState(playerID)
+
+	// Verify weapon state is reset to default pistol
+	if wsAfterRespawn.CurrentAmmo != PistolMagazineSize {
+		t.Errorf("After respawn: CurrentAmmo = %d, want %d", wsAfterRespawn.CurrentAmmo, PistolMagazineSize)
+	}
+	if wsAfterRespawn.IsReloading {
+		t.Error("After respawn: weapon should not be reloading")
+	}
+	if wsAfterRespawn.Weapon.Name != "Pistol" {
+		t.Errorf("After respawn: weapon name = %s, want Pistol", wsAfterRespawn.Weapon.Name)
+	}
+}
