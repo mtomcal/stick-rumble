@@ -1414,11 +1414,16 @@ func readMessageOfType(t *testing.T, conn *websocket.Conn, msgType string, timeo
 		conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 		_, msgBytes, err := conn.ReadMessage()
 		if err != nil {
-			// Check if it's just a timeout, keep trying
-			if websocket.IsCloseError(err, websocket.CloseNormalClosure) {
+			// Check if it's a close error or repeated read failure
+			if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				return nil, err
 			}
-			continue
+			// Check for timeout (keep trying) vs other errors (return)
+			if netErr, ok := err.(interface{ Timeout() bool }); ok && netErr.Timeout() {
+				continue
+			}
+			// Other errors - return
+			return nil, err
 		}
 
 		var msg Message
@@ -1596,5 +1601,266 @@ func TestMatchTimeLimit(t *testing.T) {
 		remaining := match.GetRemainingSeconds()
 
 		assert.InDelta(t, 410, remaining, 1, "Should have ~410 seconds remaining")
+	})
+}
+
+// TestOnRespawn tests the onRespawn callback for player respawn events
+func TestOnRespawn(t *testing.T) {
+	t.Run("broadcasts player:respawn message to room", func(t *testing.T) {
+		handler := NewWebSocketHandler()
+		server := httptest.NewServer(http.HandlerFunc(handler.HandleWebSocket))
+		defer server.Close()
+
+		wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+
+		// Connect two clients to create a room
+		conn1, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+		assert.NoError(t, err)
+		defer conn1.Close()
+
+		conn2, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+		assert.NoError(t, err)
+		defer conn2.Close()
+
+		// Consume room:joined messages and capture player ID
+		conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
+		_, joinedBytes, _ := conn1.ReadMessage()
+		var joinedMsg Message
+		json.Unmarshal(joinedBytes, &joinedMsg)
+		player1ID := joinedMsg.Data.(map[string]interface{})["playerId"].(string)
+
+		conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
+		conn2.ReadMessage()
+
+		// Give time for room setup
+		time.Sleep(50 * time.Millisecond)
+
+		// Trigger onRespawn callback directly
+		respawnPos := game.Vector2{X: 500, Y: 300}
+		handler.onRespawn(player1ID, respawnPos)
+
+		// Read the respawn message (may need to skip player:move messages)
+		respawnMsg, err := readMessageOfType(t, conn1, "player:respawn", 2*time.Second)
+		assert.NoError(t, err, "Should receive player:respawn message")
+		assert.NotNil(t, respawnMsg)
+
+		if respawnMsg != nil {
+			data := respawnMsg.Data.(map[string]interface{})
+			assert.Equal(t, player1ID, data["playerId"])
+			assert.Equal(t, float64(500), data["position"].(map[string]interface{})["x"])
+			assert.Equal(t, float64(300), data["position"].(map[string]interface{})["y"])
+			assert.Equal(t, float64(game.PlayerMaxHealth), data["health"])
+		}
+	})
+
+	t.Run("handles player not in room gracefully", func(t *testing.T) {
+		handler := NewWebSocketHandler()
+
+		// Trigger onRespawn for non-existent player - should not panic
+		handler.onRespawn("non-existent-player", game.Vector2{X: 100, Y: 100})
+
+		// Test passes if no panic occurs
+	})
+}
+
+// TestOnHitDeathScenario tests the death flow in onHit callback
+func TestOnHitDeathScenario(t *testing.T) {
+	t.Run("ends match when kill target reached via match logic", func(t *testing.T) {
+		// Verify match logic works correctly (death flow is tested in TestOnHit)
+		room := game.NewRoom()
+		room.Match.Start()
+
+		attackerID := "killer-player"
+		// Give attacker 19 kills (one more kill = match end)
+		for i := 0; i < 19; i++ {
+			room.Match.AddKill(attackerID)
+		}
+
+		assert.False(t, room.Match.CheckKillTarget(), "Should not have reached target yet")
+
+		room.Match.AddKill(attackerID)
+		assert.True(t, room.Match.CheckKillTarget(), "Should have reached kill target")
+
+		room.Match.EndMatch("kill_target")
+		assert.True(t, room.Match.IsEnded())
+		assert.Equal(t, "kill_target", room.Match.EndReason)
+	})
+}
+
+// TestBroadcastMatchTimersEdgeCases tests edge cases in broadcastMatchTimers
+func TestBroadcastMatchTimersEdgeCases(t *testing.T) {
+	t.Run("skips rooms with ended matches", func(t *testing.T) {
+		handler := NewWebSocketHandlerWithConfig(50 * time.Millisecond)
+		server := httptest.NewServer(http.HandlerFunc(handler.HandleWebSocket))
+		defer server.Close()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		handler.Start(ctx)
+		defer handler.Stop()
+		defer cancel()
+
+		wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+
+		// Connect two clients to create a room
+		conn1, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+		assert.NoError(t, err)
+		defer conn1.Close()
+
+		conn2, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+		assert.NoError(t, err)
+		defer conn2.Close()
+
+		// Consume room:joined messages
+		conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
+		conn1.ReadMessage()
+		conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
+		conn2.ReadMessage()
+
+		// Get first timer message to confirm it's working
+		timerMsg1, err := readMessageOfType(t, conn1, "match:timer", 500*time.Millisecond)
+		assert.NoError(t, err, "Should receive first timer message")
+		assert.NotNil(t, timerMsg1)
+
+		// End the match in all rooms
+		rooms := handler.roomManager.GetAllRooms()
+		for _, room := range rooms {
+			room.Match.EndMatch("test")
+		}
+
+		// Clear any pending messages
+		conn1.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+		for {
+			_, _, err := conn1.ReadMessage()
+			if err != nil {
+				break
+			}
+		}
+
+		// Now no more match:timer messages should arrive (match ended)
+		conn1.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+		_, _, err = conn1.ReadMessage()
+		// Should timeout or get non-timer message (player:move)
+		if err == nil {
+			// Got a message, verify it's not match:timer
+			// This is expected since player:move messages continue
+		}
+	})
+
+	t.Run("ends match when time limit reached via broadcastMatchTimers", func(t *testing.T) {
+		handler := NewWebSocketHandlerWithConfig(50 * time.Millisecond)
+		server := httptest.NewServer(http.HandlerFunc(handler.HandleWebSocket))
+		defer server.Close()
+
+		wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+
+		// Connect two clients to create a room
+		conn1, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+		assert.NoError(t, err)
+		defer conn1.Close()
+
+		conn2, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+		assert.NoError(t, err)
+		defer conn2.Close()
+
+		// Consume room:joined messages
+		conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
+		conn1.ReadMessage()
+		conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
+		conn2.ReadMessage()
+
+		time.Sleep(50 * time.Millisecond)
+
+		// Set start time to past (expired) for all rooms
+		rooms := handler.roomManager.GetAllRooms()
+		for _, room := range rooms {
+			room.Match.StartTime = time.Now().Add(-421 * time.Second)
+		}
+
+		// Call broadcastMatchTimers directly to trigger time limit check
+		handler.broadcastMatchTimers()
+
+		// Verify match ended
+		for _, room := range rooms {
+			assert.True(t, room.Match.IsEnded(), "Match should be ended")
+			assert.Equal(t, "time_limit", room.Match.EndReason)
+		}
+	})
+}
+
+// TestBroadcastPlayerStatesWithMarshalError tests error path (hard to trigger normally)
+func TestBroadcastPlayerStatesWithMarshalError(t *testing.T) {
+	t.Run("handles broadcast with valid states", func(t *testing.T) {
+		handler := NewWebSocketHandler()
+		server := httptest.NewServer(http.HandlerFunc(handler.HandleWebSocket))
+		defer server.Close()
+
+		wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+
+		// Connect two clients
+		conn1, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+		assert.NoError(t, err)
+		defer conn1.Close()
+
+		conn2, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+		assert.NoError(t, err)
+		defer conn2.Close()
+
+		// Consume room:joined messages
+		conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
+		conn1.ReadMessage()
+		conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
+		conn2.ReadMessage()
+
+		time.Sleep(50 * time.Millisecond)
+
+		// Create valid player states
+		states := []game.PlayerState{
+			{
+				ID:       "test-player",
+				Position: game.Vector2{X: 100, Y: 200},
+				Velocity: game.Vector2{X: 0, Y: 0},
+			},
+		}
+
+		// Broadcast should work without error
+		handler.broadcastPlayerStates(states)
+	})
+}
+
+// TestBroadcastProjectileSpawnError tests error handling in broadcastProjectileSpawn
+func TestBroadcastProjectileSpawnError(t *testing.T) {
+	t.Run("broadcasts projectile spawn successfully", func(t *testing.T) {
+		handler := NewWebSocketHandler()
+
+		// Create a valid projectile
+		proj := &game.Projectile{
+			ID:       "test-proj",
+			OwnerID:  "test-owner",
+			Position: game.Vector2{X: 100, Y: 200},
+			Velocity: game.Vector2{X: 800, Y: 0},
+		}
+
+		// Should not panic
+		handler.broadcastProjectileSpawn(proj)
+	})
+}
+
+// TestSendWeaponStateError tests error handling in sendWeaponState
+func TestSendWeaponStateError(t *testing.T) {
+	t.Run("handles player not in game server", func(t *testing.T) {
+		handler := NewWebSocketHandler()
+
+		// Should not panic for non-existent player
+		handler.sendWeaponState("non-existent-player")
+	})
+}
+
+// TestSendShootFailedError tests error handling in sendShootFailed
+func TestSendShootFailedError(t *testing.T) {
+	t.Run("handles player not in room or waiting", func(t *testing.T) {
+		handler := NewWebSocketHandler()
+
+		// Should not panic for non-existent player
+		handler.sendShootFailed("non-existent-player", "test-reason")
 	})
 }

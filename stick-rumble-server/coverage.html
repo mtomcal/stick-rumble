@@ -55,7 +55,7 @@
 			<div id="nav">
 				<select id="files">
 				
-				<option value="file0">github.com/mtomcal/stick-rumble-server/internal/network/websocket_handler.go (85.4%)</option>
+				<option value="file0">github.com/mtomcal/stick-rumble-server/internal/network/websocket_handler.go (76.1%)</option>
 				
 				</select>
 			</div>
@@ -76,6 +76,7 @@ import (
         "encoding/json"
         "log"
         "net/http"
+        "time"
 
         "github.com/google/uuid"
         "github.com/gorilla/websocket"
@@ -101,14 +102,21 @@ type Message struct {
 
 // WebSocketHandler manages WebSocket connections and room management
 type WebSocketHandler struct {
-        roomManager *game.RoomManager
-        gameServer  *game.GameServer
+        roomManager       *game.RoomManager
+        gameServer        *game.GameServer
+        timerInterval     time.Duration // Interval for match timer broadcasts (default 1s)
 }
 
 // NewWebSocketHandler creates a new WebSocket handler with room management
 func NewWebSocketHandler() *WebSocketHandler <span class="cov8" title="1">{
+        return NewWebSocketHandlerWithConfig(1 * time.Second)
+}</span>
+
+// NewWebSocketHandlerWithConfig creates a WebSocket handler with custom timer interval
+func NewWebSocketHandlerWithConfig(timerInterval time.Duration) *WebSocketHandler <span class="cov8" title="1">{
         handler := &amp;WebSocketHandler{
-                roomManager: game.NewRoomManager(),
+                roomManager:   game.NewRoomManager(),
+                timerInterval: timerInterval,
         }
 
         // Create game server with broadcast function
@@ -119,6 +127,9 @@ func NewWebSocketHandler() *WebSocketHandler <span class="cov8" title="1">{
 
         // Register callback for hit events
         handler.gameServer.SetOnHit(handler.onHit)
+
+        // Register callback for respawn events
+        handler.gameServer.SetOnRespawn(handler.onRespawn)
 
         return handler
 }</span>
@@ -189,8 +200,19 @@ func (h *WebSocketHandler) onHit(hit game.HitEvent) <span class="cov8" title="1"
 
         <span class="cov8" title="1">h.roomManager.SendToWaitingPlayer(hit.AttackerID, confirmBytes)
 
-        // If victim died, broadcast player:death
+        // If victim died, mark as dead and broadcast player:death
         if !victimState.IsAlive() </span><span class="cov0" title="0">{
+                // Mark player as dead
+                h.gameServer.MarkPlayerDead(hit.VictimID)
+
+                // Update stats: increment attacker kills and victim deaths
+                attackerState, attackerExists := h.gameServer.GetPlayerState(hit.AttackerID)
+                if attackerExists </span><span class="cov0" title="0">{
+                        attackerState.IncrementKills()
+                        attackerState.AddXP(game.KillXPReward)
+                }</span>
+                <span class="cov0" title="0">victimState.IncrementDeaths()
+
                 deathMessage := Message{
                         Type:      "player:death",
                         Timestamp: 0,
@@ -208,6 +230,119 @@ func (h *WebSocketHandler) onHit(hit game.HitEvent) <span class="cov8" title="1"
 
                 <span class="cov0" title="0">if room != nil </span><span class="cov0" title="0">{
                         room.Broadcast(deathBytes, "")
+                }</span>
+
+                // Broadcast kill credit with updated stats
+                <span class="cov0" title="0">killCreditMessage := Message{
+                        Type:      "player:kill_credit",
+                        Timestamp: 0,
+                        Data: map[string]interface{}{
+                                "killerId":    hit.AttackerID,
+                                "victimId":    hit.VictimID,
+                                "killerKills": attackerState.Kills,
+                                "killerXP":    attackerState.XP,
+                        },
+                }
+
+                creditBytes, err := json.Marshal(killCreditMessage)
+                if err != nil </span><span class="cov0" title="0">{
+                        log.Printf("Error marshaling player:kill_credit message: %v", err)
+                        return
+                }</span>
+
+                <span class="cov0" title="0">if room != nil </span><span class="cov0" title="0">{
+                        room.Broadcast(creditBytes, "")
+
+                        // Track kill in match and check win conditions
+                        room.Match.AddKill(hit.AttackerID)
+
+                        // Check if kill target reached
+                        if room.Match.CheckKillTarget() </span><span class="cov0" title="0">{
+                                room.Match.EndMatch("kill_target")
+                                log.Printf("Match ended in room %s: kill target reached", room.ID)
+                                // TODO Story 2.6.2: Broadcast match:ended message
+                        }</span>
+                }
+        }
+}
+
+// onRespawn is called when a player respawns after death
+func (h *WebSocketHandler) onRespawn(playerID string, position game.Vector2) <span class="cov0" title="0">{
+        // Create player:respawn message
+        respawnMessage := Message{
+                Type:      "player:respawn",
+                Timestamp: 0,
+                Data: map[string]interface{}{
+                        "playerId": playerID,
+                        "position": position,
+                        "health":   game.PlayerMaxHealth,
+                },
+        }
+
+        msgBytes, err := json.Marshal(respawnMessage)
+        if err != nil </span><span class="cov0" title="0">{
+                log.Printf("Error marshaling player:respawn message: %v", err)
+                return
+        }</span>
+
+        // Broadcast to all players in the room
+        <span class="cov0" title="0">room := h.roomManager.GetRoomByPlayerID(playerID)
+        if room != nil </span><span class="cov0" title="0">{
+                room.Broadcast(msgBytes, "")
+        }</span>
+}
+
+// matchTimerLoop broadcasts match timer updates at the configured interval
+func (h *WebSocketHandler) matchTimerLoop(ctx context.Context) <span class="cov8" title="1">{
+        ticker := time.NewTicker(h.timerInterval)
+        defer ticker.Stop()
+
+        for </span><span class="cov8" title="1">{
+                select </span>{
+                case &lt;-ctx.Done():<span class="cov8" title="1">
+                        log.Println("Match timer loop stopped")
+                        return</span>
+                case &lt;-ticker.C:<span class="cov8" title="1">
+                        h.broadcastMatchTimers()</span>
+                }
+        }
+}
+
+// broadcastMatchTimers broadcasts timer updates to all active rooms
+func (h *WebSocketHandler) broadcastMatchTimers() <span class="cov8" title="1">{
+        rooms := h.roomManager.GetAllRooms()
+
+        for _, room := range rooms </span><span class="cov8" title="1">{
+                // Skip if match ended
+                if room.Match.IsEnded() </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+
+                <span class="cov8" title="1">remainingSeconds := room.Match.GetRemainingSeconds()
+
+                // Create match:timer message
+                timerMessage := Message{
+                        Type:      "match:timer",
+                        Timestamp: 0,
+                        Data: map[string]interface{}{
+                                "remainingSeconds": remainingSeconds,
+                        },
+                }
+
+                msgBytes, err := json.Marshal(timerMessage)
+                if err != nil </span><span class="cov0" title="0">{
+                        log.Printf("Error marshaling match:timer message: %v", err)
+                        continue</span>
+                }
+
+                // Broadcast to all players in room
+                <span class="cov8" title="1">room.Broadcast(msgBytes, "")
+
+                // Check if time limit reached
+                if room.Match.CheckTimeLimit() </span><span class="cov0" title="0">{
+                        room.Match.EndMatch("time_limit")
+                        log.Printf("Match ended in room %s: time limit reached", room.ID)
+                        // TODO Story 2.6.2: Broadcast match:ended message
                 }</span>
         }
 }
@@ -237,7 +372,7 @@ func (h *WebSocketHandler) broadcastPlayerStates(playerStates []game.PlayerState
         // This ensures all connected clients receive game state updates
         <span class="cov8" title="1">for i := range playerStates </span><span class="cov8" title="1">{
                 room := h.roomManager.GetRoomByPlayerID(playerStates[i].ID)
-                if room != nil </span><span class="cov0" title="0">{
+                if room != nil </span><span class="cov8" title="1">{
                         // Player is in a room - broadcast to room
                         room.Broadcast(msgBytes, "")
                 }</span> else<span class="cov8" title="1"> {
@@ -250,9 +385,10 @@ func (h *WebSocketHandler) broadcastPlayerStates(playerStates []game.PlayerState
 // Global handler instance for the legacy function to share room state
 var globalHandler = NewWebSocketHandler()
 
-// Start starts the game server tick loop
+// Start starts the game server tick loop and match timer broadcasts
 func (h *WebSocketHandler) Start(ctx context.Context) <span class="cov8" title="1">{
         h.gameServer.Start(ctx)
+        go h.matchTimerLoop(ctx)
 }</span>
 
 // Stop stops the game server
@@ -303,7 +439,7 @@ func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Reques
         go func() </span><span class="cov8" title="1">{
                 defer close(done)
                 for msg := range sendChan </span><span class="cov8" title="1">{
-                        if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil </span><span class="cov0" title="0">{
+                        if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil </span><span class="cov8" title="1">{
                                 log.Printf("Write error for %s: %v", playerID, err)
                                 return
                         }</span>
