@@ -49,6 +49,9 @@ func NewWebSocketHandler() *WebSocketHandler {
 	// Register callback for hit events
 	handler.gameServer.SetOnHit(handler.onHit)
 
+	// Register callback for respawn events
+	handler.gameServer.SetOnRespawn(handler.onRespawn)
+
 	return handler
 }
 
@@ -118,8 +121,11 @@ func (h *WebSocketHandler) onHit(hit game.HitEvent) {
 
 	h.roomManager.SendToWaitingPlayer(hit.AttackerID, confirmBytes)
 
-	// If victim died, broadcast player:death
+	// If victim died, mark as dead and broadcast player:death
 	if !victimState.IsAlive() {
+		// Mark player as dead
+		h.gameServer.MarkPlayerDead(hit.VictimID)
+
 		deathMessage := Message{
 			Type:      "player:death",
 			Timestamp: 0,
@@ -138,6 +144,32 @@ func (h *WebSocketHandler) onHit(hit game.HitEvent) {
 		if room != nil {
 			room.Broadcast(deathBytes, "")
 		}
+	}
+}
+
+// onRespawn is called when a player respawns after death
+func (h *WebSocketHandler) onRespawn(playerID string, position game.Vector2) {
+	// Create player:respawn message
+	respawnMessage := Message{
+		Type:      "player:respawn",
+		Timestamp: 0,
+		Data: map[string]interface{}{
+			"playerId": playerID,
+			"position": position,
+			"health":   game.PlayerMaxHealth,
+		},
+	}
+
+	msgBytes, err := json.Marshal(respawnMessage)
+	if err != nil {
+		log.Printf("Error marshaling player:respawn message: %v", err)
+		return
+	}
+
+	// Broadcast to all players in the room
+	room := h.roomManager.GetRoomByPlayerID(playerID)
+	if room != nil {
+		room.Broadcast(msgBytes, "")
 	}
 }
 

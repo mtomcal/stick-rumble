@@ -3,6 +3,7 @@ package game
 import (
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestNewPlayerState(t *testing.T) {
@@ -346,5 +347,210 @@ func TestPlayerState_Snapshot_IncludesHealth(t *testing.T) {
 
 	if snapshot.Health != 70 {
 		t.Errorf("Snapshot Health = %v, want 70", snapshot.Health)
+	}
+}
+
+// Respawn System Tests
+
+func TestPlayerState_MarkDead(t *testing.T) {
+	player := NewPlayerState("test-player")
+
+	// Player starts alive
+	if player.IsDead() {
+		t.Error("New player should not be dead")
+	}
+
+	// Mark as dead
+	player.MarkDead()
+
+	// Verify death state
+	if !player.IsDead() {
+		t.Error("Player should be dead after MarkDead()")
+	}
+
+	if player.Health != 0 {
+		t.Errorf("Health after MarkDead() = %v, want 0", player.Health)
+	}
+
+	if player.DeathTime == nil {
+		t.Error("DeathTime should be set after MarkDead()")
+	}
+}
+
+func TestPlayerState_CanRespawn_NotDead(t *testing.T) {
+	player := NewPlayerState("test-player")
+
+	// Living players cannot respawn
+	if player.CanRespawn() {
+		t.Error("Living player should not be able to respawn")
+	}
+}
+
+func TestPlayerState_CanRespawn_TooSoon(t *testing.T) {
+	player := NewPlayerState("test-player")
+	player.MarkDead()
+
+	// Immediately after death, should not be able to respawn
+	if player.CanRespawn() {
+		t.Error("Should not be able to respawn immediately after death")
+	}
+
+	// After 1 second (less than RespawnDelay), still cannot respawn
+	time.Sleep(1 * time.Second)
+	if player.CanRespawn() {
+		t.Error("Should not be able to respawn before RespawnDelay")
+	}
+}
+
+func TestPlayerState_CanRespawn_AfterDelay(t *testing.T) {
+	player := NewPlayerState("test-player")
+	player.MarkDead()
+
+	// Wait for respawn delay
+	time.Sleep(time.Duration(RespawnDelay*float64(time.Second)) + 100*time.Millisecond)
+
+	// Should be able to respawn now
+	if !player.CanRespawn() {
+		t.Error("Should be able to respawn after RespawnDelay")
+	}
+}
+
+func TestPlayerState_Respawn(t *testing.T) {
+	player := NewPlayerState("test-player")
+
+	// Kill player
+	player.TakeDamage(100)
+	player.MarkDead()
+
+	// Respawn at a new position
+	spawnPos := Vector2{X: 500, Y: 300}
+	player.Respawn(spawnPos)
+
+	// Verify respawn state
+	if player.IsDead() {
+		t.Error("Player should not be dead after respawn")
+	}
+
+	if player.Health != PlayerMaxHealth {
+		t.Errorf("Health after respawn = %v, want %v", player.Health, PlayerMaxHealth)
+	}
+
+	if player.GetPosition() != spawnPos {
+		t.Errorf("Position after respawn = %+v, want %+v", player.GetPosition(), spawnPos)
+	}
+
+	vel := player.GetVelocity()
+	if vel.X != 0 || vel.Y != 0 {
+		t.Errorf("Velocity after respawn = %+v, want {0, 0}", vel)
+	}
+
+	if player.DeathTime != nil {
+		t.Error("DeathTime should be nil after respawn")
+	}
+
+	if !player.IsInvulnerable {
+		t.Error("Player should be invulnerable after respawn")
+	}
+}
+
+func TestPlayerState_SpawnInvulnerability(t *testing.T) {
+	player := NewPlayerState("test-player")
+	player.MarkDead()
+
+	spawnPos := Vector2{X: 500, Y: 300}
+	player.Respawn(spawnPos)
+
+	// Should be invulnerable immediately after respawn
+	if !player.IsInvulnerable {
+		t.Error("Player should be invulnerable immediately after respawn")
+	}
+
+	// Check that invulnerability end time is set correctly
+	expectedEnd := time.Now().Add(time.Duration(SpawnInvulnerabilityDuration * float64(time.Second)))
+	diff := player.InvulnerabilityEndTime.Sub(expectedEnd).Abs()
+	if diff > 100*time.Millisecond {
+		t.Errorf("InvulnerabilityEndTime differs by %v, expected ~%v", diff, expectedEnd)
+	}
+}
+
+func TestPlayerState_UpdateInvulnerability_StillActive(t *testing.T) {
+	player := NewPlayerState("test-player")
+	player.MarkDead()
+	player.Respawn(Vector2{X: 500, Y: 300})
+
+	// Update immediately - should still be invulnerable
+	player.UpdateInvulnerability()
+
+	if !player.IsInvulnerable {
+		t.Error("Player should still be invulnerable immediately after respawn")
+	}
+}
+
+func TestPlayerState_UpdateInvulnerability_Expired(t *testing.T) {
+	player := NewPlayerState("test-player")
+	player.MarkDead()
+	player.Respawn(Vector2{X: 500, Y: 300})
+
+	// Manually set invulnerability end time to past
+	player.InvulnerabilityEndTime = time.Now().Add(-1 * time.Second)
+
+	// Update - should remove invulnerability
+	player.UpdateInvulnerability()
+
+	if player.IsInvulnerable {
+		t.Error("Player should not be invulnerable after expiration")
+	}
+}
+
+func TestPlayerState_RespawnThreadSafety(t *testing.T) {
+	player := NewPlayerState("test-player")
+	player.MarkDead()
+
+	var wg sync.WaitGroup
+
+	// Concurrent respawns and checks
+	for i := 0; i < 50; i++ {
+		wg.Add(3)
+
+		go func() {
+			defer wg.Done()
+			player.Respawn(Vector2{X: 100, Y: 200})
+		}()
+
+		go func() {
+			defer wg.Done()
+			player.IsDead()
+		}()
+
+		go func() {
+			defer wg.Done()
+			player.UpdateInvulnerability()
+		}()
+	}
+
+	wg.Wait()
+	// If we get here without a data race, the test passes
+}
+
+func TestPlayerState_Snapshot_IncludesRespawnFields(t *testing.T) {
+	player := NewPlayerState("test-player")
+	player.MarkDead()
+
+	snapshot1 := player.Snapshot()
+
+	if snapshot1.DeathTime == nil {
+		t.Error("Snapshot should include DeathTime when dead")
+	}
+
+	// Respawn and snapshot again
+	player.Respawn(Vector2{X: 500, Y: 300})
+	snapshot2 := player.Snapshot()
+
+	if snapshot2.DeathTime != nil {
+		t.Error("Snapshot should have nil DeathTime after respawn")
+	}
+
+	if !snapshot2.IsInvulnerable {
+		t.Error("Snapshot should show invulnerability after respawn")
 	}
 }

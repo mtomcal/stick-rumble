@@ -2,6 +2,7 @@ package game
 
 import (
 	"sync"
+	"time"
 )
 
 // Vector2 represents a 2D vector for position and velocity
@@ -21,13 +22,16 @@ type InputState struct {
 
 // PlayerState represents a player's physics state in the game world
 type PlayerState struct {
-	ID       string     `json:"id"`
-	Position Vector2    `json:"position"`
-	Velocity Vector2    `json:"velocity"`
-	AimAngle float64    `json:"aimAngle"` // Aim angle in radians
-	Health   int        `json:"health"`   // Current health (0-100)
-	input    InputState // Private field, accessed via methods
-	mu       sync.RWMutex
+	ID                     string     `json:"id"`
+	Position               Vector2    `json:"position"`
+	Velocity               Vector2    `json:"velocity"`
+	AimAngle               float64    `json:"aimAngle"`            // Aim angle in radians
+	Health                 int        `json:"health"`              // Current health (0-100)
+	IsInvulnerable         bool       `json:"isInvulnerable"`      // Spawn protection flag
+	InvulnerabilityEndTime time.Time  `json:"invulnerabilityEnd"`  // When spawn protection ends
+	DeathTime              *time.Time `json:"deathTime,omitempty"` // When player died (nil if alive)
+	input                  InputState // Private field, accessed via methods
+	mu                     sync.RWMutex
 }
 
 // NewPlayerState creates a new player state with default spawn position
@@ -123,10 +127,60 @@ func (p *PlayerState) Snapshot() PlayerState {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return PlayerState{
-		ID:       p.ID,
-		Position: p.Position,
-		Velocity: p.Velocity,
-		AimAngle: p.AimAngle,
-		Health:   p.Health,
+		ID:                     p.ID,
+		Position:               p.Position,
+		Velocity:               p.Velocity,
+		AimAngle:               p.AimAngle,
+		Health:                 p.Health,
+		IsInvulnerable:         p.IsInvulnerable,
+		InvulnerabilityEndTime: p.InvulnerabilityEndTime,
+		DeathTime:              p.DeathTime,
+	}
+}
+
+// MarkDead marks the player as dead and records the death time (thread-safe)
+func (p *PlayerState) MarkDead() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	now := time.Now()
+	p.DeathTime = &now
+	p.Health = 0
+}
+
+// IsDead returns true if the player is currently dead (thread-safe)
+func (p *PlayerState) IsDead() bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.DeathTime != nil
+}
+
+// CanRespawn returns true if the respawn delay has passed (thread-safe)
+func (p *PlayerState) CanRespawn() bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	if p.DeathTime == nil {
+		return false
+	}
+	return time.Since(*p.DeathTime).Seconds() >= RespawnDelay
+}
+
+// Respawn resets the player to alive state at the given position (thread-safe)
+func (p *PlayerState) Respawn(spawnPos Vector2) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.Health = PlayerMaxHealth
+	p.Position = spawnPos
+	p.Velocity = Vector2{X: 0, Y: 0}
+	p.DeathTime = nil
+	p.IsInvulnerable = true
+	p.InvulnerabilityEndTime = time.Now().Add(time.Duration(SpawnInvulnerabilityDuration * float64(time.Second)))
+}
+
+// UpdateInvulnerability checks and updates invulnerability status (thread-safe)
+func (p *PlayerState) UpdateInvulnerability() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.IsInvulnerable && time.Now().After(p.InvulnerabilityEndTime) {
+		p.IsInvulnerable = false
 	}
 }
