@@ -41,6 +41,9 @@ type GameServer struct {
 	// Callback for when a projectile hits a player
 	onHit func(hit HitEvent)
 
+	// Callback for when a player respawns
+	onRespawn func(playerID string, position Vector2)
+
 	running bool
 	mu      sync.RWMutex
 	wg      sync.WaitGroup
@@ -114,6 +117,12 @@ func (gs *GameServer) tickLoop(ctx context.Context) {
 
 			// Check for reload completions
 			gs.checkReloads()
+
+			// Check for respawns
+			gs.checkRespawns()
+
+			// Update invulnerability status
+			gs.updateInvulnerability()
 		}
 	}
 }
@@ -307,6 +316,19 @@ func (gs *GameServer) SetOnHit(callback func(hit HitEvent)) {
 	gs.onHit = callback
 }
 
+// SetOnRespawn sets the callback for when a player respawns
+func (gs *GameServer) SetOnRespawn(callback func(playerID string, position Vector2)) {
+	gs.onRespawn = callback
+}
+
+// MarkPlayerDead marks a player as dead
+func (gs *GameServer) MarkPlayerDead(playerID string) {
+	player, exists := gs.world.GetPlayer(playerID)
+	if exists {
+		player.MarkDead()
+	}
+}
+
 // checkHitDetection checks for projectile-player collisions and processes hits
 func (gs *GameServer) checkHitDetection() {
 	// Get all active projectiles
@@ -358,5 +380,48 @@ func (gs *GameServer) checkHitDetection() {
 		if gs.onHit != nil {
 			gs.onHit(hit)
 		}
+	}
+}
+
+// checkRespawns checks all dead players and respawns them if ready
+func (gs *GameServer) checkRespawns() {
+	// Get all players
+	gs.world.mu.RLock()
+	players := make([]*PlayerState, 0, len(gs.world.players))
+	for _, player := range gs.world.players {
+		players = append(players, player)
+	}
+	gs.world.mu.RUnlock()
+
+	// Check each player for respawn
+	for _, player := range players {
+		if player.IsDead() && player.CanRespawn() {
+			// Get balanced spawn point
+			spawnPos := gs.world.GetBalancedSpawnPoint(player.ID)
+
+			// Respawn the player
+			player.Respawn(spawnPos)
+
+			// Notify via callback
+			if gs.onRespawn != nil {
+				gs.onRespawn(player.ID, spawnPos)
+			}
+		}
+	}
+}
+
+// updateInvulnerability updates invulnerability status for all players
+func (gs *GameServer) updateInvulnerability() {
+	// Get all players
+	gs.world.mu.RLock()
+	players := make([]*PlayerState, 0, len(gs.world.players))
+	for _, player := range gs.world.players {
+		players = append(players, player)
+	}
+	gs.world.mu.RUnlock()
+
+	// Update each player's invulnerability
+	for _, player := range players {
+		player.UpdateInvulnerability()
 	}
 }

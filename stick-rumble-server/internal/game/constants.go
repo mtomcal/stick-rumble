@@ -50,3 +50,12 @@ const (
 	// PlayerMaxHealth is the maximum health a player can have
 	PlayerMaxHealth = 100
 )
+
+// Respawn system
+const (
+	// RespawnDelay is the time in seconds before a player respawns after death
+	RespawnDelay = 3.0
+
+	// SpawnInvulnerabilityDuration is the time in seconds of spawn protection
+	SpawnInvulnerabilityDuration = 2.0
+)

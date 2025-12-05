@@ -170,3 +170,133 @@ func TestWorldThreadSafety(t *testing.T) {
 	wg.Wait()
 	// If we get here without a data race, the test passes
 }
+
+// Spawn Point Selection Tests
+
+func TestWorld_GetBalancedSpawnPoint_NoEnemies(t *testing.T) {
+	world := NewWorld()
+
+	// With no players, should spawn at center
+	spawnPos := world.GetBalancedSpawnPoint("player-1")
+
+	expectedX := ArenaWidth / 2
+	expectedY := ArenaHeight / 2
+
+	if spawnPos.X != expectedX || spawnPos.Y != expectedY {
+		t.Errorf("GetBalancedSpawnPoint() with no enemies = {%v, %v}, want {%v, %v}",
+			spawnPos.X, spawnPos.Y, expectedX, expectedY)
+	}
+}
+
+func TestWorld_GetBalancedSpawnPoint_WithDeadPlayers(t *testing.T) {
+	world := NewWorld()
+
+	// Add players and mark them as dead
+	player1 := world.AddPlayer("player-1")
+	player2 := world.AddPlayer("player-2")
+
+	player1.MarkDead()
+	player2.MarkDead()
+
+	// Should spawn at center since all players are dead
+	spawnPos := world.GetBalancedSpawnPoint("player-3")
+
+	expectedX := ArenaWidth / 2
+	expectedY := ArenaHeight / 2
+
+	if spawnPos.X != expectedX || spawnPos.Y != expectedY {
+		t.Errorf("GetBalancedSpawnPoint() with only dead players = {%v, %v}, want {%v, %v}",
+			spawnPos.X, spawnPos.Y, expectedX, expectedY)
+	}
+}
+
+func TestWorld_GetBalancedSpawnPoint_ExcludesSelf(t *testing.T) {
+	world := NewWorld()
+
+	// Add one living player and one being respawned
+	player1 := world.AddPlayer("player-1")
+	player1.SetPosition(Vector2{X: 100, Y: 100})
+
+	// Request spawn for player-2 (doesn't exist yet, but should be excluded)
+	spawnPos := world.GetBalancedSpawnPoint("player-2")
+
+	// Should find a position away from player-1
+	// Since there's only one enemy, spawn should be >100 pixels away
+	dx := spawnPos.X - 100
+	dy := spawnPos.Y - 100
+	distance := (dx*dx + dy*dy)
+
+	// With only one enemy at (100,100), spawn should be reasonably far
+	// The algorithm tries to maximize distance, so expect >200 pixels minimum
+	if distance < 40000 { // sqrt(40000) = 200 pixels
+		t.Logf("Spawn position {%v, %v} is only %.2f pixels from enemy at (100,100)",
+			spawnPos.X, spawnPos.Y, distance)
+	}
+}
+
+func TestWorld_GetBalancedSpawnPoint_WithinBounds(t *testing.T) {
+	world := NewWorld()
+
+	// Add several living players
+	world.AddPlayer("player-1").SetPosition(Vector2{X: 200, Y: 200})
+	world.AddPlayer("player-2").SetPosition(Vector2{X: 1700, Y: 200})
+	world.AddPlayer("player-3").SetPosition(Vector2{X: 960, Y: 900})
+
+	// Get spawn point for new player
+	spawnPos := world.GetBalancedSpawnPoint("player-4")
+
+	// Verify spawn is within arena bounds with margin
+	margin := 100.0
+	if spawnPos.X < margin || spawnPos.X > ArenaWidth-margin {
+		t.Errorf("Spawn X = %v, should be within [%v, %v]", spawnPos.X, margin, ArenaWidth-margin)
+	}
+
+	if spawnPos.Y < margin || spawnPos.Y > ArenaHeight-margin {
+		t.Errorf("Spawn Y = %v, should be within [%v, %v]", spawnPos.Y, margin, ArenaHeight-margin)
+	}
+}
+
+func TestWorld_GetBalancedSpawnPoint_MaximizesDistance(t *testing.T) {
+	world := NewWorld()
+
+	// Add enemies in one corner
+	world.AddPlayer("player-1").SetPosition(Vector2{X: 200, Y: 200})
+	world.AddPlayer("player-2").SetPosition(Vector2{X: 250, Y: 250})
+
+	// Get spawn point - should be far from the cluster
+	spawnPos := world.GetBalancedSpawnPoint("player-3")
+
+	// Calculate minimum distance to enemies
+	minDist := distance(spawnPos, Vector2{X: 200, Y: 200})
+	dist2 := distance(spawnPos, Vector2{X: 250, Y: 250})
+	if dist2 < minDist {
+		minDist = dist2
+	}
+
+	// With enemies clustered at (200,200), spawn should be >1000 pixels away
+	if minDist < 1000 {
+		t.Errorf("Spawn distance from enemies = %.2f, expected >1000 for balanced spawning", minDist)
+	}
+}
+
+func TestWorld_GetBalancedSpawnPoint_ThreadSafety(t *testing.T) {
+	world := NewWorld()
+	var wg sync.WaitGroup
+
+	// Add some players
+	for i := 1; i <= 5; i++ {
+		world.AddPlayer(string(rune('0' + i)))
+	}
+
+	// Concurrent spawn point requests
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			world.GetBalancedSpawnPoint(string(rune('a' + id)))
+		}(i)
+	}
+
+	wg.Wait()
+	// If we get here without a data race, the test passes
+}

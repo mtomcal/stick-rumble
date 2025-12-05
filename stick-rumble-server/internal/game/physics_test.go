@@ -442,6 +442,30 @@ func TestCheckProjectilePlayerCollision_DeadPlayer(t *testing.T) {
 	}
 }
 
+func TestCheckProjectilePlayerCollision_InvulnerablePlayer(t *testing.T) {
+	physics := NewPhysics()
+
+	// Create projectile
+	proj := &Projectile{
+		ID:            "proj-1",
+		OwnerID:       "player-1",
+		Position:      Vector2{X: 500, Y: 500},
+		SpawnPosition: Vector2{X: 500, Y: 500},
+		Active:        true,
+	}
+
+	// Create invulnerable player at same position (spawn protection)
+	target := NewPlayerState("player-2")
+	target.SetPosition(Vector2{X: 500, Y: 500})
+	target.Respawn(Vector2{X: 500, Y: 500}) // Respawn grants invulnerability
+
+	result := physics.CheckProjectilePlayerCollision(proj, target)
+
+	if result {
+		t.Error("Should not collide with invulnerable player (spawn protection)")
+	}
+}
+
 func TestCheckAllProjectileCollisions_SingleHit(t *testing.T) {
 	physics := NewPhysics()
 

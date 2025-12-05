@@ -147,6 +147,11 @@ func (p *Physics) CheckProjectilePlayerCollision(proj *Projectile, player *Playe
 		return false
 	}
 
+	// Don't check collision with invulnerable players (spawn protection)
+	if player.IsInvulnerable {
+		return false
+	}
+
 	// Don't check collision with owner
 	if proj.OwnerID == player.ID {
 		return false
