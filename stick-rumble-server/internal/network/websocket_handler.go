@@ -31,14 +31,21 @@ type Message struct {
 
 // WebSocketHandler manages WebSocket connections and room management
 type WebSocketHandler struct {
-	roomManager *game.RoomManager
-	gameServer  *game.GameServer
+	roomManager       *game.RoomManager
+	gameServer        *game.GameServer
+	timerInterval     time.Duration // Interval for match timer broadcasts (default 1s)
 }
 
 // NewWebSocketHandler creates a new WebSocket handler with room management
 func NewWebSocketHandler() *WebSocketHandler {
+	return NewWebSocketHandlerWithConfig(1 * time.Second)
+}
+
+// NewWebSocketHandlerWithConfig creates a WebSocket handler with custom timer interval
+func NewWebSocketHandlerWithConfig(timerInterval time.Duration) *WebSocketHandler {
 	handler := &WebSocketHandler{
-		roomManager: game.NewRoomManager(),
+		roomManager:   game.NewRoomManager(),
+		timerInterval: timerInterval,
 	}
 
 	// Create game server with broadcast function
@@ -214,9 +221,9 @@ func (h *WebSocketHandler) onRespawn(playerID string, position game.Vector2) {
 	}
 }
 
-// matchTimerLoop broadcasts match timer updates every second
+// matchTimerLoop broadcasts match timer updates at the configured interval
 func (h *WebSocketHandler) matchTimerLoop(ctx context.Context) {
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(h.timerInterval)
 	defer ticker.Stop()
 
 	for {
