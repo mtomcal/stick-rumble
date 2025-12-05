@@ -79,13 +79,15 @@ test-server:
 
 # Run integration tests (starts server automatically)
 test-integration:
-	@echo "Starting server for integration tests..."
-	@{ cd stick-rumble-server && go run cmd/server/main.go >/dev/null 2>&1 & }; \
+	@echo "Starting server for integration tests..."; \
+	ROOT_DIR=$$(pwd); \
+	cd stick-rumble-server && go run cmd/server/main.go >/dev/null 2>&1 & \
 	SERVER_PID=$$!; \
+	cd $$ROOT_DIR; \
 	echo "Server PID: $$SERVER_PID"; \
 	sleep 2; \
 	echo "Running integration tests..."; \
-	{ cd stick-rumble-client && npm run test:integration; }; \
+	cd $$ROOT_DIR/stick-rumble-client && npm run test:integration; \
 	TEST_EXIT=$$?; \
 	echo "Stopping server (PID: $$SERVER_PID)..."; \
 	pkill -P $$SERVER_PID 2>/dev/null || true; \
