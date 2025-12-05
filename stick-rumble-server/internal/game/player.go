@@ -25,6 +25,7 @@ type PlayerState struct {
 	Position Vector2    `json:"position"`
 	Velocity Vector2    `json:"velocity"`
 	AimAngle float64    `json:"aimAngle"` // Aim angle in radians
+	Health   int        `json:"health"`   // Current health (0-100)
 	input    InputState // Private field, accessed via methods
 	mu       sync.RWMutex
 }
@@ -38,6 +39,7 @@ func NewPlayerState(id string) *PlayerState {
 			Y: ArenaHeight / 2,
 		},
 		Velocity: Vector2{X: 0, Y: 0},
+		Health:   PlayerMaxHealth,
 		input:    InputState{},
 	}
 }
@@ -98,6 +100,24 @@ func (p *PlayerState) GetAimAngle() float64 {
 	return p.AimAngle
 }
 
+// TakeDamage reduces the player's health by the given amount (thread-safe)
+// Health will not go below 0
+func (p *PlayerState) TakeDamage(amount int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.Health -= amount
+	if p.Health < 0 {
+		p.Health = 0
+	}
+}
+
+// IsAlive returns true if the player has health remaining (thread-safe)
+func (p *PlayerState) IsAlive() bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.Health > 0
+}
+
 // Snapshot returns a thread-safe copy of the player's current state
 func (p *PlayerState) Snapshot() PlayerState {
 	p.mu.RLock()
@@ -107,5 +127,6 @@ func (p *PlayerState) Snapshot() PlayerState {
 		Position: p.Position,
 		Velocity: p.Velocity,
 		AimAngle: p.AimAngle,
+		Health:   p.Health,
 	}
 }

@@ -123,3 +123,65 @@ func clampToArena(pos Vector2) Vector2 {
 
 	return Vector2{X: x, Y: y}
 }
+
+// HitEvent represents a successful projectile hit
+type HitEvent struct {
+	ProjectileID string
+	VictimID     string
+	AttackerID   string
+}
+
+// CheckProjectilePlayerCollision checks if a projectile intersects a player's hitbox using AABB
+// Hitbox is 32x64 pixels (PlayerWidth x PlayerHeight) centered on player position
+// Returns true if collision detected
+func (p *Physics) CheckProjectilePlayerCollision(proj *Projectile, player *PlayerState) bool {
+	// Don't check collision with dead players
+	if !player.IsAlive() {
+		return false
+	}
+
+	// Don't check collision with owner
+	if proj.OwnerID == player.ID {
+		return false
+	}
+
+	playerPos := player.GetPosition()
+
+	// Calculate half-sizes for AABB collision
+	halfWidth := PlayerWidth / 2
+	halfHeight := PlayerHeight / 2
+
+	// AABB collision detection
+	// Check if projectile point is within the player's bounding box
+	if math.Abs(proj.Position.X-playerPos.X) < halfWidth &&
+		math.Abs(proj.Position.Y-playerPos.Y) < halfHeight {
+		return true
+	}
+
+	return false
+}
+
+// CheckAllProjectileCollisions checks all projectiles against all players
+// Returns a slice of HitEvents for all detected collisions
+func (p *Physics) CheckAllProjectileCollisions(projectiles []*Projectile, players []*PlayerState) []HitEvent {
+	hits := make([]HitEvent, 0)
+
+	for _, proj := range projectiles {
+		if !proj.Active {
+			continue
+		}
+
+		for _, player := range players {
+			if p.CheckProjectilePlayerCollision(proj, player) {
+				hits = append(hits, HitEvent{
+					ProjectileID: proj.ID,
+					VictimID:     player.ID,
+					AttackerID:   proj.OwnerID,
+				})
+				break // Each projectile can only hit one player
+			}
+		}
+	}
+
+	return hits
+}

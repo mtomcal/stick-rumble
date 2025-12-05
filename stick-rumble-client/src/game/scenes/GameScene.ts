@@ -117,6 +117,42 @@ export class GameScene extends Phaser.Scene {
       }
     });
 
+    // Handle player damaged events
+    this.wsClient.on('player:damaged', (data) => {
+      const damageData = data as {
+        victimId: string;
+        attackerId: string;
+        damage: number;
+        newHealth: number;
+        projectileId: string;
+      };
+      console.log(
+        `Player ${damageData.victimId} took ${damageData.damage} damage from ${damageData.attackerId} (health: ${damageData.newHealth})`
+      );
+      // TODO: Visual damage feedback (screen flash, damage numbers, health bar) in Story 2.5
+    });
+
+    // Handle hit confirmation (for hit marker feedback)
+    this.wsClient.on('hit:confirmed', (data) => {
+      const hitData = data as {
+        victimId: string;
+        damage: number;
+        projectileId: string;
+      };
+      console.log(`Hit confirmed! Dealt ${hitData.damage} damage to ${hitData.victimId}`);
+      // TODO: Show hit marker (visual + audio) in Story 2.5
+    });
+
+    // Handle player death events
+    this.wsClient.on('player:death', (data) => {
+      const deathData = data as {
+        victimId: string;
+        attackerId: string;
+      };
+      console.log(`Player ${deathData.victimId} was killed by ${deathData.attackerId}`);
+      // TODO: Death animations and respawn logic in future story
+    });
+
     // Defer connection until next frame to ensure scene is fully initialized
     this.time.delayedCall(100, () => {
       this.wsClient.connect()

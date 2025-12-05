@@ -44,3 +44,9 @@ const (
 	// PlayerHeight is the player sprite height in pixels
 	PlayerHeight = 64.0
 )
+
+// Player health
+const (
+	// PlayerMaxHealth is the maximum health a player can have
+	PlayerMaxHealth = 100
+)

@@ -6,8 +6,8 @@ import (
 
 // Weapon constants for Pistol (from Story 2.3 requirements)
 const (
-	// PistolDamage is the damage per shot
-	PistolDamage = 15
+	// PistolDamage is the damage per shot (25 damage = 4 shots to kill at 100 health)
+	PistolDamage = 25
 
 	// PistolFireRate is rounds per second (3 rounds/sec = 333ms cooldown)
 	PistolFireRate = 3.0

@@ -46,6 +46,9 @@ func NewWebSocketHandler() *WebSocketHandler {
 	// Register callback for reload completion to notify clients
 	handler.gameServer.SetOnReloadComplete(handler.onReloadComplete)
 
+	// Register callback for hit events
+	handler.gameServer.SetOnHit(handler.onHit)
+
 	return handler
 }
 
@@ -53,6 +56,89 @@ func NewWebSocketHandler() *WebSocketHandler {
 func (h *WebSocketHandler) onReloadComplete(playerID string) {
 	// Send updated weapon state to the player
 	h.sendWeaponState(playerID)
+}
+
+// onHit is called when a projectile hits a player
+func (h *WebSocketHandler) onHit(hit game.HitEvent) {
+	// Get victim's current state (including updated health)
+	victimState, victimExists := h.gameServer.GetPlayerState(hit.VictimID)
+	if !victimExists {
+		return
+	}
+
+	// Get attacker's weapon to determine damage dealt
+	attackerWeapon := h.gameServer.GetWeaponState(hit.AttackerID)
+	if attackerWeapon == nil {
+		return
+	}
+
+	damage := attackerWeapon.Weapon.Damage
+
+	// Broadcast player:damaged to all players in the room
+	damagedMessage := Message{
+		Type:      "player:damaged",
+		Timestamp: 0,
+		Data: map[string]interface{}{
+			"victimId":     hit.VictimID,
+			"attackerId":   hit.AttackerID,
+			"damage":       damage,
+			"newHealth":    victimState.Health,
+			"projectileId": hit.ProjectileID,
+		},
+	}
+
+	msgBytes, err := json.Marshal(damagedMessage)
+	if err != nil {
+		log.Printf("Error marshaling player:damaged message: %v", err)
+		return
+	}
+
+	// Broadcast to all players in the room
+	room := h.roomManager.GetRoomByPlayerID(hit.VictimID)
+	if room != nil {
+		room.Broadcast(msgBytes, "")
+	}
+
+	// Send hit confirmation to the attacker
+	hitConfirmedMessage := Message{
+		Type:      "hit:confirmed",
+		Timestamp: 0,
+		Data: map[string]interface{}{
+			"victimId":     hit.VictimID,
+			"damage":       damage,
+			"projectileId": hit.ProjectileID,
+		},
+	}
+
+	confirmBytes, err := json.Marshal(hitConfirmedMessage)
+	if err != nil {
+		log.Printf("Error marshaling hit:confirmed message: %v", err)
+		return
+	}
+
+	h.roomManager.SendToWaitingPlayer(hit.AttackerID, confirmBytes)
+
+	// If victim died, broadcast player:death
+	if !victimState.IsAlive() {
+		deathMessage := Message{
+			Type:      "player:death",
+			Timestamp: 0,
+			Data: map[string]interface{}{
+				"victimId":   hit.VictimID,
+				"attackerId": hit.AttackerID,
+			},
+		}
+
+		deathBytes, err := json.Marshal(deathMessage)
+		if err != nil {
+			log.Printf("Error marshaling player:death message: %v", err)
+			return
+		}
+
+		if room != nil {
+			room.Broadcast(deathBytes, "")
+		}
+	}
 }
 
 // broadcastPlayerStates sends player position updates to all players

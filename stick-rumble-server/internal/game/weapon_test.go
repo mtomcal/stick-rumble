@@ -275,8 +275,8 @@ func TestWeaponState_GetAmmoInfo(t *testing.T) {
 
 func TestPistolConstants(t *testing.T) {
 	// Verify pistol constants match story requirements
-	if PistolDamage != 15 {
-		t.Errorf("pistol damage should be 15, got %d", PistolDamage)
+	if PistolDamage != 25 {
+		t.Errorf("pistol damage should be 25 (4 shots to kill at 100 health), got %d", PistolDamage)
 	}
 
 	if PistolFireRate != 3.0 {
