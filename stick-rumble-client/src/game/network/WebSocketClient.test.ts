@@ -183,6 +183,189 @@ describe('WebSocketClient', () => {
       expect(handler).toHaveBeenCalledWith({ foo: 'bar' });
     });
 
+    it('should support multiple handlers for the same message type', async () => {
+      const client = new WebSocketClient('ws://localhost:8080/ws');
+
+      const connectPromise = client.connect();
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen({});
+      }
+      await connectPromise;
+
+      const handler1 = vi.fn();
+      const handler2 = vi.fn();
+      const handler3 = vi.fn();
+
+      client.on('test', handler1);
+      client.on('test', handler2);
+      client.on('test', handler3);
+
+      const message: Message = {
+        type: 'test',
+        timestamp: Date.now(),
+        data: { foo: 'bar' }
+      };
+
+      // Simulate incoming message
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage({
+          data: JSON.stringify(message)
+        });
+      }
+
+      // All three handlers should be called
+      expect(handler1).toHaveBeenCalledWith({ foo: 'bar' });
+      expect(handler2).toHaveBeenCalledWith({ foo: 'bar' });
+      expect(handler3).toHaveBeenCalledWith({ foo: 'bar' });
+    });
+
+    it('should allow removing specific handler with off()', async () => {
+      const client = new WebSocketClient('ws://localhost:8080/ws');
+
+      const connectPromise = client.connect();
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen({});
+      }
+      await connectPromise;
+
+      const handler1 = vi.fn();
+      const handler2 = vi.fn();
+
+      client.on('test', handler1);
+      client.on('test', handler2);
+
+      // Remove handler1
+      client.off('test', handler1);
+
+      const message: Message = {
+        type: 'test',
+        timestamp: Date.now(),
+        data: { foo: 'bar' }
+      };
+
+      // Simulate incoming message
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage({
+          data: JSON.stringify(message)
+        });
+      }
+
+      // Only handler2 should be called
+      expect(handler1).not.toHaveBeenCalled();
+      expect(handler2).toHaveBeenCalledWith({ foo: 'bar' });
+    });
+
+    it('should not call handler after off() is called', async () => {
+      const client = new WebSocketClient('ws://localhost:8080/ws');
+
+      const connectPromise = client.connect();
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen({});
+      }
+      await connectPromise;
+
+      const handler = vi.fn();
+      client.on('test', handler);
+      client.off('test', handler);
+
+      const message: Message = {
+        type: 'test',
+        timestamp: Date.now(),
+        data: { foo: 'bar' }
+      };
+
+      // Simulate incoming message
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage({
+          data: JSON.stringify(message)
+        });
+      }
+
+      expect(handler).not.toHaveBeenCalled();
+    });
+
+    it('should handle off() for non-existent handler gracefully', async () => {
+      const client = new WebSocketClient('ws://localhost:8080/ws');
+
+      const connectPromise = client.connect();
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen({});
+      }
+      await connectPromise;
+
+      const handler = vi.fn();
+
+      // Try to remove handler that was never added
+      expect(() => client.off('test', handler)).not.toThrow();
+    });
+
+    it('should handle off() for non-existent message type gracefully', async () => {
+      const client = new WebSocketClient('ws://localhost:8080/ws');
+
+      const connectPromise = client.connect();
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen({});
+      }
+      await connectPromise;
+
+      const handler = vi.fn();
+
+      // Try to remove handler for message type with no handlers
+      expect(() => client.off('nonexistent', handler)).not.toThrow();
+    });
+
+    it('should prevent memory leaks by cleaning up empty handler sets', async () => {
+      const client = new WebSocketClient('ws://localhost:8080/ws');
+
+      const connectPromise = client.connect();
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen({});
+      }
+      await connectPromise;
+
+      const handler = vi.fn();
+      client.on('test', handler);
+      client.off('test', handler);
+
+      // Access private messageHandlers to verify cleanup
+      const messageHandlers = (client as any).messageHandlers as Map<string, Set<(data: unknown) => void>>;
+
+      // The 'test' key should be completely removed, not just an empty Set
+      expect(messageHandlers.has('test')).toBe(false);
+    });
+
+    it('should not duplicate handlers when on() is called multiple times with same handler', async () => {
+      const client = new WebSocketClient('ws://localhost:8080/ws');
+
+      const connectPromise = client.connect();
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen({});
+      }
+      await connectPromise;
+
+      const handler = vi.fn();
+
+      // Add the same handler twice
+      client.on('test', handler);
+      client.on('test', handler);
+
+      const message: Message = {
+        type: 'test',
+        timestamp: Date.now(),
+        data: { foo: 'bar' }
+      };
+
+      // Simulate incoming message
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage({
+          data: JSON.stringify(message)
+        });
+      }
+
+      // Handler should only be called once (Set prevents duplicates)
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
+
     it('should silently ignore unhandled message types', async () => {
       const consoleWarnSpy = vi.spyOn(console, 'warn');
       const consoleErrorSpy = vi.spyOn(console, 'error');
