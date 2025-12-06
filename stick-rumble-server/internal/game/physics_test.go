@@ -690,3 +690,156 @@ func TestCheckProjectilePlayerCollision_DiagonalRange(t *testing.T) {
 		t.Error("Expected collision when diagonal travel is within max range (~707px < 800px)")
 	}
 }
+
+// NaN validation tests
+
+func TestNormalize_NeverReturnsNaN(t *testing.T) {
+	tests := []struct {
+		name  string
+		input Vector2
+	}{
+		{
+			name:  "zero vector",
+			input: Vector2{X: 0, Y: 0},
+		},
+		{
+			name:  "very small values",
+			input: Vector2{X: 1e-100, Y: 1e-100},
+		},
+		{
+			name:  "near-zero values",
+			input: Vector2{X: 1e-15, Y: 1e-15},
+		},
+		{
+			name:  "one component zero",
+			input: Vector2{X: 0, Y: 1e-100},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := normalize(tt.input)
+			if math.IsNaN(result.X) || math.IsNaN(result.Y) {
+				t.Errorf("normalize(%+v) produced NaN: %+v", tt.input, result)
+			}
+			if math.IsInf(result.X, 0) || math.IsInf(result.Y, 0) {
+				t.Errorf("normalize(%+v) produced Inf: %+v", tt.input, result)
+			}
+		})
+	}
+}
+
+func TestAccelerateToward_NeverReturnsNaN(t *testing.T) {
+	tests := []struct {
+		name      string
+		current   Vector2
+		target    Vector2
+		accel     float64
+		deltaTime float64
+	}{
+		{
+			name:      "current equals target (zero diff)",
+			current:   Vector2{X: 100, Y: 100},
+			target:    Vector2{X: 100, Y: 100},
+			accel:     50,
+			deltaTime: 0.1,
+		},
+		{
+			name:      "very close to target",
+			current:   Vector2{X: 100, Y: 100},
+			target:    Vector2{X: 100.0001, Y: 100.0001},
+			accel:     50,
+			deltaTime: 0.1,
+		},
+		{
+			name:      "zero acceleration",
+			current:   Vector2{X: 100, Y: 100},
+			target:    Vector2{X: 200, Y: 200},
+			accel:     0,
+			deltaTime: 0.1,
+		},
+		{
+			name:      "zero delta time",
+			current:   Vector2{X: 100, Y: 100},
+			target:    Vector2{X: 200, Y: 200},
+			accel:     50,
+			deltaTime: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := accelerateToward(tt.current, tt.target, tt.accel, tt.deltaTime)
+			if math.IsNaN(result.X) || math.IsNaN(result.Y) {
+				t.Errorf("accelerateToward(%+v, %+v, %v, %v) produced NaN: %+v",
+					tt.current, tt.target, tt.accel, tt.deltaTime, result)
+			}
+			if math.IsInf(result.X, 0) || math.IsInf(result.Y, 0) {
+				t.Errorf("accelerateToward(%+v, %+v, %v, %v) produced Inf: %+v",
+					tt.current, tt.target, tt.accel, tt.deltaTime, result)
+			}
+		})
+	}
+}
+
+func TestUpdatePlayer_NeverProducesNaN(t *testing.T) {
+	physics := NewPhysics()
+
+	tests := []struct {
+		name      string
+		input     InputState
+		velocity  Vector2
+		deltaTime float64
+	}{
+		{
+			name:      "zero delta time",
+			input:     InputState{Right: true},
+			velocity:  Vector2{X: 100, Y: 100},
+			deltaTime: 0,
+		},
+		{
+			name:      "very small delta time",
+			input:     InputState{Right: true},
+			velocity:  Vector2{X: 100, Y: 100},
+			deltaTime: 1e-10,
+		},
+		{
+			name:      "opposing inputs",
+			input:     InputState{Up: true, Down: true, Left: true, Right: true},
+			velocity:  Vector2{X: 100, Y: 100},
+			deltaTime: 0.016,
+		},
+		{
+			name:      "zero velocity with no input",
+			input:     InputState{},
+			velocity:  Vector2{X: 0, Y: 0},
+			deltaTime: 0.016,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			player := NewPlayerState("test-player")
+			player.SetInput(tt.input)
+			player.SetVelocity(tt.velocity)
+
+			physics.UpdatePlayer(player, tt.deltaTime)
+
+			pos := player.GetPosition()
+			vel := player.GetVelocity()
+
+			if math.IsNaN(pos.X) || math.IsNaN(pos.Y) {
+				t.Errorf("Position contains NaN: %+v", pos)
+			}
+			if math.IsInf(pos.X, 0) || math.IsInf(pos.Y, 0) {
+				t.Errorf("Position contains Inf: %+v", pos)
+			}
+			if math.IsNaN(vel.X) || math.IsNaN(vel.Y) {
+				t.Errorf("Velocity contains NaN: %+v", vel)
+			}
+			if math.IsInf(vel.X, 0) || math.IsInf(vel.Y, 0) {
+				t.Errorf("Velocity contains Inf: %+v", vel)
+			}
+		})
+	}
+}
