@@ -1,0 +1,149 @@
+import { vi } from 'vitest';
+
+// Mock Phaser scene context for the new arena-based implementation
+// Note: vi.mock('phaser') must be in each test file, not in this shared setup
+export const createMockScene = () => {
+  const mockRectangle = {
+    setOrigin: vi.fn().mockReturnThis(),
+    setStrokeStyle: vi.fn().mockReturnThis(),
+    setScrollFactor: vi.fn().mockReturnThis(),
+    setDepth: vi.fn().mockReturnThis(),
+    setAlpha: vi.fn().mockReturnThis(),
+  };
+
+  const mockText = {
+    setOrigin: vi.fn().mockReturnThis(),
+    setScrollFactor: vi.fn().mockReturnThis(),
+    setDepth: vi.fn().mockReturnThis(),
+    setText: vi.fn().mockReturnThis(),
+    setColor: vi.fn().mockReturnThis(),
+    destroy: vi.fn().mockReturnThis(),
+  };
+
+  const mockCamera = {
+    centerX: 960,
+    centerY: 540,
+    width: 1920,
+    height: 1080,
+    scrollX: 0,
+    scrollY: 0,
+    setBounds: vi.fn(),
+    startFollow: vi.fn(),
+    stopFollow: vi.fn(),
+  };
+
+  const mockLine = {
+    setTo: vi.fn().mockReturnThis(),
+    destroy: vi.fn(),
+  };
+
+  const delayedCallCallbacks: Array<() => void> = [];
+  const mockTime = {
+    delayedCall: vi.fn((_delay: number, callback: () => void) => {
+      delayedCallCallbacks.push(callback);
+      return { callback };
+    }),
+  };
+
+  const mockContainer = {
+    add: vi.fn().mockReturnThis(),
+    setScrollFactor: vi.fn().mockReturnThis(),
+    setDepth: vi.fn().mockReturnThis(),
+  };
+
+  const mockContext = {
+    add: {
+      text: vi.fn().mockReturnValue(mockText),
+      rectangle: vi.fn().mockReturnValue(mockRectangle),
+      line: vi.fn().mockReturnValue(mockLine),
+      circle: vi.fn().mockReturnValue({ destroy: vi.fn() }),
+      container: vi.fn().mockReturnValue(mockContainer),
+    },
+    cameras: {
+      main: mockCamera,
+    },
+    physics: {
+      world: {
+        setBounds: vi.fn(),
+      },
+    },
+    input: {
+      keyboard: {
+        addKeys: vi.fn().mockReturnValue({
+          W: { isDown: false },
+          A: { isDown: false },
+          S: { isDown: false },
+          D: { isDown: false },
+        }),
+        addKey: vi.fn().mockReturnValue({
+          on: vi.fn(),
+        }),
+      },
+      on: vi.fn(),
+    },
+    tweens: {
+      add: vi.fn().mockReturnValue({ remove: vi.fn() }),
+    },
+    time: mockTime,
+    delayedCallCallbacks,
+  };
+  return mockContext;
+};
+
+export interface MockWebSocketInstance {
+  readyState: number;
+  send: ReturnType<typeof vi.fn>;
+  close: ReturnType<typeof vi.fn>;
+  addEventListener: ReturnType<typeof vi.fn>;
+  removeEventListener: ReturnType<typeof vi.fn>;
+  onopen: ((event: Event) => void) | null;
+  onmessage: ((event: MessageEvent) => void) | null;
+  onerror: ((event: Event) => void) | null;
+  onclose: ((event: CloseEvent) => void) | null;
+}
+
+export const createMockWebSocket = () => {
+  const mockWebSocketInstance: MockWebSocketInstance = {
+    readyState: 0, // Start as CONNECTING, not OPEN
+    send: vi.fn(),
+    close: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    onopen: null,
+    onmessage: null,
+    onerror: null,
+    onclose: null,
+  };
+
+  // Mock WebSocket constructor as a class that tracks calls
+  const MockWebSocket = vi.fn().mockImplementation(function(this: MockWebSocketInstance) {
+    this.readyState = mockWebSocketInstance.readyState;
+    this.send = mockWebSocketInstance.send;
+    this.close = mockWebSocketInstance.close;
+    this.addEventListener = mockWebSocketInstance.addEventListener;
+    this.removeEventListener = mockWebSocketInstance.removeEventListener;
+
+    // Use defineProperty to set up getters/setters that route to shared state
+    Object.defineProperty(this, 'onopen', {
+      get: () => mockWebSocketInstance.onopen,
+      set: (handler) => { mockWebSocketInstance.onopen = handler; },
+    });
+    Object.defineProperty(this, 'onmessage', {
+      get: () => mockWebSocketInstance.onmessage,
+      set: (handler) => { mockWebSocketInstance.onmessage = handler; },
+    });
+    Object.defineProperty(this, 'onerror', {
+      get: () => mockWebSocketInstance.onerror,
+      set: (handler) => { mockWebSocketInstance.onerror = handler; },
+    });
+    Object.defineProperty(this, 'onclose', {
+      get: () => mockWebSocketInstance.onclose,
+      set: (handler) => { mockWebSocketInstance.onclose = handler; },
+    });
+  });
+
+  (MockWebSocket as unknown as Record<string, number>).OPEN = 1;
+  (MockWebSocket as unknown as Record<string, number>).CONNECTING = 0;
+
+  return { MockWebSocket, mockWebSocketInstance };
+};
