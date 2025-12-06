@@ -854,8 +854,8 @@ describe('GameScene', () => {
       let textCallCount = 0;
       mockSceneContext.add.text = vi.fn().mockImplementation(() => {
         textCallCount++;
-        // Second text call is the match timer (after title text)
-        if (textCallCount === 2) {
+        // Third text call is the match timer (after title text and health bar text)
+        if (textCallCount === 3) {
           return mockTimerText;
         }
         return { setOrigin: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), destroy: vi.fn() };
@@ -906,7 +906,7 @@ describe('GameScene', () => {
       let textCallCount = 0;
       mockSceneContext.add.text = vi.fn().mockImplementation(() => {
         textCallCount++;
-        if (textCallCount === 2) {
+        if (textCallCount === 3) {
           return mockTimerText;
         }
         return { setOrigin: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), destroy: vi.fn() };
@@ -953,7 +953,7 @@ describe('GameScene', () => {
       let textCallCount = 0;
       mockSceneContext.add.text = vi.fn().mockImplementation(() => {
         textCallCount++;
-        if (textCallCount === 2) {
+        if (textCallCount === 3) {
           return mockTimerText;
         }
         return { setOrigin: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), destroy: vi.fn() };
@@ -1000,7 +1000,7 @@ describe('GameScene', () => {
       let textCallCount = 0;
       mockSceneContext.add.text = vi.fn().mockImplementation(() => {
         textCallCount++;
-        if (textCallCount === 2) {
+        if (textCallCount === 3) {
           return mockTimerText;
         }
         return { setOrigin: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), destroy: vi.fn() };
