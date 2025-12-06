@@ -202,4 +202,3 @@ func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Reques
 func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	globalHandler.HandleWebSocket(w, r)
 }
-
