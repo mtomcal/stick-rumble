@@ -1,6 +1,7 @@
 package game
 
 import (
+	"log"
 	"math"
 )
 
@@ -52,6 +53,8 @@ func (p *Physics) UpdatePlayer(player *PlayerState, deltaTime float64) {
 		newVel = decelerateToZero(currentVel, Deceleration, deltaTime)
 	}
 
+	// Sanitize velocity before setting it
+	newVel = sanitizeVector2(newVel, "UpdatePlayer velocity")
 	player.SetVelocity(newVel)
 
 	// Update position based on velocity
@@ -64,6 +67,8 @@ func (p *Physics) UpdatePlayer(player *PlayerState, deltaTime float64) {
 	// Clamp position to arena bounds
 	newPos = clampToArena(newPos)
 
+	// Sanitize position before setting it
+	newPos = sanitizeVector2(newPos, "UpdatePlayer position")
 	player.SetPosition(newPos)
 }
 
@@ -136,6 +141,30 @@ func calculateDistance(pos1, pos2 Vector2) float64 {
 	dx := pos2.X - pos1.X
 	dy := pos2.Y - pos1.Y
 	return math.Sqrt(dx*dx + dy*dy)
+}
+
+// sanitizeVector2 ensures a Vector2 contains no NaN or Inf values
+// If NaN or Inf is detected, it's replaced with 0 and logged as an error
+func sanitizeVector2(v Vector2, context string) Vector2 {
+	result := v
+	sanitized := false
+
+	if math.IsNaN(v.X) || math.IsInf(v.X, 0) {
+		log.Printf("ERROR: %s contains invalid X value: %v, replacing with 0", context, v.X)
+		result.X = 0
+		sanitized = true
+	}
+	if math.IsNaN(v.Y) || math.IsInf(v.Y, 0) {
+		log.Printf("ERROR: %s contains invalid Y value: %v, replacing with 0", context, v.Y)
+		result.Y = 0
+		sanitized = true
+	}
+
+	if sanitized {
+		log.Printf("WARNING: %s sanitized from %+v to %+v", context, v, result)
+	}
+
+	return result
 }
 
 // CheckProjectilePlayerCollision checks if a projectile intersects a player's hitbox using AABB

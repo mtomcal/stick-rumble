@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"math"
 	"net/http"
 	"time"
 
@@ -282,6 +283,24 @@ func (h *WebSocketHandler) broadcastPlayerStates(playerStates []game.PlayerState
 		return
 	}
 
+	// Validate player states for NaN/Inf values before marshaling
+	for i := range playerStates {
+		state := &playerStates[i]
+		if math.IsNaN(state.Position.X) || math.IsNaN(state.Position.Y) ||
+			math.IsInf(state.Position.X, 0) || math.IsInf(state.Position.Y, 0) {
+			log.Printf("ERROR: Player %s has invalid position: %+v", state.ID, state.Position)
+		}
+		if math.IsNaN(state.Velocity.X) || math.IsNaN(state.Velocity.Y) ||
+			math.IsInf(state.Velocity.X, 0) || math.IsInf(state.Velocity.Y, 0) {
+			log.Printf("ERROR: Player %s has invalid velocity: %+v", state.ID, state.Velocity)
+		}
+		if math.IsNaN(state.AimAngle) || math.IsInf(state.AimAngle, 0) {
+			log.Printf("ERROR: Player %s has invalid aimAngle: %v", state.ID, state.AimAngle)
+			// Sanitize aim angle to prevent JSON marshal error
+			state.AimAngle = 0
+		}
+	}
+
 	// Create player:move message
 	message := Message{
 		Type:      "player:move",
@@ -294,6 +313,7 @@ func (h *WebSocketHandler) broadcastPlayerStates(playerStates []game.PlayerState
 	msgBytes, err := json.Marshal(message)
 	if err != nil {
 		log.Printf("Error marshaling player:move message: %v", err)
+		log.Printf("Player states that failed to marshal: %+v", playerStates)
 		return
 	}
 

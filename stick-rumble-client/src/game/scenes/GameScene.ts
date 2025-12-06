@@ -36,7 +36,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
-    // Set world bounds to match arena size
+    // Set world and camera bounds to match arena size
+    this.physics.world.setBounds(0, 0, ARENA.WIDTH, ARENA.HEIGHT);
     this.cameras.main.setBounds(0, 0, ARENA.WIDTH, ARENA.HEIGHT);
 
     // Add arena background

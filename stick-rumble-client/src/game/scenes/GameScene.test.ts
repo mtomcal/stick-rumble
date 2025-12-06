@@ -84,6 +84,11 @@ const createMockScene = () => {
     cameras: {
       main: mockCamera,
     },
+    physics: {
+      world: {
+        setBounds: vi.fn(),
+      },
+    },
     input: {
       keyboard: {
         addKeys: vi.fn().mockReturnValue({
@@ -217,6 +222,15 @@ describe('GameScene', () => {
   });
 
   describe('create', () => {
+    it('should set world bounds to arena size', () => {
+      const mockSceneContext = createMockScene();
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      expect(mockSceneContext.physics.world.setBounds).toHaveBeenCalledWith(0, 0, 1920, 1080);
+    });
+
     it('should set camera bounds to arena size', () => {
       const mockSceneContext = createMockScene();
       Object.assign(scene, mockSceneContext);
