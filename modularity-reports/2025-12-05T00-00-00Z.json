@@ -1,0 +1,76 @@
+{
+  "timestamp": "2025-12-05T00:00:00Z",
+  "scope": "Entire codebase",
+  "languages": ["TypeScript", "Go"],
+  "metrics": {
+    "total_files": 47,
+    "avg_loc_production": 158,
+    "avg_loc_test": 481,
+    "max_loc_production": 471,
+    "max_loc_test": 1629,
+    "production_files_exceeding_400": 2,
+    "production_files_exceeding_600": 0,
+    "test_files_exceeding_500": 6,
+    "test_files_exceeding_800": 3
+  },
+  "flagged_files": [
+    {
+      "path": "stick-rumble-client/src/game/scenes/GameScene.ts",
+      "loc": 471,
+      "type": "production",
+      "functions": 14,
+      "priority": "critical"
+    },
+    {
+      "path": "stick-rumble-server/internal/network/websocket_handler.go",
+      "loc": 460,
+      "type": "production",
+      "functions": 22,
+      "priority": "critical"
+    },
+    {
+      "path": "stick-rumble-client/src/game/scenes/GameScene.test.ts",
+      "loc": 1629,
+      "type": "test",
+      "priority": "critical"
+    },
+    {
+      "path": "stick-rumble-server/internal/network/websocket_handler_test.go",
+      "loc": 1186,
+      "type": "test",
+      "priority": "critical"
+    },
+    {
+      "path": "stick-rumble-client/src/game/network/WebSocketClient.integration.test.ts",
+      "loc": 1112,
+      "type": "test",
+      "priority": "critical"
+    },
+    {
+      "path": "stick-rumble-server/internal/game/physics_test.go",
+      "loc": 667,
+      "type": "test",
+      "priority": "high"
+    },
+    {
+      "path": "stick-rumble-server/internal/game/gameserver_test.go",
+      "loc": 590,
+      "type": "test",
+      "priority": "high"
+    },
+    {
+      "path": "stick-rumble-server/internal/game/room_test.go",
+      "loc": 512,
+      "type": "test",
+      "priority": "medium"
+    }
+  ],
+  "refactorings_created": 8,
+  "estimated_total_effort_hours": "32-48 hours",
+  "notes": [
+    "First modularity review for this project",
+    "Focus on test file organization - largest files are all tests",
+    "Production code is relatively well-organized (only 2 files > 400 LOC)",
+    "Test files show need for better organization (3 files > 1000 LOC)"
+  ]
+}
