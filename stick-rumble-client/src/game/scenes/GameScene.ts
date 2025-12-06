@@ -56,7 +56,8 @@ export class GameScene extends Phaser.Scene {
     titleText.setScrollFactor(0);
 
     // Add match timer at top-center (fixed to screen)
-    this.matchTimerText = this.add.text(ARENA.WIDTH / 2, 10, '7:00', {
+    const camera = this.cameras.main;
+    this.matchTimerText = this.add.text(camera.width / 2, 10, '7:00', {
       fontSize: '24px',
       color: '#ffffff',
       fontStyle: 'bold',
