@@ -312,7 +312,7 @@ So that the multiplayer foundation is proven to work.
 
 **FRs Covered:** FR2 (movement/aim), FR3 (shooting), FR7 (respawn), FR10 (deathmatch), FR12 (server authority), FR16 (performance), FR17 (browser access)
 
-**Epic Status:** 🟢 IN PROGRESS (5/9 stories complete, ~56% done)
+**Epic Status:** 🟢 IN PROGRESS (6/10 stories complete, ~60% done)
 
 ---
 
@@ -329,24 +329,29 @@ So that the multiplayer foundation is proven to work.
 - ✅ **Story 2.5**: Health System and Death (92.24% client, 93.0% server coverage)
   - Includes acceptance testing with Playwright browser automation
   - Includes client-side prediction bug fix for aim indicators
+- ✅ **Story 2.6.1**: Match Timer and Kill Target Tracking (91.8% server coverage)
 
 **Remaining Stories:**
-- 🔵 **Story 2.6.1**: Match Timer and Kill Target Tracking (NEXT - ready to start)
-- ⏸️ **Story 2.6.2**: Match End Detection and Winner Determination (blocked by 2.6.1)
+- 🔵 **Story 2.6.2**: Match End Detection and Winner Determination (NEXT - ready to start)
 - ⏸️ **Story 2.6.3**: Match End Screen and Lobby Return (blocked by 2.6.2)
 - 🔵 **Story 2.7.1**: Server-Side Health Regeneration (NEXT - ready to start)
 - ⏸️ **Story 2.7.2**: Client-Side Regeneration Feedback (blocked by 2.7.1)
+
+**Technical Debt:**
+- 🔴 **TECH-DEBT**: Client test coverage needs increase to 90% (currently ~80%)
 
 **Deferred Enhancements:**
 - 📋 **Story 2.4.1**: Lag Compensation for Hit Detection (deferred to Epic 4, Story 4.5)
 
 **Key Achievements:**
 - All completed stories exceed 90% test coverage requirement
+- Server test coverage at 91.8% (meets 90% threshold)
 - Proactive bug fixes: coordinate transformation (2.2.1), network coverage (2.1.1), client-side prediction (2.5)
 - Comprehensive integration testing established (39 integration tests passing)
 - High code quality: zero TypeScript errors, zero ESLint warnings, go vet/gofmt clean
 - Server-authoritative architecture proven with hit detection, movement validation, and projectile physics
 - Full combat loop complete: movement, aim, shoot, hit detection, health, death, respawn, kill tracking
+- All test file refactoring complete (websocket_handler, gameserver, physics, room tests split)
 
 **Key Learnings:**
 - **Integration tests critical for Phaser apps**: Story 2.2.1 revealed that unit tests with mocked Phaser APIs can pass while real implementation fails due to coordinate transformation bugs. Now require integration tests for coordinate-dependent features.
@@ -355,8 +360,9 @@ So that the multiplayer foundation is proven to work.
 - **Client-side prediction is critical for responsive gameplay**: Story 2.5 revealed that server-authoritative state (20Hz) without client-side prediction causes laggy visuals. Now require immediate local updates for aim indicators and movement feedback.
 - **Acceptance testing with real browsers catches issues unit tests miss**: Playwright MCP testing revealed visual feedback bugs that passed all unit/integration tests. Browser automation now recommended for story completion validation.
 - **Smaller stories improve agent success rate**: Breaking Story 2.6 (6-8 systems) into 3 sub-stories and Story 2.7 (4 systems) into 2 sub-stories creates more focused tasks that agents can complete in 1-3 hours.
+- **Enforce coverage thresholds early**: 90% coverage threshold now enforced for all metrics (statements, branches, functions, lines) on both client and server.
 
-**Estimated Completion:** 4 more stories to deliver fully playable deathmatch (Epic 2 goal achieved when Story 2.7.2 complete).
+**Estimated Completion:** 4 more feature stories + 1 tech debt task to deliver fully playable deathmatch (Epic 2 goal achieved when Story 2.7.2 complete and client coverage at 90%).
 
 ---
 
