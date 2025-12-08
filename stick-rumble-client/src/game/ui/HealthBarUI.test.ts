@@ -8,8 +8,14 @@ describe('HealthBarUI', () => {
   let mockBackground: Phaser.GameObjects.Rectangle;
   let mockHealthBar: Phaser.GameObjects.Rectangle;
   let mockHealthText: Phaser.GameObjects.Text;
+  let mockTween: Phaser.Tweens.Tween;
 
   beforeEach(() => {
+    // Create mock tween
+    mockTween = {
+      stop: vi.fn(),
+    } as unknown as Phaser.Tweens.Tween;
+
     // Create mock objects for testing
     mockHealthText = {
       setText: vi.fn().mockReturnThis(),
@@ -19,6 +25,7 @@ describe('HealthBarUI', () => {
     mockHealthBar = {
       setDisplaySize: vi.fn().mockReturnThis(),
       setOrigin: vi.fn().mockReturnThis(),
+      setAlpha: vi.fn().mockReturnThis(),
     } as unknown as Phaser.GameObjects.Rectangle;
 
     mockBackground = {
@@ -38,6 +45,9 @@ describe('HealthBarUI', () => {
           .mockReturnValueOnce(mockBackground) // First call: background
           .mockReturnValueOnce(mockHealthBar), // Second call: health bar
         text: vi.fn().mockReturnValue(mockHealthText),
+      },
+      tweens: {
+        add: vi.fn().mockReturnValue(mockTween),
       },
     } as unknown as Phaser.Scene;
   });
@@ -170,5 +180,138 @@ describe('HealthBarUI', () => {
 
     expect(mockHealthBar.setDisplaySize).toHaveBeenCalledWith(200, 30);
     expect(mockHealthText.setText).toHaveBeenCalledWith('100/100');
+  });
+
+  describe('Health Regeneration Animation', () => {
+    it('should start regeneration animation when isRegenerating becomes true', () => {
+      const healthBar = new HealthBarUI(mockScene, 10, 70);
+
+      // Update with regeneration enabled
+      healthBar.updateHealth(50, 100, true);
+
+      // Should create a pulsing tween
+      expect(mockScene.tweens.add).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targets: mockHealthBar,
+          alpha: 0.6,
+          duration: 500,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        })
+      );
+    });
+
+    it('should not start regeneration animation if already regenerating', () => {
+      const healthBar = new HealthBarUI(mockScene, 10, 70);
+
+      // Start regeneration
+      healthBar.updateHealth(50, 100, true);
+      const initialCallCount = (mockScene.tweens.add as ReturnType<typeof vi.fn>).mock.calls.length;
+
+      // Update again with regeneration still true
+      healthBar.updateHealth(55, 100, true);
+
+      // Should not create a new tween
+      expect((mockScene.tweens.add as ReturnType<typeof vi.fn>).mock.calls.length).toBe(initialCallCount);
+    });
+
+    it('should stop regeneration animation when isRegenerating becomes false', () => {
+      const healthBar = new HealthBarUI(mockScene, 10, 70);
+
+      // Start regeneration
+      healthBar.updateHealth(50, 100, true);
+
+      // Stop regeneration
+      healthBar.updateHealth(60, 100, false);
+
+      // Should stop the tween
+      expect(mockTween.stop).toHaveBeenCalled();
+      // Should reset alpha to full opacity
+      expect(mockHealthBar.setAlpha).toHaveBeenCalledWith(1.0);
+    });
+
+    it('should not stop animation if not currently regenerating', () => {
+      const healthBar = new HealthBarUI(mockScene, 10, 70);
+
+      // Update with regeneration false (default state)
+      healthBar.updateHealth(50, 100, false);
+
+      // Should not attempt to stop tween
+      expect(mockTween.stop).not.toHaveBeenCalled();
+    });
+
+    it('should handle regeneration state transitions correctly', () => {
+      const healthBar = new HealthBarUI(mockScene, 10, 70);
+
+      // Start at 50 HP, not regenerating
+      healthBar.updateHealth(50, 100, false);
+      expect(mockScene.tweens.add).not.toHaveBeenCalled();
+
+      // Wait 5 seconds, start regenerating at 55 HP
+      healthBar.updateHealth(55, 100, true);
+      expect(mockScene.tweens.add).toHaveBeenCalledTimes(1);
+
+      // Regenerate to 70 HP (animation should continue)
+      healthBar.updateHealth(70, 100, true);
+      expect(mockScene.tweens.add).toHaveBeenCalledTimes(1); // No new tween
+
+      // Take damage, stop regenerating
+      healthBar.updateHealth(60, 100, false);
+      expect(mockTween.stop).toHaveBeenCalled();
+      expect(mockHealthBar.setAlpha).toHaveBeenCalledWith(1.0);
+    });
+
+    it('should update health bar width while regenerating', () => {
+      const healthBar = new HealthBarUI(mockScene, 10, 70);
+
+      // Start regenerating at 50 HP
+      healthBar.updateHealth(50, 100, true);
+      expect(mockHealthBar.setDisplaySize).toHaveBeenCalledWith(100, 30);
+
+      // Regenerate to 60 HP
+      healthBar.updateHealth(60, 100, true);
+      expect(mockHealthBar.setDisplaySize).toHaveBeenCalledWith(120, 30);
+
+      // Regenerate to 100 HP (full health)
+      healthBar.updateHealth(100, 100, true);
+      expect(mockHealthBar.setDisplaySize).toHaveBeenCalledWith(200, 30);
+    });
+
+    it('should update health text while regenerating', () => {
+      const healthBar = new HealthBarUI(mockScene, 10, 70);
+
+      // Start regenerating at 50 HP
+      healthBar.updateHealth(50, 100, true);
+      expect(mockHealthText.setText).toHaveBeenCalledWith('50/100');
+
+      // Regenerate to 75 HP
+      healthBar.updateHealth(75, 100, true);
+      expect(mockHealthText.setText).toHaveBeenCalledWith('75/100');
+
+      // Regenerate to 100 HP
+      healthBar.updateHealth(100, 100, true);
+      expect(mockHealthText.setText).toHaveBeenCalledWith('100/100');
+    });
+
+    it('should stop existing tween when restarting regeneration animation', () => {
+      const healthBar = new HealthBarUI(mockScene, 10, 70);
+
+      // Start regenerating
+      healthBar.updateHealth(50, 100, true);
+      expect(mockScene.tweens.add).toHaveBeenCalledTimes(1);
+
+      // Stop regenerating (damage taken)
+      healthBar.updateHealth(40, 100, false);
+      expect(mockTween.stop).toHaveBeenCalled();
+
+      // Manually start regeneration again by triggering the animation directly
+      // This simulates the edge case where a tween exists and we restart
+      healthBar.updateHealth(45, 100, true);
+
+      // Should have stopped the old tween (even though it was already stopped)
+      // and created a new one
+      expect(mockScene.tweens.add).toHaveBeenCalledTimes(2);
+    });
   });
 });

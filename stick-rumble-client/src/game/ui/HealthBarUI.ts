@@ -10,13 +10,17 @@ import type Phaser from 'phaser';
  * - Fixed to screen (doesn't scroll with camera)
  */
 export class HealthBarUI {
+  private scene: Phaser.Scene;
   private container: Phaser.GameObjects.Container;
   private healthBar: Phaser.GameObjects.Rectangle;
   private healthText: Phaser.GameObjects.Text;
   private readonly BAR_WIDTH = 200;
   private readonly BAR_HEIGHT = 30;
+  private isRegenerating: boolean = false;
+  private pulseTween: Phaser.Tweens.Tween | null = null;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
+    this.scene = scene;
     // Create container for health bar components
     this.container = scene.add.container(x, y);
 
@@ -63,8 +67,9 @@ export class HealthBarUI {
    * Update the health bar display
    * @param currentHealth Current health value
    * @param maxHealth Maximum health value
+   * @param isRegenerating Whether health is currently regenerating
    */
-  updateHealth(currentHealth: number, maxHealth: number): void {
+  updateHealth(currentHealth: number, maxHealth: number, isRegenerating: boolean = false): void {
     // Clamp health values
     const health = Math.max(0, Math.min(currentHealth, maxHealth));
     const percentage = maxHealth > 0 ? health / maxHealth : 0;
@@ -84,5 +89,49 @@ export class HealthBarUI {
 
     // Update text
     this.healthText.setText(`${Math.floor(health)}/${maxHealth}`);
+
+    // Handle regeneration visual feedback
+    if (isRegenerating && !this.isRegenerating) {
+      // Start regeneration animation
+      this.startRegenerationEffect();
+    } else if (!isRegenerating && this.isRegenerating) {
+      // Stop regeneration animation
+      this.stopRegenerationEffect();
+    }
+
+    this.isRegenerating = isRegenerating;
+  }
+
+  /**
+   * Start pulsing animation to indicate health regeneration
+   */
+  private startRegenerationEffect(): void {
+    // Stop any existing tween
+    if (this.pulseTween) {
+      this.pulseTween.stop();
+      this.pulseTween = null;
+    }
+
+    // Create pulsing alpha effect (0.6 to 1.0 and back)
+    this.pulseTween = this.scene.tweens.add({
+      targets: this.healthBar,
+      alpha: 0.6,
+      duration: 500,
+      yoyo: true,
+      repeat: -1, // Infinite repeat
+      ease: 'Sine.easeInOut',
+    });
+  }
+
+  /**
+   * Stop the regeneration animation
+   */
+  private stopRegenerationEffect(): void {
+    if (this.pulseTween) {
+      this.pulseTween.stop();
+      this.pulseTween = null;
+    }
+    // Reset alpha to full opacity
+    this.healthBar.setAlpha(1.0);
   }
 }

@@ -476,7 +476,7 @@ describe('GameScene - UI', () => {
       }
 
       // Verify health bar was updated
-      expect(mockUpdateHealth).toHaveBeenCalledWith(75, 100);
+      expect(mockUpdateHealth).toHaveBeenCalledWith(75, 100, false);
     });
 
     it('should not update health bar when other player takes damage', async () => {
@@ -515,7 +515,7 @@ describe('GameScene - UI', () => {
       }
 
       // Verify room:joined initialized health bar to 100/100
-      expect(mockUpdateHealth).toHaveBeenCalledWith(100, 100);
+      expect(mockUpdateHealth).toHaveBeenCalledWith(100, 100, false);
       expect(mockUpdateHealth).toHaveBeenCalledTimes(1);
 
       // Reset mock to check damage message behavior
@@ -597,7 +597,7 @@ describe('GameScene - UI', () => {
       }
 
       // Verify health bar was updated to full health
-      expect(mockUpdateHealth).toHaveBeenCalledWith(100, 100);
+      expect(mockUpdateHealth).toHaveBeenCalledWith(100, 100, false);
     });
   });
 });
