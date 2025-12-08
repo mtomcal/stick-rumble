@@ -129,6 +129,9 @@ func (gs *GameServer) tickLoop(ctx context.Context) {
 
 			// Update invulnerability status
 			gs.updateInvulnerability()
+
+			// Update health regeneration
+			gs.updateHealthRegeneration(deltaTime)
 		}
 	}
 }
@@ -447,5 +450,27 @@ func (gs *GameServer) updateInvulnerability() {
 	// Update each player's invulnerability
 	for _, player := range players {
 		player.UpdateInvulnerability()
+	}
+}
+
+// updateHealthRegeneration applies health regeneration to all players
+func (gs *GameServer) updateHealthRegeneration(deltaTime float64) {
+	// Get all players
+	gs.world.mu.RLock()
+	players := make([]*PlayerState, 0, len(gs.world.players))
+	for _, player := range gs.world.players {
+		players = append(players, player)
+	}
+	gs.world.mu.RUnlock()
+
+	now := time.Now()
+
+	// Update each player's regeneration
+	for _, player := range players {
+		// Update regeneration state
+		player.UpdateRegenerationState(now)
+
+		// Apply regeneration if applicable
+		player.ApplyRegeneration(now, deltaTime)
 	}
 }

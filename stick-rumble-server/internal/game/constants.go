@@ -65,3 +65,12 @@ const (
 	// KillXPReward is the amount of XP awarded for each kill
 	KillXPReward = 100
 )
+
+// Health regeneration
+const (
+	// HealthRegenerationDelay is the time in seconds before health starts regenerating after taking damage
+	HealthRegenerationDelay = 5.0
+
+	// HealthRegenerationRate is the amount of HP restored per second
+	HealthRegenerationRate = 10.0
+)
