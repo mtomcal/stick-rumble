@@ -1,10 +1,26 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import App from './App';
+import type { PhaserGameProps } from './ui/common/PhaserGame';
+import type { MatchEndData } from './shared/types';
 
 // Mock PhaserGame component
+let mockOnMatchEnd: PhaserGameProps['onMatchEnd'];
+
 vi.mock('./ui/common/PhaserGame', () => ({
-  PhaserGame: () => <div data-testid="phaser-game-mock">Phaser Game</div>,
+  PhaserGame: ({ onMatchEnd }: PhaserGameProps) => {
+    mockOnMatchEnd = onMatchEnd;
+    return <div data-testid="phaser-game-mock">Phaser Game</div>;
+  },
+}));
+
+// Mock MatchEndScreen component
+vi.mock('./ui/match/MatchEndScreen', () => ({
+  MatchEndScreen: ({ onClose }: { onClose: () => void }) => (
+    <div data-testid="match-end-screen-mock">
+      <button onClick={onClose}>Close Match End</button>
+    </div>
+  ),
 }));
 
 describe('App', () => {
@@ -63,5 +79,58 @@ describe('App', () => {
 
     // Second child should be the PhaserGame (mocked as div)
     expect(appContainer?.children[1].getAttribute('data-testid')).toBe('phaser-game-mock');
+  });
+
+  describe('Match End Integration', () => {
+    it('should not show match end screen initially', () => {
+      render(<App />);
+
+      expect(screen.queryByTestId('match-end-screen-mock')).toBeNull();
+    });
+
+    it('should show match end screen when match ends', () => {
+      const { rerender } = render(<App />);
+
+      const mockMatchData: MatchEndData = {
+        winners: ['player-1'],
+        finalScores: [
+          { playerId: 'player-1', kills: 5, deaths: 2, xp: 100 },
+          { playerId: 'player-2', kills: 3, deaths: 4, xp: 50 },
+        ],
+        reason: 'time_expired',
+      };
+
+      // Trigger match end via callback
+      act(() => {
+        mockOnMatchEnd?.(mockMatchData, 'player-1');
+      });
+      rerender(<App />);
+
+      expect(screen.getByTestId('match-end-screen-mock')).toBeInTheDocument();
+    });
+
+    it('should close match end screen when close is called', () => {
+      const { rerender } = render(<App />);
+
+      const mockMatchData: MatchEndData = {
+        winners: ['player-1'],
+        finalScores: [{ playerId: 'player-1', kills: 0, deaths: 0, xp: 50 }],
+        reason: 'time_expired',
+      };
+
+      // Show match end screen
+      act(() => {
+        mockOnMatchEnd?.(mockMatchData, 'player-1');
+      });
+      rerender(<App />);
+
+      expect(screen.getByTestId('match-end-screen-mock')).toBeInTheDocument();
+
+      // Close it
+      const closeButton = screen.getByText('Close Match End');
+      fireEvent.click(closeButton);
+
+      expect(screen.queryByTestId('match-end-screen-mock')).toBeNull();
+    });
   });
 });

@@ -113,4 +113,41 @@ describe('PhaserGame', () => {
 
     expect(mockGameInstances).toHaveLength(1);
   });
+
+  describe('onMatchEnd callback', () => {
+    it('should set window.onMatchEnd when callback is provided', () => {
+      const mockOnMatchEnd = vi.fn();
+
+      render(<PhaserGame onMatchEnd={mockOnMatchEnd} />);
+
+      expect(window.onMatchEnd).toBe(mockOnMatchEnd);
+    });
+
+    it('should not set window.onMatchEnd when callback is not provided', () => {
+      delete window.onMatchEnd;
+
+      render(<PhaserGame />);
+
+      expect(window.onMatchEnd).toBeUndefined();
+    });
+
+    it('should clean up window.onMatchEnd on unmount when callback was provided', () => {
+      const mockOnMatchEnd = vi.fn();
+
+      const { unmount } = render(<PhaserGame onMatchEnd={mockOnMatchEnd} />);
+
+      expect(window.onMatchEnd).toBe(mockOnMatchEnd);
+
+      unmount();
+
+      expect(window.onMatchEnd).toBeUndefined();
+    });
+
+    it('should not throw when cleaning up without onMatchEnd', () => {
+      const { unmount } = render(<PhaserGame />);
+
+      expect(() => unmount()).not.toThrow();
+      expect(window.onMatchEnd).toBeUndefined();
+    });
+  });
 });

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"os"
 	"sync"
 	"time"
 
@@ -27,11 +28,19 @@ type Room struct {
 
 // NewRoom creates a new room with a unique ID
 func NewRoom() *Room {
+	match := NewMatch()
+
+	// Enable test mode if TEST_MODE environment variable is set
+	if os.Getenv("TEST_MODE") == "true" {
+		match.SetTestMode()
+		log.Println("Match created in TEST MODE (kill target: 2, time limit: 10s)")
+	}
+
 	return &Room{
 		ID:         uuid.New().String(),
 		Players:    make([]*Player, 0, 8),
 		MaxPlayers: 8,
-		Match:      NewMatch(),
+		Match:      match,
 	}
 }
 

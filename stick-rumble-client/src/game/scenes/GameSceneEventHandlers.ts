@@ -242,7 +242,11 @@ export class GameSceneEventHandlers {
         this.shootingManager.disable();
       }
 
-      // TODO: Display match end UI with winners and scores in future story
+      // Trigger match end UI via React callback
+      const localPlayerId = this.playerManager.getLocalPlayerId();
+      if (localPlayerId && window.onMatchEnd) {
+        window.onMatchEnd(matchEndData, localPlayerId);
+      }
     });
   }
 }
