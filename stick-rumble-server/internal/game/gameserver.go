@@ -335,6 +335,14 @@ func (gs *GameServer) MarkPlayerDead(playerID string) {
 	}
 }
 
+// DamagePlayer applies damage to a player (for testing purposes)
+func (gs *GameServer) DamagePlayer(playerID string, damage int) {
+	player, exists := gs.world.GetPlayer(playerID)
+	if exists {
+		player.TakeDamage(damage)
+	}
+}
+
 // checkHitDetection checks for projectile-player collisions and processes hits
 func (gs *GameServer) checkHitDetection() {
 	// Get all active projectiles
