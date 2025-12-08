@@ -588,7 +588,7 @@ So that I can celebrate victory or learn from defeat.
 
 **Technical Notes:**
 - Winner determination logic in `internal/game/gameserver.go`
-- PlayerScore: `{playerId, playerName, kills, deaths, xp}`
+- PlayerScore: `{playerId, kills, deaths, xp}`
 - Reason: "kill_target" | "time_limit"
 - Freeze gameplay: disable input handlers on client
 - Server stops accepting input:state messages after match end
