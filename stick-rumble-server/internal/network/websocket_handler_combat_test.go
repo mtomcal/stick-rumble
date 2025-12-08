@@ -485,9 +485,9 @@ func TestOnHitDeathScenario(t *testing.T) {
 		// Attacker (conn1) receives: player:damaged, hit:confirmed, player:death, player:kill_credit
 		// Collect messages and verify expected types are present
 		expectedTypes := map[string]bool{
-			"player:damaged":    false,
-			"hit:confirmed":     false,
-			"player:death":      false,
+			"player:damaged":     false,
+			"hit:confirmed":      false,
+			"player:death":       false,
 			"player:kill_credit": false,
 		}
 

@@ -31,6 +31,7 @@ export default defineConfig({
         '**/*.css',
         'package.json',
         'src/main.tsx', // App entry point, difficult to test
+        'src/**/*.integration.helpers.ts', // Integration test helpers, tested during integration
       ],
       include: ['src/**/*.ts', 'src/**/*.tsx'],
       thresholds: {
