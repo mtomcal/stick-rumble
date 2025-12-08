@@ -35,6 +35,7 @@ type PlayerState struct {
 	XP                     int        `json:"xp"`                  // Experience points
 	IsRegeneratingHealth   bool       `json:"isRegenerating"`      // Whether health is currently regenerating
 	lastDamageTime         time.Time  // Private field: when player last took damage
+	regenAccumulator       float64    // Private field: accumulated fractional HP for regeneration
 	input                  InputState // Private field, accessed via methods
 	mu                     sync.RWMutex
 }
@@ -122,6 +123,7 @@ func (p *PlayerState) TakeDamage(amount int) {
 	}
 	p.lastDamageTime = time.Now()
 	p.IsRegeneratingHealth = false // Stop regeneration when taking damage
+	p.regenAccumulator = 0.0       // Reset regeneration accumulator
 }
 
 // IsAlive returns true if the player has health remaining (thread-safe)
@@ -187,6 +189,8 @@ func (p *PlayerState) Respawn(spawnPos Vector2) {
 	p.DeathTime = nil
 	p.IsInvulnerable = true
 	p.InvulnerabilityEndTime = time.Now().Add(time.Duration(SpawnInvulnerabilityDuration * float64(time.Second)))
+	p.regenAccumulator = 0.0      // Clear regeneration accumulator on respawn
+	p.lastDamageTime = time.Now() // Reset regeneration timer to prevent immediate regeneration
 }
 
 // UpdateInvulnerability checks and updates invulnerability status (thread-safe)
@@ -276,17 +280,22 @@ func (p *PlayerState) ApplyRegeneration(now time.Time, deltaTime float64) {
 		return
 	}
 
-	// Apply regeneration (use float calculation then round to nearest int)
-	// This ensures regeneration works at 60Hz tick rate (deltaTime ≈ 0.0167s)
-	regenAmount := int(HealthRegenerationRate*deltaTime + 0.5)
-	if regenAmount < 1 {
-		regenAmount = 1 // Ensure at least 1 HP per tick when regenerating
-	}
-	p.Health += regenAmount
+	// Apply regeneration using accumulator for fractional HP
+	// At 60Hz tick rate (deltaTime ≈ 0.0167s), HealthRegenerationRate * deltaTime ≈ 0.167 HP
+	// We accumulate fractional HP and only apply full HP when accumulator >= 1.0
+	p.regenAccumulator += HealthRegenerationRate * deltaTime
 
-	// Cap at max health
-	if p.Health > PlayerMaxHealth {
+	// Apply accumulated HP as integer value
+	if p.regenAccumulator >= 1.0 {
+		regenAmount := int(p.regenAccumulator)
+		p.Health += regenAmount
+		p.regenAccumulator -= float64(regenAmount) // Keep the fractional remainder
+	}
+
+	// Cap at max health and clear accumulator
+	if p.Health >= PlayerMaxHealth {
 		p.Health = PlayerMaxHealth
+		p.regenAccumulator = 0.0 // Clear accumulator at max health
 	}
 
 	// Update regeneration state

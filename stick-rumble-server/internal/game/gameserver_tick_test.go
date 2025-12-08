@@ -190,3 +190,126 @@ func TestGameServerGetActiveProjectiles(t *testing.T) {
 		t.Errorf("Expected 1 projectile after shooting, got %d", len(projectiles))
 	}
 }
+
+func TestGameServerHealthRegeneration(t *testing.T) {
+	gs := NewGameServer(nil)
+	playerID := "test-player-1"
+
+	// Add player (starts at 100 HP)
+	gs.AddPlayer(playerID)
+
+	// Damage player to 50 HP
+	gs.DamagePlayer(playerID, 50)
+
+	// Verify damage was applied
+	state, _ := gs.GetPlayerState(playerID)
+	if state.Health != 50 {
+		t.Fatalf("Expected health to be 50 after damage, got %d", state.Health)
+	}
+
+	// Start the game server
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	gs.Start(ctx)
+
+	// Wait 5 seconds for regeneration delay to pass
+	time.Sleep(5 * time.Second)
+
+	// Get state immediately after delay
+	stateAfterDelay, _ := gs.GetPlayerState(playerID)
+	t.Logf("Health after 5s delay: %d HP, isRegenerating: %v", stateAfterDelay.Health, stateAfterDelay.IsRegeneratingHealth)
+
+	// Wait 100ms for regeneration to start applying (should apply ~1 HP)
+	time.Sleep(100 * time.Millisecond)
+
+	state100ms, _ := gs.GetPlayerState(playerID)
+	t.Logf("Health after 5.1s: %d HP, isRegenerating: %v", state100ms.Health, state100ms.IsRegeneratingHealth)
+
+	// Wait 1 more second for regeneration to apply (10 HP/s * 1s = 10 HP)
+	time.Sleep(1 * time.Second)
+
+	// Stop server
+	cancel()
+	gs.Stop()
+
+	// Check final health (should be 50 + ~10 = 60 HP)
+	finalState, _ := gs.GetPlayerState(playerID)
+	t.Logf("Final health after 6.1s total: %d HP, isRegenerating: %v", finalState.Health, finalState.IsRegeneratingHealth)
+
+	// Health should have increased from 50 HP after delay passed
+	if finalState.Health <= 50 {
+		t.Errorf("Health should have regenerated after 5s delay + 1.1s regen time. Expected >50, got %d", finalState.Health)
+	}
+
+	// Expected health: 50 + (10 HP/s * 1.1s) = 50 + 11 = 61 HP (or close)
+	expectedMin := 55 // Allow some tolerance
+	if finalState.Health < expectedMin {
+		t.Errorf("Expected at least %d HP after regeneration, got %d", expectedMin, finalState.Health)
+	}
+}
+
+func TestGameServerHealthRegenerationAfterRespawn(t *testing.T) {
+	gs := NewGameServer(nil)
+	playerID := "test-player-1"
+
+	// Add player (starts at 100 HP)
+	gs.AddPlayer(playerID)
+
+	// Start the game server
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	gs.Start(ctx)
+
+	// Kill the player
+	gs.DamagePlayer(playerID, 100)
+	gs.MarkPlayerDead(playerID)
+
+	// Verify player is dead
+	state, _ := gs.GetPlayerState(playerID)
+	if !state.IsDead() {
+		t.Fatal("Player should be dead")
+	}
+	if state.Health != 0 {
+		t.Fatalf("Dead player should have 0 HP, got %d", state.Health)
+	}
+
+	// Wait for respawn (3 seconds)
+	time.Sleep(3500 * time.Millisecond)
+
+	// Verify player respawned at full health
+	respawnedState, _ := gs.GetPlayerState(playerID)
+	if respawnedState.Health != PlayerMaxHealth {
+		t.Errorf("Player should respawn at full health (100), got %d", respawnedState.Health)
+	}
+
+	// Damage player again
+	gs.DamagePlayer(playerID, 50)
+
+	damagedState, _ := gs.GetPlayerState(playerID)
+	if damagedState.Health != 50 {
+		t.Fatalf("Expected health to be 50 after damage, got %d", damagedState.Health)
+	}
+
+	t.Logf("Player damaged to 50 HP after respawn")
+
+	// Wait 5+ seconds for regeneration delay
+	time.Sleep(5500 * time.Millisecond)
+
+	// Check if regeneration is working
+	regenState, _ := gs.GetPlayerState(playerID)
+	t.Logf("Health after 5.5s: %d HP, isRegenerating: %v", regenState.Health, regenState.IsRegeneratingHealth)
+
+	// Stop server
+	cancel()
+	gs.Stop()
+
+	// Health should have regenerated
+	if regenState.Health <= 50 {
+		t.Errorf("Health should have regenerated after respawn and 5s delay. Expected >50, got %d", regenState.Health)
+	}
+
+	// Should be regenerating
+	if !regenState.IsRegeneratingHealth && regenState.Health < PlayerMaxHealth {
+		t.Error("IsRegeneratingHealth should be true after delay (unless already at max)")
+	}
+}
