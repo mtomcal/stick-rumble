@@ -33,6 +33,8 @@ type PlayerState struct {
 	Kills                  int        `json:"kills"`               // Number of kills
 	Deaths                 int        `json:"deaths"`              // Number of deaths
 	XP                     int        `json:"xp"`                  // Experience points
+	IsRegeneratingHealth   bool       `json:"isRegenerating"`      // Whether health is currently regenerating
+	lastDamageTime         time.Time  // Private field: when player last took damage
 	input                  InputState // Private field, accessed via methods
 	mu                     sync.RWMutex
 }
@@ -109,6 +111,7 @@ func (p *PlayerState) GetAimAngle() float64 {
 
 // TakeDamage reduces the player's health by the given amount (thread-safe)
 // Health will not go below 0
+// Updates lastDamageTime to reset regeneration timer
 func (p *PlayerState) TakeDamage(amount int) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -116,6 +119,8 @@ func (p *PlayerState) TakeDamage(amount int) {
 	if p.Health < 0 {
 		p.Health = 0
 	}
+	p.lastDamageTime = time.Now()
+	p.IsRegeneratingHealth = false // Stop regeneration when taking damage
 }
 
 // IsAlive returns true if the player has health remaining (thread-safe)
@@ -141,6 +146,7 @@ func (p *PlayerState) Snapshot() PlayerState {
 		Kills:                  p.Kills,
 		Deaths:                 p.Deaths,
 		XP:                     p.XP,
+		IsRegeneratingHealth:   p.IsRegeneratingHealth,
 	}
 }
 
@@ -221,4 +227,89 @@ func (p *PlayerState) GetKDRatio() float64 {
 		return float64(p.Kills)
 	}
 	return float64(p.Kills) / float64(p.Deaths)
+}
+
+// GetLastDamageTime returns the time when the player last took damage (thread-safe)
+func (p *PlayerState) GetLastDamageTime() time.Time {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.lastDamageTime
+}
+
+// CanRegenerate checks if the player can regenerate health at the given time (thread-safe)
+// Returns true if enough time has passed since last damage and health is below max
+func (p *PlayerState) CanRegenerate(now time.Time) bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	// Cannot regenerate if dead
+	if p.DeathTime != nil {
+		return false
+	}
+
+	// Cannot regenerate if at full health
+	if p.Health >= PlayerMaxHealth {
+		return false
+	}
+
+	// Check if enough time has passed since last damage
+	timeSinceLastDamage := now.Sub(p.lastDamageTime).Seconds()
+	return timeSinceLastDamage >= HealthRegenerationDelay
+}
+
+// ApplyRegeneration applies health regeneration for the given deltaTime (thread-safe)
+// Only regenerates if conditions are met (delay passed, not at max health, not dead)
+func (p *PlayerState) ApplyRegeneration(now time.Time, deltaTime float64) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	// Check if we can regenerate
+	if p.DeathTime != nil || p.Health >= PlayerMaxHealth {
+		p.IsRegeneratingHealth = false
+		return
+	}
+
+	timeSinceLastDamage := now.Sub(p.lastDamageTime).Seconds()
+	if timeSinceLastDamage < HealthRegenerationDelay {
+		p.IsRegeneratingHealth = false
+		return
+	}
+
+	// Apply regeneration (use float calculation then round to nearest int)
+	// This ensures regeneration works at 60Hz tick rate (deltaTime ≈ 0.0167s)
+	regenAmount := int(HealthRegenerationRate*deltaTime + 0.5)
+	if regenAmount < 1 {
+		regenAmount = 1 // Ensure at least 1 HP per tick when regenerating
+	}
+	p.Health += regenAmount
+
+	// Cap at max health
+	if p.Health > PlayerMaxHealth {
+		p.Health = PlayerMaxHealth
+	}
+
+	// Update regeneration state
+	p.IsRegeneratingHealth = p.Health < PlayerMaxHealth
+}
+
+// UpdateRegenerationState updates the IsRegeneratingHealth flag based on current conditions (thread-safe)
+func (p *PlayerState) UpdateRegenerationState(now time.Time) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	// Update regeneration state
+	if p.DeathTime != nil || p.Health >= PlayerMaxHealth {
+		p.IsRegeneratingHealth = false
+		return
+	}
+
+	timeSinceLastDamage := now.Sub(p.lastDamageTime).Seconds()
+	p.IsRegeneratingHealth = timeSinceLastDamage >= HealthRegenerationDelay
+}
+
+// IsRegenerating returns whether the player is currently regenerating health (thread-safe)
+func (p *PlayerState) IsRegenerating() bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.IsRegeneratingHealth
 }

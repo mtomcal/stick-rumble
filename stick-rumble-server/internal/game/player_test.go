@@ -726,3 +726,315 @@ func TestPlayerState_GetKDRatio(t *testing.T) {
 		t.Errorf("K/D ratio with 0 kills, 0 deaths = %v, want 0.0", ratio)
 	}
 }
+
+// Health Regeneration Tests
+
+func TestPlayerState_RegenerationDelay(t *testing.T) {
+	player := NewPlayerState("test-player")
+
+	// Take damage to trigger regeneration timer
+	player.TakeDamage(60)
+
+	if player.Health != 40 {
+		t.Errorf("Health after damage = %v, want 40", player.Health)
+	}
+
+	// Immediately after damage, should not be regenerating
+	if player.IsRegenerating() {
+		t.Error("Player should not be regenerating immediately after damage")
+	}
+
+	// After 4.9 seconds, still should not be regenerating (delay is 5 seconds)
+	now := time.Now()
+	canRegen := player.CanRegenerate(now.Add(4900 * time.Millisecond))
+	if canRegen {
+		t.Error("Player should not regenerate before 5 second delay")
+	}
+
+	// After 5 seconds, should be able to regenerate
+	canRegen = player.CanRegenerate(now.Add(5000 * time.Millisecond))
+	if !canRegen {
+		t.Error("Player should be able to regenerate after 5 second delay")
+	}
+}
+
+func TestPlayerState_RegenerationRate(t *testing.T) {
+	player := NewPlayerState("test-player")
+
+	// Take damage to set health to 40
+	player.TakeDamage(60)
+
+	// Simulate 5 seconds passing (to bypass delay)
+	now := time.Now().Add(6 * time.Second)
+
+	// Apply regeneration for 1 second (10 HP/s rate)
+	deltaTime := 1.0 // 1 second
+	player.ApplyRegeneration(now, deltaTime)
+
+	if player.Health != 50 {
+		t.Errorf("Health after 1 second regeneration = %v, want 50 (40 + 10)", player.Health)
+	}
+
+	// Apply regeneration for another 0.5 seconds (5 more HP)
+	now = now.Add(500 * time.Millisecond)
+	deltaTime = 0.5
+	player.ApplyRegeneration(now, deltaTime)
+
+	if player.Health != 55 {
+		t.Errorf("Health after 0.5 second regeneration = %v, want 55 (50 + 5)", player.Health)
+	}
+}
+
+func TestPlayerState_RegenerationRate_SmallDeltaTime(t *testing.T) {
+	player := NewPlayerState("test-player")
+
+	// Take damage to set health to 50
+	player.TakeDamage(50)
+
+	// Simulate 5 seconds passing (to bypass delay)
+	now := time.Now().Add(6 * time.Second)
+
+	// Apply regeneration with very small deltaTime (simulating 60Hz tick rate)
+	// At 60Hz, deltaTime ≈ 0.01667 seconds
+	// 10 HP/s * 0.01667s = 0.1667 HP (rounds to 0, but minimum is 1 HP)
+	deltaTime := 1.0 / 60.0 // 0.01667 seconds (60Hz tick rate)
+	player.ApplyRegeneration(now, deltaTime)
+
+	// Should regenerate at least 1 HP even with small deltaTime
+	if player.Health != 51 {
+		t.Errorf("Health after small deltaTime regeneration = %v, want 51 (50 + 1 minimum)", player.Health)
+	}
+
+	// Apply regeneration multiple times to verify consistent 1 HP per tick
+	for i := 0; i < 9; i++ {
+		now = now.Add(time.Duration(deltaTime * float64(time.Second)))
+		player.ApplyRegeneration(now, deltaTime)
+	}
+
+	// After 10 ticks at 60Hz, should have regenerated 10 HP (1 HP per tick)
+	if player.Health != 60 {
+		t.Errorf("Health after 10 ticks at 60Hz = %v, want 60 (50 + 10)", player.Health)
+	}
+}
+
+func TestPlayerState_RegenerationStopsAtMaxHealth(t *testing.T) {
+	player := NewPlayerState("test-player")
+
+	// Take minimal damage
+	player.TakeDamage(5)
+
+	if player.Health != 95 {
+		t.Errorf("Health after damage = %v, want 95", player.Health)
+	}
+
+	// Simulate 5 seconds passing
+	now := time.Now().Add(6 * time.Second)
+
+	// Apply regeneration for 1 second (would be +10 HP, but should cap at 100)
+	deltaTime := 1.0
+	player.ApplyRegeneration(now, deltaTime)
+
+	if player.Health != 100 {
+		t.Errorf("Health after regeneration = %v, want 100 (capped at max)", player.Health)
+	}
+
+	// After reaching max health, IsRegeneratingHealth should be false
+	if player.IsRegeneratingHealth {
+		t.Error("IsRegeneratingHealth should be false after reaching max health")
+	}
+
+	// Further regeneration should not increase health beyond 100
+	now = now.Add(1 * time.Second)
+	player.ApplyRegeneration(now, deltaTime)
+
+	if player.Health != 100 {
+		t.Errorf("Health should remain at max = %v, want 100", player.Health)
+	}
+
+	// IsRegeneratingHealth should still be false
+	if player.IsRegeneratingHealth {
+		t.Error("IsRegeneratingHealth should remain false at max health")
+	}
+}
+
+func TestPlayerState_DamageResetsRegenerationTimer(t *testing.T) {
+	player := NewPlayerState("test-player")
+
+	// Take damage
+	player.TakeDamage(60)
+
+	// Record when damage was taken
+	firstDamageTime := player.GetLastDamageTime()
+
+	// Wait 3 seconds
+	time.Sleep(3 * time.Second)
+
+	// Take damage again (this should reset the timer)
+	player.TakeDamage(10)
+
+	secondDamageTime := player.GetLastDamageTime()
+
+	// The second damage time should be significantly later
+	if !secondDamageTime.After(firstDamageTime) {
+		t.Error("Taking damage should update lastDamageTime")
+	}
+
+	// Should not be able to regenerate yet (timer was reset)
+	now := time.Now()
+	if player.CanRegenerate(now) {
+		t.Error("Player should not be able to regenerate immediately after taking damage")
+	}
+
+	// After 5 more seconds from second damage, should be able to regenerate
+	if !player.CanRegenerate(now.Add(5 * time.Second)) {
+		t.Error("Player should be able to regenerate 5 seconds after last damage")
+	}
+}
+
+func TestPlayerState_NoRegenerationAtFullHealth(t *testing.T) {
+	player := NewPlayerState("test-player")
+
+	// Player starts at full health (100 HP)
+	if player.Health != 100 {
+		t.Errorf("Player should start at full health, got %v", player.Health)
+	}
+
+	// Should not be able to regenerate at full health
+	now := time.Now().Add(10 * time.Second)
+	canRegen := player.CanRegenerate(now)
+
+	if canRegen {
+		t.Error("Player at full health should not be able to regenerate")
+	}
+}
+
+func TestPlayerState_RegenerationWhileDead(t *testing.T) {
+	player := NewPlayerState("test-player")
+
+	// Take damage and then die
+	player.TakeDamage(60)
+	player.TakeDamage(40)
+	player.MarkDead()
+
+	// Try to regenerate after delay
+	now := time.Now().Add(10 * time.Second)
+
+	// Dead players should not regenerate
+	canRegen := player.CanRegenerate(now)
+	if canRegen {
+		t.Error("Dead players should not be able to regenerate")
+	}
+}
+
+func TestPlayerState_RegenerationWhileInvulnerable(t *testing.T) {
+	player := NewPlayerState("test-player")
+
+	// Simulate respawn with invulnerability
+	player.MarkDead()
+	player.Respawn(Vector2{X: 500, Y: 300})
+
+	// Take damage (but player is invulnerable, so damage shouldn't apply in real game)
+	// For this test, manually reduce health to simulate what would happen if invuln didn't block damage
+	player.Health = 40
+
+	// Even if invulnerable, regeneration timer logic should still work
+	now := time.Now().Add(6 * time.Second)
+
+	// Should be able to regenerate (regeneration is independent of invulnerability)
+	deltaTime := 1.0
+	player.ApplyRegeneration(now, deltaTime)
+
+	if player.Health != 50 {
+		t.Errorf("Health after regeneration = %v, want 50", player.Health)
+	}
+}
+
+func TestPlayerState_IsRegenerating(t *testing.T) {
+	player := NewPlayerState("test-player")
+
+	// Take damage
+	player.TakeDamage(60)
+
+	// Should not be regenerating immediately
+	now := time.Now()
+	player.UpdateRegenerationState(now)
+
+	if player.IsRegenerating() {
+		t.Error("Should not be regenerating immediately after damage")
+	}
+
+	// After 5 seconds, should be regenerating
+	now = now.Add(6 * time.Second)
+	player.UpdateRegenerationState(now)
+
+	if !player.IsRegenerating() {
+		t.Error("Should be regenerating after 5 second delay with health < 100")
+	}
+
+	// Apply regeneration until full health
+	for i := 0; i < 10; i++ {
+		player.ApplyRegeneration(now, 1.0)
+		now = now.Add(1 * time.Second)
+	}
+
+	// Should not be regenerating at full health
+	player.UpdateRegenerationState(now)
+	if player.IsRegenerating() {
+		t.Error("Should not be regenerating at full health")
+	}
+}
+
+func TestPlayerState_RegenerationThreadSafety(t *testing.T) {
+	player := NewPlayerState("test-player")
+	player.TakeDamage(60)
+
+	var wg sync.WaitGroup
+	now := time.Now().Add(6 * time.Second)
+
+	// Concurrent regeneration operations
+	for i := 0; i < 50; i++ {
+		wg.Add(4)
+
+		go func() {
+			defer wg.Done()
+			player.ApplyRegeneration(now, 0.1)
+		}()
+
+		go func() {
+			defer wg.Done()
+			player.CanRegenerate(now)
+		}()
+
+		go func() {
+			defer wg.Done()
+			player.IsRegenerating()
+		}()
+
+		go func() {
+			defer wg.Done()
+			player.GetLastDamageTime()
+		}()
+	}
+
+	wg.Wait()
+	// If we get here without a data race, the test passes
+}
+
+func TestPlayerState_Snapshot_IncludesRegenerationFields(t *testing.T) {
+	player := NewPlayerState("test-player")
+
+	// Take damage to trigger regeneration
+	player.TakeDamage(60)
+
+	// Update regeneration state
+	now := time.Now().Add(6 * time.Second)
+	player.UpdateRegenerationState(now)
+
+	snapshot := player.Snapshot()
+
+	// Snapshot should include IsRegeneratingHealth field
+	// Note: lastDamageTime is not included in snapshot as it's server-only logic
+	if !snapshot.IsRegeneratingHealth {
+		t.Error("Snapshot should show regenerating state")
+	}
+}

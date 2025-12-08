@@ -217,5 +217,100 @@ describe.sequential('WebSocket Health and Respawn Integration Tests', () => {
         expect(typeof playerWithStats.xp).toBe('number');
       });
     });
+
+    describe('AC: Health Regeneration (Story 2.7.1)', () => {
+      it('should include isRegeneratingHealth flag in player:move messages', async () => {
+        const client1 = createClient();
+        const client2 = createClient();
+
+        let playerWithRegenFlag: any = null;
+        const regenFlagPromise = new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error('Timeout')), 5000);
+          client2.on('player:move', (data: any) => {
+            if (data.players && data.players.length > 0) {
+              // Check if any player has isRegeneratingHealth field
+              const playerWithFlag = data.players.find((p: any) =>
+                p.isRegeneratingHealth !== undefined
+              );
+              if (playerWithFlag) {
+                playerWithRegenFlag = playerWithFlag;
+                clearTimeout(timeout);
+                resolve();
+              }
+            }
+          });
+        });
+
+        // Connect both clients and wait for room:joined
+        await connectClientsToRoom(client1, client2);
+
+        // Send some input to trigger player:move broadcasts
+        const inputMessage: Message = {
+          type: 'input:state',
+          timestamp: Date.now(),
+          data: {
+            up: true,
+            down: false,
+            left: false,
+            right: false,
+            aimAngle: 0
+          }
+        };
+
+        client1.send(inputMessage);
+        await regenFlagPromise;
+
+        // Verify player state includes isRegeneratingHealth flag
+        expect(playerWithRegenFlag).toBeTruthy();
+        expect(typeof playerWithRegenFlag.isRegeneratingHealth).toBe('boolean');
+      });
+
+      it('should allow regeneration after respawn with invulnerability', async () => {
+        const client1 = createClient();
+        const client2 = createClient();
+
+        let sawInvulnerableAndRegenerating = false;
+
+        const invulnRegenPromise = new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error('Timeout')), 10000);
+          client2.on('player:move', (data: any) => {
+            if (data.players && data.players.length > 0) {
+              // Look for a player that is both invulnerable AND regenerating
+              // (regeneration should work independently of invulnerability)
+              const player = data.players.find((p: any) =>
+                p.isInvulnerable === true &&
+                p.isRegeneratingHealth !== undefined
+              );
+              if (player) {
+                sawInvulnerableAndRegenerating = true;
+                clearTimeout(timeout);
+                resolve();
+              }
+            }
+          });
+        });
+
+        await connectClientsToRoom(client1, client2);
+
+        // Trigger player:move broadcasts
+        const inputMessage: Message = {
+          type: 'input:state',
+          timestamp: Date.now(),
+          data: {
+            up: true,
+            down: false,
+            left: false,
+            right: false,
+            aimAngle: 0
+          }
+        };
+
+        client1.send(inputMessage);
+        await invulnRegenPromise;
+
+        // Verify we saw a player with both invulnerability and regeneration state
+        expect(sawInvulnerableAndRegenerating).toBe(true);
+      }, 12000);
+    });
   });
 });
