@@ -47,9 +47,10 @@ func NewPlayerState(id string) *PlayerState {
 			X: ArenaWidth / 2,
 			Y: ArenaHeight / 2,
 		},
-		Velocity: Vector2{X: 0, Y: 0},
-		Health:   PlayerMaxHealth,
-		input:    InputState{},
+		Velocity:       Vector2{X: 0, Y: 0},
+		Health:         PlayerMaxHealth,
+		input:          InputState{},
+		lastDamageTime: time.Now(), // Initialize to prevent immediate regeneration
 	}
 }
 
