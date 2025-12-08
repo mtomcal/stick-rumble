@@ -190,33 +190,3 @@ func TestGameServerGetActiveProjectiles(t *testing.T) {
 		t.Errorf("Expected 1 projectile after shooting, got %d", len(projectiles))
 	}
 }
-
-// Story 2.7.1: Health Regeneration Integration Tests
-// NOTE: These tests validate that the game server's tick loop properly
-// processes health regeneration. The server's regeneration logic is tested
-// in player_test.go. Full end-to-end tests with real combat/damage are in
-// WebSocketClient.health-regeneration.integration.test.ts
-
-func TestGameServerHealthRegeneration_TickLoop(t *testing.T) {
-	t.Skip("Skipped - requires combat system integration for proper lastDamageTime setting. See Story 2.7.1B")
-	// This test requires the full combat system to properly trigger TakeDamage()
-	// which sets lastDamageTime. The underlying regeneration logic is validated in:
-	// - Unit tests: player_test.go (11 tests covering all regeneration scenarios)
-	// - Integration tests: WebSocketClient.health-regeneration.integration.test.ts
-}
-
-func TestGameServerHealthRegeneration_MultiplePlayersSimultaneously(t *testing.T) {
-	t.Skip("Skipped - requires combat system integration. See Story 2.7.1B")
-}
-
-func TestGameServerHealthRegeneration_DamageInterruptsRegen(t *testing.T) {
-	t.Skip("Skipped - requires combat system integration. See Story 2.7.1B")
-}
-
-func TestGameServerHealthRegeneration_StopsAtMaxHealth(t *testing.T) {
-	t.Skip("Skipped - requires combat system integration. See Story 2.7.1B")
-}
-
-func TestGameServerHealthRegeneration_PersistsAcrossTicks(t *testing.T) {
-	t.Skip("Skipped - requires combat system integration. See Story 2.7.1B")
-}
