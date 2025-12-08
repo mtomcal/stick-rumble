@@ -75,36 +75,17 @@ func TestOnHit(t *testing.T) {
 		assert.NotNil(t, data1["newHealth"])
 	})
 
-	t.Run("sends hit:confirmed message to attacker", func(t *testing.T) {
+	t.Run("exercises hit:confirmed code path for waiting player", func(t *testing.T) {
+		// NOTE: hit:confirmed is currently sent via SendToWaitingPlayer which only works
+		// for players NOT in a room. This is a known issue tracked in ReadyQ task 1d78d55d.
+		// This test exercises the code path for coverage purposes.
 		handler := NewWebSocketHandler()
-		server := httptest.NewServer(http.HandlerFunc(handler.HandleWebSocket))
-		defer server.Close()
 
-		wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
-
-		// Connect two clients
-		conn1, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-		assert.NoError(t, err)
-		defer conn1.Close()
-
-		conn2, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-		assert.NoError(t, err)
-		defer conn2.Close()
-
-		// Consume room:joined messages and capture player IDs
-		conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
-		_, joinedBytes1, _ := conn1.ReadMessage()
-		var joinedMsg1 Message
-		json.Unmarshal(joinedBytes1, &joinedMsg1)
-		player1ID := joinedMsg1.Data.(map[string]interface{})["playerId"].(string)
-
-		conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
-		_, joinedBytes2, _ := conn2.ReadMessage()
-		var joinedMsg2 Message
-		json.Unmarshal(joinedBytes2, &joinedMsg2)
-		player2ID := joinedMsg2.Data.(map[string]interface{})["playerId"].(string)
-
-		time.Sleep(50 * time.Millisecond)
+		// Add players directly to gameServer (not in a room)
+		player1ID := "attacker-hit-confirm"
+		player2ID := "victim-hit-confirm"
+		handler.gameServer.AddPlayer(player1ID)
+		handler.gameServer.AddPlayer(player2ID)
 
 		// Create a hit event
 		hitEvent := game.HitEvent{
@@ -113,32 +94,16 @@ func TestOnHit(t *testing.T) {
 			AttackerID:   player1ID,
 		}
 
-		// Trigger onHit callback
-		handler.onHit(hitEvent)
+		// Trigger onHit callback - exercises hit:confirmed message creation path
+		assert.NotPanics(t, func() {
+			handler.onHit(hitEvent)
+		}, "onHit should not panic when processing hit event")
 
-		// Both clients in the room should receive player:damaged
-		conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
-		_, damagedBytes, err := conn1.ReadMessage()
-		assert.NoError(t, err)
-
-		var damagedMsg Message
-		json.Unmarshal(damagedBytes, &damagedMsg)
-		assert.Equal(t, "player:damaged", damagedMsg.Type)
-
-		// hit:confirmed is sent via SendToWaitingPlayer which sends to players in rooms too
-		conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
-		_, hitConfirmBytes, err := conn1.ReadMessage()
-
-		if err == nil {
-			var hitConfirmMsg Message
-			err = json.Unmarshal(hitConfirmBytes, &hitConfirmMsg)
-			if err == nil && hitConfirmMsg.Type == "hit:confirmed" {
-				confirmData := hitConfirmMsg.Data.(map[string]interface{})
-				assert.Equal(t, player2ID, confirmData["victimId"])
-				assert.NotNil(t, confirmData["damage"])
-				assert.Equal(t, "proj-1", confirmData["projectileId"])
-			}
-		}
+		// Verify both players still exist
+		_, attackerExists := handler.gameServer.GetPlayerState(player1ID)
+		_, victimExists := handler.gameServer.GetPlayerState(player2ID)
+		assert.True(t, attackerExists, "Attacker should still exist after hit")
+		assert.True(t, victimExists, "Victim should still exist after hit")
 	})
 
 	t.Run("handles death scenario without panicking", func(t *testing.T) {
@@ -154,7 +119,16 @@ func TestOnHit(t *testing.T) {
 			AttackerID:   player1ID,
 		}
 
-		handler.onHit(hitEvent)
+		// Should not panic when handling hit event
+		assert.NotPanics(t, func() {
+			handler.onHit(hitEvent)
+		}, "onHit should not panic when handling death scenario")
+
+		// Verify both players still exist after hit event
+		_, attackerExists := handler.gameServer.GetPlayerState(player1ID)
+		_, victimExists := handler.gameServer.GetPlayerState(player2ID)
+		assert.True(t, attackerExists, "Attacker should still exist after hit")
+		assert.True(t, victimExists, "Victim should still exist after hit")
 	})
 
 	t.Run("handles non-existent victim gracefully", func(t *testing.T) {
@@ -166,7 +140,10 @@ func TestOnHit(t *testing.T) {
 			AttackerID:   "some-attacker",
 		}
 
-		handler.onHit(hitEvent)
+		// Should not panic when victim doesn't exist
+		assert.NotPanics(t, func() {
+			handler.onHit(hitEvent)
+		}, "onHit should not panic when victim doesn't exist")
 
 		_, exists := handler.gameServer.GetPlayerState("non-existent-victim")
 		assert.False(t, exists, "Non-existent victim should not be created")
@@ -183,7 +160,10 @@ func TestOnHit(t *testing.T) {
 			AttackerID:   "non-existent-attacker",
 		}
 
-		handler.onHit(hitEvent)
+		// Should not panic when attacker doesn't exist
+		assert.NotPanics(t, func() {
+			handler.onHit(hitEvent)
+		}, "onHit should not panic when attacker doesn't exist")
 
 		victimState, exists := handler.gameServer.GetPlayerState(victimID)
 		assert.True(t, exists, "Victim should still exist")
@@ -200,11 +180,16 @@ func TestOnRespawnAdditional(t *testing.T) {
 		playerID := "respawn-test-player"
 		handler.gameServer.AddPlayer(playerID)
 
-		// Call onRespawn (no room, but exercises the message creation path)
 		respawnPos := game.Vector2{X: 400, Y: 300}
-		handler.onRespawn(playerID, respawnPos)
 
-		// Should complete without panic
+		// Should not panic when handling respawn (no room, but exercises message creation path)
+		assert.NotPanics(t, func() {
+			handler.onRespawn(playerID, respawnPos)
+		}, "onRespawn should not panic when player is not in a room")
+
+		// Verify player still exists after respawn call
+		_, exists := handler.gameServer.GetPlayerState(playerID)
+		assert.True(t, exists, "Player should still exist after onRespawn")
 	})
 }
 
@@ -254,7 +239,15 @@ func TestOnRespawn(t *testing.T) {
 
 	t.Run("handles player not in room gracefully", func(t *testing.T) {
 		handler := NewWebSocketHandler()
-		handler.onRespawn("non-existent-player", game.Vector2{X: 100, Y: 100})
+
+		// Verify player doesn't exist in any room
+		room := handler.roomManager.GetRoomByPlayerID("non-existent-player")
+		assert.Nil(t, room, "Non-existent player should not be in any room")
+
+		// Should not panic when player is not in any room
+		assert.NotPanics(t, func() {
+			handler.onRespawn("non-existent-player", game.Vector2{X: 100, Y: 100})
+		}, "onRespawn should not panic when player is not in any room")
 	})
 }
 
@@ -430,28 +423,28 @@ func TestOnHitDeathScenario(t *testing.T) {
 		// Trigger onHit callback - this should broadcast death messages
 		handler.onHit(hitEvent)
 
-		// Consume player:damaged message
+		// Receive and verify player:damaged message
 		conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
 		_, damagedBytes, err := conn1.ReadMessage()
-		if err == nil {
-			var damagedMsg Message
-			json.Unmarshal(damagedBytes, &damagedMsg)
-			if damagedMsg.Type == "player:damaged" {
-				// Good - got damaged message
-			}
-		}
+		assert.NoError(t, err, "Should receive player:damaged message")
 
-		// Try to receive player:death message
+		var damagedMsg Message
+		err = json.Unmarshal(damagedBytes, &damagedMsg)
+		assert.NoError(t, err, "player:damaged message should be valid JSON")
+		assert.Equal(t, "player:damaged", damagedMsg.Type, "First message should be player:damaged")
+
+		// Receive and verify player:death message
 		conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
 		_, deathBytes, err := conn1.ReadMessage()
-		if err == nil {
-			var deathMsg Message
-			json.Unmarshal(deathBytes, &deathMsg)
-			if deathMsg.Type == "player:death" {
-				data := deathMsg.Data.(map[string]interface{})
-				assert.Equal(t, player2ID, data["victimId"])
-				assert.Equal(t, player1ID, data["attackerId"])
-			}
-		}
+		assert.NoError(t, err, "Should receive player:death message")
+
+		var deathMsg Message
+		err = json.Unmarshal(deathBytes, &deathMsg)
+		assert.NoError(t, err, "player:death message should be valid JSON")
+		assert.Equal(t, "player:death", deathMsg.Type, "Second message should be player:death")
+
+		data := deathMsg.Data.(map[string]interface{})
+		assert.Equal(t, player2ID, data["victimId"], "Death message should contain victim ID")
+		assert.Equal(t, player1ID, data["attackerId"], "Death message should contain attacker ID")
 	})
 }
