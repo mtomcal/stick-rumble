@@ -1038,3 +1038,75 @@ func TestPlayerState_Snapshot_IncludesRegenerationFields(t *testing.T) {
 		t.Error("Snapshot should show regenerating state")
 	}
 }
+
+// Bug fix: Test that new players don't immediately regenerate
+func TestPlayerState_NewPlayer_NoRegenerationInitially(t *testing.T) {
+	player := NewPlayerState("test-player")
+
+	// New player at full health should not be able to regenerate
+	now := time.Now()
+	canRegen := player.CanRegenerate(now)
+
+	if canRegen {
+		t.Error("New player at full health should not be able to regenerate immediately")
+	}
+
+	// Even after 10 seconds, should not regenerate (at full health)
+	canRegen = player.CanRegenerate(now.Add(10 * time.Second))
+	if canRegen {
+		t.Error("New player at full health should not be able to regenerate even after delay")
+	}
+}
+
+// Bug fix: Test that players at full health never regenerate regardless of lastDamageTime
+func TestPlayerState_FullHealth_NeverRegenerates(t *testing.T) {
+	player := NewPlayerState("test-player")
+
+	// Verify player is at full health
+	if player.Health != PlayerMaxHealth {
+		t.Fatalf("Expected full health (%d), got %d", PlayerMaxHealth, player.Health)
+	}
+
+	// Test at various time offsets
+	baseTime := time.Now()
+	testTimes := []time.Duration{
+		0 * time.Second,
+		5 * time.Second,
+		10 * time.Second,
+		100 * time.Second,
+	}
+
+	for _, offset := range testTimes {
+		testTime := baseTime.Add(offset)
+		canRegen := player.CanRegenerate(testTime)
+		if canRegen {
+			t.Errorf("Player at full health should not regenerate at time offset %v", offset)
+		}
+
+		// Also verify UpdateRegenerationState sets flag correctly
+		player.UpdateRegenerationState(testTime)
+		if player.IsRegenerating() {
+			t.Errorf("IsRegenerating should be false at full health (time offset %v)", offset)
+		}
+	}
+}
+
+// Bug fix: Test that lastDamageTime is properly initialized
+func TestPlayerState_LastDamageTime_Initialized(t *testing.T) {
+	player := NewPlayerState("test-player")
+
+	lastDamageTime := player.GetLastDamageTime()
+
+	// lastDamageTime should be initialized to a recent time, not zero time
+	// Zero time is January 1, year 1, 00:00:00 UTC
+	zeroTime := time.Time{}
+	if lastDamageTime == zeroTime {
+		t.Error("lastDamageTime should be initialized, not zero value")
+	}
+
+	// Should be within the last second (recently initialized)
+	timeSinceInit := time.Since(lastDamageTime)
+	if timeSinceInit < 0 || timeSinceInit > 2*time.Second {
+		t.Errorf("lastDamageTime should be initialized to recent time, got time since init: %v", timeSinceInit)
+	}
+}
