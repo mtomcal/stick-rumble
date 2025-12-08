@@ -16,6 +16,8 @@ export interface PlayerState {
   };
   aimAngle?: number; // Aim angle in radians (optional for backward compatibility)
   deathTime?: number; // Timestamp when player died (ms since epoch), undefined if alive
+  health?: number; // Current health (0-100)
+  isRegenerating?: boolean; // Whether health is currently regenerating
 }
 
 // Length of the aim indicator line in pixels

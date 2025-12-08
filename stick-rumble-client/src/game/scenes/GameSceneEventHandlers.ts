@@ -78,6 +78,12 @@ export class GameSceneEventHandlers {
               localPlayer.position.x,
               localPlayer.position.y
             );
+
+            // Update health bar from server state (including regeneration)
+            if (localPlayer.health !== undefined) {
+              this.localPlayerHealth = localPlayer.health;
+              this.getHealthBarUI().updateHealth(this.localPlayerHealth, 100, localPlayer.isRegenerating ?? false);
+            }
           }
         }
 
@@ -94,7 +100,7 @@ export class GameSceneEventHandlers {
         this.playerManager.setLocalPlayerId(messageData.playerId);
         // Initialize health bar to full health on join
         this.localPlayerHealth = 100;
-        this.getHealthBarUI().updateHealth(this.localPlayerHealth, 100);
+        this.getHealthBarUI().updateHealth(this.localPlayerHealth, 100, false);
       }
     });
 
@@ -150,7 +156,7 @@ export class GameSceneEventHandlers {
       // Update health bar if local player was damaged
       if (damageData.victimId === this.playerManager.getLocalPlayerId()) {
         this.localPlayerHealth = damageData.newHealth;
-        this.getHealthBarUI().updateHealth(this.localPlayerHealth, 100);
+        this.getHealthBarUI().updateHealth(this.localPlayerHealth, 100, false); // Not regenerating when damaged
         this.ui.showDamageFlash();
       }
 
@@ -210,7 +216,7 @@ export class GameSceneEventHandlers {
       // If local player respawned, exit spectator mode and reset health
       if (respawnData.playerId === this.playerManager.getLocalPlayerId()) {
         this.localPlayerHealth = respawnData.health;
-        this.getHealthBarUI().updateHealth(this.localPlayerHealth, 100);
+        this.getHealthBarUI().updateHealth(this.localPlayerHealth, 100, false); // Not regenerating on respawn
         this.spectator.exitSpectatorMode();
 
         // Camera follow will be restarted automatically on next player:move

@@ -13,6 +13,8 @@ export const createMockScene = () => {
     setTint: vi.fn().mockReturnThis(),
     clearTint: vi.fn().mockReturnThis(),
     setFillStyle: vi.fn().mockReturnThis(),
+    setDisplaySize: vi.fn().mockReturnThis(),
+    fillColor: 0x00ff00,
     destroy: vi.fn(),
   };
 
@@ -22,6 +24,7 @@ export const createMockScene = () => {
     setDepth: vi.fn().mockReturnThis(),
     setText: vi.fn().mockReturnThis(),
     setColor: vi.fn().mockReturnThis(),
+    setPosition: vi.fn().mockReturnThis(),
     destroy: vi.fn().mockReturnThis(),
   };
 
