@@ -796,24 +796,27 @@ func TestPlayerState_RegenerationRate_SmallDeltaTime(t *testing.T) {
 
 	// Apply regeneration with very small deltaTime (simulating 60Hz tick rate)
 	// At 60Hz, deltaTime ≈ 0.01667 seconds
-	// 10 HP/s * 0.01667s = 0.1667 HP (rounds to 0, but minimum is 1 HP)
+	// 10 HP/s * 0.01667s = 0.1667 HP per tick
+	// Uses accumulator to track fractional HP across ticks
 	deltaTime := 1.0 / 60.0 // 0.01667 seconds (60Hz tick rate)
 	player.ApplyRegeneration(now, deltaTime)
 
-	// Should regenerate at least 1 HP even with small deltaTime
-	if player.Health != 51 {
-		t.Errorf("Health after small deltaTime regeneration = %v, want 51 (50 + 1 minimum)", player.Health)
+	// After first tick: accumulator = 0.1667, health still 50 (no full HP yet)
+	if player.Health != 50 {
+		t.Errorf("Health after 1 tick = %v, want 50 (accumulating 0.1667 HP)", player.Health)
 	}
 
-	// Apply regeneration multiple times to verify consistent 1 HP per tick
-	for i := 0; i < 9; i++ {
+	// Apply regeneration for 60 ticks total (1 second of game time)
+	// 60 ticks * 0.1667 HP/tick = 10 HP (matches the 10 HP/s rate)
+	for i := 0; i < 59; i++ {
 		now = now.Add(time.Duration(deltaTime * float64(time.Second)))
 		player.ApplyRegeneration(now, deltaTime)
 	}
 
-	// After 10 ticks at 60Hz, should have regenerated 10 HP (1 HP per tick)
-	if player.Health != 60 {
-		t.Errorf("Health after 10 ticks at 60Hz = %v, want 60 (50 + 10)", player.Health)
+	// After 60 ticks at 60Hz (1 second), should have regenerated ~10 HP
+	// Allow ±1 HP tolerance due to floating point accumulation
+	if player.Health < 59 || player.Health > 61 {
+		t.Errorf("Health after 60 ticks at 60Hz = %v, want 59-61 (50 + ~10 HP over 1 second)", player.Health)
 	}
 }
 
@@ -1108,5 +1111,115 @@ func TestPlayerState_LastDamageTime_Initialized(t *testing.T) {
 	timeSinceInit := time.Since(lastDamageTime)
 	if timeSinceInit < 0 || timeSinceInit > 2*time.Second {
 		t.Errorf("lastDamageTime should be initialized to recent time, got time since init: %v", timeSinceInit)
+	}
+}
+
+// Bug fix: Test that Respawn() properly resets regeneration accumulator and timer
+func TestPlayerState_Respawn_ResetsRegenerationState(t *testing.T) {
+	player := NewPlayerState("test-player")
+
+	// Damage player to trigger regeneration
+	player.TakeDamage(50)
+
+	if player.Health != 50 {
+		t.Fatalf("Expected health to be 50 after damage, got %d", player.Health)
+	}
+
+	// Simulate time passing and start regeneration
+	now := time.Now().Add(6 * time.Second)
+
+	// Apply partial regeneration to accumulate fractional HP
+	// At 10 HP/s with deltaTime 0.07s, we accumulate 0.7 HP
+	deltaTime := 0.07
+	player.ApplyRegeneration(now, deltaTime)
+
+	// Verify accumulator has fractional value (not exposed, but we can infer from next regen)
+	// Health should still be 50 (0.7 HP accumulated but not applied yet)
+	if player.Health != 50 {
+		t.Errorf("Health should still be 50 with fractional accumulator, got %d", player.Health)
+	}
+
+	// Kill the player
+	player.TakeDamage(50)
+	player.MarkDead()
+
+	if player.Health != 0 {
+		t.Fatalf("Player should have 0 HP after death, got %d", player.Health)
+	}
+
+	// Respawn the player
+	spawnPos := Vector2{X: 500, Y: 300}
+	player.Respawn(spawnPos)
+
+	// Verify respawn reset all regeneration state
+	if player.Health != PlayerMaxHealth {
+		t.Errorf("Health should be max after respawn, got %d", player.Health)
+	}
+
+	// Try to regenerate immediately (should not work - 5 second delay)
+	nowAfterRespawn := time.Now()
+	canRegen := player.CanRegenerate(nowAfterRespawn)
+	if canRegen {
+		t.Error("Should not be able to regenerate immediately after respawn (5s delay required)")
+	}
+
+	// Damage player to test regeneration (can't test at full health)
+	player.TakeDamage(50)
+
+	// Wait 5+ seconds for delay
+	time.Sleep(100 * time.Millisecond) // Small delay to ensure time passes
+	testTime := time.Now().Add(6 * time.Second)
+
+	// Apply one tick of regeneration
+	player.ApplyRegeneration(testTime, 0.07)
+
+	// Health should still be 50 (0.7 HP accumulated, not yet applied)
+	// If accumulator wasn't reset, we'd see 51 HP here (old 0.7 + new 0.7 = 1.4 HP applied)
+	if player.Health != 50 {
+		t.Errorf("After respawn and 1 tick, health should be 50 (fractional), got %d (accumulator may not have been reset)", player.Health)
+	}
+
+	// Apply more ticks to reach 1.0 HP threshold
+	// Need ~3 more ticks at 0.07 deltaTime to reach 0.7 + (3 * 0.7) = 2.8 HP
+	for i := 0; i < 4; i++ {
+		testTime = testTime.Add(70 * time.Millisecond)
+		player.ApplyRegeneration(testTime, 0.07)
+	}
+
+	// After 5 ticks at 0.07s each (0.35s total), we should have 3.5 HP accumulated
+	// This means 3 HP applied, health should be 53
+	if player.Health < 52 || player.Health > 54 {
+		t.Errorf("After 5 ticks of 0.7 HP each, expected 52-54 HP (50 + 3-4 HP), got %d", player.Health)
+	}
+}
+
+// Test that lastDamageTime is reset on respawn
+func TestPlayerState_Respawn_ResetsLastDamageTime(t *testing.T) {
+	player := NewPlayerState("test-player")
+
+	// Record initial lastDamageTime
+	initialTime := player.GetLastDamageTime()
+
+	// Kill player
+	player.TakeDamage(100)
+	player.MarkDead()
+
+	// Wait 1 second before respawn
+	time.Sleep(1 * time.Second)
+
+	// Respawn
+	player.Respawn(Vector2{X: 500, Y: 300})
+
+	// Get new lastDamageTime
+	respawnTime := player.GetLastDamageTime()
+
+	// lastDamageTime should be reset to a recent time (within last 2 seconds)
+	if !respawnTime.After(initialTime) {
+		t.Error("lastDamageTime should be updated on respawn to a more recent time")
+	}
+
+	timeSinceRespawn := time.Since(respawnTime)
+	if timeSinceRespawn < 0 || timeSinceRespawn > 2*time.Second {
+		t.Errorf("lastDamageTime should be reset to recent time on respawn, got %v ago", timeSinceRespawn)
 	}
 }
