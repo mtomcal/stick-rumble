@@ -33,6 +33,7 @@ export class InputManager {
   private playerY: number = 540; // Default to center of arena (1080/2)
   private aimAngle: number = 0;
   private lastSentAimAngle: number = 0;
+  private isEnabled: boolean = true;
 
   constructor(scene: Phaser.Scene, wsClient: WebSocketClient) {
     this.scene = scene;
@@ -68,7 +69,7 @@ export class InputManager {
    * Update input state (call every frame)
    */
   update(): void {
-    if (!this.keys) {
+    if (!this.keys || !this.isEnabled) {
       return;
     }
 
@@ -169,6 +170,20 @@ export class InputManager {
     // Update last sent state
     this.lastSentState = { ...this.currentState };
     this.lastSentAimAngle = this.currentState.aimAngle;
+  }
+
+  /**
+   * Disable input handling (e.g., when match ends)
+   */
+  disable(): void {
+    this.isEnabled = false;
+  }
+
+  /**
+   * Enable input handling
+   */
+  enable(): void {
+    this.isEnabled = true;
   }
 
   /**

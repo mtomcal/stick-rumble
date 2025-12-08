@@ -9,6 +9,13 @@ import (
 
 // handleInputState processes player input state updates
 func (h *WebSocketHandler) handleInputState(playerID string, data any) {
+	// Check if player's match has ended - reject input if so
+	room := h.roomManager.GetRoomByPlayerID(playerID)
+	if room != nil && room.Match.IsEnded() {
+		// Silently ignore input after match ends (AC: "server stops accepting input:state messages")
+		return
+	}
+
 	// Convert data to InputState
 	dataMap, ok := data.(map[string]interface{})
 	if !ok {
@@ -193,7 +200,8 @@ func (h *WebSocketHandler) onHit(hit game.HitEvent) {
 			if room.Match.CheckKillTarget() {
 				room.Match.EndMatch("kill_target")
 				log.Printf("Match ended in room %s: kill target reached", room.ID)
-				// TODO Story 2.6.2: Broadcast match:ended message
+				// Broadcast match:ended message to all players
+				h.broadcastMatchEnded(room, h.gameServer.GetWorld())
 			}
 		}
 	}

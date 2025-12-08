@@ -9,6 +9,11 @@ export const createMockScene = () => {
     setScrollFactor: vi.fn().mockReturnThis(),
     setDepth: vi.fn().mockReturnThis(),
     setAlpha: vi.fn().mockReturnThis(),
+    setPosition: vi.fn().mockReturnThis(),
+    setTint: vi.fn().mockReturnThis(),
+    clearTint: vi.fn().mockReturnThis(),
+    setFillStyle: vi.fn().mockReturnThis(),
+    destroy: vi.fn(),
   };
 
   const mockText = {

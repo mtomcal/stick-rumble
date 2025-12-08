@@ -250,3 +250,182 @@ func TestIsEnded(t *testing.T) {
 		assert.True(t, match.IsEnded())
 	})
 }
+
+// TestDetermineWinners tests winner determination logic
+func TestDetermineWinners(t *testing.T) {
+	t.Run("single winner with most kills", func(t *testing.T) {
+		match := NewMatch()
+		match.AddKill("player-1")
+		match.AddKill("player-1")
+		match.AddKill("player-1")
+		match.AddKill("player-2")
+		match.AddKill("player-2")
+		match.AddKill("player-3")
+
+		winners := match.DetermineWinners()
+
+		assert.Equal(t, []string{"player-1"}, winners)
+	})
+
+	t.Run("two-way tie returns both winners", func(t *testing.T) {
+		match := NewMatch()
+		match.AddKill("player-1")
+		match.AddKill("player-1")
+		match.AddKill("player-1")
+		match.AddKill("player-2")
+		match.AddKill("player-2")
+		match.AddKill("player-2")
+		match.AddKill("player-3")
+
+		winners := match.DetermineWinners()
+
+		assert.Len(t, winners, 2)
+		assert.Contains(t, winners, "player-1")
+		assert.Contains(t, winners, "player-2")
+	})
+
+	t.Run("three-way tie returns all three winners", func(t *testing.T) {
+		match := NewMatch()
+		match.AddKill("player-1")
+		match.AddKill("player-1")
+		match.AddKill("player-2")
+		match.AddKill("player-2")
+		match.AddKill("player-3")
+		match.AddKill("player-3")
+
+		winners := match.DetermineWinners()
+
+		assert.Len(t, winners, 3)
+		assert.Contains(t, winners, "player-1")
+		assert.Contains(t, winners, "player-2")
+		assert.Contains(t, winners, "player-3")
+	})
+
+	t.Run("all players tied at zero kills", func(t *testing.T) {
+		match := NewMatch()
+		// Simulate players exist but have no kills
+		match.PlayerKills["player-1"] = 0
+		match.PlayerKills["player-2"] = 0
+		match.PlayerKills["player-3"] = 0
+
+		winners := match.DetermineWinners()
+
+		assert.Len(t, winners, 3)
+		assert.Contains(t, winners, "player-1")
+		assert.Contains(t, winners, "player-2")
+		assert.Contains(t, winners, "player-3")
+	})
+
+	t.Run("single player with kills wins", func(t *testing.T) {
+		match := NewMatch()
+		match.AddKill("player-1")
+
+		winners := match.DetermineWinners()
+
+		assert.Equal(t, []string{"player-1"}, winners)
+	})
+
+	t.Run("returns empty when no players", func(t *testing.T) {
+		match := NewMatch()
+
+		winners := match.DetermineWinners()
+
+		assert.Empty(t, winners)
+	})
+
+	t.Run("player with 20 kills wins via kill target", func(t *testing.T) {
+		match := NewMatch()
+		for i := 0; i < 20; i++ {
+			match.AddKill("player-1")
+		}
+		match.AddKill("player-2")
+		match.AddKill("player-2")
+
+		winners := match.DetermineWinners()
+
+		assert.Equal(t, []string{"player-1"}, winners)
+	})
+}
+
+// TestGetFinalScores tests collecting final scores from match
+func TestGetFinalScores(t *testing.T) {
+	t.Run("collects scores for all players", func(t *testing.T) {
+		// Create a world with players
+		world := NewWorld()
+		player1 := world.AddPlayer("player-1")
+		player2 := world.AddPlayer("player-2")
+		player3 := world.AddPlayer("player-3")
+
+		// Update player stats
+		player1.IncrementKills()
+		player1.IncrementKills()
+		player1.IncrementKills()
+		player1.AddXP(150)
+
+		player2.IncrementKills()
+		player2.IncrementKills()
+		player2.IncrementDeaths()
+		player2.AddXP(100)
+
+		player3.IncrementKills()
+		player3.IncrementDeaths()
+		player3.IncrementDeaths()
+		player3.AddXP(50)
+
+		// Create match and track kills
+		match := NewMatch()
+		match.AddKill("player-1")
+		match.AddKill("player-1")
+		match.AddKill("player-1")
+		match.AddKill("player-2")
+		match.AddKill("player-2")
+		match.AddKill("player-3")
+
+		scores := match.GetFinalScores(world)
+
+		assert.Len(t, scores, 3)
+
+		// Verify player-1 score
+		score1 := findPlayerScore(scores, "player-1")
+		assert.NotNil(t, score1)
+		assert.Equal(t, "player-1", score1.PlayerID)
+		assert.Equal(t, 3, score1.Kills)
+		assert.Equal(t, 0, score1.Deaths)
+		assert.Equal(t, 150, score1.XP)
+
+		// Verify player-2 score
+		score2 := findPlayerScore(scores, "player-2")
+		assert.NotNil(t, score2)
+		assert.Equal(t, "player-2", score2.PlayerID)
+		assert.Equal(t, 2, score2.Kills)
+		assert.Equal(t, 1, score2.Deaths)
+		assert.Equal(t, 100, score2.XP)
+
+		// Verify player-3 score
+		score3 := findPlayerScore(scores, "player-3")
+		assert.NotNil(t, score3)
+		assert.Equal(t, "player-3", score3.PlayerID)
+		assert.Equal(t, 1, score3.Kills)
+		assert.Equal(t, 2, score3.Deaths)
+		assert.Equal(t, 50, score3.XP)
+	})
+
+	t.Run("returns empty array when no players", func(t *testing.T) {
+		world := NewWorld()
+		match := NewMatch()
+
+		scores := match.GetFinalScores(world)
+
+		assert.Empty(t, scores)
+	})
+}
+
+// Helper function to find a player score by ID
+func findPlayerScore(scores []PlayerScore, playerID string) *PlayerScore {
+	for _, score := range scores {
+		if score.PlayerID == playerID {
+			return &score
+		}
+	}
+	return nil
+}

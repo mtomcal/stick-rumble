@@ -20,6 +20,14 @@ type MatchConfig struct {
 	TimeLimitSeconds int // Time limit in seconds (e.g., 420 = 7 minutes)
 }
 
+// PlayerScore represents a player's final score in a match
+type PlayerScore struct {
+	PlayerID string `json:"playerId"`
+	Kills    int    `json:"kills"`
+	Deaths   int    `json:"deaths"`
+	XP       int    `json:"xp"`
+}
+
 // Match represents a game match with win conditions and state tracking
 type Match struct {
 	Config      MatchConfig
@@ -132,4 +140,64 @@ func (m *Match) IsEnded() bool {
 	defer m.mu.RUnlock()
 
 	return m.State == MatchStateEnded
+}
+
+// DetermineWinners analyzes PlayerKills and returns player IDs with the highest kill count
+// Returns multiple IDs in case of a tie
+func (m *Match) DetermineWinners() []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	// Handle empty match
+	if len(m.PlayerKills) == 0 {
+		return []string{}
+	}
+
+	// Find the maximum kill count
+	maxKills := 0
+	for _, kills := range m.PlayerKills {
+		if kills > maxKills {
+			maxKills = kills
+		}
+	}
+
+	// Collect all players with the maximum kill count
+	winners := []string{}
+	for playerID, kills := range m.PlayerKills {
+		if kills == maxKills {
+			winners = append(winners, playerID)
+		}
+	}
+
+	return winners
+}
+
+// GetFinalScores collects final scores for all players in the match
+func (m *Match) GetFinalScores(world *World) []PlayerScore {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	scores := []PlayerScore{}
+
+	// Get all players from the world
+	world.mu.RLock()
+	defer world.mu.RUnlock()
+
+	for playerID := range m.PlayerKills {
+		player, exists := world.players[playerID]
+		if !exists {
+			continue
+		}
+
+		// Create score entry with player stats
+		score := PlayerScore{
+			PlayerID: playerID,
+			Kills:    player.Kills,
+			Deaths:   player.Deaths,
+			XP:       player.XP,
+		}
+		scores = append(scores, score)
+	}
+
+	return scores
 }

@@ -22,6 +22,7 @@ export class ShootingManager {
   private lastShotTime: number = 0;
   private fireCooldownMs: number;
   private aimAngle: number = 0;
+  private isEnabled: boolean = true;
 
   constructor(_scene: Phaser.Scene, wsClient: WebSocketClient) {
     this.wsClient = wsClient;
@@ -50,7 +51,7 @@ export class ShootingManager {
    * Returns true if shot was sent to server
    */
   shoot(): boolean {
-    if (!this.canShoot()) {
+    if (!this.isEnabled || !this.canShoot()) {
       return false;
     }
 
@@ -149,6 +150,20 @@ export class ShootingManager {
    */
   isReloading(): boolean {
     return this.weaponState.isReloading;
+  }
+
+  /**
+   * Disable shooting (e.g., when match ends)
+   */
+  disable(): void {
+    this.isEnabled = false;
+  }
+
+  /**
+   * Enable shooting
+   */
+  enable(): void {
+    this.isEnabled = true;
   }
 
   /**

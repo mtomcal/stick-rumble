@@ -92,6 +92,7 @@ describe('GameScene - UI', () => {
       const mockAmmoText = {
         setText: vi.fn(),
         setOrigin: vi.fn().mockReturnThis(),
+        setScrollFactor: vi.fn().mockReturnThis(),
       };
       let textCallCount = 0;
       mockSceneContext.add.text = vi.fn().mockImplementation(() => {
@@ -154,6 +155,7 @@ describe('GameScene - UI', () => {
       const mockAmmoText = {
         setText: vi.fn(),
         setOrigin: vi.fn().mockReturnThis(),
+        setScrollFactor: vi.fn().mockReturnThis(),
       };
       let textCallCount = 0;
       mockSceneContext.add.text = vi.fn().mockImplementation(() => {

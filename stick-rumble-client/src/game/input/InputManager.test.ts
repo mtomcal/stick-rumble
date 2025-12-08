@@ -352,6 +352,78 @@ describe('InputManager', () => {
     });
   });
 
+  describe('disable/enable', () => {
+    beforeEach(() => {
+      inputManager.init();
+    });
+
+    it('should disable input handling when disable() is called', () => {
+      mockScene.mockKeys.W.isDown = true;
+
+      // First update should send (enabled by default)
+      inputManager.update();
+      expect(mockWsClient.send).toHaveBeenCalledTimes(1);
+
+      // Disable input
+      inputManager.disable();
+
+      // Release W and press D
+      mockScene.mockKeys.W.isDown = false;
+      mockScene.mockKeys.D.isDown = true;
+
+      // Update should NOT send when disabled
+      inputManager.update();
+      expect(mockWsClient.send).toHaveBeenCalledTimes(1); // Still 1
+    });
+
+    it('should enable input handling when enable() is called', () => {
+      // Disable first
+      inputManager.disable();
+
+      mockScene.mockKeys.W.isDown = true;
+      inputManager.update();
+      expect(mockWsClient.send).not.toHaveBeenCalled();
+
+      // Enable input
+      inputManager.enable();
+
+      // Now update should send
+      inputManager.update();
+      expect(mockWsClient.send).toHaveBeenCalledWith({
+        type: 'input:state',
+        timestamp: expect.any(Number),
+        data: {
+          up: true,
+          down: false,
+          left: false,
+          right: false,
+          aimAngle: expect.any(Number),
+        },
+      });
+    });
+
+    it('should be enabled by default', () => {
+      mockScene.mockKeys.W.isDown = true;
+      inputManager.update();
+      expect(mockWsClient.send).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not send input when disabled even with state changes', () => {
+      inputManager.disable();
+
+      // Try various state changes
+      mockScene.mockKeys.W.isDown = true;
+      inputManager.update();
+      mockScene.mockKeys.A.isDown = true;
+      inputManager.update();
+      mockScene.mockKeys.W.isDown = false;
+      inputManager.update();
+
+      // Should never send
+      expect(mockWsClient.send).not.toHaveBeenCalled();
+    });
+  });
+
   describe('aim angle', () => {
     beforeEach(() => {
       inputManager.init();
