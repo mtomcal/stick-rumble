@@ -312,7 +312,7 @@ So that the multiplayer foundation is proven to work.
 
 **FRs Covered:** FR2 (movement/aim), FR3 (shooting), FR7 (respawn), FR10 (deathmatch), FR12 (server authority), FR16 (performance), FR17 (browser access)
 
-**Epic Status:** 🟢 IN PROGRESS (6/10 stories complete, ~60% done)
+**Epic Status:** 🟢 IN PROGRESS (9/13 stories complete, ~69% done)
 
 ---
 
@@ -330,15 +330,26 @@ So that the multiplayer foundation is proven to work.
   - Includes acceptance testing with Playwright browser automation
   - Includes client-side prediction bug fix for aim indicators
 - ✅ **Story 2.6.1**: Match Timer and Kill Target Tracking (91.8% server coverage)
+- ✅ **Story 2.6.2**: Match End Detection and Winner Determination (97.2% client, 91.5% server coverage)
+  - Includes winner determination with tie handling
+  - Includes input freeze mechanism on match end
+  - Includes comprehensive match:ended message broadcasting
+
+**Bug Fixes Completed:**
+- ✅ **BUG**: Respawn and UI Rendering Issues (431c9ba6) - 5 critical bugs fixed, 93.05% coverage
+- ✅ **BUG**: NaN values in player movement (9094ee09) - JSON marshaling errors resolved
+- ✅ **BUG**: hit:confirmed message not sent to attackers in rooms (1d78d55d)
+
+**Technical Debt Completed:**
+- ✅ **TECH-DEBT**: Network package test coverage >90% (776e9f83) - achieved 91.8%
+- ✅ **TECH-DEBT**: Client test coverage >90% (b2b8e38f) - achieved 97.2% stmt, 90.54% branch
+- ✅ **TECH-DEBT**: Server network package coverage improvement (e144f364) - 89.9% to 91.5%
+- ✅ **TECH-DEBT**: PlayerScore documentation fix (bb162068)
 
 **Remaining Stories:**
-- 🔵 **Story 2.6.2**: Match End Detection and Winner Determination (NEXT - ready to start)
-- ⏸️ **Story 2.6.3**: Match End Screen and Lobby Return (blocked by 2.6.2)
-- 🔵 **Story 2.7.1**: Server-Side Health Regeneration (NEXT - ready to start)
+- 🔵 **Story 2.6.3**: Match End Screen and Lobby Return (READY - database requirements moved to Epic 5)
+- 🔵 **Story 2.7.1**: Server-Side Health Regeneration (READY - unblocked, parallel to 2.6.3)
 - ⏸️ **Story 2.7.2**: Client-Side Regeneration Feedback (blocked by 2.7.1)
-
-**Technical Debt:**
-- 🔴 **TECH-DEBT**: Client test coverage needs increase to 90% (currently ~80%)
 
 **Deferred Enhancements:**
 - 📋 **Story 2.4.1**: Lag Compensation for Hit Detection (deferred to Epic 4, Story 4.5)
@@ -361,8 +372,9 @@ So that the multiplayer foundation is proven to work.
 - **Acceptance testing with real browsers catches issues unit tests miss**: Playwright MCP testing revealed visual feedback bugs that passed all unit/integration tests. Browser automation now recommended for story completion validation.
 - **Smaller stories improve agent success rate**: Breaking Story 2.6 (6-8 systems) into 3 sub-stories and Story 2.7 (4 systems) into 2 sub-stories creates more focused tasks that agents can complete in 1-3 hours.
 - **Enforce coverage thresholds early**: 90% coverage threshold now enforced for all metrics (statements, branches, functions, lines) on both client and server.
+- **Documentation sync is critical**: Story 2.6.2 was completed but epic documentation still showed it as "NEXT - ready to start", causing confusion. Must update epics.md progress summary when marking ReadyQ stories as done to prevent documentation drift.
 
-**Estimated Completion:** 4 more feature stories + 1 tech debt task to deliver fully playable deathmatch (Epic 2 goal achieved when Story 2.7.2 complete and client coverage at 90%).
+**Estimated Completion:** 3 more feature stories to deliver fully playable deathmatch (Epic 2 goal achieved when Story 2.7.2 complete). All test coverage thresholds already met (97.2% client, 91.5% server).
 
 ---
 
@@ -596,11 +608,11 @@ So that I can celebrate victory or learn from defeat.
 
 ---
 
-### Story 2.6.3: Implement Match End Screen and Lobby Return
+### Story 2.6.3: Implement Match End Screen (Display Only)
 
 As a player,
 I want to see detailed match results after the game ends,
-So that I can review my performance and play again quickly.
+So that I can review my performance and prepare for the next match.
 
 **Acceptance Criteria:**
 
@@ -611,11 +623,9 @@ So that I can review my performance and play again quickly.
 **And** all players are ranked by kills (descending order)
 **And** my XP earned is displayed with breakdown
 **And** XP calculation: `(kills * 100) + (win ? 100 : 0) + (topThree ? 50 : 0) + 50`
-**And** "Play Again" button is visible and clickable
-**And** 10-second countdown shows before auto-return to lobby
-**And** clicking "Play Again" immediately returns to lobby
-**And** match results are saved to database (kills, deaths, winner, timestamp)
-**And** after 10 seconds OR button click, all players return to lobby
+**And** "Play Again" button is visible with message "Lobby system coming in Epic 5"
+**And** 10-second countdown timer is displayed (UI only, no action on completion)
+**And** match end screen is dismissible by pressing ESC or clicking away
 
 **Prerequisites:** Story 2.6.2
 
@@ -623,10 +633,14 @@ So that I can review my performance and play again quickly.
 - Match end screen UI in React component (MatchEndScreen.tsx)
 - Rankings sorted by kills descending, then by deaths ascending
 - XP breakdown shows: base (50) + kills + win bonus + top 3 bonus
-- Database schema: matches table (id, timestamp, winnerId, mode, duration)
-- Database schema: match_participants table (matchId, playerId, kills, deaths, xp)
-- Lobby return: transition to lobby scene or disconnect/reconnect flow
-- Auto-return timer: 10 second countdown on match end screen
+- **No database persistence** - display only, data not saved (deferred to Story 6.5)
+- **No lobby return** - "Play Again" button shows placeholder message (deferred to Story 5.3)
+- Countdown timer is visual only - no automatic action when it reaches 0
+- ESC key or click outside modal dismisses the screen
+
+**Scope Boundaries:**
+- ✅ IN SCOPE: Display match results, XP calculation, rankings, countdown timer UI
+- ❌ OUT OF SCOPE: Database persistence (→ Story 6.5), Lobby functionality (→ Story 5.3), Matchmaking (→ Story 5.1)
 
 ---
 
@@ -1227,6 +1241,81 @@ So that I can test and tune netcode without needing poor connections.
 
 ---
 
+### Story 5.0: Database Infrastructure Setup (PostgreSQL + Redis)
+
+As a developer,
+I want database infrastructure configured with Docker Compose,
+So that Epic 5 and Epic 6 features can persist player data.
+
+**Acceptance Criteria:**
+
+**Given** I am setting up the development environment
+**When** I run `docker-compose up -d`
+**Then** PostgreSQL and Redis containers start successfully
+
+**And** PostgreSQL is accessible on localhost:5432
+**And** Redis is accessible on localhost:6379
+**And** database migrations run automatically on startup
+**And** health checks confirm both services are ready
+**And** connection pooling is configured for PostgreSQL
+**And** database schema versioning is in place (migrations tooling)
+
+**And** server connects to PostgreSQL and Redis on startup
+**And** server logs show successful database connections
+**And** graceful shutdown: server closes database connections cleanly
+
+**Prerequisites:** Story 4.6 (completes Epic 4)
+
+**Technical Notes:**
+
+**Docker Compose Configuration:**
+- `docker-compose.yml` in project root
+- PostgreSQL 15 container: `postgres:15-alpine`
+- Redis 7 container: `redis:7-alpine`
+- Volume mounts: `./db/data` for PostgreSQL persistence
+- Environment variables: `POSTGRES_DB=stickrumble`, `POSTGRES_USER=dev`, `POSTGRES_PASSWORD=devpass`
+- Health checks: `pg_isready` for PostgreSQL, `redis-cli ping` for Redis
+
+**Database Migrations:**
+- Use `golang-migrate/migrate` or similar migration tool
+- Migrations directory: `stick-rumble-server/migrations/`
+- Initial schema: `000001_initial_schema.up.sql` (empty, ready for Epic 6)
+- Migration command: `migrate -path ./migrations -database "postgres://..." up`
+- Run migrations in Docker entrypoint or server startup
+
+**Go Server Integration:**
+- PostgreSQL driver: `github.com/lib/pq`
+- Redis client: `github.com/go-redis/redis/v8`
+- Connection pooling: `sql.DB` with `SetMaxOpenConns(25)`, `SetMaxIdleConns(5)`
+- Server startup: connect to both databases, retry logic (max 5 attempts, 2s delay)
+- Graceful shutdown: `defer db.Close()`, `defer redisClient.Close()`
+
+**Environment Variables:**
+```
+DATABASE_URL=postgres://dev:devpass@localhost:5432/stickrumble?sslmode=disable
+REDIS_URL=redis://localhost:6379/0
+```
+
+**Testing:**
+- Integration test: verify PostgreSQL connection
+- Integration test: verify Redis connection
+- Unit test: connection retry logic
+- Docker Compose smoke test: `docker-compose up && make test-integration`
+
+**Quality Requirements:**
+- All tests pass with database containers running
+- Server starts successfully with database connections
+- Clean shutdown with no connection leaks
+- README.md updated with Docker Compose setup instructions
+
+**Estimated Effort:** 2-3 hours
+
+**Scope Boundaries:**
+- ✅ IN SCOPE: Docker setup, connection pooling, health checks, migration tooling
+- ❌ OUT OF SCOPE: Actual database schemas (defined in Epic 6 stories), production deployment config
+
+---
+
 ### Story 5.1: Implement Redis-Based Matchmaking Queue
 
 As a player,
@@ -1247,7 +1336,7 @@ So that I can find a match automatically.
 **And** server polls queue every 1 second looking for enough players (2-8)
 **And** when 2+ players available: server creates match and notifies players
 
-**Prerequisites:** Story 4.6
+**Prerequisites:** Story 5.0 (database infrastructure)
 
 **Technical Notes:**
 - Redis sorted set: `matchmaking:queue` with timestamp scores
@@ -1548,6 +1637,86 @@ So that I can track improvement and achievements.
 - UI: React component `ProfileStats.tsx` with stat cards and charts
 - Charts: use Chart.js or Recharts for visualizations
 - Leaderboard: Redis sorted set `leaderboard:kills` + PostgreSQL for detailed stats
+
+---
+
+### Story 6.4.1: Implement Match History Persistence
+
+As a player,
+I want my match results saved permanently,
+So that I can review past matches and track performance over time.
+
+**Acceptance Criteria:**
+
+**Given** a match ends
+**When** the server determines final results
+**Then** match data is saved to the database
+
+**And** database stores: match ID, timestamp, game mode, winner(s), duration
+**And** database stores: per-player stats (kills, deaths, XP earned, placement)
+**And** match results link to player profiles (foreign key: player_id)
+**And** players can view their last 20 matches in "Match History" tab
+**And** each match entry shows: date, mode, result (Win/Loss), kills/deaths, XP earned
+
+**And** match history is sorted by most recent first
+**And** clicking a match shows detailed breakdown: all players, final scores, timestamps
+
+**Prerequisites:** Story 6.4 (stats tracking)
+
+**Technical Notes:**
+
+**Database Schema:**
+```sql
+CREATE TABLE matches (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  game_mode VARCHAR(20) NOT NULL, -- 'ffa' or 'tdm'
+  winner_ids TEXT[] NOT NULL, -- array of player IDs (handles ties)
+  duration_seconds INTEGER NOT NULL,
+  kill_target INTEGER, -- 20 for FFA
+  time_limit_seconds INTEGER -- 420 for FFA
+);
+
+CREATE TABLE match_participants (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  match_id UUID NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
+  player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  kills INTEGER NOT NULL DEFAULT 0,
+  deaths INTEGER NOT NULL DEFAULT 0,
+  xp_earned INTEGER NOT NULL DEFAULT 0,
+  placement INTEGER, -- 1 = winner, 2-8 = rank by kills
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  UNIQUE(match_id, player_id)
+);
+
+CREATE INDEX idx_match_participants_player ON match_participants(player_id, created_at DESC);
+CREATE INDEX idx_matches_created_at ON matches(created_at DESC);
+```
+
+**Server Implementation:**
+- Save match: called in `EndMatch()` after determining winners (internal/game/match.go)
+- Insert match record: `INSERT INTO matches (...) VALUES (...) RETURNING id`
+- Insert participant records: batch insert for all players
+- Transaction: wrap both inserts in database transaction (atomic)
+- Error handling: log errors but don't block match end flow
+
+**Client UI:**
+- React component: `MatchHistory.tsx` in profile section
+- Fetch endpoint: `GET /api/players/{id}/matches?limit=20`
+- Display format: table with columns (Date, Mode, Result, K/D, XP)
+- Detail modal: click match row to see full scoreboard
+
+**Quality Requirements:**
+- Test coverage >90% for database save logic
+- Unit tests: verify match and participant records created correctly
+- Integration test: full match flow → database save → query results
+- Edge case tests: ties, single player, database connection failure
+
+**Estimated Effort:** 2-3 hours
+
+**Deferred from Epic 2:**
+- Original requirement in Story 2.6.3 moved here for proper database infrastructure
+- Epic 2 shows match results in UI only (no persistence)
 
 ---
 
