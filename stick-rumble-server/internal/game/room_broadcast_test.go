@@ -192,6 +192,138 @@ func TestSendToWaitingPlayerWithFullChannel(t *testing.T) {
 	assert.Equal(t, []byte("filling"), msg)
 }
 
+// TestSendToPlayer tests sending messages to any player (in room or waiting)
+func TestSendToPlayer(t *testing.T) {
+	t.Run("sends to player in room", func(t *testing.T) {
+		manager := NewRoomManager()
+
+		player1Chan := make(chan []byte, 10)
+		player2Chan := make(chan []byte, 10)
+		player1 := &Player{ID: "player1", SendChan: player1Chan}
+		player2 := &Player{ID: "player2", SendChan: player2Chan}
+
+		// Create a room with 2 players
+		manager.AddPlayer(player1)
+		manager.AddPlayer(player2)
+
+		// Clear room:joined messages
+		<-player1Chan
+		<-player2Chan
+
+		// Send message to player1 who is in the room
+		testMsg := []byte(`{"type":"hit:confirmed","data":"test"}`)
+		sent := manager.SendToPlayer("player1", testMsg)
+
+		assert.True(t, sent, "SendToPlayer should return true for player in room")
+
+		// Player1 should receive the message
+		select {
+		case msg := <-player1Chan:
+			assert.Equal(t, testMsg, msg)
+		case <-time.After(1 * time.Second):
+			t.Fatal("Player in room should have received the message")
+		}
+
+		// Player2 should NOT receive the message (targeted send)
+		select {
+		case msg := <-player2Chan:
+			t.Fatalf("Player2 should not receive message, but got: %s", msg)
+		default:
+			// Expected: no message for player2
+		}
+	})
+
+	t.Run("sends to waiting player", func(t *testing.T) {
+		manager := NewRoomManager()
+
+		playerChan := make(chan []byte, 10)
+		player := &Player{ID: "waiting-player", SendChan: playerChan}
+
+		// Add single player (will be waiting)
+		manager.AddPlayer(player)
+		assert.Len(t, manager.waitingPlayers, 1)
+
+		// Send message to waiting player
+		testMsg := []byte(`{"type":"test","data":"hello"}`)
+		sent := manager.SendToPlayer("waiting-player", testMsg)
+
+		assert.True(t, sent, "SendToPlayer should return true for waiting player")
+
+		// Player should receive the message
+		select {
+		case msg := <-playerChan:
+			assert.Equal(t, testMsg, msg)
+		case <-time.After(1 * time.Second):
+			t.Fatal("Waiting player should have received the message")
+		}
+	})
+
+	t.Run("returns false for non-existent player", func(t *testing.T) {
+		manager := NewRoomManager()
+
+		// Send message to non-existent player
+		testMsg := []byte(`{"type":"test","data":"hello"}`)
+		sent := manager.SendToPlayer("nonexistent", testMsg)
+
+		assert.False(t, sent, "SendToPlayer should return false for non-existent player")
+	})
+
+	t.Run("handles closed channel gracefully for room player", func(t *testing.T) {
+		manager := NewRoomManager()
+
+		player1Chan := make(chan []byte, 10)
+		player2Chan := make(chan []byte, 10)
+		player1 := &Player{ID: "player1", SendChan: player1Chan}
+		player2 := &Player{ID: "player2", SendChan: player2Chan}
+
+		// Create a room
+		manager.AddPlayer(player1)
+		manager.AddPlayer(player2)
+
+		// Clear room:joined messages
+		<-player1Chan
+		<-player2Chan
+
+		// Close player1's channel
+		close(player1Chan)
+
+		// Send should not panic
+		testMsg := []byte(`{"type":"test","data":"test"}`)
+		assert.NotPanics(t, func() {
+			manager.SendToPlayer("player1", testMsg)
+		}, "SendToPlayer should handle closed channel gracefully")
+	})
+
+	t.Run("handles full channel gracefully for room player", func(t *testing.T) {
+		manager := NewRoomManager()
+
+		// Create player with small buffer
+		player1Chan := make(chan []byte, 1)
+		player2Chan := make(chan []byte, 10)
+		player1 := &Player{ID: "player1", SendChan: player1Chan}
+		player2 := &Player{ID: "player2", SendChan: player2Chan}
+
+		// Create a room
+		manager.AddPlayer(player1)
+		manager.AddPlayer(player2)
+
+		// Clear room:joined message from player2
+		<-player2Chan
+
+		// Player1's channel has room:joined (1 msg), now fill it
+		// Channel is already full with room:joined message
+
+		// Send should not block
+		testMsg := []byte(`{"type":"test","data":"test"}`)
+		assert.NotPanics(t, func() {
+			manager.SendToPlayer("player1", testMsg)
+		}, "SendToPlayer should handle full channel gracefully")
+
+		// Channel should still only have the room:joined message
+		assert.Len(t, player1Chan, 1)
+	})
+}
+
 // TestBroadcastToAll tests broadcasting messages to all players (rooms and waiting)
 func TestBroadcastToAll(t *testing.T) {
 	t.Run("broadcasts to players in rooms", func(t *testing.T) {

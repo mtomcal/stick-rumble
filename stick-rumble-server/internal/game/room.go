@@ -305,6 +305,65 @@ func (rm *RoomManager) SendToWaitingPlayer(playerID string, msgBytes []byte) {
 	}
 }
 
+// SendToPlayer sends a message to any player (in room or waiting)
+// Returns true if player was found and message was queued, false otherwise
+func (rm *RoomManager) SendToPlayer(playerID string, msgBytes []byte) bool {
+	rm.mu.RLock()
+	defer rm.mu.RUnlock()
+
+	// First, check if player is in a room
+	roomID, inRoom := rm.playerToRoom[playerID]
+	if inRoom {
+		room, roomExists := rm.rooms[roomID]
+		if roomExists {
+			player := room.GetPlayer(playerID)
+			if player != nil {
+				// Use recover to handle closed channel panics gracefully
+				func() {
+					defer func() {
+						if rec := recover(); rec != nil {
+							log.Printf("Warning: Could not send message to player %s (channel closed)", playerID)
+						}
+					}()
+
+					select {
+					case player.SendChan <- msgBytes:
+						// Message sent successfully
+					default:
+						log.Printf("Warning: Could not send message to player %s (channel full)", playerID)
+					}
+				}()
+				return true
+			}
+		}
+	}
+
+	// Second, check waiting players
+	for _, player := range rm.waitingPlayers {
+		if player.ID == playerID {
+			// Use recover to handle closed channel panics gracefully
+			func() {
+				defer func() {
+					if rec := recover(); rec != nil {
+						log.Printf("Warning: Could not send message to waiting player %s (channel closed)", playerID)
+					}
+				}()
+
+				select {
+				case player.SendChan <- msgBytes:
+					// Message sent successfully
+				default:
+					log.Printf("Warning: Could not send message to waiting player %s (channel full)", playerID)
+				}
+			}()
+			return true
+		}
+	}
+
+	// Player not found
+	return false
+}
+
 // BroadcastToAll sends a message to all players (in rooms and waiting)
 func (rm *RoomManager) BroadcastToAll(msgBytes []byte) {
 	rm.mu.RLock()

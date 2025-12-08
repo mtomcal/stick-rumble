@@ -75,35 +75,94 @@ func TestOnHit(t *testing.T) {
 		assert.NotNil(t, data1["newHealth"])
 	})
 
-	t.Run("exercises hit:confirmed code path for waiting player", func(t *testing.T) {
-		// NOTE: hit:confirmed is currently sent via SendToWaitingPlayer which only works
-		// for players NOT in a room. This is a known issue tracked in ReadyQ task 1d78d55d.
-		// This test exercises the code path for coverage purposes.
+	t.Run("sends hit:confirmed message to attacker in room", func(t *testing.T) {
+		// This test verifies the fix for ReadyQ task 1d78d55d:
+		// hit:confirmed is now sent via SendToPlayer which works for players in rooms
 		handler := NewWebSocketHandler()
+		server := httptest.NewServer(http.HandlerFunc(handler.HandleWebSocket))
+		defer server.Close()
 
-		// Add players directly to gameServer (not in a room)
-		player1ID := "attacker-hit-confirm"
-		player2ID := "victim-hit-confirm"
-		handler.gameServer.AddPlayer(player1ID)
-		handler.gameServer.AddPlayer(player2ID)
+		wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
 
-		// Create a hit event
+		// Connect two clients to create a room
+		conn1, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+		assert.NoError(t, err)
+		defer conn1.Close()
+
+		conn2, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+		assert.NoError(t, err)
+		defer conn2.Close()
+
+		// Consume room:joined messages and capture player IDs
+		conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
+		_, joinedBytes1, _ := conn1.ReadMessage()
+		var joinedMsg1 Message
+		json.Unmarshal(joinedBytes1, &joinedMsg1)
+		player1ID := joinedMsg1.Data.(map[string]interface{})["playerId"].(string)
+
+		conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
+		_, joinedBytes2, _ := conn2.ReadMessage()
+		var joinedMsg2 Message
+		json.Unmarshal(joinedBytes2, &joinedMsg2)
+		player2ID := joinedMsg2.Data.(map[string]interface{})["playerId"].(string)
+
+		// Give time for room setup
+		time.Sleep(50 * time.Millisecond)
+
+		// Create a hit event where player1 is the attacker
 		hitEvent := game.HitEvent{
-			ProjectileID: "proj-1",
+			ProjectileID: "proj-hit-confirm",
 			VictimID:     player2ID,
 			AttackerID:   player1ID,
 		}
 
-		// Trigger onHit callback - exercises hit:confirmed message creation path
-		assert.NotPanics(t, func() {
-			handler.onHit(hitEvent)
-		}, "onHit should not panic when processing hit event")
+		// Trigger onHit callback
+		handler.onHit(hitEvent)
 
-		// Verify both players still exist
-		_, attackerExists := handler.gameServer.GetPlayerState(player1ID)
-		_, victimExists := handler.gameServer.GetPlayerState(player2ID)
-		assert.True(t, attackerExists, "Attacker should still exist after hit")
-		assert.True(t, victimExists, "Victim should still exist after hit")
+		// Attacker (conn1) should receive player:damaged (broadcast) and hit:confirmed (targeted)
+		// Read messages from conn1 - should get both player:damaged and hit:confirmed
+		receivedTypes := make(map[string]bool)
+		var hitConfirmedData map[string]interface{}
+
+		for i := 0; i < 2; i++ {
+			conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
+			_, msgBytes, err := conn1.ReadMessage()
+			assert.NoError(t, err, "Attacker should receive messages")
+
+			var msg Message
+			err = json.Unmarshal(msgBytes, &msg)
+			assert.NoError(t, err)
+			receivedTypes[msg.Type] = true
+
+			if msg.Type == "hit:confirmed" {
+				hitConfirmedData = msg.Data.(map[string]interface{})
+			}
+		}
+
+		// Verify attacker received both messages
+		assert.True(t, receivedTypes["player:damaged"], "Attacker should receive player:damaged broadcast")
+		assert.True(t, receivedTypes["hit:confirmed"], "Attacker should receive hit:confirmed message")
+
+		// Verify hit:confirmed data
+		assert.NotNil(t, hitConfirmedData, "hit:confirmed should have data")
+		assert.Equal(t, player2ID, hitConfirmedData["victimId"])
+		assert.Equal(t, "proj-hit-confirm", hitConfirmedData["projectileId"])
+		assert.NotNil(t, hitConfirmedData["damage"])
+
+		// Victim (conn2) should only receive player:damaged (broadcast), NOT hit:confirmed
+		conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
+		_, msgBytes2, err := conn2.ReadMessage()
+		assert.NoError(t, err, "Victim should receive player:damaged")
+
+		var msg2 Message
+		err = json.Unmarshal(msgBytes2, &msg2)
+		assert.NoError(t, err)
+		assert.Equal(t, "player:damaged", msg2.Type, "Victim should receive player:damaged")
+
+		// Verify victim does NOT receive hit:confirmed (short timeout)
+		conn2.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+		_, _, err = conn2.ReadMessage()
+		assert.Error(t, err, "Victim should NOT receive hit:confirmed (timeout expected)")
 	})
 
 	t.Run("handles death scenario without panicking", func(t *testing.T) {
@@ -423,28 +482,49 @@ func TestOnHitDeathScenario(t *testing.T) {
 		// Trigger onHit callback - this should broadcast death messages
 		handler.onHit(hitEvent)
 
-		// Receive and verify player:damaged message
-		conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
-		_, damagedBytes, err := conn1.ReadMessage()
-		assert.NoError(t, err, "Should receive player:damaged message")
+		// Attacker (conn1) receives: player:damaged, hit:confirmed, player:death, player:kill_credit
+		// Collect messages and verify expected types are present
+		expectedTypes := map[string]bool{
+			"player:damaged":    false,
+			"hit:confirmed":     false,
+			"player:death":      false,
+			"player:kill_credit": false,
+		}
 
-		var damagedMsg Message
-		err = json.Unmarshal(damagedBytes, &damagedMsg)
-		assert.NoError(t, err, "player:damaged message should be valid JSON")
-		assert.Equal(t, "player:damaged", damagedMsg.Type, "First message should be player:damaged")
+		var deathData map[string]interface{}
 
-		// Receive and verify player:death message
-		conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
-		_, deathBytes, err := conn1.ReadMessage()
-		assert.NoError(t, err, "Should receive player:death message")
+		// Read up to 4 messages
+		for i := 0; i < 4; i++ {
+			conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
+			_, msgBytes, err := conn1.ReadMessage()
+			if err != nil {
+				break
+			}
 
-		var deathMsg Message
-		err = json.Unmarshal(deathBytes, &deathMsg)
-		assert.NoError(t, err, "player:death message should be valid JSON")
-		assert.Equal(t, "player:death", deathMsg.Type, "Second message should be player:death")
+			var msg Message
+			err = json.Unmarshal(msgBytes, &msg)
+			assert.NoError(t, err)
 
-		data := deathMsg.Data.(map[string]interface{})
-		assert.Equal(t, player2ID, data["victimId"], "Death message should contain victim ID")
-		assert.Equal(t, player1ID, data["attackerId"], "Death message should contain attacker ID")
+			if _, expected := expectedTypes[msg.Type]; expected {
+				expectedTypes[msg.Type] = true
+			}
+
+			if msg.Type == "player:death" {
+				deathData = msg.Data.(map[string]interface{})
+			}
+		}
+
+		// Verify all expected messages were received
+		assert.True(t, expectedTypes["player:damaged"], "Should receive player:damaged message")
+		assert.True(t, expectedTypes["hit:confirmed"], "Should receive hit:confirmed message")
+		assert.True(t, expectedTypes["player:death"], "Should receive player:death message")
+		assert.True(t, expectedTypes["player:kill_credit"], "Should receive player:kill_credit message")
+
+		// Verify death message data
+		assert.NotNil(t, deathData, "Should have received player:death message data")
+		if deathData != nil {
+			assert.Equal(t, player2ID, deathData["victimId"], "Death message should contain victim ID")
+			assert.Equal(t, player1ID, deathData["attackerId"], "Death message should contain attacker ID")
+		}
 	})
 }

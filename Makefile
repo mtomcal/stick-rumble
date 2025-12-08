@@ -99,15 +99,15 @@ test-integration:
 	wait $$SERVER_PID 2>/dev/null || true; \
 	exit $$TEST_EXIT
 
-# Run tests with coverage
+# Run tests with coverage (enforces 90% threshold)
 test-coverage:
-	@echo "Running client tests with coverage..."
+	@echo "Running client tests with coverage (90% threshold)..."
 	cd stick-rumble-client && npm run test:coverage
 	@echo ""
-	@echo "Running server tests with coverage..."
-	cd stick-rumble-server && go test ./... -cover
+	@echo "Running server tests with coverage (90% threshold)..."
+	cd stick-rumble-server && ./scripts/check-coverage.sh 90
 	@echo ""
-	@echo "✓ Coverage reports generated"
+	@echo "✓ Coverage thresholds met (90% for all metrics)"
 
 # Run linters
 lint:
