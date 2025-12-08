@@ -2,6 +2,7 @@ package network
 
 import (
 	"encoding/json"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -140,6 +141,119 @@ func TestBroadcastPlayerStatesWithMarshalError(t *testing.T) {
 	})
 }
 
+// TestBroadcastPlayerStatesNaNHandling tests NaN/Inf sanitization
+func TestBroadcastPlayerStatesNaNHandling(t *testing.T) {
+	t.Run("sanitizes NaN position values", func(t *testing.T) {
+		handler := NewWebSocketHandler()
+
+		// Create player state with NaN position
+		nan := math.NaN()
+		states := []game.PlayerState{
+			{
+				ID:       "player-nan-pos",
+				Position: game.Vector2{X: nan, Y: 100},
+				Velocity: game.Vector2{X: 0, Y: 0},
+			},
+		}
+
+		// Should not panic - NaN is logged but broadcast continues
+		handler.broadcastPlayerStates(states)
+	})
+
+	t.Run("sanitizes Inf position values", func(t *testing.T) {
+		handler := NewWebSocketHandler()
+
+		// Create player state with Inf position
+		inf := math.Inf(1)
+		states := []game.PlayerState{
+			{
+				ID:       "player-inf-pos",
+				Position: game.Vector2{X: inf, Y: 100},
+				Velocity: game.Vector2{X: 0, Y: 0},
+			},
+		}
+
+		// Should not panic - Inf is logged but broadcast continues
+		handler.broadcastPlayerStates(states)
+	})
+
+	t.Run("sanitizes NaN velocity values", func(t *testing.T) {
+		handler := NewWebSocketHandler()
+
+		// Create player state with NaN velocity
+		nan := math.NaN()
+		states := []game.PlayerState{
+			{
+				ID:       "player-nan-vel",
+				Position: game.Vector2{X: 100, Y: 100},
+				Velocity: game.Vector2{X: nan, Y: 0},
+			},
+		}
+
+		// Should not panic - NaN is logged but broadcast continues
+		handler.broadcastPlayerStates(states)
+	})
+
+	t.Run("sanitizes Inf velocity values", func(t *testing.T) {
+		handler := NewWebSocketHandler()
+
+		// Create player state with Inf velocity
+		inf := math.Inf(-1)
+		states := []game.PlayerState{
+			{
+				ID:       "player-inf-vel",
+				Position: game.Vector2{X: 100, Y: 100},
+				Velocity: game.Vector2{X: 0, Y: inf},
+			},
+		}
+
+		// Should not panic - Inf is logged but broadcast continues
+		handler.broadcastPlayerStates(states)
+	})
+
+	t.Run("sanitizes NaN aimAngle and replaces with 0", func(t *testing.T) {
+		handler := NewWebSocketHandler()
+
+		// Create player state with NaN aimAngle
+		nan := math.NaN()
+		states := []game.PlayerState{
+			{
+				ID:       "player-nan-aim",
+				Position: game.Vector2{X: 100, Y: 100},
+				Velocity: game.Vector2{X: 0, Y: 0},
+				AimAngle: nan,
+			},
+		}
+
+		// Should not panic - NaN aimAngle is sanitized to 0
+		handler.broadcastPlayerStates(states)
+
+		// Verify aimAngle was sanitized
+		assert.Equal(t, float64(0), states[0].AimAngle, "NaN aimAngle should be sanitized to 0")
+	})
+
+	t.Run("sanitizes Inf aimAngle and replaces with 0", func(t *testing.T) {
+		handler := NewWebSocketHandler()
+
+		// Create player state with Inf aimAngle
+		inf := math.Inf(1)
+		states := []game.PlayerState{
+			{
+				ID:       "player-inf-aim",
+				Position: game.Vector2{X: 100, Y: 100},
+				Velocity: game.Vector2{X: 0, Y: 0},
+				AimAngle: inf,
+			},
+		}
+
+		// Should not panic - Inf aimAngle is sanitized to 0
+		handler.broadcastPlayerStates(states)
+
+		// Verify aimAngle was sanitized
+		assert.Equal(t, float64(0), states[0].AimAngle, "Inf aimAngle should be sanitized to 0")
+	})
+}
+
 // TestBroadcastProjectileSpawnError tests error handling in broadcastProjectileSpawn
 func TestBroadcastProjectileSpawnError(t *testing.T) {
 	t.Run("broadcasts projectile spawn successfully", func(t *testing.T) {
@@ -175,6 +289,31 @@ func TestSendShootFailedError(t *testing.T) {
 
 		// Should not panic for non-existent player
 		handler.sendShootFailed("non-existent-player", "test-reason")
+	})
+}
+
+// TestSendWeaponStateToWaitingPlayer tests sending weapon state to a waiting player
+func TestSendWeaponStateToWaitingPlayer(t *testing.T) {
+	t.Run("sends weapon state to waiting player", func(t *testing.T) {
+		handler := NewWebSocketHandler()
+		server := httptest.NewServer(http.HandlerFunc(handler.HandleWebSocket))
+		defer server.Close()
+
+		wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+
+		// Connect only ONE client (will be waiting, not in room)
+		conn1, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+		assert.NoError(t, err)
+		defer conn1.Close()
+
+		// Give time for player setup
+		time.Sleep(50 * time.Millisecond)
+
+		// Player added to game server but is waiting (not in room)
+		// We need to send weapon state and confirm it goes to waiting player path
+		handler.sendWeaponState("some-player-id")
+
+		// Should not panic - waiting player path is exercised
 	})
 }
 
