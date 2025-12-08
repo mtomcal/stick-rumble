@@ -546,6 +546,25 @@ func TestSendWeaponState(t *testing.T) {
 		roomAfter := handler.roomManager.GetRoomByPlayerID("non-existent-player")
 		assert.Nil(t, roomAfter, "Player should remain not in any room after sendWeaponState")
 	})
+
+	t.Run("sends to waiting player not in room", func(t *testing.T) {
+		handler := NewWebSocketHandler()
+
+		// Add player directly to gameServer but not to a room
+		playerID := "waiting-weapon-state"
+		handler.gameServer.AddPlayer(playerID)
+
+		// Verify player is NOT in a room
+		room := handler.roomManager.GetRoomByPlayerID(playerID)
+		assert.Nil(t, room, "Player should not be in any room")
+
+		// Call sendWeaponState - exercises the waiting player path (else branch at line 165)
+		// This calls SendToWaitingPlayer which will find no matching player
+		// in waitingPlayers list, but should not panic
+		assert.NotPanics(t, func() {
+			handler.sendWeaponState(playerID)
+		}, "sendWeaponState should not panic when taking waiting player path")
+	})
 }
 
 // TestSendShootFailed tests the sendShootFailed function

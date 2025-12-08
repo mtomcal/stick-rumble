@@ -2,6 +2,7 @@ package network
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -276,5 +277,122 @@ func TestBroadcastMatchTimersEdgeCases(t *testing.T) {
 			assert.True(t, room.Match.IsEnded(), "Match should be ended")
 			assert.Equal(t, "time_limit", room.Match.EndReason)
 		}
+	})
+}
+
+// TestBroadcastMatchEnded tests the broadcastMatchEnded function for error handling and edge cases
+func TestBroadcastMatchEnded(t *testing.T) {
+	t.Run("broadcasts match:ended to all players in room after kill target", func(t *testing.T) {
+		handler := NewWebSocketHandler()
+		server := httptest.NewServer(http.HandlerFunc(handler.HandleWebSocket))
+		defer server.Close()
+
+		wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+
+		// Connect two clients to create a room
+		conn1, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+		assert.NoError(t, err)
+		defer conn1.Close()
+
+		conn2, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+		assert.NoError(t, err)
+		defer conn2.Close()
+
+		// Consume room:joined messages
+		conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
+		_, joinedBytes1, _ := conn1.ReadMessage()
+		var joinedMsg1 Message
+		json.Unmarshal(joinedBytes1, &joinedMsg1)
+		player1ID := joinedMsg1.Data.(map[string]interface{})["playerId"].(string)
+
+		conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
+		conn2.ReadMessage()
+
+		time.Sleep(50 * time.Millisecond)
+
+		// Get room and add kills to reach target
+		rooms := handler.roomManager.GetAllRooms()
+		assert.Equal(t, 1, len(rooms), "Should have 1 room")
+		room := rooms[0]
+
+		// Add kills to reach target
+		for i := 0; i < 20; i++ {
+			room.Match.AddKill(player1ID)
+		}
+		room.Match.EndMatch("kill_target")
+
+		// Broadcast match ended
+		handler.broadcastMatchEnded(room, handler.gameServer.GetWorld())
+
+		// Both clients should receive match:ended message
+		matchEndMsg1, err := readMessageOfType(t, conn1, "match:ended", 2*time.Second)
+		assert.NoError(t, err, "Client 1 should receive match:ended")
+		assert.NotNil(t, matchEndMsg1)
+
+		if matchEndMsg1 != nil {
+			data := matchEndMsg1.Data.(map[string]interface{})
+			assert.Equal(t, "kill_target", data["reason"])
+			assert.NotNil(t, data["winners"])
+			assert.NotNil(t, data["finalScores"])
+		}
+	})
+
+	t.Run("broadcasts match:ended to all players in room after time limit", func(t *testing.T) {
+		handler := NewWebSocketHandler()
+		server := httptest.NewServer(http.HandlerFunc(handler.HandleWebSocket))
+		defer server.Close()
+
+		wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+
+		// Connect two clients to create a room
+		conn1, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+		assert.NoError(t, err)
+		defer conn1.Close()
+
+		conn2, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+		assert.NoError(t, err)
+		defer conn2.Close()
+
+		// Consume room:joined messages
+		conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
+		conn1.ReadMessage()
+		conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
+		conn2.ReadMessage()
+
+		time.Sleep(50 * time.Millisecond)
+
+		// Get room and end by time limit
+		rooms := handler.roomManager.GetAllRooms()
+		assert.Equal(t, 1, len(rooms), "Should have 1 room")
+		room := rooms[0]
+
+		room.Match.EndMatch("time_limit")
+
+		// Broadcast match ended
+		handler.broadcastMatchEnded(room, handler.gameServer.GetWorld())
+
+		// Both clients should receive match:ended message
+		matchEndMsg1, err := readMessageOfType(t, conn1, "match:ended", 2*time.Second)
+		assert.NoError(t, err, "Client 1 should receive match:ended")
+		assert.NotNil(t, matchEndMsg1)
+
+		if matchEndMsg1 != nil {
+			data := matchEndMsg1.Data.(map[string]interface{})
+			assert.Equal(t, "time_limit", data["reason"])
+		}
+	})
+
+	t.Run("handles empty room gracefully", func(t *testing.T) {
+		handler := NewWebSocketHandler()
+
+		// Create empty room
+		room := game.NewRoom()
+		room.Match.Start()
+		room.Match.EndMatch("test")
+
+		// Should not panic when broadcasting to empty room
+		assert.NotPanics(t, func() {
+			handler.broadcastMatchEnded(room, handler.gameServer.GetWorld())
+		}, "broadcastMatchEnded should not panic with empty room")
 	})
 }

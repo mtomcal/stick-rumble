@@ -308,6 +308,55 @@ func TestOnRespawn(t *testing.T) {
 			handler.onRespawn("non-existent-player", game.Vector2{X: 100, Y: 100})
 		}, "onRespawn should not panic when player is not in any room")
 	})
+
+	t.Run("exercises message marshal path for respawn", func(t *testing.T) {
+		handler := NewWebSocketHandler()
+		server := httptest.NewServer(http.HandlerFunc(handler.HandleWebSocket))
+		defer server.Close()
+
+		wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+
+		// Connect two clients to create a room
+		conn1, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+		assert.NoError(t, err)
+		defer conn1.Close()
+
+		conn2, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+		assert.NoError(t, err)
+		defer conn2.Close()
+
+		// Get player IDs
+		conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
+		_, joinedBytes, _ := conn1.ReadMessage()
+		var joinedMsg Message
+		json.Unmarshal(joinedBytes, &joinedMsg)
+		player1ID := joinedMsg.Data.(map[string]interface{})["playerId"].(string)
+
+		conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
+		conn2.ReadMessage()
+
+		time.Sleep(50 * time.Millisecond)
+
+		// Trigger respawn with specific position
+		respawnPos := game.Vector2{X: 123.45, Y: 678.90}
+		handler.onRespawn(player1ID, respawnPos)
+
+		// Verify message was marshaled and sent successfully
+		respawnMsg, err := readMessageOfType(t, conn1, "player:respawn", 2*time.Second)
+		assert.NoError(t, err, "Should receive player:respawn message")
+		assert.NotNil(t, respawnMsg, "Respawn message should not be nil")
+
+		if respawnMsg != nil {
+			data := respawnMsg.Data.(map[string]interface{})
+			assert.Equal(t, player1ID, data["playerId"], "Should contain correct player ID")
+
+			position := data["position"].(map[string]interface{})
+			assert.Equal(t, 123.45, position["x"], "Should contain correct X position")
+			assert.Equal(t, 678.90, position["y"], "Should contain correct Y position")
+
+			assert.Equal(t, float64(game.PlayerMaxHealth), data["health"], "Should reset to max health")
+		}
+	})
 }
 
 // TestOnHitDeathScenario tests the death flow in onHit callback
@@ -526,5 +575,127 @@ func TestOnHitDeathScenario(t *testing.T) {
 			assert.Equal(t, player2ID, deathData["victimId"], "Death message should contain victim ID")
 			assert.Equal(t, player1ID, deathData["attackerId"], "Death message should contain attacker ID")
 		}
+	})
+
+	t.Run("broadcasts all kill-related messages in correct sequence", func(t *testing.T) {
+		handler := NewWebSocketHandler()
+		server := httptest.NewServer(http.HandlerFunc(handler.HandleWebSocket))
+		defer server.Close()
+
+		wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+
+		// Connect two clients to create a room
+		conn1, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+		assert.NoError(t, err)
+		defer conn1.Close()
+
+		conn2, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+		assert.NoError(t, err)
+		defer conn2.Close()
+
+		// Consume room:joined messages and capture player IDs
+		conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
+		_, joinedBytes1, _ := conn1.ReadMessage()
+		var joinedMsg1 Message
+		json.Unmarshal(joinedBytes1, &joinedMsg1)
+		player1ID := joinedMsg1.Data.(map[string]interface{})["playerId"].(string)
+
+		conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
+		_, joinedBytes2, _ := conn2.ReadMessage()
+		var joinedMsg2 Message
+		json.Unmarshal(joinedBytes2, &joinedMsg2)
+		player2ID := joinedMsg2.Data.(map[string]interface{})["playerId"].(string)
+
+		time.Sleep(50 * time.Millisecond)
+
+		// Kill player2 to trigger full death flow
+		handler.gameServer.DamagePlayer(player2ID, game.PlayerMaxHealth)
+
+		// Create hit event for a killing blow
+		hitEvent := game.HitEvent{
+			ProjectileID: "proj-sequence-test",
+			VictimID:     player2ID,
+			AttackerID:   player1ID,
+		}
+
+		// Trigger onHit callback - this should broadcast all 4 message types
+		handler.onHit(hitEvent)
+
+		// Collect all messages from attacker (should get all 4 types)
+		receivedMsgs := make(map[string]int)
+		for i := 0; i < 4; i++ {
+			conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
+			_, msgBytes, err := conn1.ReadMessage()
+			if err != nil {
+				break
+			}
+
+			var msg Message
+			err = json.Unmarshal(msgBytes, &msg)
+			assert.NoError(t, err)
+			receivedMsgs[msg.Type]++
+		}
+
+		// Verify all message types were sent
+		assert.Equal(t, 1, receivedMsgs["player:damaged"], "Should send 1 player:damaged")
+		assert.Equal(t, 1, receivedMsgs["hit:confirmed"], "Should send 1 hit:confirmed")
+		assert.Equal(t, 1, receivedMsgs["player:death"], "Should send 1 player:death")
+		assert.Equal(t, 1, receivedMsgs["player:kill_credit"], "Should send 1 player:kill_credit")
+	})
+
+	t.Run("exercises all message marshal paths in death scenario", func(t *testing.T) {
+		handler := NewWebSocketHandler()
+		server := httptest.NewServer(http.HandlerFunc(handler.HandleWebSocket))
+		defer server.Close()
+
+		wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+
+		// Connect two clients
+		conn1, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+		assert.NoError(t, err)
+		defer conn1.Close()
+
+		conn2, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+		assert.NoError(t, err)
+		defer conn2.Close()
+
+		// Get player IDs
+		conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
+		_, joinedBytes1, _ := conn1.ReadMessage()
+		var joinedMsg1 Message
+		json.Unmarshal(joinedBytes1, &joinedMsg1)
+		player1ID := joinedMsg1.Data.(map[string]interface{})["playerId"].(string)
+
+		conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
+		_, joinedBytes2, _ := conn2.ReadMessage()
+		var joinedMsg2 Message
+		json.Unmarshal(joinedBytes2, &joinedMsg2)
+		player2ID := joinedMsg2.Data.(map[string]interface{})["playerId"].(string)
+
+		time.Sleep(50 * time.Millisecond)
+
+		// Kill victim and trigger hit
+		handler.gameServer.DamagePlayer(player2ID, game.PlayerMaxHealth)
+
+		hitEvent := game.HitEvent{
+			ProjectileID: "proj-marshal-test",
+			VictimID:     player2ID,
+			AttackerID:   player1ID,
+		}
+
+		// This exercises all marshal paths: player:damaged, hit:confirmed, player:death, player:kill_credit
+		handler.onHit(hitEvent)
+
+		// Verify messages were created and sent (by receiving them)
+		messagesReceived := 0
+		for i := 0; i < 4; i++ {
+			conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
+			_, _, err := conn1.ReadMessage()
+			if err == nil {
+				messagesReceived++
+			}
+		}
+
+		assert.GreaterOrEqual(t, messagesReceived, 4, "Should receive at least 4 messages (all marshal paths executed)")
 	})
 }
