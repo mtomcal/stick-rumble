@@ -50,6 +50,16 @@ func NewMatch() *Match {
 	}
 }
 
+// SetTestMode configures the match for fast testing
+// Reduces kill target to 2 and time limit to 10 seconds
+func (m *Match) SetTestMode() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.Config.KillTarget = 2
+	m.Config.TimeLimitSeconds = 10
+}
+
 // Start begins the match and records the start time
 func (m *Match) Start() {
 	m.mu.Lock()
