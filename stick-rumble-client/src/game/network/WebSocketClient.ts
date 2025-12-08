@@ -4,6 +4,19 @@ export interface Message {
   data?: unknown;
 }
 
+export interface PlayerScore {
+  playerId: string;
+  kills: number;
+  deaths: number;
+  xp: number;
+}
+
+export interface MatchEndedData {
+  winners: string[];
+  finalScores: PlayerScore[];
+  reason: 'kill_target' | 'time_limit';
+}
+
 export class WebSocketClient {
   private ws: WebSocket | null = null;
   private url: string;

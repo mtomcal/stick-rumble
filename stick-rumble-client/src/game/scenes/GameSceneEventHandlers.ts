@@ -223,5 +223,26 @@ export class GameSceneEventHandlers {
       const timerData = data as { remainingSeconds: number };
       this.ui.updateMatchTimer(timerData.remainingSeconds);
     });
+
+    // Handle match ended events
+    this.wsClient.on('match:ended', (data) => {
+      const matchEndData = data as {
+        winners: string[];
+        finalScores: Array<{ playerId: string; kills: number; deaths: number; xp: number }>;
+        reason: string;
+      };
+      console.log(`Match ended! Reason: ${matchEndData.reason}, Winners:`, matchEndData.winners);
+      console.log('Final scores:', matchEndData.finalScores);
+
+      // Freeze gameplay by disabling input handlers
+      if (this.inputManager) {
+        this.inputManager.disable();
+      }
+      if (this.shootingManager) {
+        this.shootingManager.disable();
+      }
+
+      // TODO: Display match end UI with winners and scores in future story
+    });
   }
 }

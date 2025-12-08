@@ -388,4 +388,82 @@ describe('ShootingManager', () => {
       expect(shootingManager.isReloading()).toBe(false);
     });
   });
+
+  describe('disable/enable', () => {
+    it('should disable shooting when disable() is called', () => {
+      // Shoot successfully first
+      shootingManager.shoot();
+      expect(mockWsClient.send).toHaveBeenCalledTimes(1);
+
+      // Disable shooting
+      shootingManager.disable();
+
+      // Advance time past cooldown
+      vi.advanceTimersByTime(400);
+      vi.clearAllMocks();
+
+      // Try to shoot - should NOT send
+      shootingManager.shoot();
+      expect(mockWsClient.send).not.toHaveBeenCalled();
+    });
+
+    it('should enable shooting when enable() is called', () => {
+      // Disable first
+      shootingManager.disable();
+
+      // Try to shoot while disabled
+      shootingManager.shoot();
+      expect(mockWsClient.send).not.toHaveBeenCalled();
+
+      // Enable shooting
+      shootingManager.enable();
+
+      // Now shoot should work
+      shootingManager.shoot();
+      expect(mockWsClient.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'player:shoot',
+        })
+      );
+    });
+
+    it('should be enabled by default', () => {
+      shootingManager.shoot();
+      expect(mockWsClient.send).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not shoot when disabled even after cooldown', () => {
+      shootingManager.disable();
+
+      // Try shooting multiple times with cooldown in between
+      shootingManager.shoot();
+      vi.advanceTimersByTime(400);
+      shootingManager.shoot();
+      vi.advanceTimersByTime(400);
+      shootingManager.shoot();
+
+      // Should never send
+      expect(mockWsClient.send).not.toHaveBeenCalled();
+    });
+
+    it('should respect cooldown after re-enabling', () => {
+      // Shoot once
+      shootingManager.shoot();
+      expect(mockWsClient.send).toHaveBeenCalledTimes(1);
+
+      // Disable, then enable
+      shootingManager.disable();
+      shootingManager.enable();
+      vi.clearAllMocks();
+
+      // Try to shoot immediately - should still be on cooldown
+      shootingManager.shoot();
+      expect(mockWsClient.send).not.toHaveBeenCalled();
+
+      // After cooldown expires, should work
+      vi.advanceTimersByTime(400);
+      shootingManager.shoot();
+      expect(mockWsClient.send).toHaveBeenCalledTimes(1);
+    });
+  });
 });

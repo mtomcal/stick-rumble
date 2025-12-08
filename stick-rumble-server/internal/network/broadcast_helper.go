@@ -119,7 +119,8 @@ func (h *WebSocketHandler) broadcastMatchTimers() {
 		if room.Match.CheckTimeLimit() {
 			room.Match.EndMatch("time_limit")
 			log.Printf("Match ended in room %s: time limit reached", room.ID)
-			// TODO Story 2.6.2: Broadcast match:ended message
+			// Broadcast match:ended message to all players
+			h.broadcastMatchEnded(room, h.gameServer.GetWorld())
 		}
 	}
 }
@@ -195,4 +196,32 @@ func (h *WebSocketHandler) sendShootFailed(playerID string, reason string) {
 	} else {
 		h.roomManager.SendToWaitingPlayer(playerID, msgBytes)
 	}
+}
+
+// broadcastMatchEnded broadcasts match end event to all players in a room
+func (h *WebSocketHandler) broadcastMatchEnded(room *game.Room, world *game.World) {
+	// Determine winners and get final scores
+	winners := room.Match.DetermineWinners()
+	finalScores := room.Match.GetFinalScores(world)
+
+	// Create match:ended message
+	message := Message{
+		Type:      "match:ended",
+		Timestamp: 0,
+		Data: map[string]interface{}{
+			"winners":     winners,
+			"finalScores": finalScores,
+			"reason":      room.Match.EndReason,
+		},
+	}
+
+	msgBytes, err := json.Marshal(message)
+	if err != nil {
+		log.Printf("Error marshaling match:ended message: %v", err)
+		return
+	}
+
+	// Broadcast to all players in the room
+	room.Broadcast(msgBytes, "")
+	log.Printf("Match ended in room %s - reason: %s, winners: %v", room.ID, room.Match.EndReason, winners)
 }

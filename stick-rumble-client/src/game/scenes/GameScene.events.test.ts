@@ -198,5 +198,117 @@ describe('GameScene - Events', () => {
 
       consoleSpy.mockRestore();
     });
+
+    it('should handle match:ended messages and freeze gameplay', async () => {
+      const mockSceneContext = createMockScene();
+      Object.assign(scene, mockSceneContext);
+
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      scene.create();
+
+      // Trigger the delayed callback to create WebSocket
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Connect successfully to initialize inputManager and shootingManager
+      mockWebSocketInstance.readyState = 1;
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen(new Event('open'));
+      }
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Spy on disable methods
+      const inputManagerDisableSpy = vi.spyOn(scene['inputManager'], 'disable');
+      const shootingManagerDisableSpy = vi.spyOn(scene['shootingManager'], 'disable');
+
+      // Simulate match:ended message
+      const matchEndedMessage = {
+        data: JSON.stringify({
+          type: 'match:ended',
+          timestamp: Date.now(),
+          data: {
+            winners: ['player-1', 'player-2'],
+            finalScores: [
+              { playerId: 'player-1', kills: 20, deaths: 5, xp: 300 },
+              { playerId: 'player-2', kills: 20, deaths: 6, xp: 290 },
+              { playerId: 'player-3', kills: 15, deaths: 10, xp: 200 }
+            ],
+            reason: 'kill_target'
+          }
+        })
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(matchEndedMessage as MessageEvent);
+      }
+
+      // Verify console logs
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Match ended! Reason: kill_target, Winners:',
+        ['player-1', 'player-2']
+      );
+      expect(consoleSpy).toHaveBeenCalledWith('Final scores:', [
+        { playerId: 'player-1', kills: 20, deaths: 5, xp: 300 },
+        { playerId: 'player-2', kills: 20, deaths: 6, xp: 290 },
+        { playerId: 'player-3', kills: 15, deaths: 10, xp: 200 }
+      ]);
+
+      // Verify input freeze
+      expect(inputManagerDisableSpy).toHaveBeenCalled();
+      expect(shootingManagerDisableSpy).toHaveBeenCalled();
+
+      consoleSpy.mockRestore();
+    });
+
+    it('should handle match:ended with time_limit reason', async () => {
+      const mockSceneContext = createMockScene();
+      Object.assign(scene, mockSceneContext);
+
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      scene.create();
+
+      // Trigger the delayed callback to create WebSocket
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Connect successfully to initialize inputManager and shootingManager
+      mockWebSocketInstance.readyState = 1;
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen(new Event('open'));
+      }
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Simulate match:ended message with time_limit
+      const matchEndedMessage = {
+        data: JSON.stringify({
+          type: 'match:ended',
+          timestamp: Date.now(),
+          data: {
+            winners: ['player-1'],
+            finalScores: [
+              { playerId: 'player-1', kills: 18, deaths: 3, xp: 280 },
+              { playerId: 'player-2', kills: 15, deaths: 5, xp: 220 }
+            ],
+            reason: 'time_limit'
+          }
+        })
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(matchEndedMessage as MessageEvent);
+      }
+
+      // Verify console logs with time_limit reason
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Match ended! Reason: time_limit, Winners:',
+        ['player-1']
+      );
+
+      consoleSpy.mockRestore();
+    });
   });
 });

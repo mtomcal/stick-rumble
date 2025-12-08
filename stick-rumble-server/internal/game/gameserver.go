@@ -216,6 +216,11 @@ func (gs *GameServer) IsRunning() bool {
 	return gs.running
 }
 
+// GetWorld returns the game world
+func (gs *GameServer) GetWorld() *World {
+	return gs.world
+}
+
 // SetOnReloadComplete sets the callback for when a player's reload completes
 func (gs *GameServer) SetOnReloadComplete(callback func(playerID string)) {
 	gs.onReloadComplete = callback
