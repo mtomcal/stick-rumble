@@ -312,7 +312,7 @@ So that the multiplayer foundation is proven to work.
 
 **FRs Covered:** FR2 (movement/aim), FR3 (shooting), FR7 (respawn), FR10 (deathmatch), FR12 (server authority), FR16 (performance), FR17 (browser access)
 
-**Epic Status:** 🟢 IN PROGRESS (9/13 stories complete, ~69% done)
+**Epic Status:** ✅ COMPLETE (13/13 stories complete, 100% done)
 
 ---
 
@@ -346,23 +346,32 @@ So that the multiplayer foundation is proven to work.
 - ✅ **TECH-DEBT**: Server network package coverage improvement (e144f364) - 89.9% to 91.5%
 - ✅ **TECH-DEBT**: PlayerScore documentation fix (bb162068)
 
-**Remaining Stories:**
-- 🔵 **Story 2.6.3**: Match End Screen and Lobby Return (READY - database requirements moved to Epic 5)
-- 🔵 **Story 2.7.1**: Server-Side Health Regeneration (READY - unblocked, parallel to 2.6.3)
-- ⏸️ **Story 2.7.2**: Client-Side Regeneration Feedback (blocked by 2.7.1)
+**Completed Stories (continued):**
+- ✅ **Story 2.6.3**: Match End Screen and Lobby Return (97.3% client coverage)
+  - XP calculation system with kill/death scoring
+  - Leaderboard with player rankings
+  - Session results display with match statistics
+- ✅ **Story 2.7.1**: Server-Side Health Regeneration (91.2% server coverage)
+  - Auto-heal after 3s damage-free period
+  - 5 HP/sec regeneration rate
+  - Broadcasts isRegenerating field in player:move messages
+- ✅ **Story 2.7.2**: Client-Side Regeneration Feedback (97.3% client coverage)
+  - Integration tests verify isRegenerating field handling
+  - Full health stops regeneration correctly
 
 **Deferred Enhancements:**
 - 📋 **Story 2.4.1**: Lag Compensation for Hit Detection (deferred to Epic 4, Story 4.5)
 
 **Key Achievements:**
-- All completed stories exceed 90% test coverage requirement
-- Server test coverage at 91.8% (meets 90% threshold)
+- All 13 stories complete with >90% test coverage (Client: 97.3%, Server: 91.2%)
+- Full combat loop: movement, aim, shoot, hit detection, health, death, respawn, regeneration
+- Complete match system: timer, kill tracking, end detection, winner determination, end screen
 - Proactive bug fixes: coordinate transformation (2.2.1), network coverage (2.1.1), client-side prediction (2.5)
-- Comprehensive integration testing established (39 integration tests passing)
+- Comprehensive integration testing established (43 integration tests passing)
 - High code quality: zero TypeScript errors, zero ESLint warnings, go vet/gofmt clean
 - Server-authoritative architecture proven with hit detection, movement validation, and projectile physics
-- Full combat loop complete: movement, aim, shoot, hit detection, health, death, respawn, kill tracking
 - All test file refactoring complete (websocket_handler, gameserver, physics, room tests split)
+- XP calculation system implemented with kill/death scoring and leaderboard rankings
 
 **Key Learnings:**
 - **Integration tests critical for Phaser apps**: Story 2.2.1 revealed that unit tests with mocked Phaser APIs can pass while real implementation fails due to coordinate transformation bugs. Now require integration tests for coordinate-dependent features.
@@ -374,7 +383,7 @@ So that the multiplayer foundation is proven to work.
 - **Enforce coverage thresholds early**: 90% coverage threshold now enforced for all metrics (statements, branches, functions, lines) on both client and server.
 - **Documentation sync is critical**: Story 2.6.2 was completed but epic documentation still showed it as "NEXT - ready to start", causing confusion. Must update epics.md progress summary when marking ReadyQ stories as done to prevent documentation drift.
 
-**Estimated Completion:** 3 more feature stories to deliver fully playable deathmatch (Epic 2 goal achieved when Story 2.7.2 complete). All test coverage thresholds already met (97.2% client, 91.5% server).
+**Epic Completion Date:** December 8, 2025 - All 13 feature stories complete, fully playable deathmatch delivered. Test coverage exceeds 90% threshold (Client: 97.3%, Server: 91.2%).
 
 ---
 
