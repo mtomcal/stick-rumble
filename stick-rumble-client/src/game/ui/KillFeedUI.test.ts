@@ -237,4 +237,70 @@ describe('KillFeedUI', () => {
       expect(mockContainer.destroy).toHaveBeenCalled();
     });
   });
+
+  describe('edge cases', () => {
+    it('should handle fadeOutKill when entry is not in kills array', () => {
+      let fadeCallback: (() => void) | undefined;
+
+      (mockScene.tweens.add as any).mockImplementation((config: any) => {
+        fadeCallback = config.onComplete as () => void;
+      });
+
+      const killFeed = new KillFeedUI(mockScene, 1720, 100);
+      killFeed.addKill('Player1', 'Player2');
+
+      // Get the delayed call callback
+      const delayedCallArgs = (mockScene.time.delayedCall as any).mock.calls[0];
+      const delayCallback = delayedCallArgs[1] as () => void;
+
+      // Manually remove the kill entry from internal array to simulate edge case
+      const kills = (killFeed as any).kills as any[];
+      kills.length = 0;
+
+      // Execute the delay callback (starts fade) - should handle missing entry gracefully
+      expect(() => {
+        delayCallback();
+      }).not.toThrow();
+
+      // Execute fade completion callback - should handle index = -1 gracefully
+      expect(fadeCallback).toBeDefined();
+      expect(() => {
+        fadeCallback!();
+      }).not.toThrow();
+    });
+
+    it('should handle concurrent fade operations correctly', () => {
+      const fadeCallbacks: Array<(() => void)> = [];
+
+      (mockScene.tweens.add as any).mockImplementation((config: any) => {
+        fadeCallbacks.push(config.onComplete as () => void);
+      });
+
+      const killFeed = new KillFeedUI(mockScene, 1720, 100);
+
+      // Add three kills
+      killFeed.addKill('Player1', 'Player2');
+      killFeed.addKill('Player3', 'Player4');
+      killFeed.addKill('Player5', 'Player6');
+
+      // Trigger all fade delays
+      const delayedCalls = (mockScene.time.delayedCall as any).mock.calls;
+      delayedCalls.forEach((call: any[]) => {
+        const callback = call[1] as () => void;
+        callback();
+      });
+
+      // Execute all fade completion callbacks
+      fadeCallbacks.forEach(callback => {
+        expect(() => {
+          callback();
+        }).not.toThrow();
+      });
+
+      // All kills should be destroyed and removed
+      mockTexts.forEach(text => {
+        expect(text.destroy).toHaveBeenCalled();
+      });
+    });
+  });
 });
