@@ -104,14 +104,10 @@ export class HealthBarUI {
 
   /**
    * Start pulsing animation to indicate health regeneration
+   * Note: This method is only called when transitioning from not regenerating to regenerating,
+   * so pulseTween should always be null. The guard at updateHealth() prevents duplicate calls.
    */
   private startRegenerationEffect(): void {
-    // Stop any existing tween
-    if (this.pulseTween) {
-      this.pulseTween.stop();
-      this.pulseTween = null;
-    }
-
     // Create pulsing alpha effect (0.6 to 1.0 and back)
     this.pulseTween = this.scene.tweens.add({
       targets: this.healthBar,
