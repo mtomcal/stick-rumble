@@ -208,4 +208,20 @@ export class GameSceneUI {
       },
     });
   }
+
+  /**
+   * Cleanup all resources
+   */
+  destroy(): void {
+    // Destroy UI elements if they exist
+    if (this.ammoText) {
+      this.ammoText.destroy();
+    }
+    if (this.matchTimerText) {
+      this.matchTimerText.destroy();
+    }
+    if (this.damageFlashOverlay) {
+      this.damageFlashOverlay.destroy();
+    }
+  }
 }

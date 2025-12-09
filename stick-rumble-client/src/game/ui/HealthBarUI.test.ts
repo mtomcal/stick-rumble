@@ -335,4 +335,51 @@ describe('HealthBarUI', () => {
       expect(mockHealthText.setText).toHaveBeenCalledWith('0/0');
     });
   });
+
+  describe('Cleanup', () => {
+    it('should stop regeneration effect when destroyed', () => {
+      const healthBar = new HealthBarUI(mockScene, 10, 70);
+
+      // Start regenerating
+      healthBar.updateHealth(50, 100, true);
+      expect(mockScene.tweens.add).toHaveBeenCalled();
+
+      // Add destroy method to container mock
+      mockContainer.destroy = vi.fn();
+
+      // Destroy health bar
+      healthBar.destroy();
+
+      // Should stop the tween and reset alpha
+      expect(mockTween.stop).toHaveBeenCalled();
+      expect(mockHealthBar.setAlpha).toHaveBeenCalledWith(1.0);
+    });
+
+    it('should destroy container and all children', () => {
+      const healthBar = new HealthBarUI(mockScene, 10, 70);
+
+      // Add destroy method to container mock
+      mockContainer.destroy = vi.fn();
+
+      // Destroy health bar
+      healthBar.destroy();
+
+      // Should destroy container (which destroys all children)
+      expect(mockContainer.destroy).toHaveBeenCalled();
+    });
+
+    it('should handle destroy when not regenerating', () => {
+      const healthBar = new HealthBarUI(mockScene, 10, 70);
+
+      // Add destroy method to container mock
+      mockContainer.destroy = vi.fn();
+
+      // Destroy health bar without starting regeneration
+      healthBar.destroy();
+
+      // Should not crash and should destroy container
+      expect(mockTween.stop).not.toHaveBeenCalled();
+      expect(mockContainer.destroy).toHaveBeenCalled();
+    });
+  });
 });

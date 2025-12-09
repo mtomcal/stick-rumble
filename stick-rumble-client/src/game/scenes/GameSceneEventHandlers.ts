@@ -24,6 +24,7 @@ export class GameSceneEventHandlers {
   private spectator: GameSceneSpectator;
   private localPlayerHealth: number = 100;
   private onCameraFollowNeeded: () => void;
+  private handlerRefs: Map<string, (data: unknown) => void> = new Map();
 
   constructor(
     wsClient: WebSocketClient,
@@ -60,10 +61,36 @@ export class GameSceneEventHandlers {
   }
 
   /**
+   * Cleanup all registered event handlers
+   * Called before re-registering handlers to prevent accumulation
+   */
+  private cleanupHandlers(): void {
+    // Remove all registered handlers from WebSocket client
+    for (const [eventType, handler] of this.handlerRefs) {
+      this.wsClient.off(eventType, handler);
+    }
+    // Clear the handler references map
+    this.handlerRefs.clear();
+  }
+
+  /**
+   * Destroy event handlers (called on scene shutdown)
+   * Public method to cleanup all registered handlers
+   */
+  destroy(): void {
+    this.cleanupHandlers();
+  }
+
+  /**
    * Setup all WebSocket message handlers
+   * Cleanup existing handlers first to prevent accumulation
    */
   setupEventHandlers(): void {
-    this.wsClient.on('player:move', (data) => {
+    // Cleanup existing handlers before registering new ones
+    this.cleanupHandlers();
+
+    // Store and register player:move handler
+    const playerMoveHandler = (data: unknown) => {
       const messageData = data as { players: PlayerState[] };
       if (messageData.players) {
         this.playerManager.updatePlayers(messageData.players);
@@ -90,11 +117,19 @@ export class GameSceneEventHandlers {
         // Start camera follow on local player sprite (if not already following)
         this.onCameraFollowNeeded();
       }
-    });
+    };
+    this.handlerRefs.set('player:move', playerMoveHandler);
+    this.wsClient.on('player:move', playerMoveHandler);
 
-    this.wsClient.on('room:joined', (data) => {
+    // Store and register room:joined handler
+    const roomJoinedHandler = (data: unknown) => {
       const messageData = data as { playerId: string };
       console.log('Joined room as player:', messageData.playerId);
+
+      // Clear existing players to prevent duplication if room:joined fires multiple times
+      // This handles reconnect scenarios and future match restart functionality
+      this.playerManager.destroy();
+
       // Set local player ID so we can highlight our player
       if (messageData.playerId) {
         this.playerManager.setLocalPlayerId(messageData.playerId);
@@ -102,10 +137,12 @@ export class GameSceneEventHandlers {
         this.localPlayerHealth = 100;
         this.getHealthBarUI().updateHealth(this.localPlayerHealth, 100, false);
       }
-    });
+    };
+    this.handlerRefs.set('room:joined', roomJoinedHandler);
+    this.wsClient.on('room:joined', roomJoinedHandler);
 
-    // Handle projectile spawn from server
-    this.wsClient.on('projectile:spawn', (data) => {
+    // Store and register projectile:spawn handler
+    const projectileSpawnHandler = (data: unknown) => {
       const projectileData = data as ProjectileData;
       this.projectileManager.spawnProjectile(projectileData);
 
@@ -114,34 +151,42 @@ export class GameSceneEventHandlers {
         projectileData.position.x,
         projectileData.position.y
       );
-    });
+    };
+    this.handlerRefs.set('projectile:spawn', projectileSpawnHandler);
+    this.wsClient.on('projectile:spawn', projectileSpawnHandler);
 
-    // Handle projectile destroy from server
-    this.wsClient.on('projectile:destroy', (data) => {
+    // Store and register projectile:destroy handler
+    const projectileDestroyHandler = (data: unknown) => {
       const { id } = data as { id: string };
       this.projectileManager.removeProjectile(id);
-    });
+    };
+    this.handlerRefs.set('projectile:destroy', projectileDestroyHandler);
+    this.wsClient.on('projectile:destroy', projectileDestroyHandler);
 
-    // Handle weapon state updates from server
-    this.wsClient.on('weapon:state', (data) => {
+    // Store and register weapon:state handler
+    const weaponStateHandler = (data: unknown) => {
       const weaponState = data as WeaponState;
       if (this.shootingManager) {
         this.shootingManager.updateWeaponState(weaponState);
         this.ui.updateAmmoDisplay(this.shootingManager);
       }
-    });
+    };
+    this.handlerRefs.set('weapon:state', weaponStateHandler);
+    this.wsClient.on('weapon:state', weaponStateHandler);
 
-    // Handle shoot failures (for empty click sound, etc.)
-    this.wsClient.on('shoot:failed', (data) => {
+    // Store and register shoot:failed handler
+    const shootFailedHandler = (data: unknown) => {
       const { reason } = data as { reason: string };
       if (reason === 'empty') {
         // TODO: Play empty click sound in future story
         console.log('Click! Magazine empty');
       }
-    });
+    };
+    this.handlerRefs.set('shoot:failed', shootFailedHandler);
+    this.wsClient.on('shoot:failed', shootFailedHandler);
 
-    // Handle player damaged events
-    this.wsClient.on('player:damaged', (data) => {
+    // Store and register player:damaged handler
+    const playerDamagedHandler = (data: unknown) => {
       const damageData = data as {
         victimId: string;
         attackerId: string;
@@ -162,10 +207,12 @@ export class GameSceneEventHandlers {
 
       // Show damage numbers above damaged player
       this.ui.showDamageNumber(this.playerManager, damageData.victimId, damageData.damage);
-    });
+    };
+    this.handlerRefs.set('player:damaged', playerDamagedHandler);
+    this.wsClient.on('player:damaged', playerDamagedHandler);
 
-    // Handle hit confirmation (for hit marker feedback)
-    this.wsClient.on('hit:confirmed', (data) => {
+    // Store and register hit:confirmed handler
+    const hitConfirmedHandler = (data: unknown) => {
       const hitData = data as {
         victimId: string;
         damage: number;
@@ -174,10 +221,12 @@ export class GameSceneEventHandlers {
       console.log(`Hit confirmed! Dealt ${hitData.damage} damage to ${hitData.victimId}`);
       this.ui.showHitMarker();
       // TODO: Audio feedback (ding sound) - deferred to audio story
-    });
+    };
+    this.handlerRefs.set('hit:confirmed', hitConfirmedHandler);
+    this.wsClient.on('hit:confirmed', hitConfirmedHandler);
 
-    // Handle player death events
-    this.wsClient.on('player:death', (data) => {
+    // Store and register player:death handler
+    const playerDeathHandler = (data: unknown) => {
       const deathData = data as {
         victimId: string;
         attackerId: string;
@@ -188,10 +237,12 @@ export class GameSceneEventHandlers {
       if (deathData.victimId === this.playerManager.getLocalPlayerId()) {
         this.spectator.enterSpectatorMode();
       }
-    });
+    };
+    this.handlerRefs.set('player:death', playerDeathHandler);
+    this.wsClient.on('player:death', playerDeathHandler);
 
-    // Handle player kill credit events
-    this.wsClient.on('player:kill_credit', (data) => {
+    // Store and register player:kill_credit handler
+    const playerKillCreditHandler = (data: unknown) => {
       const killData = data as {
         killerId: string;
         victimId: string;
@@ -202,10 +253,12 @@ export class GameSceneEventHandlers {
 
       // Add kill to feed (using player IDs for now - will be replaced with names later)
       this.killFeedUI.addKill(killData.killerId.substring(0, 8), killData.victimId.substring(0, 8));
-    });
+    };
+    this.handlerRefs.set('player:kill_credit', playerKillCreditHandler);
+    this.wsClient.on('player:kill_credit', playerKillCreditHandler);
 
-    // Handle player respawn events
-    this.wsClient.on('player:respawn', (data) => {
+    // Store and register player:respawn handler
+    const playerRespawnHandler = (data: unknown) => {
       const respawnData = data as {
         playerId: string;
         position: { x: number; y: number };
@@ -222,16 +275,20 @@ export class GameSceneEventHandlers {
         // Camera follow will be restarted automatically on next player:move
         // via startCameraFollowIfNeeded() since isCameraFollowing was reset
       }
-    });
+    };
+    this.handlerRefs.set('player:respawn', playerRespawnHandler);
+    this.wsClient.on('player:respawn', playerRespawnHandler);
 
-    // Handle match timer updates
-    this.wsClient.on('match:timer', (data) => {
+    // Store and register match:timer handler
+    const matchTimerHandler = (data: unknown) => {
       const timerData = data as { remainingSeconds: number };
       this.ui.updateMatchTimer(timerData.remainingSeconds);
-    });
+    };
+    this.handlerRefs.set('match:timer', matchTimerHandler);
+    this.wsClient.on('match:timer', matchTimerHandler);
 
-    // Handle match ended events
-    this.wsClient.on('match:ended', (data) => {
+    // Store and register match:ended handler
+    const matchEndedHandler = (data: unknown) => {
       const matchEndData = data as {
         winners: string[];
         finalScores: Array<{ playerId: string; kills: number; deaths: number; xp: number }>;
@@ -253,6 +310,8 @@ export class GameSceneEventHandlers {
       if (localPlayerId && window.onMatchEnd) {
         window.onMatchEnd(matchEndData, localPlayerId);
       }
-    });
+    };
+    this.handlerRefs.set('match:ended', matchEndedHandler);
+    this.wsClient.on('match:ended', matchEndedHandler);
   }
 }

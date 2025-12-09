@@ -93,6 +93,12 @@ export const createMockScene = () => {
       add: vi.fn().mockReturnValue({ remove: vi.fn() }),
     },
     time: mockTime,
+    events: {
+      once: vi.fn(),
+      on: vi.fn(),
+      off: vi.fn(),
+      emit: vi.fn(),
+    },
     delayedCallCallbacks,
   };
   return mockContext;

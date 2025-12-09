@@ -130,4 +130,15 @@ export class HealthBarUI {
     // Reset alpha to full opacity
     this.healthBar.setAlpha(1.0);
   }
+
+  /**
+   * Cleanup all resources
+   */
+  destroy(): void {
+    // Stop any active regeneration effect
+    this.stopRegenerationEffect();
+
+    // Destroy container (automatically destroys all children)
+    this.container.destroy();
+  }
 }
