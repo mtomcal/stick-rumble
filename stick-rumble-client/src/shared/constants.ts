@@ -58,7 +58,7 @@ export const PLAYER = {
  */
 export const WEAPON = {
   /** Pistol damage per shot */
-  PISTOL_DAMAGE: 15,
+  PISTOL_DAMAGE: 25,
 
   /** Pistol fire rate in rounds per second */
   PISTOL_FIRE_RATE: 3,
