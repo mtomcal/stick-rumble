@@ -294,24 +294,45 @@ describe('HealthBarUI', () => {
       expect(mockHealthText.setText).toHaveBeenCalledWith('100/100');
     });
 
-    it('should stop existing tween when restarting regeneration animation', () => {
+    it('should not restart animation when already regenerating (idempotency test)', () => {
       const healthBar = new HealthBarUI(mockScene, 10, 70);
 
       // Start regenerating
       healthBar.updateHealth(50, 100, true);
       expect(mockScene.tweens.add).toHaveBeenCalledTimes(1);
 
-      // Stop regenerating (damage taken)
-      healthBar.updateHealth(40, 100, false);
-      expect(mockTween.stop).toHaveBeenCalled();
+      // Continue regenerating with updated health (common case: health increasing during regen)
+      healthBar.updateHealth(55, 100, true);
 
-      // Manually start regeneration again by triggering the animation directly
-      // This simulates the edge case where a tween exists and we restart
-      healthBar.updateHealth(45, 100, true);
+      // Should NOT create a new tween (already regenerating)
+      expect(mockScene.tweens.add).toHaveBeenCalledTimes(1);
 
-      // Should have stopped the old tween (even though it was already stopped)
-      // and created a new one
-      expect(mockScene.tweens.add).toHaveBeenCalledTimes(2);
+      // Tween should NOT be stopped (no restart needed)
+      expect(mockTween.stop).not.toHaveBeenCalled();
+    });
+
+    it('should handle stopping regeneration when not currently regenerating (null safety)', () => {
+      const healthBar = new HealthBarUI(mockScene, 10, 70);
+
+      // Update with isRegenerating=false when never started regenerating
+      // This tests the null check in stopRegenerationEffect
+      healthBar.updateHealth(50, 100, false);
+
+      // Should not crash or attempt to stop null tween
+      expect(mockTween.stop).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Edge Cases', () => {
+    it('should handle maxHealth of zero without division by zero', () => {
+      const healthBar = new HealthBarUI(mockScene, 10, 70);
+
+      // Test with maxHealth = 0 (edge case that should not occur in normal gameplay)
+      healthBar.updateHealth(0, 0, false);
+
+      // Should set bar width to 0 and not crash
+      expect(mockHealthBar.setDisplaySize).toHaveBeenCalledWith(0, 30);
+      expect(mockHealthText.setText).toHaveBeenCalledWith('0/0');
     });
   });
 });
