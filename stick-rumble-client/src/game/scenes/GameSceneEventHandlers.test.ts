@@ -229,4 +229,357 @@ describe('GameSceneEventHandlers', () => {
       expect(mockWsClient.on).toHaveBeenCalledWith('player:move', playerMoveHandler);
     });
   });
+
+  describe('event handler branches', () => {
+    beforeEach(() => {
+      eventHandlers.setupEventHandlers();
+    });
+
+    it('should handle shoot:failed with non-empty reason', () => {
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const shootFailedHandler = handlerRefs.get('shoot:failed');
+
+      // Test with reason other than 'empty'
+      const data = { reason: 'reloading' };
+
+      expect(() => {
+        shootFailedHandler?.(data);
+      }).not.toThrow();
+
+      // Should not log the 'empty' message
+      // (In real code, it would log nothing or handle differently)
+    });
+
+    it('should handle shoot:failed with empty reason', () => {
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const shootFailedHandler = handlerRefs.get('shoot:failed');
+
+      // Test with reason = 'empty'
+      const data = { reason: 'empty' };
+      shootFailedHandler?.(data);
+
+      expect(consoleSpy).toHaveBeenCalledWith('Click! Magazine empty');
+
+      consoleSpy.mockRestore();
+    });
+
+    it('should handle player:damaged when victim is not local player', () => {
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const playerDamagedHandler = handlerRefs.get('player:damaged');
+
+      const data = {
+        victimId: 'other-player',
+        attackerId: 'attacker',
+        damage: 25,
+        newHealth: 75,
+        projectileId: 'proj-123',
+      };
+
+      // Should not update health bar for non-local player
+      playerDamagedHandler?.(data);
+
+      // Health bar should not be updated (still at initial 100 from setup)
+      expect(mockHealthBarUI.updateHealth).not.toHaveBeenCalled();
+
+      // Should still show damage numbers for other players
+      expect(mockGameSceneUI.showDamageNumber).toHaveBeenCalledWith(
+        mockPlayerManager,
+        'other-player',
+        25
+      );
+    });
+
+    it('should handle player:damaged when victim is local player', () => {
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const playerDamagedHandler = handlerRefs.get('player:damaged');
+
+      const data = {
+        victimId: 'player-1', // Local player ID from mock
+        attackerId: 'attacker',
+        damage: 25,
+        newHealth: 75,
+        projectileId: 'proj-123',
+      };
+
+      playerDamagedHandler?.(data);
+
+      // Should update health bar for local player
+      expect(mockHealthBarUI.updateHealth).toHaveBeenCalledWith(75, 100, false);
+      expect(mockGameSceneUI.showDamageFlash).toHaveBeenCalled();
+    });
+
+    it('should handle match:ended with null inputManager', () => {
+      // Create event handlers without input manager
+      const eventHandlersNoInput = new GameSceneEventHandlers(
+        mockWsClient,
+        mockPlayerManager,
+        mockProjectileManager as any,
+        () => mockHealthBarUI,
+        mockKillFeedUI,
+        mockGameSceneUI,
+        mockGameSceneSpectator,
+        vi.fn()
+      );
+
+      // Setup shooting manager but not input manager
+      const mockShootingManager = {
+        disable: vi.fn(),
+      };
+      eventHandlersNoInput.setShootingManager(mockShootingManager as any);
+      eventHandlersNoInput.setupEventHandlers();
+
+      const handlerRefs = (eventHandlersNoInput as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const matchEndedHandler = handlerRefs.get('match:ended');
+
+      const data = {
+        winners: ['player-1'],
+        finalScores: [{ playerId: 'player-1', kills: 5, deaths: 2, xp: 500 }],
+        reason: 'time_limit',
+      };
+
+      // Should not throw when inputManager is null
+      expect(() => {
+        matchEndedHandler?.(data);
+      }).not.toThrow();
+
+      // Shooting manager should still be disabled
+      expect(mockShootingManager.disable).toHaveBeenCalled();
+    });
+
+    it('should handle match:ended with null shootingManager', () => {
+      // Create event handlers without shooting manager
+      const eventHandlersNoShooting = new GameSceneEventHandlers(
+        mockWsClient,
+        mockPlayerManager,
+        mockProjectileManager as any,
+        () => mockHealthBarUI,
+        mockKillFeedUI,
+        mockGameSceneUI,
+        mockGameSceneSpectator,
+        vi.fn()
+      );
+
+      // Setup input manager but not shooting manager
+      const mockInputManager = {
+        disable: vi.fn(),
+      };
+      eventHandlersNoShooting.setInputManager(mockInputManager as any);
+      eventHandlersNoShooting.setupEventHandlers();
+
+      const handlerRefs = (eventHandlersNoShooting as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const matchEndedHandler = handlerRefs.get('match:ended');
+
+      const data = {
+        winners: ['player-1'],
+        finalScores: [{ playerId: 'player-1', kills: 5, deaths: 2, xp: 500 }],
+        reason: 'time_limit',
+      };
+
+      // Should not throw when shootingManager is null
+      expect(() => {
+        matchEndedHandler?.(data);
+      }).not.toThrow();
+
+      // Input manager should still be disabled
+      expect(mockInputManager.disable).toHaveBeenCalled();
+    });
+
+    it('should handle match:ended with both managers null', () => {
+      // Create event handlers without any managers
+      const eventHandlersNoManagers = new GameSceneEventHandlers(
+        mockWsClient,
+        mockPlayerManager,
+        mockProjectileManager as any,
+        () => mockHealthBarUI,
+        mockKillFeedUI,
+        mockGameSceneUI,
+        mockGameSceneSpectator,
+        vi.fn()
+      );
+
+      eventHandlersNoManagers.setupEventHandlers();
+
+      const handlerRefs = (eventHandlersNoManagers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const matchEndedHandler = handlerRefs.get('match:ended');
+
+      const data = {
+        winners: ['player-1'],
+        finalScores: [{ playerId: 'player-1', kills: 5, deaths: 2, xp: 500 }],
+        reason: 'time_limit',
+      };
+
+      // Should not throw when both managers are null
+      expect(() => {
+        matchEndedHandler?.(data);
+      }).not.toThrow();
+    });
+
+    it('should handle match:ended without window.onMatchEnd callback', () => {
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const matchEndedHandler = handlerRefs.get('match:ended');
+
+      // Ensure window.onMatchEnd is not set
+      delete (window as any).onMatchEnd;
+
+      const data = {
+        winners: ['player-1'],
+        finalScores: [{ playerId: 'player-1', kills: 5, deaths: 2, xp: 500 }],
+        reason: 'time_limit',
+      };
+
+      // Should not throw when window.onMatchEnd is not defined
+      expect(() => {
+        matchEndedHandler?.(data);
+      }).not.toThrow();
+    });
+
+    it('should handle player:move when inputManager is null', () => {
+      // Create event handlers without inputManager
+      const eventHandlersNoInput = new GameSceneEventHandlers(
+        mockWsClient,
+        mockPlayerManager,
+        mockProjectileManager as any,
+        () => mockHealthBarUI,
+        mockKillFeedUI,
+        mockGameSceneUI,
+        mockGameSceneSpectator,
+        vi.fn()
+      );
+
+      eventHandlersNoInput.setupEventHandlers();
+
+      const handlerRefs = (eventHandlersNoInput as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const playerMoveHandler = handlerRefs.get('player:move');
+
+      const data = {
+        players: [
+          { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, health: 100 },
+        ],
+      };
+
+      // Should not throw when inputManager is null
+      expect(() => {
+        playerMoveHandler?.(data);
+      }).not.toThrow();
+
+      // Should still update players
+      expect(mockPlayerManager.updatePlayers).toHaveBeenCalledWith(data.players);
+    });
+
+    it('should handle player:move when local player not found in list', () => {
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const playerMoveHandler = handlerRefs.get('player:move');
+
+      // Setup input manager
+      const mockInputManager = { setPlayerPosition: vi.fn() };
+      eventHandlers.setInputManager(mockInputManager as any);
+
+      const data = {
+        players: [
+          { id: 'other-player', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, health: 100 },
+        ],
+      };
+
+      // Should not throw when local player not in list
+      expect(() => {
+        playerMoveHandler?.(data);
+      }).not.toThrow();
+
+      // Should not update input manager position
+      expect(mockInputManager.setPlayerPosition).not.toHaveBeenCalled();
+    });
+
+    it('should handle player:move when local player health is undefined', () => {
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const playerMoveHandler = handlerRefs.get('player:move');
+
+      // Setup input manager
+      const mockInputManager = { setPlayerPosition: vi.fn() };
+      eventHandlers.setInputManager(mockInputManager as any);
+
+      const data = {
+        players: [
+          { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } }, // No health field
+        ],
+      };
+
+      // Should not throw when health is undefined
+      expect(() => {
+        playerMoveHandler?.(data);
+      }).not.toThrow();
+
+      // Should update input manager position
+      expect(mockInputManager.setPlayerPosition).toHaveBeenCalledWith(100, 200);
+
+      // Should not update health bar
+      expect(mockHealthBarUI.updateHealth).not.toHaveBeenCalled();
+    });
+
+    it('should handle player:move when messageData.players is falsy', () => {
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const playerMoveHandler = handlerRefs.get('player:move');
+
+      const data = { players: null };
+
+      // Should not throw when players is null
+      expect(() => {
+        playerMoveHandler?.(data);
+      }).not.toThrow();
+
+      // Should not update players
+      expect(mockPlayerManager.updatePlayers).not.toHaveBeenCalled();
+    });
+
+    it('should handle room:joined when playerId is falsy', () => {
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const roomJoinedHandler = handlerRefs.get('room:joined');
+
+      const data = { playerId: '' };
+
+      // Should not throw when playerId is empty
+      expect(() => {
+        roomJoinedHandler?.(data);
+      }).not.toThrow();
+
+      // Should still destroy old players
+      expect(mockPlayerManager.destroy).toHaveBeenCalled();
+
+      // Should not set local player ID or update health bar
+      expect(mockPlayerManager.setLocalPlayerId).not.toHaveBeenCalled();
+    });
+
+    it('should handle weapon:state when shootingManager is null', () => {
+      // Create event handlers without shooting manager
+      const eventHandlersNoShooting = new GameSceneEventHandlers(
+        mockWsClient,
+        mockPlayerManager,
+        mockProjectileManager as any,
+        () => mockHealthBarUI,
+        mockKillFeedUI,
+        mockGameSceneUI,
+        mockGameSceneSpectator,
+        vi.fn()
+      );
+
+      eventHandlersNoShooting.setupEventHandlers();
+
+      const handlerRefs = (eventHandlersNoShooting as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const weaponStateHandler = handlerRefs.get('weapon:state');
+
+      const data = {
+        ammo: 10,
+        maxAmmo: 30,
+        isReloading: false,
+      };
+
+      // Should not throw when shootingManager is null
+      expect(() => {
+        weaponStateHandler?.(data);
+      }).not.toThrow();
+
+      // Should not update ammo display
+      expect(mockGameSceneUI.updateAmmoDisplay).not.toHaveBeenCalled();
+    });
+  });
 });

@@ -678,4 +678,114 @@ describe('PlayerManager', () => {
       expect(setToSpy).toHaveBeenCalledWith(100, 200, 100, 150);
     });
   });
+
+  describe('getPlayerPosition', () => {
+    it('should return player position when player exists', () => {
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      const position = playerManager.getPlayerPosition('player-1');
+
+      expect(position).toEqual({ x: 100, y: 200 });
+    });
+
+    it('should return null when player does not exist', () => {
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      const position = playerManager.getPlayerPosition('non-existent');
+
+      expect(position).toBeNull();
+    });
+
+    it('should return null when no players exist', () => {
+      const position = playerManager.getPlayerPosition('any-id');
+
+      expect(position).toBeNull();
+    });
+  });
+
+  describe('edge cases - missing label/aim indicator', () => {
+    it('should handle missing label during player removal', () => {
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      // Manually remove the label from internal map to simulate edge case
+      const playerLabels = (playerManager as any).playerLabels as Map<string, any>;
+      playerLabels.delete('player-1');
+
+      // Remove player - should not throw even though label is missing
+      expect(() => {
+        playerManager.updatePlayers([]);
+      }).not.toThrow();
+    });
+
+    it('should handle missing aim indicator during player removal', () => {
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      // Manually remove the aim indicator from internal map to simulate edge case
+      const aimIndicators = (playerManager as any).aimIndicators as Map<string, any>;
+      aimIndicators.delete('player-1');
+
+      // Remove player - should not throw even though aim indicator is missing
+      expect(() => {
+        playerManager.updatePlayers([]);
+      }).not.toThrow();
+    });
+
+    it('should handle missing label during position update', () => {
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      // Manually remove the label from internal map to simulate edge case
+      const playerLabels = (playerManager as any).playerLabels as Map<string, any>;
+      playerLabels.delete('player-1');
+
+      // Update player position - should not throw even though label is missing
+      const updatedStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 300, y: 400 }, velocity: { x: 0, y: 0 } },
+      ];
+
+      expect(() => {
+        playerManager.updatePlayers(updatedStates);
+      }).not.toThrow();
+    });
+
+    it('should handle missing aim indicator during angle update', () => {
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: 0 },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      // Manually remove the aim indicator from internal map to simulate edge case
+      const aimIndicators = (playerManager as any).aimIndicators as Map<string, any>;
+      aimIndicators.delete('player-1');
+
+      // Update player with new aim angle - should not throw even though aim indicator is missing
+      const updatedStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: Math.PI / 2 },
+      ];
+
+      expect(() => {
+        playerManager.updatePlayers(updatedStates);
+      }).not.toThrow();
+    });
+  });
 });
