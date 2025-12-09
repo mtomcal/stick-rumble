@@ -339,6 +339,9 @@ So that the multiplayer foundation is proven to work.
 - ✅ **BUG**: Respawn and UI Rendering Issues (431c9ba6) - 5 critical bugs fixed, 93.05% coverage
 - ✅ **BUG**: NaN values in player movement (9094ee09) - JSON marshaling errors resolved
 - ✅ **BUG**: hit:confirmed message not sent to attackers in rooms (1d78d55d)
+- ✅ **BUG**: Health regeneration not working as designed (4bcdb803) - Fixed 60 HP/s bug, implemented fractional accumulation for correct 10 HP/s rate
+- ✅ **BUG**: Player sprite duplication on match restart (d7896712) - Added Phaser lifecycle cleanup handlers to prevent sprite accumulation
+- ✅ **QUALITY**: Branch coverage improvement (c4c46eea) - Improved from 84.28% to 88.62% with 23 new edge case tests
 
 **Technical Debt Completed:**
 - ✅ **TECH-DEBT**: Network package test coverage >90% (776e9f83) - achieved 91.8%
@@ -383,7 +386,7 @@ So that the multiplayer foundation is proven to work.
 - **Enforce coverage thresholds early**: 90% coverage threshold now enforced for all metrics (statements, branches, functions, lines) on both client and server.
 - **Documentation sync is critical**: Story 2.6.2 was completed but epic documentation still showed it as "NEXT - ready to start", causing confusion. Must update epics.md progress summary when marking ReadyQ stories as done to prevent documentation drift.
 
-**Epic Completion Date:** December 8, 2025 - All 13 feature stories complete, fully playable deathmatch delivered. Test coverage exceeds 90% threshold (Client: 97.3%, Server: 91.2%).
+**Epic Completion Date:** December 9, 2025 - All 13 feature stories complete with post-epic bug fixes and quality improvements. Fully playable deathmatch delivered with health regeneration working correctly, sprite lifecycle management, and 88.62% branch coverage (Client: 97.3%, Server: 91.2%).
 
 ---
 
@@ -723,9 +726,13 @@ So that I know when to stay safe versus re-engage.
 
 **FRs Covered:** FR4 (weapon pickups), FR5 (reload/switch), FR6 (sprint/dodge)
 
-**Epic Status:** ⏳ NOT STARTED (0/7 stories complete, blocked by Epic 2)
+**Epic Status:** ⏳ NOT STARTED (0/8 stories complete, ready to start)
 
-**Key Addition:** Story 3.7 added for basic visual polish after weapon systems complete. Makes game shareable before tackling Epic 4's technical netcode work. Scope: simple sprites, health bars, minimal hit effects (1-2 days, using Kenney.nl free assets).
+**Epic Ready:** Epic 2 complete (December 9, 2025). Epic 3 unblocked and loaded into ReadyQ with all 8 stories.
+
+**Key Additions:**
+- Story 3.0 added for weapon balance research before implementation (prevents mid-epic rebalancing)
+- Story 3.7 split into 3.7A (sprites) and 3.7B (UI effects) for improved agent success rate (smaller stories = 1-day tasks)
 
 ---
 
@@ -953,7 +960,7 @@ So that I can outplay opponents with skillful timing.
 
 ---
 
-### Story 3.7: Basic Visual Polish for Weapons and Characters
+### Story 3.7A: Character & Weapon Sprites
 
 As a player,
 I want visually distinct characters and weapons,
@@ -961,7 +968,7 @@ So that the game looks presentable and weapons are easily identifiable.
 
 **Acceptance Criteria:**
 
-**Given** I am playing the game after completing Epic 3
+**Given** I am playing the game after completing weapon mechanics
 **When** I look at my character and weapons
 **Then** I see proper stick figure sprites (not primitive shapes)
 
@@ -982,52 +989,70 @@ So that the game looks presentable and weapons are easily identifiable.
 **And** weapons rotate correctly with aim angle (anchor point at handle)
 **And** weapons visible when held by other players (rendered at player position + aim angle)
 
-**And** basic hit effects (minimal, not full particle systems):
-- Bullet impact: small yellow flash sprite (4×4 pixels, fades in 0.1s)
-- Melee hit: white impact lines (simple graphic, not particles)
-- Muzzle flash: small orange/yellow flash at gun barrel (fades in 0.1s)
+**Prerequisites:** Story 3.6
+
+---
+
+### Story 3.7B: Health Bars & Hit Effects
+
+As a player,
+I want clear visual feedback during combat,
+So that I can track health and understand hit registration.
+
+**Acceptance Criteria:**
+
+**Given** I am in combat with other players
+**When** damage is dealt or health changes
+**Then** I see clear visual feedback
 
 **And** health bar UI visible above each player:
 - Green bar (health), gray background, 32×4 pixels
 - Updates in real-time as health changes
 - Positioned 8 pixels above player head
+- Scales proportionally from 0-100 HP
 
-**Prerequisites:** Story 3.6 (completes Epic 3 gameplay features)
+**And** basic hit effects (minimal, not full particle systems):
+- Bullet impact: small yellow flash sprite (4×4 pixels, fades in 0.1s)
+- Melee hit: white impact lines (simple graphic, not particles)
+- Muzzle flash: small orange/yellow flash at gun barrel (fades in 0.1s)
 
-**Technical Notes:**
+**And** all effects are performant (60 FPS maintained with 8 players fighting)
 
-**Art Sourcing Strategy:**
-- Use free assets from Kenney.nl (Micro Roguelike pack, Top-Down Shooter pack)
-- Or create simple pixel art (1-2 day scope, 16×16 or smaller)
-- No custom animations needed (frame-by-frame sprite sheets are fine)
-- Prioritize clarity over detail (needs to read well at small size)
+**Prerequisites:** Story 3.7A
 
-**Implementation:**
-- Client assets: `public/assets/sprites/character.png`, `weapons/*.png`
-- Phaser sprite loading: `this.load.spritesheet('player', 'assets/sprites/character.png', {frameWidth: 16, frameHeight: 32})`
-- Animation config: `this.anims.create({key: 'walk', frames: this.anims.generateFrameNumbers('player', {start: 0, end: 3}), frameRate: 10, repeat: -1})`
-- Weapon rendering: `this.add.sprite(x, y, 'weapon_pistol').setRotation(aimAngle)`
-- Health bar: Phaser Graphics object, rectangle drawn above player each frame
-- Hit effects: Simple sprites with tween alpha: `this.add.sprite(x, y, 'impact_flash').setAlpha(1).tween({alpha: 0, duration: 100, onComplete: destroy})`
+**Technical Notes (Story 3.7A - Character & Weapon Sprites):**
+- **Art Sourcing:** Use free assets from Kenney.nl (Micro Roguelike, Top-Down Shooter packs) or create simple pixel art (16×16 or smaller)
+- **Client assets:** `public/assets/sprites/character.png`, `weapons/*.png`
+- **Phaser sprite loading:** `this.load.spritesheet('player', 'assets/sprites/character.png', {frameWidth: 16, frameHeight: 32})`
+- **Animation config:** `this.anims.create({key: 'walk', frames: this.anims.generateFrameNumbers('player', {start: 0, end: 3}), frameRate: 10, repeat: -1})`
+- **Weapon rendering:** `this.add.sprite(x, y, 'weapon_pistol').setRotation(aimAngle)`
+- **Quality:** Sprites readable at 1920×1080, weapons visually distinct, <500KB total
+- **Tests:** Mock sprite paths, verify rendering methods called, >90% coverage
+- **Estimated Effort:** 1 day (asset sourcing + integration + testing)
 
-**Scope Boundaries (Keep It Small):**
+**Technical Notes (Story 3.7B - Health Bars & Hit Effects):**
+- **Health bar:** Phaser Graphics object, rectangle drawn above player each frame
+- **Hit effects:** Simple sprites with tween alpha fade
+- **Implementation:** `this.add.sprite(x, y, 'impact_flash').setAlpha(1).tween({alpha: 0, duration: 100, onComplete: destroy})`
+- **Performance:** Effects pooled/reused (not created/destroyed per hit)
+- **Quality:** 60 FPS maintained with 8 players fighting, health bars clearly visible
+- **Tests:** Browser acceptance tests for visibility and performance, >90% coverage
+- **Estimated Effort:** 1 day (UI polish + feedback systems + testing)
+
+**Scope Boundaries (Both Stories):**
 - ❌ NO particle systems (deferred to Story 9.1)
-- ❌ NO advanced animations (idle breathing, run cycles, etc.)
-- ❌ NO death animations or ragdolls (deferred to Story 9.1)
+- ❌ NO advanced animations (idle breathing, run cycles, death animations, ragdolls - deferred to Story 9.1)
 - ❌ NO screen shake or camera effects (deferred to Story 9.1)
 - ✅ YES basic sprites that make the game shareable and clear
 - ✅ YES health bars and minimal hit feedback
 
-**Quality Requirements:**
-- Sprites must be readable at 1920×1080 resolution
-- Weapons must be visually distinct at a glance
-- Health bars must be clearly visible during combat
-- All assets optimized: PNG with compression, <500KB total for all sprites
-- Tests updated: mock new sprite paths, verify rendering methods called
+**Why Split Into 3.7A and 3.7B:**
+- Smaller stories improve agent success rate (learned from Epic 2.6/2.7 splits)
+- Story 3.7A focuses on asset integration (1 day)
+- Story 3.7B focuses on UI systems (1 day)
+- Combined: 2 days total, more manageable than single 2-day story
 
-**Estimated Effort:** 1-2 days (asset sourcing + integration + testing)
-
-**Why After Epic 3:**
+**Why After Epic 3 Weapon Mechanics:**
 - All 5 weapons implemented (can do all weapon art at once)
 - Combat mechanics proven (won't waste art on cut features)
 - Makes game shareable for early playtesting feedback
