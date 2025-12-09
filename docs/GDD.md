@@ -266,10 +266,49 @@ Flash's death in 2020 left a void for stick figure combat games that had million
 - **Rocket Launcher** - Explosive damage, splash radius, very limited ammo
 
 **Weapon Pickup System:**
-- Weapons spawn at fixed locations on map every 15-30 seconds
-- Controlling weapon spawn points = strategic map control
-- No inventory - pickup replaces current weapon
-- Default spawn weapon: Basic pistol or bat (balanced starter)
+
+**Acquisition Model: Fixed Weapon Crates (Arena Shooter Style)**
+
+The weapon acquisition system follows classic arena shooter design (Quake, Halo, Stick Arena) with fixed weapon spawn locations that become strategic control objectives.
+
+**Core Mechanics:**
+- **Fixed spawn locations** - 3-5 predetermined positions per map, each spawns a specific weapon type
+- **Auto-pickup on contact** - Players automatically pick up weapons when within 32px radius
+- **Instant weapon switch** - Picked-up weapon immediately replaces current weapon
+- **30-second respawn timer** - After pickup, weapon crate becomes inactive and respawns 30 seconds later
+- **Default spawn weapon** - All players spawn with Pistol (balanced starter weapon)
+- **No weapon drops** - Current weapon is destroyed on pickup (Pistol always destroyed, other weapons destroyed for MVP simplicity)
+- **No inventory system** - Players carry one weapon at a time, no weapon scrolling
+
+**Default Arena Spawn Configuration (1920x1080 map):**
+
+| Spawn ID | Position (x, y) | Weapon Type | Strategic Location |
+|----------|-----------------|-------------|-------------------|
+| crate_1  | (960, 200)      | Uzi         | Top center (high-traffic area) |
+| crate_2  | (400, 540)      | AK47        | Left middle (power position) |
+| crate_3  | (1520, 540)     | Shotgun     | Right middle (close-quarters zone) |
+| crate_4  | (960, 880)      | Katana      | Bottom center (melee control point) |
+| crate_5  | (200, 200)      | Bat         | Top-left corner (flanking route) |
+
+**Strategic Design:**
+- **Map control** - Controlling weapon spawn points provides tactical advantage
+- **Predictable locations** - Players learn spawn positions, creating skill-based gameplay (no RNG frustration)
+- **Weapon diversity** - Spawn positions aligned with weapon playstyle (Shotgun near tight corridors, AK47 in open areas)
+- **Fight for control** - Best weapons in contested areas, creating engagement hotspots
+- **No loadout selection** - Prevents AK47 dominance (everyone would pick best weapon)
+- **No random spawns** - Avoids battle royale RNG frustration from bad weapon spawns
+- **No kill rewards** - Prevents snowball effect (rich get richer)
+
+**Visual Feedback:**
+- **Available crate** - Weapon sprite with pulsing glow effect (color-coded by weapon type)
+- **Respawning crate** - Empty crate platform with countdown timer indicator
+- **Minimap indicators** - Show weapon spawn locations and availability status
+
+**Server-Authoritative Implementation:**
+- Server owns all weapon crate state (available/unavailable, respawn timers)
+- Server validates pickup attempts (distance check, availability check)
+- Server broadcasts pickup events to all players for UI updates
+- Client renders visual representation based on server state
 
 **Balance Philosophy:**
 - All weapons viable in situational contexts (no strict "best weapon")

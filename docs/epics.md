@@ -745,27 +745,43 @@ So that I can gain tactical advantage.
 **Acceptance Criteria:**
 
 **Given** a weapon (Uzi) spawned at position {x: 500, y: 600}
-**When** I move within 32 pixels of the weapon
-**Then** "Press E to pick up Uzi" prompt appears on screen
+**When** I move within 32 pixels of the weapon crate
+**Then** weapon pickup automatically triggers (no key press required)
 
-**And** when I press E key, I send `player:pickup` message to server
-**And** server validates I'm in range and weapon exists
-**And** server removes weapon from map, adds to my inventory, broadcasts `weapon:pickedup`
-**And** weapon sprite disappears for all players
-**And** my current weapon is replaced (dropped at my location if not default pistol)
+**And** client sends `weapon:pickup_attempt` message to server with crate ID
+**And** server validates I'm in range and weapon crate is available
+**And** server switches my weapon to Uzi (destroying current weapon)
+**And** server marks weapon crate as unavailable and starts 30-second respawn timer
+**And** server broadcasts `weapon:pickup_confirmed` to all players with pickup details
+**And** weapon crate visual changes to "unavailable" state for all players
+**And** my current weapon is destroyed (Pistol always destroyed, other weapons destroyed for MVP)
 
-**And** weapon respawns at the same location after 30 seconds
-**And** weapon spawn notification: subtle glow effect on map and minimap
+**And** weapon crate respawns at the same location after 30 seconds
+**And** server broadcasts `weapon:respawned` to all players
+**And** weapon crate visual changes back to "available" state with glow effect
+**And** minimap shows weapon spawn locations and availability status
 
 **Prerequisites:** Story 2.6
 
 **Technical Notes:**
-- Weapon spawn data: `{id, type, x, y, respawnTime}`
-- Server tracks weapon state: `{available: true/false, nextRespawn: timestamp}`
-- Pickup range: 32 pixels (circular collision check)
-- Weapon switch instant (no animation delay for MVP)
-- Dropped weapons disappear after 10 seconds (prevent clutter)
-- Each map has 3-5 fixed weapon spawn points defined in map config
+- Weapon crate data structure: `{id, type, position, isAvailable, respawnTime}`
+- Server tracks weapon crate state: `{available: true/false, nextRespawn: timestamp}`
+- Pickup detection: Auto-trigger when player within 32px radius (circular collision check)
+- Weapon switch: Instant replacement (no animation delay for MVP)
+- No weapon drops: Current weapon destroyed on pickup (no floor loot clutter)
+- Fixed spawn points: 5 locations defined in GDD Section "Weapon Pickup System"
+  - crate_1: (960, 200) - Uzi
+  - crate_2: (400, 540) - AK47
+  - crate_3: (1520, 540) - Shotgun
+  - crate_4: (960, 880) - Katana
+  - crate_5: (200, 200) - Bat
+- Network messages:
+  - `weapon:pickup_attempt` (Client → Server): {crateId}
+  - `weapon:pickup_confirmed` (Server → All): {playerId, crateId, weaponType, nextRespawn}
+  - `weapon:respawned` (Server → All): {crateId, weaponType, position}
+  - `weapon:spawned` (Server → Client on join): Initial crate state sync
+- Collision pattern: Reuse AABB system from projectile collision
+- Visual states: Available (glowing), Unavailable (empty platform), Respawning (countdown timer)
 
 ---
 
