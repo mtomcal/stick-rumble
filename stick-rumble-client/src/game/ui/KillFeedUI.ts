@@ -120,4 +120,18 @@ export class KillFeedUI {
       kill.text.setY(targetY);
     });
   }
+
+  /**
+   * Cleanup all resources
+   */
+  destroy(): void {
+    // Destroy all kill entries
+    this.kills.forEach(kill => {
+      kill.text.destroy();
+    });
+    this.kills = [];
+
+    // Destroy container
+    this.container.destroy();
+  }
 }

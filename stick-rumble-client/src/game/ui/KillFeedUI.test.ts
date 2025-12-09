@@ -191,4 +191,50 @@ describe('KillFeedUI', () => {
       expect.any(Object)
     );
   });
+
+  describe('Cleanup', () => {
+    it('should destroy all kill entries when destroyed', () => {
+      const killFeed = new KillFeedUI(mockScene, 1720, 100);
+
+      // Add multiple kills
+      killFeed.addKill('Player1', 'Player2');
+      killFeed.addKill('Player3', 'Player4');
+
+      // Add destroy method to container mock
+      mockContainer.destroy = vi.fn();
+
+      // Destroy kill feed
+      killFeed.destroy();
+
+      // Should destroy both kill text entries
+      expect(mockTexts[0].destroy).toHaveBeenCalled();
+      expect(mockTexts[1].destroy).toHaveBeenCalled();
+    });
+
+    it('should destroy container', () => {
+      const killFeed = new KillFeedUI(mockScene, 1720, 100);
+
+      // Add destroy method to container mock
+      mockContainer.destroy = vi.fn();
+
+      // Destroy kill feed
+      killFeed.destroy();
+
+      // Should destroy container
+      expect(mockContainer.destroy).toHaveBeenCalled();
+    });
+
+    it('should handle destroy when no kills exist', () => {
+      const killFeed = new KillFeedUI(mockScene, 1720, 100);
+
+      // Add destroy method to container mock
+      mockContainer.destroy = vi.fn();
+
+      // Destroy kill feed without adding any kills
+      killFeed.destroy();
+
+      // Should not crash and should destroy container
+      expect(mockContainer.destroy).toHaveBeenCalled();
+    });
+  });
 });

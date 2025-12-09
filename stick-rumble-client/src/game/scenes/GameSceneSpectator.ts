@@ -137,4 +137,23 @@ export class GameSceneSpectator {
       }
     }
   }
+
+  /**
+   * Cleanup all resources
+   */
+  destroy(): void {
+    // Remove spectator UI if active
+    if (this.spectatorText) {
+      this.spectatorText.destroy();
+      this.spectatorText = null;
+    }
+    if (this.respawnCountdownText) {
+      this.respawnCountdownText.destroy();
+      this.respawnCountdownText = null;
+    }
+
+    // Reset state
+    this.isSpectating = false;
+    this.localPlayerDeathTime = null;
+  }
 }

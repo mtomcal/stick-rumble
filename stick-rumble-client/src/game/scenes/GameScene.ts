@@ -34,6 +34,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Register shutdown event handler for cleanup
+    this.events.once('shutdown', () => {
+      this.cleanup();
+    });
+
     // Set world and camera bounds to match arena size
     this.physics.world.setBounds(0, 0, ARENA.WIDTH, ARENA.HEIGHT);
     this.cameras.main.setBounds(0, 0, ARENA.WIDTH, ARENA.HEIGHT);
@@ -199,5 +204,55 @@ export class GameScene extends Phaser.Scene {
   private stopCameraFollow(): void {
     this.cameras.main.stopFollow();
     this.isCameraFollowing = false;
+  }
+
+  /**
+   * Cleanup all managers and resources on scene shutdown
+   * This prevents memory leaks and sprite duplication when scene restarts
+   */
+  private cleanup(): void {
+    // Cleanup event handlers first to prevent handler accumulation
+    if (this.eventHandlers) {
+      this.eventHandlers.destroy();
+    }
+
+    // Destroy all managers
+    if (this.playerManager) {
+      this.playerManager.destroy();
+    }
+    if (this.projectileManager) {
+      this.projectileManager.destroy();
+    }
+    if (this.healthBarUI) {
+      this.healthBarUI.destroy();
+    }
+    if (this.killFeedUI) {
+      this.killFeedUI.destroy();
+    }
+    if (this.ui) {
+      this.ui.destroy();
+    }
+    if (this.spectator) {
+      this.spectator.destroy();
+    }
+    if (this.inputManager) {
+      this.inputManager.destroy();
+    }
+    if (this.shootingManager) {
+      this.shootingManager.destroy();
+    }
+
+    // Disconnect WebSocket
+    if (this.wsClient) {
+      this.wsClient.disconnect();
+    }
+  }
+
+  /**
+   * Restart the match (for future Epic 5 lobby system)
+   * This will trigger scene shutdown -> cleanup -> create cycle
+   */
+  restartMatch(): void {
+    this.scene.restart();
   }
 }

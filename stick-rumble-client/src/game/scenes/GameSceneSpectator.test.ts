@@ -391,4 +391,42 @@ describe('GameSceneSpectator', () => {
       expect(mockCamera.scrollY).toBeGreaterThan(scrollYAfterFirstUpdate);
     });
   });
+
+  describe('Cleanup', () => {
+    it('should destroy spectator text when destroyed', () => {
+      spectator.enterSpectatorMode();
+
+      spectator.destroy();
+
+      expect(mockSpectatorText.destroy).toHaveBeenCalled();
+    });
+
+    it('should destroy respawn countdown text when destroyed', () => {
+      spectator.enterSpectatorMode();
+
+      spectator.destroy();
+
+      expect(mockRespawnCountdownText.destroy).toHaveBeenCalled();
+    });
+
+    it('should reset spectator state when destroyed', () => {
+      spectator.enterSpectatorMode();
+      expect(spectator.isActive()).toBe(true);
+
+      spectator.destroy();
+
+      expect(spectator.isActive()).toBe(false);
+    });
+
+    it('should handle destroy when not in spectator mode', () => {
+      // Should not crash when destroying before entering spectator mode
+      expect(() => {
+        spectator.destroy();
+      }).not.toThrow();
+
+      // Texts should not be destroyed if never created
+      expect(mockSpectatorText.destroy).not.toHaveBeenCalled();
+      expect(mockRespawnCountdownText.destroy).not.toHaveBeenCalled();
+    });
+  });
 });

@@ -40,6 +40,7 @@ describe('GameSceneUI', () => {
       setScrollFactor: vi.fn().mockReturnThis(),
       setDepth: vi.fn().mockReturnThis(),
       setAlpha: vi.fn().mockReturnThis(),
+      destroy: vi.fn(),
     };
 
     // Create mock line
@@ -387,6 +388,43 @@ describe('GameSceneUI', () => {
       ui.showDamageNumber(mockPlayerManager, 'victim-1', 25);
 
       expect(createdTexts[0].setOrigin).toHaveBeenCalledWith(0.5);
+    });
+  });
+
+  describe('Cleanup', () => {
+    it('should destroy ammo text when destroyed', () => {
+      ui.createAmmoDisplay(10, 50);
+      const ammoText = createdTexts[0];
+
+      ui.destroy();
+
+      expect(ammoText.destroy).toHaveBeenCalled();
+    });
+
+    it('should destroy match timer when destroyed', () => {
+      ui.createMatchTimer(960, 10);
+      const timerText = createdTexts[0];
+
+      ui.destroy();
+
+      expect(timerText.destroy).toHaveBeenCalled();
+    });
+
+    it('should destroy damage flash overlay when destroyed', () => {
+      ui.createDamageFlashOverlay(1920, 1080);
+
+      ui.destroy();
+
+      expect(mockDamageFlashOverlay.destroy).toHaveBeenCalled();
+    });
+
+    it('should handle destroy when UI elements are not created', () => {
+      const emptyUI = new GameSceneUI(mockScene);
+
+      // Should not crash when destroying without creating UI elements
+      expect(() => {
+        emptyUI.destroy();
+      }).not.toThrow();
     });
   });
 });
