@@ -12,6 +12,8 @@ describe('GameSceneEventHandlers', () => {
   let mockWsClient: WebSocketClient;
   let mockPlayerManager: PlayerManager;
   let mockProjectileManager: ProjectileManager;
+  let mockWeaponCrateManager: any;
+  let mockPickupPromptUI: any;
   let mockHealthBarUI: HealthBarUI;
   let mockKillFeedUI: KillFeedUI;
   let mockGameSceneUI: GameSceneUI;
@@ -39,6 +41,18 @@ describe('GameSceneEventHandlers', () => {
       createMuzzleFlash: vi.fn(),
       removeProjectile: vi.fn(),
     } as unknown as ProjectileManager;
+
+    mockWeaponCrateManager = {
+      spawnCrate: vi.fn(),
+      markUnavailable: vi.fn(),
+      markAvailable: vi.fn(),
+    } as any;
+
+    mockPickupPromptUI = {
+      show: vi.fn(),
+      hide: vi.fn(),
+      isVisible: vi.fn().mockReturnValue(false),
+    } as any;
 
     mockHealthBarUI = {
       updateHealth: vi.fn(),
@@ -70,7 +84,9 @@ describe('GameSceneEventHandlers', () => {
       mockKillFeedUI,
       mockGameSceneUI,
       mockGameSceneSpectator,
-      vi.fn() // onCameraFollowNeeded
+      vi.fn(), // onCameraFollowNeeded
+      mockWeaponCrateManager,
+      mockPickupPromptUI
     );
   });
 
@@ -92,6 +108,9 @@ describe('GameSceneEventHandlers', () => {
       expect(mockWsClient.on).toHaveBeenCalledWith('player:respawn', expect.any(Function));
       expect(mockWsClient.on).toHaveBeenCalledWith('match:timer', expect.any(Function));
       expect(mockWsClient.on).toHaveBeenCalledWith('match:ended', expect.any(Function));
+      expect(mockWsClient.on).toHaveBeenCalledWith('weapon:spawned', expect.any(Function));
+      expect(mockWsClient.on).toHaveBeenCalledWith('weapon:pickup_confirmed', expect.any(Function));
+      expect(mockWsClient.on).toHaveBeenCalledWith('weapon:respawned', expect.any(Function));
     });
 
     it('should not accumulate handlers when called multiple times', () => {
@@ -103,11 +122,11 @@ describe('GameSceneEventHandlers', () => {
       eventHandlers.setupEventHandlers();
       const secondCallCount = (mockWsClient.on as ReturnType<typeof vi.fn>).mock.calls.length;
 
-      // Should have registered handlers twice (13 event types × 2 calls)
+      // Should have registered handlers twice (16 event types × 2 calls)
       expect(secondCallCount).toBe(firstCallCount * 2);
 
       // But off() should have been called to remove previous handlers
-      expect(mockWsClient.off).toHaveBeenCalledTimes(13); // 13 event types cleaned up
+      expect(mockWsClient.off).toHaveBeenCalledTimes(16); // 16 event types cleaned up
     });
 
     it('should call cleanupHandlers before registering new handlers', () => {
@@ -132,8 +151,8 @@ describe('GameSceneEventHandlers', () => {
       // Call cleanup
       (eventHandlers as any).cleanupHandlers();
 
-      // Verify all handlers were removed (13 event types)
-      expect(mockWsClient.off).toHaveBeenCalledTimes(13);
+      // Verify all handlers were removed (16 event types)
+      expect(mockWsClient.off).toHaveBeenCalledTimes(16);
       expect(mockWsClient.off).toHaveBeenCalledWith('player:move', expect.any(Function));
       expect(mockWsClient.off).toHaveBeenCalledWith('room:joined', expect.any(Function));
       expect(mockWsClient.off).toHaveBeenCalledWith('projectile:spawn', expect.any(Function));
@@ -147,6 +166,9 @@ describe('GameSceneEventHandlers', () => {
       expect(mockWsClient.off).toHaveBeenCalledWith('player:respawn', expect.any(Function));
       expect(mockWsClient.off).toHaveBeenCalledWith('match:timer', expect.any(Function));
       expect(mockWsClient.off).toHaveBeenCalledWith('match:ended', expect.any(Function));
+      expect(mockWsClient.off).toHaveBeenCalledWith('weapon:spawned', expect.any(Function));
+      expect(mockWsClient.off).toHaveBeenCalledWith('weapon:pickup_confirmed', expect.any(Function));
+      expect(mockWsClient.off).toHaveBeenCalledWith('weapon:respawned', expect.any(Function));
     });
 
     it('should handle cleanup when no handlers are registered', () => {
@@ -192,7 +214,7 @@ describe('GameSceneEventHandlers', () => {
       eventHandlers.destroy();
 
       // Verify all handlers were removed (13 event types)
-      expect(mockWsClient.off).toHaveBeenCalledTimes(13);
+      expect(mockWsClient.off).toHaveBeenCalledTimes(16);
     });
   });
 
@@ -202,8 +224,8 @@ describe('GameSceneEventHandlers', () => {
 
       const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
 
-      // Verify all 13 event types have stored references
-      expect(handlerRefs.size).toBe(13);
+      // Verify all 16 event types have stored references
+      expect(handlerRefs.size).toBe(16);
       expect(handlerRefs.has('player:move')).toBe(true);
       expect(handlerRefs.has('room:joined')).toBe(true);
       expect(handlerRefs.has('projectile:spawn')).toBe(true);
@@ -319,7 +341,9 @@ describe('GameSceneEventHandlers', () => {
         mockKillFeedUI,
         mockGameSceneUI,
         mockGameSceneSpectator,
-        vi.fn()
+        vi.fn(),
+        mockWeaponCrateManager,
+        mockPickupPromptUI
       );
 
       // Setup shooting manager but not input manager
@@ -357,7 +381,9 @@ describe('GameSceneEventHandlers', () => {
         mockKillFeedUI,
         mockGameSceneUI,
         mockGameSceneSpectator,
-        vi.fn()
+        vi.fn(),
+        mockWeaponCrateManager,
+        mockPickupPromptUI
       );
 
       // Setup input manager but not shooting manager
@@ -395,7 +421,9 @@ describe('GameSceneEventHandlers', () => {
         mockKillFeedUI,
         mockGameSceneUI,
         mockGameSceneSpectator,
-        vi.fn()
+        vi.fn(),
+        mockWeaponCrateManager,
+        mockPickupPromptUI
       );
 
       eventHandlersNoManagers.setupEventHandlers();
@@ -444,7 +472,9 @@ describe('GameSceneEventHandlers', () => {
         mockKillFeedUI,
         mockGameSceneUI,
         mockGameSceneSpectator,
-        vi.fn()
+        vi.fn(),
+        mockWeaponCrateManager,
+        mockPickupPromptUI
       );
 
       eventHandlersNoInput.setupEventHandlers();
@@ -559,7 +589,9 @@ describe('GameSceneEventHandlers', () => {
         mockKillFeedUI,
         mockGameSceneUI,
         mockGameSceneSpectator,
-        vi.fn()
+        vi.fn(),
+        mockWeaponCrateManager,
+        mockPickupPromptUI
       );
 
       eventHandlersNoShooting.setupEventHandlers();

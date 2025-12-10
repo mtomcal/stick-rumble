@@ -25,6 +25,8 @@ export const createMockScene = () => {
     setText: vi.fn().mockReturnThis(),
     setColor: vi.fn().mockReturnThis(),
     setPosition: vi.fn().mockReturnThis(),
+    setVisible: vi.fn().mockReturnThis(),
+    visible: false,
     destroy: vi.fn().mockReturnThis(),
   };
 
@@ -42,6 +44,7 @@ export const createMockScene = () => {
 
   const mockLine = {
     setTo: vi.fn().mockReturnThis(),
+    setDepth: vi.fn().mockReturnThis(),
     destroy: vi.fn(),
   };
 

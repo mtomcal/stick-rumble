@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"math"
+	"time"
 
 	"github.com/mtomcal/stick-rumble-server/internal/game"
 )
@@ -224,4 +225,49 @@ func (h *WebSocketHandler) broadcastMatchEnded(room *game.Room, world *game.Worl
 	// Broadcast to all players in the room
 	room.Broadcast(msgBytes, "")
 	log.Printf("Match ended in room %s - reason: %s, winners: %v", room.ID, room.Match.EndReason, winners)
+}
+
+// broadcastWeaponPickup broadcasts weapon pickup event to all clients
+func (h *WebSocketHandler) broadcastWeaponPickup(playerID, crateID, weaponType string, respawnTime time.Time) {
+	message := Message{
+		Type:      "weapon:pickup_confirmed",
+		Timestamp: time.Now().UnixMilli(),
+		Data: map[string]interface{}{
+			"playerId":        playerID,
+			"crateId":         crateID,
+			"weaponType":      weaponType,
+			"nextRespawnTime": respawnTime.Unix(),
+		},
+	}
+
+	msgBytes, err := json.Marshal(message)
+	if err != nil {
+		log.Printf("Error marshaling weapon:pickup_confirmed message: %v", err)
+		return
+	}
+
+	// Broadcast to all players
+	h.roomManager.BroadcastToAll(msgBytes)
+}
+
+// broadcastWeaponRespawn broadcasts weapon respawn event to all clients
+func (h *WebSocketHandler) broadcastWeaponRespawn(crate *game.WeaponCrate) {
+	message := Message{
+		Type:      "weapon:respawned",
+		Timestamp: time.Now().UnixMilli(),
+		Data: map[string]interface{}{
+			"crateId":    crate.ID,
+			"weaponType": crate.WeaponType,
+			"position":   crate.Position,
+		},
+	}
+
+	msgBytes, err := json.Marshal(message)
+	if err != nil {
+		log.Printf("Error marshaling weapon:respawned message: %v", err)
+		return
+	}
+
+	// Broadcast to all players
+	h.roomManager.BroadcastToAll(msgBytes)
 }

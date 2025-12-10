@@ -93,6 +93,8 @@ describe('GameScene - UI', () => {
         setText: vi.fn(),
         setOrigin: vi.fn().mockReturnThis(),
         setScrollFactor: vi.fn().mockReturnThis(),
+        setVisible: vi.fn().mockReturnThis(),
+        visible: false,
       };
       let textCallCount = 0;
       mockSceneContext.add.text = vi.fn().mockImplementation(() => {
@@ -156,6 +158,8 @@ describe('GameScene - UI', () => {
         setText: vi.fn(),
         setOrigin: vi.fn().mockReturnThis(),
         setScrollFactor: vi.fn().mockReturnThis(),
+        setVisible: vi.fn().mockReturnThis(),
+        visible: false,
       };
       let textCallCount = 0;
       mockSceneContext.add.text = vi.fn().mockImplementation(() => {
@@ -223,6 +227,8 @@ describe('GameScene - UI', () => {
         setOrigin: vi.fn().mockReturnThis(),
         setScrollFactor: vi.fn().mockReturnThis(),
         setDepth: vi.fn().mockReturnThis(),
+        setVisible: vi.fn().mockReturnThis(),
+        visible: false,
         destroy: vi.fn(),
       };
 
@@ -234,7 +240,7 @@ describe('GameScene - UI', () => {
         if (textCallCount === 3) {
           return mockTimerText;
         }
-        return { setOrigin: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), destroy: vi.fn() };
+        return { setOrigin: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), setVisible: vi.fn().mockReturnThis(), visible: false, destroy: vi.fn() };
       });
 
       Object.assign(scene, mockSceneContext);
@@ -276,6 +282,8 @@ describe('GameScene - UI', () => {
         setOrigin: vi.fn().mockReturnThis(),
         setScrollFactor: vi.fn().mockReturnThis(),
         setDepth: vi.fn().mockReturnThis(),
+        setVisible: vi.fn().mockReturnThis(),
+        visible: false,
         destroy: vi.fn(),
       };
 
@@ -285,7 +293,7 @@ describe('GameScene - UI', () => {
         if (textCallCount === 3) {
           return mockTimerText;
         }
-        return { setOrigin: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), destroy: vi.fn() };
+        return { setOrigin: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), setVisible: vi.fn().mockReturnThis(), visible: false, destroy: vi.fn() };
       });
 
       Object.assign(scene, mockSceneContext);
@@ -323,6 +331,8 @@ describe('GameScene - UI', () => {
         setOrigin: vi.fn().mockReturnThis(),
         setScrollFactor: vi.fn().mockReturnThis(),
         setDepth: vi.fn().mockReturnThis(),
+        setVisible: vi.fn().mockReturnThis(),
+        visible: false,
         destroy: vi.fn(),
       };
 
@@ -332,7 +342,7 @@ describe('GameScene - UI', () => {
         if (textCallCount === 3) {
           return mockTimerText;
         }
-        return { setOrigin: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), destroy: vi.fn() };
+        return { setOrigin: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), setVisible: vi.fn().mockReturnThis(), visible: false, destroy: vi.fn() };
       });
 
       Object.assign(scene, mockSceneContext);
@@ -370,6 +380,8 @@ describe('GameScene - UI', () => {
         setOrigin: vi.fn().mockReturnThis(),
         setScrollFactor: vi.fn().mockReturnThis(),
         setDepth: vi.fn().mockReturnThis(),
+        setVisible: vi.fn().mockReturnThis(),
+        visible: false,
         destroy: vi.fn(),
       };
 
@@ -379,7 +391,7 @@ describe('GameScene - UI', () => {
         if (textCallCount === 3) {
           return mockTimerText;
         }
-        return { setOrigin: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), destroy: vi.fn() };
+        return { setOrigin: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), setVisible: vi.fn().mockReturnThis(), visible: false, destroy: vi.fn() };
       });
 
       Object.assign(scene, mockSceneContext);
