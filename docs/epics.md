@@ -726,13 +726,67 @@ So that I know when to stay safe versus re-engage.
 
 **FRs Covered:** FR4 (weapon pickups), FR5 (reload/switch), FR6 (sprint/dodge)
 
-**Epic Status:** ⏳ NOT STARTED (0/8 stories complete, ready to start)
+**Epic Status:** ⏳ IN PROGRESS (2/14 stories complete, 14% done)
 
-**Epic Ready:** Epic 2 complete (December 9, 2025). Epic 3 unblocked and loaded into ReadyQ with all 8 stories.
+**Epic Ready:** December 9, 2025 (Epic 2 complete)
+**Epic Started:** December 10, 2025 (Story 3.1 PR #3 merged)
+
+**Epic Progress:**
+- ✅ Story 3.0: Weapon Balance Research & Validation (DONE - Dec 9)
+- ✅ Story 3.1: Weapon Pickup System (DONE - Dec 10, PR #3 merged)
+- 🟢 Story 3.2: Melee Weapons (NEXT - ready to start)
+- 🔴 Stories 3.3-3.7B: Blocked by sequential dependencies
 
 **Key Additions:**
 - Story 3.0 added for weapon balance research before implementation (prevents mid-epic rebalancing)
 - Story 3.7 split into 3.7A (sprites) and 3.7B (UI effects) for improved agent success rate (smaller stories = 1-day tasks)
+- Story 3.8 added for shared configuration system (from PR #3 feedback, blocked until 3.2-3.4 complete)
+
+---
+
+### Epic 3 Balance Warnings (from weapon-balance-analysis.md)
+
+**CRITICAL FINDINGS** (Story 3.0 research):
+1. ⚠️ **Melee underpowered**: Bat (50 DPS) and Katana (56.25 DPS) have LOWEST DPS, not highest as designed
+2. ⚠️ **AK47 overpowered**: 120 DPS + 800px range + no weaknesses = dominates all scenarios
+3. ⚠️ **Pistol damage mismatch**: Client shows 15 dmg, server uses 25 dmg (✅ FIXED in Story 3.0B)
+4. ⚠️ **Risk/reward inverted**: High-risk melee gives low reward, low-risk ranged gives high reward
+
+**RECOMMENDED SOLUTIONS**:
+- Story 3.2: Consider buffing melee (Bat 25→30, Katana 45→50) for 60+ DPS
+- Story 3.3: Implement damage falloff system (PRIMARY AK47 balance mechanism)
+- Story 3.3: Monitor AK47 playtesting, ready to nerf fire rate 6/s→5/s if needed
+
+See docs/weapon-balance-analysis.md for full analysis with DPS calculations, TTK tables, and design recommendations.
+
+---
+
+### Epic 3 Completion Checklist
+
+**Feature Stories (9 core):**
+- [x] 3.0: Weapon Balance Research & Validation
+- [x] 3.1: Weapon Pickup System
+- [ ] 3.2: Melee Weapons (Bat and Katana)
+- [ ] 3.3: Ranged Weapons (Uzi, AK47, Shotgun)
+- [ ] 3.4: Manual Reload Mechanic
+- [ ] 3.5: Sprint Mechanic
+- [ ] 3.6: Dodge Roll with Invincibility Frames
+- [ ] 3.7A: Character & Weapon Sprites
+- [ ] 3.7B: Health Bars & Hit Effects
+
+**Supporting Work:**
+- [x] 3.0B: Pistol damage mismatch fix (client 15→25)
+- [x] 3.3A: Weapon acquisition system design
+- [x] 3.4A: Ammo economy & magazine balance design
+- [ ] 3.8: Shared configuration system (blocked until 3.2-3.4 complete)
+
+**Epic Complete When:**
+- All 14 stories done (9 feature + 4 supporting + 1 tech debt)
+- All weapon mechanics playtested and balanced
+- Balance validated against weapon-balance-analysis.md findings
+- Game is "shareable" quality (sprites, effects, clear UI)
+- Zero TypeScript errors, zero ESLint warnings, zero Go vet issues
+- >90% test coverage maintained across all new code
 
 ---
 
@@ -761,7 +815,7 @@ So that I can gain tactical advantage.
 **And** weapon crate visual changes back to "available" state with glow effect
 **And** minimap shows weapon spawn locations and availability status
 
-**Prerequisites:** Story 2.6
+**Prerequisites:** Story 2.6, Story 3.0 (Weapon Balance Research), Story 3.3A (Weapon Acquisition System)
 
 **Technical Notes:**
 - Weapon crate data structure: `{id, type, position, isAvailable, respawnTime}`
@@ -810,16 +864,24 @@ So that I can dominate at short range.
 **And** both weapons have no ammo (infinite uses)
 **And** melee attacks require precise timing and positioning
 
+**And** melee balance approach selected from options:
+  - Option A: Implement as-is (Bat 25 dmg, Katana 45 dmg) and evaluate in playtesting
+  - Option B: Apply recommended buffs (Bat 30 dmg = 60 DPS, Katana 50 dmg = 62.5 DPS)
+  - Option C: Implement as-is but add TODO for post-Epic 3 balance pass
+
+**And** decision rationale documented in session logs (why chosen, what trade-offs)
+
 **Prerequisites:** Story 3.1
 
 **Technical Notes:**
-- Bat stats: {damage: 25, cooldown: 0.5s, range: 64px, arc: 90°}
-- Katana stats: {damage: 45, cooldown: 0.8s, range: 80px, arc: 90°}
+- Bat stats: {damage: 25, cooldown: 0.5s, range: 64px, arc: 90°, DPS: 50}
+- Katana stats: {damage: 45, cooldown: 0.8s, range: 80px, arc: 90°, DPS: 56.25}
 - Server hit detection: check enemies in cone-shaped area from player
 - Knockback velocity: 200 px/s for 0.2 seconds
 - Animation: 4-frame swing (0.2s duration)
 - Melee priority: if multiple enemies in range, hit all (AoE)
-- Balance: melee is high-risk (need to close distance) but high DPS
+
+**Balance Note:** Weapon balance research (docs/weapon-balance-analysis.md) shows melee weapons have the LOWEST DPS among all weapons (Bat: 50 DPS, Katana: 56.25 DPS vs AK47: 120 DPS). This contradicts the original "high-risk, high-reward" design philosophy. Consider implementing recommended stat buffs (Bat 25→30 damage = 60 DPS, Katana 45→50 damage = 62.5 DPS) or evaluate during playtesting. See weapon-balance-analysis.md Section 7 for detailed analysis.
 
 ---
 
@@ -858,16 +920,29 @@ So that I can choose weapons matching my playstyle.
 **And** devastating at close range (all pellets hit), weak at distance (spread too wide)
 **And** slow fire rate: 1 shot per second, 6-round magazine, 2.5 second reload
 
-**Prerequisites:** Story 3.2
+**Prerequisites:** Story 3.1
 
 **Technical Notes:**
-- Uzi: {damage: 8, fireRate: 10/s, mag: 30, reload: 1.5s, range: 600px}
-- AK47: {damage: 20, fireRate: 6/s, mag: 30, reload: 2.0s, range: 800px}
-- Shotgun: {damage: 60 total (8 pellets × 7.5), fireRate: 1/s, mag: 6, reload: 2.5s, range: 300px}
+- Uzi: {damage: 8, fireRate: 10/s, mag: 30, reload: 1.5s, range: 600px, DPS: 80}
+- AK47: {damage: 20, fireRate: 6/s, mag: 30, reload: 2.0s, range: 800px, DPS: 120}
+- Shotgun: {damage: 60 total (8 pellets × 7.5), fireRate: 1/s, mag: 6, reload: 2.5s, range: 300px, DPS: 60}
 - Shotgun pellet spread: each pellet angle offset by random ±7.5° from aim
 - Recoil patterns stored as `{x, y}` offset arrays per weapon
 - Bullet drop-off: damage decreases linearly after 50% of max range
 - Server validates fire rate (prevent macros/exploits)
+
+**CRITICAL - Damage Falloff Formula** (applies to all ranged weapons):
+```javascript
+if (distance > maxRange * 0.5) {
+  damageFalloff = 1.0 - ((distance - maxRange * 0.5) / (maxRange * 0.5))
+  actualDamage = baseDamage * damageFalloff
+} else {
+  actualDamage = baseDamage
+}
+```
+Damage decreases linearly after 50% of max range. At max range (100%), damage = 0. Example: AK47 at 400px = 20 dmg, 600px = 10 dmg, 800px = 0 dmg.
+
+**Balance Warning:** Weapon balance research (docs/weapon-balance-analysis.md) shows AK47 is overpowered with highest DPS (120), longest range (800px), and largest magazine (30 rounds) with no clear weakness. The damage falloff system is the PRIMARY balance mechanism to prevent AK47 dominance. Monitor playtesting closely. If AK47 still dominates after falloff implementation, consider reducing fire rate from 6/s to 5/s (reduces DPS to 100). See weapon-balance-analysis.md Sections 6-7 for detailed analysis.
 
 ---
 
