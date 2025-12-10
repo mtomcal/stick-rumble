@@ -125,6 +125,17 @@ func (r *Room) GetPlayer(playerID string) *Player {
 	return nil
 }
 
+// GetPlayers returns a copy of all players in the room
+func (r *Room) GetPlayers() []*Player {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	// Return a copy to avoid race conditions
+	players := make([]*Player, len(r.Players))
+	copy(players, r.Players)
+	return players
+}
+
 // RoomManager manages all game rooms and player assignments
 type RoomManager struct {
 	rooms          map[string]*Room

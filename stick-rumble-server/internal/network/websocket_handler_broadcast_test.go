@@ -41,17 +41,9 @@ func TestBroadcastPlayerStates(t *testing.T) {
 		assert.NoError(t, err)
 		defer conn2.Close()
 
-		// Consume room:joined messages and capture player ID
-		conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
-		_, joinedBytes, err := conn1.ReadMessage()
-		assert.NoError(t, err)
-		var joinedMsg Message
-		err = json.Unmarshal(joinedBytes, &joinedMsg)
-		assert.NoError(t, err)
-		player1ID := joinedMsg.Data.(map[string]interface{})["playerId"].(string)
-
-		conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
-		conn2.ReadMessage()
+		// Consume room:joined and weapon:spawned messages, capture player ID
+		player1ID := consumeRoomJoinedAndGetPlayerID(t, conn1)
+		consumeRoomJoined(t, conn2)
 
 		// Give time for room setup
 		time.Sleep(50 * time.Millisecond)
@@ -135,17 +127,9 @@ func TestBroadcastPlayerStatesWithMarshalError(t *testing.T) {
 		assert.NoError(t, err)
 		defer conn2.Close()
 
-		// Consume room:joined messages and capture player ID
-		conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
-		_, joinedBytes, err := conn1.ReadMessage()
-		assert.NoError(t, err)
-		var joinedMsg Message
-		err = json.Unmarshal(joinedBytes, &joinedMsg)
-		assert.NoError(t, err)
-		player1ID := joinedMsg.Data.(map[string]interface{})["playerId"].(string)
-
-		conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
-		conn2.ReadMessage()
+		// Consume room:joined and weapon:spawned messages, capture player ID
+		player1ID := consumeRoomJoinedAndGetPlayerID(t, conn1)
+		consumeRoomJoined(t, conn2)
 
 		time.Sleep(50 * time.Millisecond)
 
@@ -329,11 +313,9 @@ func TestBroadcastProjectileSpawnError(t *testing.T) {
 		assert.NoError(t, err)
 		defer conn2.Close()
 
-		// Consume room:joined messages
-		conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
-		conn1.ReadMessage()
-		conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
-		conn2.ReadMessage()
+		// Consume room:joined and weapon:spawned messages
+		consumeRoomJoined(t, conn1)
+		consumeRoomJoined(t, conn2)
 
 		time.Sleep(50 * time.Millisecond)
 
@@ -509,14 +491,9 @@ func TestSendWeaponState(t *testing.T) {
 		assert.NoError(t, err)
 		defer conn2.Close()
 
-		conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
-		_, joinedBytes, _ := conn1.ReadMessage()
-		var joinedMsg Message
-		json.Unmarshal(joinedBytes, &joinedMsg)
-		playerID := joinedMsg.Data.(map[string]interface{})["playerId"].(string)
-
-		conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
-		conn2.ReadMessage()
+		// Consume room:joined and weapon:spawned messages, capture player ID
+		playerID := consumeRoomJoinedAndGetPlayerID(t, conn1)
+		consumeRoomJoined(t, conn2)
 
 		time.Sleep(50 * time.Millisecond)
 
@@ -584,14 +561,9 @@ func TestSendShootFailed(t *testing.T) {
 		assert.NoError(t, err)
 		defer conn2.Close()
 
-		conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
-		_, joinedBytes, _ := conn1.ReadMessage()
-		var joinedMsg Message
-		json.Unmarshal(joinedBytes, &joinedMsg)
-		playerID := joinedMsg.Data.(map[string]interface{})["playerId"].(string)
-
-		conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
-		conn2.ReadMessage()
+		// Consume room:joined and weapon:spawned messages, capture player ID
+		playerID := consumeRoomJoinedAndGetPlayerID(t, conn1)
+		consumeRoomJoined(t, conn2)
 
 		time.Sleep(50 * time.Millisecond)
 

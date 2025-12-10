@@ -127,16 +127,29 @@ describe('GameScene - Combat', () => {
     it('should trigger reload when R key is pressed', async () => {
       const mockSceneContext = createMockScene();
       let reloadKeyHandler: (() => void) | null = null;
+
+      // Create separate mocks for each key (R and E)
       const reloadKeyOnMock = vi.fn((_event: string, handler: () => void) => {
-        reloadKeyHandler = handler;
+        if (_event === 'down') {
+          reloadKeyHandler = handler;
+        }
       });
+      const pickupKeyOnMock = vi.fn();
+
+      const addKeyMock = vi.fn((key: string) => {
+        if (key === 'R') {
+          return { on: reloadKeyOnMock };
+        } else if (key === 'E') {
+          return { on: pickupKeyOnMock };
+        }
+        return { on: vi.fn() };
+      });
+
       mockSceneContext.input = {
         ...mockSceneContext.input,
         on: vi.fn(),
         keyboard: {
-          addKey: vi.fn().mockReturnValue({
-            on: reloadKeyOnMock,
-          }),
+          addKey: addKeyMock,
           addKeys: mockSceneContext.input.keyboard.addKeys,
         },
       };

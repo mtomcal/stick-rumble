@@ -241,6 +241,17 @@ export class PlayerManager {
   }
 
   /**
+   * Get the local player's current position
+   * Returns undefined if local player doesn't exist yet
+   */
+  getLocalPlayerPosition(): { x: number; y: number } | undefined {
+    if (!this.localPlayerId) {
+      return undefined;
+    }
+    return this.getPlayerPosition(this.localPlayerId) ?? undefined;
+  }
+
+  /**
    * Update local player's aim indicator from current aim angle
    * This provides immediate visual feedback without waiting for server echo
    */
