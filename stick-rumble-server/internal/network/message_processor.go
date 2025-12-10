@@ -258,3 +258,102 @@ func getFloat64(m map[string]interface{}, key string) float64 {
 	}
 	return floatVal
 }
+
+// getString safely extracts a string value from a map
+func getString(m map[string]interface{}, key string) string {
+	val, ok := m[key]
+	if !ok {
+		return ""
+	}
+	strVal, ok := val.(string)
+	if !ok {
+		return ""
+	}
+	return strVal
+}
+
+// handleWeaponPickup processes weapon pickup attempts from players
+func (h *WebSocketHandler) handleWeaponPickup(playerID string, data any) {
+	// Convert data to map
+	dataMap, ok := data.(map[string]interface{})
+	if !ok {
+		log.Printf("Invalid weapon:pickup_attempt data format from %s", playerID)
+		return
+	}
+
+	crateID := getString(dataMap, "crateId")
+	if crateID == "" {
+		log.Printf("Missing crateId in weapon:pickup_attempt from %s", playerID)
+		return
+	}
+
+	// Get weapon crate
+	crate := h.gameServer.GetWeaponCrateManager().GetCrate(crateID)
+	if crate == nil {
+		log.Printf("Invalid crateId %s from player %s", crateID, playerID)
+		return
+	}
+
+	// Check if crate is available
+	if !crate.IsAvailable {
+		log.Printf("Player %s attempted to pickup unavailable crate %s", playerID, crateID)
+		return
+	}
+
+	// Get player state from world
+	playerState, exists := h.gameServer.GetWorld().GetPlayer(playerID)
+	if !exists {
+		log.Printf("Player %s not found for weapon pickup", playerID)
+		return
+	}
+
+	// Check if player is alive
+	if !playerState.IsAlive() {
+		log.Printf("Dead player %s attempted weapon pickup", playerID)
+		return
+	}
+
+	// Check proximity using physics system
+	physics := game.NewPhysics()
+	if !physics.CheckPlayerCrateProximity(playerState, crate) {
+		log.Printf("Player %s out of range for crate %s", playerID, crateID)
+		return
+	}
+
+	// All validation passed - perform pickup
+	// 1. Mark crate as picked up
+	success := h.gameServer.GetWeaponCrateManager().PickupCrate(crateID)
+	if !success {
+		log.Printf("Failed to pick up crate %s (race condition)", crateID)
+		return
+	}
+
+	// 2. Create new weapon for player
+	newWeapon, err := game.CreateWeaponByType(crate.WeaponType)
+	if err != nil {
+		log.Printf("Failed to create weapon %s: %v", crate.WeaponType, err)
+		// Return crate to available state
+		crate.IsAvailable = true
+		return
+	}
+
+	// 3. Replace player's weapon
+	h.gameServer.SetWeaponState(playerID, game.NewWeaponState(newWeapon))
+
+	// 4. Call pickup callback to broadcast to clients
+	if h.gameServer.GetWeaponCrateManager().GetCrate(crateID) != nil {
+		updatedCrate := h.gameServer.GetWeaponCrateManager().GetCrate(crateID)
+		h.broadcastWeaponPickup(playerID, crateID, crate.WeaponType, updatedCrate.RespawnTime)
+
+		// 5. Send updated weapon state to picker
+		h.sendWeaponState(playerID)
+	}
+
+	log.Printf("Player %s picked up %s from crate %s", playerID, crate.WeaponType, crateID)
+}
+
+// onWeaponRespawn is called when a weapon crate respawns
+func (h *WebSocketHandler) onWeaponRespawn(crate *game.WeaponCrate) {
+	h.broadcastWeaponRespawn(crate)
+	log.Printf("Weapon crate %s respawned (%s)", crate.ID, crate.WeaponType)
+}

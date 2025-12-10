@@ -1,6 +1,8 @@
 import type { WebSocketClient } from '../network/WebSocketClient';
 import type { PlayerManager, PlayerState } from '../entities/PlayerManager';
 import type { ProjectileManager, ProjectileData } from '../entities/ProjectileManager';
+import type { WeaponCrateManager, WeaponCrateData } from '../entities/WeaponCrateManager';
+import type { PickupPromptUI } from '../ui/PickupPromptUI';
 import type { InputManager } from '../input/InputManager';
 import type { ShootingManager, WeaponState } from '../input/ShootingManager';
 import type { HealthBarUI } from '../ui/HealthBarUI';
@@ -16,6 +18,8 @@ export class GameSceneEventHandlers {
   private wsClient: WebSocketClient;
   private playerManager: PlayerManager;
   private projectileManager: ProjectileManager;
+  private weaponCrateManager: WeaponCrateManager;
+  private pickupPromptUI: PickupPromptUI;
   private inputManager: InputManager | null = null;
   private shootingManager: ShootingManager | null = null;
   private getHealthBarUI: () => HealthBarUI;
@@ -34,7 +38,9 @@ export class GameSceneEventHandlers {
     killFeedUI: KillFeedUI,
     ui: GameSceneUI,
     spectator: GameSceneSpectator,
-    onCameraFollowNeeded: () => void
+    onCameraFollowNeeded: () => void,
+    weaponCrateManager: WeaponCrateManager,
+    pickupPromptUI: PickupPromptUI
   ) {
     this.wsClient = wsClient;
     this.playerManager = playerManager;
@@ -44,6 +50,8 @@ export class GameSceneEventHandlers {
     this.ui = ui;
     this.spectator = spectator;
     this.onCameraFollowNeeded = onCameraFollowNeeded;
+    this.weaponCrateManager = weaponCrateManager;
+    this.pickupPromptUI = pickupPromptUI;
   }
 
   /**
@@ -313,5 +321,48 @@ export class GameSceneEventHandlers {
     };
     this.handlerRefs.set('match:ended', matchEndedHandler);
     this.wsClient.on('match:ended', matchEndedHandler);
+
+    // Store and register weapon:spawned handler (initial weapon crate spawns)
+    const weaponSpawnedHandler = (data: unknown) => {
+      const cratesData = data as { crates: WeaponCrateData[] };
+      if (cratesData.crates) {
+        for (const crateData of cratesData.crates) {
+          this.weaponCrateManager.spawnCrate(crateData);
+        }
+      }
+    };
+    this.handlerRefs.set('weapon:spawned', weaponSpawnedHandler);
+    this.wsClient.on('weapon:spawned', weaponSpawnedHandler);
+
+    // Store and register weapon:pickup_confirmed handler
+    const weaponPickupConfirmedHandler = (data: unknown) => {
+      const pickupData = data as {
+        playerId: string;
+        crateId: string;
+        weaponType: string;
+      };
+      // Mark crate as unavailable
+      this.weaponCrateManager.markUnavailable(pickupData.crateId);
+
+      // Hide pickup prompt if it's the same crate
+      if (this.pickupPromptUI.isVisible()) {
+        this.pickupPromptUI.hide();
+      }
+    };
+    this.handlerRefs.set('weapon:pickup_confirmed', weaponPickupConfirmedHandler);
+    this.wsClient.on('weapon:pickup_confirmed', weaponPickupConfirmedHandler);
+
+    // Store and register weapon:respawned handler
+    const weaponRespawnedHandler = (data: unknown) => {
+      const respawnData = data as {
+        crateId: string;
+        weaponType: string;
+        position: { x: number; y: number };
+      };
+      // Mark crate as available again
+      this.weaponCrateManager.markAvailable(respawnData.crateId);
+    };
+    this.handlerRefs.set('weapon:respawned', weaponRespawnedHandler);
+    this.wsClient.on('weapon:respawned', weaponRespawnedHandler);
   }
 }

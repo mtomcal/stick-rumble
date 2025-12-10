@@ -24,13 +24,14 @@ type ShootResult struct {
 
 // GameServer manages the game loop and physics simulation
 type GameServer struct {
-	world             *World
-	physics           *Physics
-	projectileManager *ProjectileManager
-	weaponStates      map[string]*WeaponState
-	weaponMu          sync.RWMutex
-	tickRate          time.Duration
-	updateRate        time.Duration // Rate at which to broadcast updates to clients
+	world              *World
+	physics            *Physics
+	projectileManager  *ProjectileManager
+	weaponCrateManager *WeaponCrateManager
+	weaponStates       map[string]*WeaponState
+	weaponMu           sync.RWMutex
+	tickRate           time.Duration
+	updateRate         time.Duration // Rate at which to broadcast updates to clients
 
 	// Broadcast function to send state updates to clients
 	broadcastFunc func(playerStates []PlayerState)
@@ -50,6 +51,12 @@ type GameServer struct {
 	// Callback for checking time limit across all rooms
 	onCheckTimeLimit func()
 
+	// Callback for when a weapon is picked up
+	onWeaponPickup func(playerID, crateID, weaponType string, respawnTime time.Time)
+
+	// Callback for when a weapon crate respawns
+	onWeaponRespawn func(crate *WeaponCrate)
+
 	running bool
 	mu      sync.RWMutex
 	wg      sync.WaitGroup
@@ -58,14 +65,15 @@ type GameServer struct {
 // NewGameServer creates a new game server
 func NewGameServer(broadcastFunc func(playerStates []PlayerState)) *GameServer {
 	return &GameServer{
-		world:             NewWorld(),
-		physics:           NewPhysics(),
-		projectileManager: NewProjectileManager(),
-		weaponStates:      make(map[string]*WeaponState),
-		tickRate:          time.Duration(ServerTickInterval) * time.Millisecond,
-		updateRate:        time.Duration(ClientUpdateInterval) * time.Millisecond,
-		broadcastFunc:     broadcastFunc,
-		running:           false,
+		world:              NewWorld(),
+		physics:            NewPhysics(),
+		projectileManager:  NewProjectileManager(),
+		weaponCrateManager: NewWeaponCrateManager(),
+		weaponStates:       make(map[string]*WeaponState),
+		tickRate:           time.Duration(ServerTickInterval) * time.Millisecond,
+		updateRate:         time.Duration(ClientUpdateInterval) * time.Millisecond,
+		broadcastFunc:      broadcastFunc,
+		running:            false,
 	}
 }
 
@@ -132,6 +140,9 @@ func (gs *GameServer) tickLoop(ctx context.Context) {
 
 			// Update health regeneration
 			gs.updateHealthRegeneration(deltaTime)
+
+			// Check for weapon respawns
+			gs.checkWeaponRespawns()
 		}
 	}
 }
@@ -236,6 +247,13 @@ func (gs *GameServer) GetWeaponState(playerID string) *WeaponState {
 	return gs.weaponStates[playerID]
 }
 
+// SetWeaponState sets the weapon state for a player
+func (gs *GameServer) SetWeaponState(playerID string, weaponState *WeaponState) {
+	gs.weaponMu.Lock()
+	defer gs.weaponMu.Unlock()
+	gs.weaponStates[playerID] = weaponState
+}
+
 // PlayerShoot attempts to fire a projectile for the given player
 func (gs *GameServer) PlayerShoot(playerID string, aimAngle float64) ShootResult {
 	// Check if player exists
@@ -333,6 +351,21 @@ func (gs *GameServer) SetOnHit(callback func(hit HitEvent)) {
 // SetOnRespawn sets the callback for when a player respawns
 func (gs *GameServer) SetOnRespawn(callback func(playerID string, position Vector2)) {
 	gs.onRespawn = callback
+}
+
+// SetOnWeaponPickup sets the callback for when a weapon is picked up
+func (gs *GameServer) SetOnWeaponPickup(callback func(playerID, crateID, weaponType string, respawnTime time.Time)) {
+	gs.onWeaponPickup = callback
+}
+
+// SetOnWeaponRespawn sets the callback for when a weapon crate respawns
+func (gs *GameServer) SetOnWeaponRespawn(callback func(crate *WeaponCrate)) {
+	gs.onWeaponRespawn = callback
+}
+
+// GetWeaponCrateManager returns the weapon crate manager
+func (gs *GameServer) GetWeaponCrateManager() *WeaponCrateManager {
+	return gs.weaponCrateManager
 }
 
 // MarkPlayerDead marks a player as dead
@@ -472,5 +505,19 @@ func (gs *GameServer) updateHealthRegeneration(deltaTime float64) {
 
 		// Apply regeneration if applicable
 		player.ApplyRegeneration(now, deltaTime)
+	}
+}
+
+// checkWeaponRespawns checks for weapon crates that should respawn
+func (gs *GameServer) checkWeaponRespawns() {
+	// Get list of crates that respawned
+	respawnedCrates := gs.weaponCrateManager.UpdateRespawns()
+
+	// Notify about each respawned crate
+	for _, crateID := range respawnedCrates {
+		crate := gs.weaponCrateManager.GetCrate(crateID)
+		if crate != nil && gs.onWeaponRespawn != nil {
+			gs.onWeaponRespawn(crate)
+		}
 	}
 }

@@ -33,11 +33,9 @@ func TestMessageEcho(t *testing.T) {
 	assert.NoError(t, err, "Should connect client 2")
 	defer conn2.Close()
 
-	// Consume room:joined messages
-	conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
-	conn1.ReadMessage()
-	conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
-	conn2.ReadMessage()
+	// Consume room:joined and weapon:spawned messages
+	consumeRoomJoined(t, conn1)
+	consumeRoomJoined(t, conn2)
 
 	// Create test message from client 1
 	testMsg := Message{

@@ -60,6 +60,9 @@ func NewWebSocketHandlerWithConfig(timerInterval time.Duration) *WebSocketHandle
 	// Register callback for respawn events
 	handler.gameServer.SetOnRespawn(handler.onRespawn)
 
+	// Register callback for weapon respawn events
+	handler.gameServer.SetOnWeaponRespawn(handler.onWeaponRespawn)
+
 	return handler
 }
 
@@ -126,10 +129,18 @@ func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Reques
 	log.Printf("Client connected: %s", playerID)
 
 	// Add player to room manager
-	h.roomManager.AddPlayer(player)
+	room := h.roomManager.AddPlayer(player)
 
 	// Add player to game server
 	h.gameServer.AddPlayer(playerID)
+
+	// If player joined a room, send initial weapon spawn state to all players
+	if room != nil {
+		// Send weapon spawns to all players in the newly created room
+		for _, p := range room.GetPlayers() {
+			h.sendWeaponSpawns(p.ID)
+		}
+	}
 
 	// Start goroutine to send messages to client
 	done := make(chan struct{})
@@ -178,6 +189,10 @@ func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Reques
 		case "player:reload":
 			// Handle player reloading
 			h.handlePlayerReload(playerID)
+
+		case "weapon:pickup_attempt":
+			// Handle weapon pickup
+			h.handleWeaponPickup(playerID, msg.Data)
 
 		default:
 			// Broadcast other messages to room (for backward compatibility with tests)

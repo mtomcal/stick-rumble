@@ -74,3 +74,12 @@ const (
 	// HealthRegenerationRate is the amount of HP restored per second
 	HealthRegenerationRate = 10.0
 )
+
+// Weapon pickup system
+const (
+	// WeaponRespawnDelay is the time in seconds before a weapon respawns after pickup
+	WeaponRespawnDelay = 30.0
+
+	// WeaponPickupRadius is the distance in pixels for weapon pickup detection
+	WeaponPickupRadius = 32.0
+)

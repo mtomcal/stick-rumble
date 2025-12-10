@@ -31,18 +31,9 @@ func TestOnHit(t *testing.T) {
 		assert.NoError(t, err)
 		defer conn2.Close()
 
-		// Consume room:joined messages and capture player IDs
-		conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
-		_, joinedBytes1, _ := conn1.ReadMessage()
-		var joinedMsg1 Message
-		json.Unmarshal(joinedBytes1, &joinedMsg1)
-		player1ID := joinedMsg1.Data.(map[string]interface{})["playerId"].(string)
-
-		conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
-		_, joinedBytes2, _ := conn2.ReadMessage()
-		var joinedMsg2 Message
-		json.Unmarshal(joinedBytes2, &joinedMsg2)
-		player2ID := joinedMsg2.Data.(map[string]interface{})["playerId"].(string)
+		// Consume room:joined and weapon:spawned messages, capture player IDs
+		player1ID := consumeRoomJoinedAndGetPlayerID(t, conn1)
+		player2ID := consumeRoomJoinedAndGetPlayerID(t, conn2)
 
 		// Give time for room setup
 		time.Sleep(50 * time.Millisecond)
@@ -93,18 +84,9 @@ func TestOnHit(t *testing.T) {
 		assert.NoError(t, err)
 		defer conn2.Close()
 
-		// Consume room:joined messages and capture player IDs
-		conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
-		_, joinedBytes1, _ := conn1.ReadMessage()
-		var joinedMsg1 Message
-		json.Unmarshal(joinedBytes1, &joinedMsg1)
-		player1ID := joinedMsg1.Data.(map[string]interface{})["playerId"].(string)
-
-		conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
-		_, joinedBytes2, _ := conn2.ReadMessage()
-		var joinedMsg2 Message
-		json.Unmarshal(joinedBytes2, &joinedMsg2)
-		player2ID := joinedMsg2.Data.(map[string]interface{})["playerId"].(string)
+		// Consume room:joined and weapon:spawned messages, capture player IDs
+		player1ID := consumeRoomJoinedAndGetPlayerID(t, conn1)
+		player2ID := consumeRoomJoinedAndGetPlayerID(t, conn2)
 
 		// Give time for room setup
 		time.Sleep(50 * time.Millisecond)
@@ -503,18 +485,9 @@ func TestOnHitDeathScenario(t *testing.T) {
 		assert.NoError(t, err)
 		defer conn2.Close()
 
-		// Consume room:joined messages and capture player IDs
-		conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
-		_, joinedBytes1, _ := conn1.ReadMessage()
-		var joinedMsg1 Message
-		json.Unmarshal(joinedBytes1, &joinedMsg1)
-		player1ID := joinedMsg1.Data.(map[string]interface{})["playerId"].(string)
-
-		conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
-		_, joinedBytes2, _ := conn2.ReadMessage()
-		var joinedMsg2 Message
-		json.Unmarshal(joinedBytes2, &joinedMsg2)
-		player2ID := joinedMsg2.Data.(map[string]interface{})["playerId"].(string)
+		// Consume room:joined and weapon:spawned messages, capture player IDs
+		player1ID := consumeRoomJoinedAndGetPlayerID(t, conn1)
+		player2ID := consumeRoomJoinedAndGetPlayerID(t, conn2)
 
 		time.Sleep(50 * time.Millisecond)
 
@@ -593,18 +566,9 @@ func TestOnHitDeathScenario(t *testing.T) {
 		assert.NoError(t, err)
 		defer conn2.Close()
 
-		// Consume room:joined messages and capture player IDs
-		conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
-		_, joinedBytes1, _ := conn1.ReadMessage()
-		var joinedMsg1 Message
-		json.Unmarshal(joinedBytes1, &joinedMsg1)
-		player1ID := joinedMsg1.Data.(map[string]interface{})["playerId"].(string)
-
-		conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
-		_, joinedBytes2, _ := conn2.ReadMessage()
-		var joinedMsg2 Message
-		json.Unmarshal(joinedBytes2, &joinedMsg2)
-		player2ID := joinedMsg2.Data.(map[string]interface{})["playerId"].(string)
+		// Consume room:joined and weapon:spawned messages, capture player IDs
+		player1ID := consumeRoomJoinedAndGetPlayerID(t, conn1)
+		player2ID := consumeRoomJoinedAndGetPlayerID(t, conn2)
 
 		time.Sleep(50 * time.Millisecond)
 
@@ -659,18 +623,9 @@ func TestOnHitDeathScenario(t *testing.T) {
 		assert.NoError(t, err)
 		defer conn2.Close()
 
-		// Get player IDs
-		conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
-		_, joinedBytes1, _ := conn1.ReadMessage()
-		var joinedMsg1 Message
-		json.Unmarshal(joinedBytes1, &joinedMsg1)
-		player1ID := joinedMsg1.Data.(map[string]interface{})["playerId"].(string)
-
-		conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
-		_, joinedBytes2, _ := conn2.ReadMessage()
-		var joinedMsg2 Message
-		json.Unmarshal(joinedBytes2, &joinedMsg2)
-		player2ID := joinedMsg2.Data.(map[string]interface{})["playerId"].(string)
+		// Consume room:joined and weapon:spawned messages, capture player IDs
+		player1ID := consumeRoomJoinedAndGetPlayerID(t, conn1)
+		player2ID := consumeRoomJoinedAndGetPlayerID(t, conn2)
 
 		time.Sleep(50 * time.Millisecond)
 

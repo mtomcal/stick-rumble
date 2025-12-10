@@ -4,8 +4,10 @@ import { InputManager } from '../input/InputManager';
 import { ShootingManager } from '../input/ShootingManager';
 import { PlayerManager } from '../entities/PlayerManager';
 import { ProjectileManager } from '../entities/ProjectileManager';
+import { WeaponCrateManager } from '../entities/WeaponCrateManager';
 import { HealthBarUI } from '../ui/HealthBarUI';
 import { KillFeedUI } from '../ui/KillFeedUI';
+import { PickupPromptUI } from '../ui/PickupPromptUI';
 import { GameSceneUI } from './GameSceneUI';
 import { GameSceneSpectator } from './GameSceneSpectator';
 import { GameSceneEventHandlers } from './GameSceneEventHandlers';
@@ -17,6 +19,8 @@ export class GameScene extends Phaser.Scene {
   private shootingManager!: ShootingManager;
   private playerManager!: PlayerManager;
   private projectileManager!: ProjectileManager;
+  private weaponCrateManager!: WeaponCrateManager;
+  private pickupPromptUI!: PickupPromptUI;
   private healthBarUI!: HealthBarUI;
   private killFeedUI!: KillFeedUI;
   private ui!: GameSceneUI;
@@ -24,6 +28,7 @@ export class GameScene extends Phaser.Scene {
   private eventHandlers!: GameSceneEventHandlers;
   private lastDeltaTime: number = 0;
   private isCameraFollowing: boolean = false;
+  private nearbyWeaponCrate: { id: string; weaponType: string } | null = null;
 
   constructor() {
     super({ key: 'GameScene' });
@@ -64,6 +69,12 @@ export class GameScene extends Phaser.Scene {
     // Initialize projectile manager
     this.projectileManager = new ProjectileManager(this);
 
+    // Initialize weapon crate manager
+    this.weaponCrateManager = new WeaponCrateManager(this);
+
+    // Initialize pickup prompt UI
+    this.pickupPromptUI = new PickupPromptUI(this);
+
     // Initialize health bar UI (top-left corner)
     this.healthBarUI = new HealthBarUI(this, 10, 70);
 
@@ -92,7 +103,9 @@ export class GameScene extends Phaser.Scene {
       this.killFeedUI,
       this.ui,
       this.spectator,
-      () => this.startCameraFollowIfNeeded()
+      () => this.startCameraFollowIfNeeded(),
+      this.weaponCrateManager,
+      this.pickupPromptUI
     );
 
     // Setup message handlers before connecting
@@ -134,8 +147,22 @@ export class GameScene extends Phaser.Scene {
             });
           }
 
+          // Setup E key for weapon pickup
+          const pickupKey = this.input.keyboard?.addKey('E');
+          if (pickupKey) {
+            pickupKey.on('down', () => {
+              if (this.nearbyWeaponCrate) {
+                this.wsClient.send({
+                  type: 'weapon:pickup_attempt',
+                  timestamp: Date.now(),
+                  data: { crateId: this.nearbyWeaponCrate.id }
+                });
+              }
+            });
+          }
+
           // Add connection status (fixed to screen)
-          const connectionText = this.add.text(10, 30, 'Connected! WASD=move, Click=shoot, R=reload', {
+          const connectionText = this.add.text(10, 30, 'Connected! WASD=move, Click=shoot, R=reload, E=pickup', {
             fontSize: '14px',
             color: '#00ff00'
           });
@@ -169,6 +196,9 @@ export class GameScene extends Phaser.Scene {
       // This provides client-side prediction without waiting for server echo
       const currentAimAngle = this.inputManager.getAimAngle();
       this.playerManager.updateLocalPlayerAim(currentAimAngle);
+
+      // Check for nearby weapon crates
+      this.checkWeaponProximity();
     }
 
     // Update projectiles
@@ -179,6 +209,26 @@ export class GameScene extends Phaser.Scene {
     // Update spectator mode
     if (this.spectator && this.spectator.isActive()) {
       this.spectator.updateSpectatorMode();
+    }
+  }
+
+  /**
+   * Check for nearby weapon crates and show pickup prompt
+   */
+  private checkWeaponProximity(): void {
+    if (!this.weaponCrateManager || !this.pickupPromptUI || !this.playerManager) {
+      return;
+    }
+
+    const localPlayerPos = this.playerManager.getLocalPlayerPosition();
+    const nearest = this.weaponCrateManager.checkProximity(localPlayerPos);
+
+    if (nearest) {
+      this.pickupPromptUI.show(nearest.weaponType);
+      this.nearbyWeaponCrate = nearest;
+    } else {
+      this.pickupPromptUI.hide();
+      this.nearbyWeaponCrate = null;
     }
   }
 
@@ -222,6 +272,12 @@ export class GameScene extends Phaser.Scene {
     }
     if (this.projectileManager) {
       this.projectileManager.destroy();
+    }
+    if (this.weaponCrateManager) {
+      this.weaponCrateManager.destroy();
+    }
+    if (this.pickupPromptUI) {
+      this.pickupPromptUI.destroy();
     }
     if (this.healthBarUI) {
       this.healthBarUI.destroy();
