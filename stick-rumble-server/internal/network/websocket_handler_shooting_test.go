@@ -224,11 +224,9 @@ func TestBroadcastProjectileSpawn(t *testing.T) {
 		assert.NoError(t, err)
 		defer conn2.Close()
 
-		// Consume room:joined messages
-		conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
-		conn1.ReadMessage()
-		conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
-		conn2.ReadMessage()
+		// Consume room:joined and weapon:spawned messages
+		consumeRoomJoined(t, conn1)
+		consumeRoomJoined(t, conn2)
 
 		// Give time for room setup
 		time.Sleep(50 * time.Millisecond)
@@ -274,16 +272,9 @@ func TestOnReloadComplete(t *testing.T) {
 		assert.NoError(t, err)
 		defer conn2.Close()
 
-		// Consume room:joined messages and capture player ID
-		conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
-		_, joinedBytes, _ := conn1.ReadMessage()
-		var joinedMsg Message
-		json.Unmarshal(joinedBytes, &joinedMsg)
-		joinedData := joinedMsg.Data.(map[string]interface{})
-		playerID := joinedData["playerId"].(string)
-
-		conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
-		conn2.ReadMessage()
+		// Consume room:joined and weapon:spawned messages, capture player ID
+		playerID := consumeRoomJoinedAndGetPlayerID(t, conn1)
+		consumeRoomJoined(t, conn2)
 
 		// Give time for room setup
 		time.Sleep(50 * time.Millisecond)

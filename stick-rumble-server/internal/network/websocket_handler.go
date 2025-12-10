@@ -129,10 +129,18 @@ func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Reques
 	log.Printf("Client connected: %s", playerID)
 
 	// Add player to room manager
-	h.roomManager.AddPlayer(player)
+	room := h.roomManager.AddPlayer(player)
 
 	// Add player to game server
 	h.gameServer.AddPlayer(playerID)
+
+	// If player joined a room, send initial weapon spawn state to all players
+	if room != nil {
+		// Send weapon spawns to all players in the newly created room
+		for _, p := range room.GetPlayers() {
+			h.sendWeaponSpawns(p.ID)
+		}
+	}
 
 	// Start goroutine to send messages to client
 	done := make(chan struct{})

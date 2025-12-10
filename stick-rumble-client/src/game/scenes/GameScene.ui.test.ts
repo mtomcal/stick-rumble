@@ -99,11 +99,11 @@ describe('GameScene - UI', () => {
       let textCallCount = 0;
       mockSceneContext.add.text = vi.fn().mockImplementation(() => {
         textCallCount++;
-        // Fifth text call is the ammo display (after title, match timer, health bar text, connection status)
-        if (textCallCount === 5) {
+        // Sixth text call is the ammo display (after title, pickup prompt, health bar text, match timer, connection status)
+        if (textCallCount === 6) {
           return mockAmmoText;
         }
-        return { setOrigin: vi.fn().mockReturnThis(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), destroy: vi.fn() };
+        return { setOrigin: vi.fn().mockReturnThis(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), setVisible: vi.fn().mockReturnThis(), destroy: vi.fn() };
       });
       mockSceneContext.input = {
         ...mockSceneContext.input,
@@ -164,11 +164,11 @@ describe('GameScene - UI', () => {
       let textCallCount = 0;
       mockSceneContext.add.text = vi.fn().mockImplementation(() => {
         textCallCount++;
-        // Fifth text call is the ammo display (after title, match timer, health bar text, connection status)
-        if (textCallCount === 5) {
+        // Sixth text call is the ammo display (after title, pickup prompt, health bar text, match timer, connection status)
+        if (textCallCount === 6) {
           return mockAmmoText;
         }
-        return { setOrigin: vi.fn().mockReturnThis(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), destroy: vi.fn() };
+        return { setOrigin: vi.fn().mockReturnThis(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), setVisible: vi.fn().mockReturnThis(), destroy: vi.fn() };
       });
       mockSceneContext.input = {
         ...mockSceneContext.input,
@@ -236,8 +236,8 @@ describe('GameScene - UI', () => {
       let textCallCount = 0;
       mockSceneContext.add.text = vi.fn().mockImplementation(() => {
         textCallCount++;
-        // Third text call is the match timer (after title text and health bar text)
-        if (textCallCount === 3) {
+        // Fourth text call is the match timer (after title text, pickup prompt text, and health bar text)
+        if (textCallCount === 4) {
           return mockTimerText;
         }
         return { setOrigin: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), setVisible: vi.fn().mockReturnThis(), visible: false, destroy: vi.fn() };
@@ -290,7 +290,7 @@ describe('GameScene - UI', () => {
       let textCallCount = 0;
       mockSceneContext.add.text = vi.fn().mockImplementation(() => {
         textCallCount++;
-        if (textCallCount === 3) {
+        if (textCallCount === 4) {
           return mockTimerText;
         }
         return { setOrigin: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), setVisible: vi.fn().mockReturnThis(), visible: false, destroy: vi.fn() };
@@ -339,7 +339,7 @@ describe('GameScene - UI', () => {
       let textCallCount = 0;
       mockSceneContext.add.text = vi.fn().mockImplementation(() => {
         textCallCount++;
-        if (textCallCount === 3) {
+        if (textCallCount === 4) {
           return mockTimerText;
         }
         return { setOrigin: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), setVisible: vi.fn().mockReturnThis(), visible: false, destroy: vi.fn() };
@@ -388,7 +388,7 @@ describe('GameScene - UI', () => {
       let textCallCount = 0;
       mockSceneContext.add.text = vi.fn().mockImplementation(() => {
         textCallCount++;
-        if (textCallCount === 3) {
+        if (textCallCount === 4) {
           return mockTimerText;
         }
         return { setOrigin: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), setVisible: vi.fn().mockReturnThis(), visible: false, destroy: vi.fn() };

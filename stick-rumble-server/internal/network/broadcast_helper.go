@@ -271,3 +271,53 @@ func (h *WebSocketHandler) broadcastWeaponRespawn(crate *game.WeaponCrate) {
 	// Broadcast to all players
 	h.roomManager.BroadcastToAll(msgBytes)
 }
+
+// sendWeaponSpawns sends initial weapon spawn state to a specific player
+func (h *WebSocketHandler) sendWeaponSpawns(playerID string) {
+	// Get all weapon crates from the manager
+	allCrates := h.gameServer.GetWeaponCrateManager().GetAllCrates()
+
+	// Build crates array for the message
+	crates := make([]map[string]interface{}, 0, len(allCrates))
+	for _, crate := range allCrates {
+		crateData := map[string]interface{}{
+			"id":          crate.ID,
+			"position":    map[string]interface{}{"x": crate.Position.X, "y": crate.Position.Y},
+			"weaponType":  crate.WeaponType,
+			"isAvailable": crate.IsAvailable,
+		}
+		crates = append(crates, crateData)
+	}
+
+	// Create weapon:spawned message
+	message := Message{
+		Type:      "weapon:spawned",
+		Timestamp: time.Now().UnixMilli(),
+		Data: map[string]interface{}{
+			"crates": crates,
+		},
+	}
+
+	msgBytes, err := json.Marshal(message)
+	if err != nil {
+		log.Printf("Error marshaling weapon:spawned message: %v", err)
+		return
+	}
+
+	// Send to the specific player
+	room := h.roomManager.GetRoomByPlayerID(playerID)
+	if room != nil {
+		player := room.GetPlayer(playerID)
+		if player != nil {
+			select {
+			case player.SendChan <- msgBytes:
+				// Message sent successfully
+			default:
+				log.Printf("Failed to send weapon:spawned to player %s (channel full)", playerID)
+			}
+		}
+	} else {
+		// Player not in a room yet, send to waiting player
+		h.roomManager.SendToWaitingPlayer(playerID, msgBytes)
+	}
+}

@@ -58,13 +58,15 @@ func (ts *testServer) connectTwoClients(t *testing.T) (*websocket.Conn, *websock
 	return conn1, conn2
 }
 
-// consumeRoomJoined reads and discards the room:joined message from a connection
+// consumeRoomJoined reads and discards the room:joined and weapon:spawned messages from a connection
 func consumeRoomJoined(t *testing.T, conn *websocket.Conn) {
 	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
-	conn.ReadMessage()
+	conn.ReadMessage() // room:joined
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	conn.ReadMessage() // weapon:spawned
 }
 
-// consumeRoomJoinedAndGetPlayerID reads room:joined and returns the player ID
+// consumeRoomJoinedAndGetPlayerID reads room:joined, weapon:spawned and returns the player ID
 func consumeRoomJoinedAndGetPlayerID(t *testing.T, conn *websocket.Conn) string {
 	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 	_, joinedBytes, err := conn.ReadMessage()
@@ -75,7 +77,13 @@ func consumeRoomJoinedAndGetPlayerID(t *testing.T, conn *websocket.Conn) string 
 	assert.NoError(t, err, "Should parse room:joined message")
 
 	joinedData := joinedMsg.Data.(map[string]interface{})
-	return joinedData["playerId"].(string)
+	playerID := joinedData["playerId"].(string)
+
+	// Consume weapon:spawned message
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	conn.ReadMessage()
+
+	return playerID
 }
 
 // readMessageOfType reads messages from a WebSocket connection until it finds

@@ -99,11 +99,15 @@ func TestMessageBroadcast(t *testing.T) {
 	require.NoError(t, err)
 	defer conn2.Close()
 
-	// Consume room:joined messages
+	// Consume room:joined and weapon:spawned messages
 	conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
-	conn1.ReadMessage()
+	conn1.ReadMessage() // room:joined
+	conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
+	conn1.ReadMessage() // weapon:spawned
 	conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
-	conn2.ReadMessage()
+	conn2.ReadMessage() // room:joined
+	conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
+	conn2.ReadMessage() // weapon:spawned
 
 	// Client 1 sends a test message
 	testMsg := Message{
@@ -151,9 +155,9 @@ func TestPlayerDisconnection(t *testing.T) {
 
 	// Consume room:joined messages
 	conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
-	_, msgBytes1, _ := conn1.ReadMessage()
+	_, msgBytes1, _ := conn1.ReadMessage() //room:joined
 	conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
-	conn2.ReadMessage()
+	conn2.ReadMessage() // room:joined
 
 	// Extract player1's ID from room:joined message
 	var joinMsg Message
@@ -161,6 +165,12 @@ func TestPlayerDisconnection(t *testing.T) {
 	require.NoError(t, err, "Should unmarshal player1's join message")
 	joinData := joinMsg.Data.(map[string]interface{})
 	player1ID := joinData["playerId"].(string)
+
+	// Consume weapon:spawned messages
+	conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
+	conn1.ReadMessage() // weapon:spawned
+	conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
+	conn2.ReadMessage() // weapon:spawned
 
 	// Client 1 disconnects
 	conn1.Close()
@@ -198,11 +208,15 @@ func TestBidirectionalBroadcast(t *testing.T) {
 	require.NoError(t, err)
 	defer conn2.Close()
 
-	// Consume room:joined messages
+	// Consume room:joined and weapon:spawned messages
 	conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
-	conn1.ReadMessage()
+	conn1.ReadMessage() // room:joined
+	conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
+	conn1.ReadMessage() // weapon:spawned
 	conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
-	conn2.ReadMessage()
+	conn2.ReadMessage() // room:joined
+	conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
+	conn2.ReadMessage() // weapon:spawned
 
 	// Player 1 sends "hello"
 	msg1 := Message{Type: "test", Timestamp: time.Now().UnixMilli(), Data: "hello"}

@@ -45,6 +45,7 @@ export const createMockScene = () => {
   const mockLine = {
     setTo: vi.fn().mockReturnThis(),
     setDepth: vi.fn().mockReturnThis(),
+    setLineWidth: vi.fn().mockReturnThis(),
     destroy: vi.fn(),
   };
 

@@ -467,3 +467,110 @@ func TestMessageSerialization(t *testing.T) {
 		t.Errorf("Failed to marshal respawn message: %v", err)
 	}
 }
+
+// TestSendWeaponSpawns tests sending initial weapon spawn state to a player
+func TestSendWeaponSpawns(t *testing.T) {
+	handler := NewWebSocketHandler()
+
+	// Create a test player with a channel
+	playerID := "test_player"
+	sendChan := make(chan []byte, 256)
+	player := &game.Player{
+		ID:       playerID,
+		SendChan: sendChan,
+	}
+
+	// Add player to room manager and game server
+	handler.roomManager.AddPlayer(player)
+	handler.gameServer.AddPlayer(playerID)
+
+	// Create a room (requires 2 players)
+	player2ID := "test_player2"
+	sendChan2 := make(chan []byte, 256)
+	player2 := &game.Player{
+		ID:       player2ID,
+		SendChan: sendChan2,
+	}
+	handler.roomManager.AddPlayer(player2)
+	handler.gameServer.AddPlayer(player2ID)
+
+	// Consume room:joined messages
+	<-sendChan
+	<-sendChan2
+
+	// Call sendWeaponSpawns
+	handler.sendWeaponSpawns(playerID)
+
+	// Verify message was sent to player
+	select {
+	case msgBytes := <-sendChan:
+		// Parse the message
+		var msg Message
+		err := json.Unmarshal(msgBytes, &msg)
+		if err != nil {
+			t.Fatalf("Failed to parse weapon:spawned message: %v", err)
+		}
+
+		// Verify message type
+		if msg.Type != "weapon:spawned" {
+			t.Errorf("Expected message type 'weapon:spawned', got '%s'", msg.Type)
+		}
+
+		// Verify data structure
+		data, ok := msg.Data.(map[string]interface{})
+		if !ok {
+			t.Fatal("Expected msg.Data to be a map")
+		}
+
+		crates, ok := data["crates"].([]interface{})
+		if !ok {
+			t.Fatal("Expected data['crates'] to be an array")
+		}
+
+		// Verify we have the expected number of crates (5 default spawns)
+		if len(crates) != 5 {
+			t.Errorf("Expected 5 weapon crates, got %d", len(crates))
+		}
+
+		// Verify structure of first crate
+		if len(crates) > 0 {
+			firstCrate, ok := crates[0].(map[string]interface{})
+			if !ok {
+				t.Fatal("Expected crate to be a map")
+			}
+
+			// Check required fields
+			requiredFields := []string{"id", "position", "weaponType", "isAvailable"}
+			for _, field := range requiredFields {
+				if _, exists := firstCrate[field]; !exists {
+					t.Errorf("Crate missing required field: %s", field)
+				}
+			}
+
+			// Verify position structure
+			position, ok := firstCrate["position"].(map[string]interface{})
+			if !ok {
+				t.Fatal("Expected position to be a map")
+			}
+			if _, exists := position["x"]; !exists {
+				t.Error("Position missing 'x' field")
+			}
+			if _, exists := position["y"]; !exists {
+				t.Error("Position missing 'y' field")
+			}
+
+			// Verify weaponType is a string
+			if _, ok := firstCrate["weaponType"].(string); !ok {
+				t.Error("weaponType should be a string")
+			}
+
+			// Verify isAvailable is a boolean
+			if _, ok := firstCrate["isAvailable"].(bool); !ok {
+				t.Error("isAvailable should be a boolean")
+			}
+		}
+
+	default:
+		t.Fatal("Expected to receive weapon:spawned message, but channel was empty")
+	}
+}
