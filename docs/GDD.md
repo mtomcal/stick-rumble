@@ -316,6 +316,83 @@ The weapon acquisition system follows classic arena shooter design (Quake, Halo,
 - Skill expression: Uzi high DPS but requires tracking aim, Katana requires positioning
 - Map design supports different weapon playstyles (open areas favor ranged, tight corridors favor melee)
 
+### Ammo Economy & Resource Management
+
+**Design Philosophy:**
+
+Stick Rumble uses a streamlined ammo economy system that prioritizes tactical reload management over ammunition scarcity. Magazine sizes serve as a weapon differentiation factor rather than a strict balance constraint.
+
+**Core Ammo System (MVP):**
+
+**Starting Ammo:**
+- Players spawn with full magazine (100% of capacity)
+- Default spawn weapon: Pistol (15 rounds loaded)
+- Weapon crate pickups: Full magazine loaded (100% capacity)
+
+**Magazine Capacity by Weapon:**
+
+| Weapon | Magazine Size | Theoretical Kills per Mag | Design Intent |
+|--------|---------------|---------------------------|---------------|
+| **Pistol** | 15 rounds | 3.75 kills (15 × 25 dmg / 100 HP) | Balanced starter weapon |
+| **Uzi** | 30 rounds | 3.0 kills (30 × 8 dmg / 100 HP) | High-fire-rate suppression |
+| **AK47** | 30 rounds | 6.0 kills (30 × 20 dmg / 100 HP) | Sustained engagement |
+| **Shotgun** | 6 rounds | 3.0 kills (6 × 60 dmg / 100 HP) | High burst damage |
+| **Bat** | Infinite | N/A (melee) | Close-range default |
+| **Katana** | Infinite | N/A (melee) | High-damage melee |
+
+**Reload Mechanics:**
+- **Reload behavior:** Refills magazine to 100% capacity (no ammo reserve pool, no partial reloads)
+- **Manual reload:** Triggered by player input (R key / reload button)
+- **Auto-reload:** Triggered automatically when attempting to fire with empty magazine (0 ammo)
+- **Reload time:** Weapon-specific duration (see Weapon Systems table above for each weapon)
+- **Reload interruption:** Switching weapons cancels reload and loses progress. Taking damage does NOT interrupt reload (player can be hit while reloading).
+- **Actions during reload:** Player can move, sprint, and dodge while reloading. Player CANNOT shoot/fire weapon until reload completes.
+- **Ammo state persistence:** Not tracked per weapon (picked-up weapon always has full magazine)
+
+**Kill Capacity Balance:**
+
+The magazine sizes create intentional kill capacity variance:
+- **AK47:** 6 theoretical kills per magazine (highest sustained combat capability)
+- **Pistol:** 3.75 theoretical kills per magazine
+- **Uzi:** 3 theoretical kills per magazine (compensated by highest fire rate)
+- **Shotgun:** 3 theoretical kills per magazine (compensated by burst damage)
+
+Note: Kill capacity values assume 100% accuracy and are rounded to nearest practical value (Uzi: 30 rounds / 13 shots per kill ≈ 2.3 kills, rounded to 3 for design discussion).
+
+**Design Rationale:**
+
+This variance is intentional and serves weapon differentiation:
+- AK47's magazine advantage is offset by damage falloff at range (see docs/weapon-balance-analysis.md Section 2.2)
+- Shotgun's limited capacity is balanced by devastating close-range damage (60 damage/shot)
+- Uzi's lower kill capacity is compensated by highest DPS (80) and suppression capability
+- Industry precedent: CS2 AWP (5-round magazine balances deadliest weapon), Halo weapons with distinct magazine sizes
+
+Magazine size as weapon differentiation creates:
+- **Tactical reload timing:** Knowing when to reload becomes skill expression
+- **Vulnerability windows:** Smaller magazines create more frequent reload exposure
+- **Weapon control objectives:** Fighting for AK47 crate provides sustained combat advantage
+- **Engagement sustainability:** AK47 users can hold positions longer without reloading
+
+**Ammo Pickups (Post-MVP Consideration):**
+- **MVP:** No ammo crate pickups (weapons spawn with full magazine only)
+- **Future Option:** Add ammo crate pickups on map (similar to weapon crates)
+- **Future Option:** Limit starting ammo to 50% magazine capacity (forces weapon switching)
+- **Future Option:** Balance magazine sizes to equal kill capacity (all weapons = 4 kills/mag)
+
+**Evaluation Plan:**
+- Playtesting will assess whether AK47's magazine advantage creates unfair dominance
+- If balance issues emerge: Reduce AK47 magazine from 30 → 20 rounds (6 kills → 4 kills)
+- Magazine adjustments are simple spec changes requiring no system redesign
+
+**Technical Implementation Notes:**
+- Server tracks ammo state per player: {currentAmmo: int, maxAmmo: int, isReloading: bool, reloadStartTime: timestamp}
+- Reload triggers: Player input (manual) or fire attempt with ammo === 0 (auto)
+- Reload progress calculated as: (currentTime - reloadStartTime) / weaponReloadDuration
+- Server validates reload completion before allowing fire actions
+- Weapon switch cancels reload: Sets isReloading=false, resets reloadStartTime, keeps currentAmmo unchanged (loses reload progress)
+- Client renders ammo counter UI and reload indicator based on server state
+- Weapon switch destroys current weapon (no ammo persistence for dropped weapons in MVP)
+
 ### Aiming and Combat Mechanics
 
 **Aiming System:**
