@@ -6,7 +6,7 @@
 
 **FRs Covered:** FR4 (weapon pickups), FR5 (reload/switch), FR6 (sprint/dodge)
 
-**Epic Status:** In Progress (2/14 stories complete, 14% done)
+**Epic Status:** In Progress (5/14 stories complete, 36% done)
 
 **Epic Ready:** December 9, 2025 (Epic 2 complete)
 **Epic Started:** December 10, 2025 (Story 3.1 PR #3 merged)
@@ -16,14 +16,19 @@
 ## Epic Progress
 
 - Story 3.0: Weapon Balance Research & Validation (DONE - Dec 9)
+- Story 3.0B: Pistol damage mismatch fix (DONE)
 - Story 3.1: Weapon Pickup System (DONE - Dec 10, PR #3 merged)
-- Story 3.2: Melee Weapons (NEXT - ready to start)
-- Stories 3.3-3.7B: Blocked by sequential dependencies
+- Story 3.3A: Weapon acquisition system design (DONE)
+- Story 3.4A: Ammo economy & magazine balance design (DONE)
+- Tech Debt - JSON Schema Phase 3 (DONE - approved for merge Jan 12)
+- **CURRENT BLOCKER:** Tech Debt - JSON Schema Phase 4 → Stories 3.2+
+- Stories 3.2-3.7B: Blocked until JSON Schema tech debt complete
 
 **Key Additions:**
 - Story 3.0 added for weapon balance research before implementation (prevents mid-epic rebalancing)
 - Story 3.7 split into 3.7A (sprites) and 3.7B (UI effects) for improved agent success rate (smaller stories = 1-day tasks)
 - Story 3.8 added for shared configuration system (from PR #3 feedback, blocked until 3.2-3.4 complete)
+- Tech Debt: Simulation Testing stories added after JSON Schema (enables headless testing)
 
 ---
 
