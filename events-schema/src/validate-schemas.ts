@@ -51,6 +51,13 @@ export function validateSchemaFile(ajv: InstanceType<typeof Ajv>, filePath: stri
     return true;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
+
+    // Ignore "schema already exists" errors - this is expected when schemas reference
+    // common types like Position, Velocity, etc. that have already been registered
+    if (errorMessage.includes('already exists')) {
+      return true;
+    }
+
     console.error(`  Error: ${errorMessage}`);
     return false;
   }

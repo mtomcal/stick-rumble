@@ -28,11 +28,11 @@ describe('checkSchemasUpToDate', () => {
     expect(result).toBe(true);
   });
 
-  it('should verify all 10 schema files', () => {
+  it('should verify all 44 schema files', () => {
     // This test ensures the check validates the expected number of files
     const result = checkSchemasUpToDate();
     expect(result).toBe(true);
-    // If this passes, all 10 files were checked (3 common + 7 client-to-server)
+    // If this passes, all 44 files were checked (3 common + 7 client-to-server + 34 server-to-client)
   });
 
   it.sequential('should return false when a schema file is stale', () => {
@@ -46,8 +46,8 @@ describe('checkSchemasUpToDate', () => {
       const result = checkSchemasUpToDate();
       expect(result).toBe(false);
     } finally {
-      // Always restore original content
-      writeFileSync(testFilePath, originalContent, 'utf8');
+      // Restore by regenerating all schemas to ensure consistency
+      buildSchemas();
     }
 
     // Verify restoration worked
@@ -66,10 +66,11 @@ describe('checkSchemasUpToDate', () => {
       const result = checkSchemasUpToDate();
       expect(result).toBe(false);
     } finally {
-      // Always restore the file
+      // Restore by regenerating all schemas to ensure consistency
       if (existsSync(backupPath)) {
         renameSync(backupPath, testFilePath);
       }
+      buildSchemas();
     }
 
     // Verify restoration worked
