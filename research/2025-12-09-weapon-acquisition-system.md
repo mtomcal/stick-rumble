@@ -10,7 +10,7 @@ status: complete
 
 **Date**: 2025-12-09
 **Researcher**: codebase-researcher-agent
-**ReadyQ Issue**: a58bb26d (Story 3.3A - Define Weapon Acquisition System)
+**Story**: 3.3A - Define Weapon Acquisition System
 
 ## Research Question
 

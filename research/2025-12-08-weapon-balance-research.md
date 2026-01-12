@@ -22,9 +22,9 @@ Gather all weapon specification information from the Game Design Document (GDD),
 ## Summary
 
 The codebase contains comprehensive weapon specifications across multiple sources:
-1. **GDD (/Users/mtomcal/Code/stick-rumble/docs/GDD.md)**: High-level weapon stats and balance philosophy
-2. **Epic 3 Stories (/Users/mtomcal/Code/stick-rumble/.readyq.md)**: Detailed acceptance criteria for each weapon
-3. **Server Implementation (/Users/mtomcal/Code/stick-rumble/stick-rumble-server/internal/game/weapon.go)**: Pistol implementation with full stats
+1. **GDD (docs/GDD.md)**: High-level weapon stats and balance philosophy
+2. **Epic 3 Stories (docs/epics.md)**: Detailed acceptance criteria for each weapon
+3. **Server Implementation (stick-rumble-server/internal/game/weapon.go)**: Pistol implementation with full stats
 4. **Client Constants (/Users/mtomcal/Code/stick-rumble/stick-rumble-client/src/shared/constants.ts)**: Client-side weapon constants (note: pistol damage MISMATCH)
 
 **Key Finding**: There is a **CRITICAL DISCREPANCY** between server pistol damage (25) and client pistol damage (15) that must be resolved before proceeding with Epic 3 implementation.
@@ -58,10 +58,9 @@ The codebase contains comprehensive weapon specifications across multiple source
 
 ### 2. Epic 3 Story Definitions
 
-**Location**: /Users/mtomcal/Code/stick-rumble/.readyq.md
+**Location**: docs/epics.md
 
 #### Story 3.2: Melee Weapons (Bat and Katana)
-**Lines 114-171**
 
 **Bat Stats:**
 - Damage: 25
@@ -326,10 +325,9 @@ This makes range a meaningful trade-off without changing base stats.
 - `/Users/mtomcal/Code/stick-rumble/stick-rumble-client/src/game/input/ShootingManager.ts` - Client-side shooting logic
 
 ### Documentation
-- `/Users/mtomcal/Code/stick-rumble/docs/GDD.md:246-262` - Weapon specifications table
-- `/Users/mtomcal/Code/stick-rumble/docs/GDD.md:274-278` - Balance philosophy
-- `/Users/mtomcal/Code/stick-rumble/.readyq.md:114-171` - Story 3.2 melee weapons
-- `/Users/mtomcal/Code/stick-rumble/.readyq.md:175-242` - Story 3.3 ranged weapons
+- `docs/GDD.md:246-262` - Weapon specifications table
+- `docs/GDD.md:274-278` - Balance philosophy
+- `docs/epics.md` - Story 3.2 melee weapons, Story 3.3 ranged weapons
 
 ## Architecture Insights
 

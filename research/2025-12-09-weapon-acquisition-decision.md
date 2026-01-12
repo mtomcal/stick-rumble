@@ -4,14 +4,13 @@ author: implementation-agent
 topic: "Weapon Acquisition System Design Decision"
 tags: [design-decision, weapon-system, epic-3, story-3.3A]
 status: complete
-readyq_issue: a58bb26d
 ---
 
 # Design Decision: Weapon Acquisition System
 
 **Date**: 2025-12-09
 **Author**: implementation-agent
-**ReadyQ Issue**: a58bb26d (Story 3.3A - Define Weapon Acquisition System)
+**Story**: 3.3A - Define Weapon Acquisition System
 **Related Documents**:
 - docs/weapon-balance-analysis.md (Section 10, Question 2)
 - research/2025-12-09-weapon-acquisition-system.md
@@ -462,7 +461,7 @@ checkProximity(playerPos: { x: number; y: number }): string | null {
 
 **Status**: ✅ APPROVED FOR IMPLEMENTATION
 
-**Approved By**: Story 3.3A completion (ReadyQ issue a58bb26d)
+**Approved By**: Story 3.3A completion
 
 **Date**: 2025-12-09
 

@@ -743,9 +743,9 @@ Sustained DPS = 600 / 7 = 85.7 DPS (vs 120 burst DPS)
    - Lines 274-278: Balance philosophy
 
 2. **Epic 3 Story Definitions**
-   - File: `/Users/mtomcal/Code/stick-rumble/.readyq.md`
-   - Lines 114-171: Story 3.2 (Melee Weapons)
-   - Lines 175-242: Story 3.3 (Ranged Weapons)
+   - File: `docs/epics.md`
+   - Story 3.2 (Melee Weapons)
+   - Story 3.3 (Ranged Weapons)
 
 3. **Server Implementation**
    - File: `/Users/mtomcal/Code/stick-rumble/stick-rumble-server/internal/game/weapon.go`
