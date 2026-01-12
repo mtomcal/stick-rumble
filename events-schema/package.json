@@ -1,0 +1,36 @@
+{
+  "name": "@stick-rumble/events-schema",
+  "version": "1.0.0",
+  "description": "Shared JSON Schema definitions for WebSocket events",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc && npm run generate:schemas",
+    "generate:schemas": "node --import tsx src/build-schemas.ts",
+    "validate": "node --import tsx src/validate-schemas.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "clean": "rm -rf dist generated/typescript/*.ts generated/go/*.go schemas/**/*.json"
+  },
+  "keywords": [
+    "json-schema",
+    "websocket",
+    "validation",
+    "stick-rumble"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.27",
+    "ajv": "^8.17.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@vitest/coverage-v8": "^4.0.13",
+    "tsx": "^4.19.4",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.13"
+  }
+}
