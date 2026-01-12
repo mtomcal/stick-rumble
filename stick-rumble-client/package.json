@@ -19,6 +19,9 @@
     "test:coverage": "vitest --run --coverage --reporter=dot --silent=passed-only"
   },
   "dependencies": {
+    "@sinclair/typebox": "^0.34.27",
+    "@stick-rumble/events-schema": "file:../events-schema",
+    "ajv": "^8.17.1",
     "phaser": "^3.90.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
