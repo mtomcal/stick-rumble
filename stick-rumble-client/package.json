@@ -9,14 +9,14 @@
     "typecheck": "tsc -b --noEmit",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "vitest --run",
+    "test": "vitest --run --reporter=dot --silent=passed-only",
     "test:watch": "vitest",
-    "test:unit": "vitest --run",
-    "test:unit:coverage": "vitest --run --coverage",
-    "test:integration": "vitest --run --config vitest.integration.config.ts",
-    "test:all": "vitest --run --config vitest.integration.config.ts && vitest --run",
+    "test:unit": "vitest --run --reporter=dot --silent=passed-only",
+    "test:unit:coverage": "vitest --run --coverage --reporter=dot --silent=passed-only",
+    "test:integration": "vitest --run --config vitest.integration.config.ts --reporter=dot --silent=passed-only",
+    "test:all": "vitest --run --config vitest.integration.config.ts --reporter=dot --silent=passed-only && vitest --run --reporter=dot --silent=passed-only",
     "test:ui": "vitest --ui",
-    "test:coverage": "vitest --run --coverage"
+    "test:coverage": "vitest --run --coverage --reporter=dot --silent=passed-only"
   },
   "dependencies": {
     "phaser": "^3.90.0",
