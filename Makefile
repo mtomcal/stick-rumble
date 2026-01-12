@@ -1,4 +1,4 @@
-.PHONY: help install dev-client dev-server dev test test-client test-server test-integration test-coverage lint build clean check-zombies kill-dev
+.PHONY: help install dev-client dev-server dev test test-client test-server test-server-verbose test-integration test-coverage lint build clean check-zombies kill-dev
 
 # Default target - show help
 help:
@@ -18,6 +18,7 @@ help:
 	@echo "  make test             Run all tests (client + server)"
 	@echo "  make test-client      Run client tests only"
 	@echo "  make test-server      Run server tests only"
+	@echo "  make test-server-verbose  Run server tests with verbose output"
 	@echo "  make test-integration Run integration tests (starts server automatically)"
 	@echo "  make test-coverage    Run tests with coverage reports"
 	@echo ""
@@ -75,6 +76,11 @@ test-client:
 # Run server tests only
 test-server:
 	@echo "Running server tests..."
+	cd stick-rumble-server && go test ./...
+
+# Run server tests with verbose output (for debugging)
+test-server-verbose:
+	@echo "Running server tests (verbose)..."
 	cd stick-rumble-server && go test ./... -v
 
 # Run integration tests (starts server automatically)
