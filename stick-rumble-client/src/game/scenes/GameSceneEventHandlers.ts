@@ -1,14 +1,33 @@
 import type { WebSocketClient } from '../network/WebSocketClient';
-import type { PlayerManager, PlayerState } from '../entities/PlayerManager';
-import type { ProjectileManager, ProjectileData } from '../entities/ProjectileManager';
-import type { WeaponCrateManager, WeaponCrateData } from '../entities/WeaponCrateManager';
+import type { PlayerManager } from '../entities/PlayerManager';
+import type { ProjectileManager } from '../entities/ProjectileManager';
+import type { WeaponCrateManager } from '../entities/WeaponCrateManager';
 import type { PickupPromptUI } from '../ui/PickupPromptUI';
 import type { InputManager } from '../input/InputManager';
-import type { ShootingManager, WeaponState } from '../input/ShootingManager';
+import type { ShootingManager } from '../input/ShootingManager';
 import type { HealthBarUI } from '../ui/HealthBarUI';
 import type { KillFeedUI } from '../ui/KillFeedUI';
 import type { GameSceneUI } from './GameSceneUI';
 import type { GameSceneSpectator } from './GameSceneSpectator';
+// Import generated schema types for server→client messages (replaces manual type assertions)
+import type {
+  RoomJoinedData,
+  PlayerMoveData,
+  ProjectileSpawnData,
+  ProjectileDestroyData,
+  WeaponStateData,
+  ShootFailedData,
+  PlayerDamagedData,
+  HitConfirmedData,
+  PlayerDeathData,
+  PlayerKillCreditData,
+  PlayerRespawnData,
+  MatchTimerData,
+  MatchEndedData,
+  WeaponSpawnedData,
+  WeaponPickupConfirmedData,
+  WeaponRespawnedData,
+} from '../../../../events-schema/src/index.js';
 
 /**
  * GameSceneEventHandlers - Manages all WebSocket event handlers
@@ -99,7 +118,7 @@ export class GameSceneEventHandlers {
 
     // Store and register player:move handler
     const playerMoveHandler = (data: unknown) => {
-      const messageData = data as { players: PlayerState[] };
+      const messageData = data as PlayerMoveData;
       if (messageData.players) {
         this.playerManager.updatePlayers(messageData.players);
 
@@ -117,7 +136,9 @@ export class GameSceneEventHandlers {
             // Update health bar from server state (including regeneration)
             if (localPlayer.health !== undefined) {
               this.localPlayerHealth = localPlayer.health;
-              this.getHealthBarUI().updateHealth(this.localPlayerHealth, 100, localPlayer.isRegenerating ?? false);
+              // isRegenerating is not in the schema, use optional chaining with type-safe accessor
+              const isRegen = 'isRegenerating' in localPlayer ? (localPlayer as { isRegenerating?: boolean }).isRegenerating ?? false : false;
+              this.getHealthBarUI().updateHealth(this.localPlayerHealth, 100, isRegen);
             }
           }
         }
@@ -131,7 +152,7 @@ export class GameSceneEventHandlers {
 
     // Store and register room:joined handler
     const roomJoinedHandler = (data: unknown) => {
-      const messageData = data as { playerId: string };
+      const messageData = data as RoomJoinedData;
       console.log('Joined room as player:', messageData.playerId);
 
       // Clear existing players to prevent duplication if room:joined fires multiple times
@@ -151,13 +172,13 @@ export class GameSceneEventHandlers {
 
     // Store and register projectile:spawn handler
     const projectileSpawnHandler = (data: unknown) => {
-      const projectileData = data as ProjectileData;
-      this.projectileManager.spawnProjectile(projectileData);
+      const messageData = data as ProjectileSpawnData;
+      this.projectileManager.spawnProjectile(messageData);
 
       // Create muzzle flash at projectile origin
       this.projectileManager.createMuzzleFlash(
-        projectileData.position.x,
-        projectileData.position.y
+        messageData.position.x,
+        messageData.position.y
       );
     };
     this.handlerRefs.set('projectile:spawn', projectileSpawnHandler);
@@ -165,17 +186,17 @@ export class GameSceneEventHandlers {
 
     // Store and register projectile:destroy handler
     const projectileDestroyHandler = (data: unknown) => {
-      const { id } = data as { id: string };
-      this.projectileManager.removeProjectile(id);
+      const messageData = data as ProjectileDestroyData;
+      this.projectileManager.removeProjectile(messageData.id);
     };
     this.handlerRefs.set('projectile:destroy', projectileDestroyHandler);
     this.wsClient.on('projectile:destroy', projectileDestroyHandler);
 
     // Store and register weapon:state handler
     const weaponStateHandler = (data: unknown) => {
-      const weaponState = data as WeaponState;
+      const messageData = data as WeaponStateData;
       if (this.shootingManager) {
-        this.shootingManager.updateWeaponState(weaponState);
+        this.shootingManager.updateWeaponState(messageData);
         this.ui.updateAmmoDisplay(this.shootingManager);
       }
     };
@@ -184,8 +205,8 @@ export class GameSceneEventHandlers {
 
     // Store and register shoot:failed handler
     const shootFailedHandler = (data: unknown) => {
-      const { reason } = data as { reason: string };
-      if (reason === 'empty') {
+      const messageData = data as ShootFailedData;
+      if (messageData.reason === 'empty') {
         // TODO: Play empty click sound in future story
         console.log('Click! Magazine empty');
       }
@@ -195,38 +216,28 @@ export class GameSceneEventHandlers {
 
     // Store and register player:damaged handler
     const playerDamagedHandler = (data: unknown) => {
-      const damageData = data as {
-        victimId: string;
-        attackerId: string;
-        damage: number;
-        newHealth: number;
-        projectileId: string;
-      };
+      const messageData = data as PlayerDamagedData;
       console.log(
-        `Player ${damageData.victimId} took ${damageData.damage} damage from ${damageData.attackerId} (health: ${damageData.newHealth})`
+        `Player ${messageData.victimId} took ${messageData.damage} damage from ${messageData.attackerId} (health: ${messageData.newHealth})`
       );
 
       // Update health bar if local player was damaged
-      if (damageData.victimId === this.playerManager.getLocalPlayerId()) {
-        this.localPlayerHealth = damageData.newHealth;
+      if (messageData.victimId === this.playerManager.getLocalPlayerId()) {
+        this.localPlayerHealth = messageData.newHealth;
         this.getHealthBarUI().updateHealth(this.localPlayerHealth, 100, false); // Not regenerating when damaged
         this.ui.showDamageFlash();
       }
 
       // Show damage numbers above damaged player
-      this.ui.showDamageNumber(this.playerManager, damageData.victimId, damageData.damage);
+      this.ui.showDamageNumber(this.playerManager, messageData.victimId, messageData.damage);
     };
     this.handlerRefs.set('player:damaged', playerDamagedHandler);
     this.wsClient.on('player:damaged', playerDamagedHandler);
 
     // Store and register hit:confirmed handler
     const hitConfirmedHandler = (data: unknown) => {
-      const hitData = data as {
-        victimId: string;
-        damage: number;
-        projectileId: string;
-      };
-      console.log(`Hit confirmed! Dealt ${hitData.damage} damage to ${hitData.victimId}`);
+      const messageData = data as HitConfirmedData;
+      console.log(`Hit confirmed! Dealt ${messageData.damage} damage to ${messageData.victimId}`);
       this.ui.showHitMarker();
       // TODO: Audio feedback (ding sound) - deferred to audio story
     };
@@ -235,14 +246,11 @@ export class GameSceneEventHandlers {
 
     // Store and register player:death handler
     const playerDeathHandler = (data: unknown) => {
-      const deathData = data as {
-        victimId: string;
-        attackerId: string;
-      };
-      console.log(`Player ${deathData.victimId} was killed by ${deathData.attackerId}`);
+      const messageData = data as PlayerDeathData;
+      console.log(`Player ${messageData.victimId} was killed by ${messageData.attackerId}`);
 
       // If local player died, enter spectator mode
-      if (deathData.victimId === this.playerManager.getLocalPlayerId()) {
+      if (messageData.victimId === this.playerManager.getLocalPlayerId()) {
         this.spectator.enterSpectatorMode();
       }
     };
@@ -251,32 +259,23 @@ export class GameSceneEventHandlers {
 
     // Store and register player:kill_credit handler
     const playerKillCreditHandler = (data: unknown) => {
-      const killData = data as {
-        killerId: string;
-        victimId: string;
-        killerKills: number;
-        killerXP: number;
-      };
-      console.log(`Kill credit: ${killData.killerId} killed ${killData.victimId} (Kills: ${killData.killerKills}, XP: ${killData.killerXP})`);
+      const messageData = data as PlayerKillCreditData;
+      console.log(`Kill credit: ${messageData.killerId} killed ${messageData.victimId} (Kills: ${messageData.killerKills}, XP: ${messageData.killerXP})`);
 
       // Add kill to feed (using player IDs for now - will be replaced with names later)
-      this.killFeedUI.addKill(killData.killerId.substring(0, 8), killData.victimId.substring(0, 8));
+      this.killFeedUI.addKill(messageData.killerId.substring(0, 8), messageData.victimId.substring(0, 8));
     };
     this.handlerRefs.set('player:kill_credit', playerKillCreditHandler);
     this.wsClient.on('player:kill_credit', playerKillCreditHandler);
 
     // Store and register player:respawn handler
     const playerRespawnHandler = (data: unknown) => {
-      const respawnData = data as {
-        playerId: string;
-        position: { x: number; y: number };
-        health: number;
-      };
-      console.log(`Player ${respawnData.playerId} respawned at (${respawnData.position.x}, ${respawnData.position.y})`);
+      const messageData = data as PlayerRespawnData;
+      console.log(`Player ${messageData.playerId} respawned at (${messageData.position.x}, ${messageData.position.y})`);
 
       // If local player respawned, exit spectator mode and reset health
-      if (respawnData.playerId === this.playerManager.getLocalPlayerId()) {
-        this.localPlayerHealth = respawnData.health;
+      if (messageData.playerId === this.playerManager.getLocalPlayerId()) {
+        this.localPlayerHealth = messageData.health;
         this.getHealthBarUI().updateHealth(this.localPlayerHealth, 100, false); // Not regenerating on respawn
         this.spectator.exitSpectatorMode();
 
@@ -289,21 +288,17 @@ export class GameSceneEventHandlers {
 
     // Store and register match:timer handler
     const matchTimerHandler = (data: unknown) => {
-      const timerData = data as { remainingSeconds: number };
-      this.ui.updateMatchTimer(timerData.remainingSeconds);
+      const messageData = data as MatchTimerData;
+      this.ui.updateMatchTimer(messageData.remainingSeconds);
     };
     this.handlerRefs.set('match:timer', matchTimerHandler);
     this.wsClient.on('match:timer', matchTimerHandler);
 
     // Store and register match:ended handler
     const matchEndedHandler = (data: unknown) => {
-      const matchEndData = data as {
-        winners: string[];
-        finalScores: Array<{ playerId: string; kills: number; deaths: number; xp: number }>;
-        reason: string;
-      };
-      console.log(`Match ended! Reason: ${matchEndData.reason}, Winners:`, matchEndData.winners);
-      console.log('Final scores:', matchEndData.finalScores);
+      const messageData = data as MatchEndedData;
+      console.log(`Match ended! Reason: ${messageData.reason}, Winners:`, messageData.winners);
+      console.log('Final scores:', messageData.finalScores);
 
       // Freeze gameplay by disabling input handlers
       if (this.inputManager) {
@@ -316,7 +311,9 @@ export class GameSceneEventHandlers {
       // Trigger match end UI via React callback
       const localPlayerId = this.playerManager.getLocalPlayerId();
       if (localPlayerId && window.onMatchEnd) {
-        window.onMatchEnd(matchEndData, localPlayerId);
+        // Bridge between MatchEndedData schema and window.onMatchEnd type
+        // Schema uses { [key: string]: number } for finalScores, window expects PlayerScore[]
+        window.onMatchEnd(messageData as unknown as import('../../../src/shared/types.js').MatchEndData, localPlayerId);
       }
     };
     this.handlerRefs.set('match:ended', matchEndedHandler);
@@ -324,9 +321,9 @@ export class GameSceneEventHandlers {
 
     // Store and register weapon:spawned handler (initial weapon crate spawns)
     const weaponSpawnedHandler = (data: unknown) => {
-      const cratesData = data as { crates: WeaponCrateData[] };
-      if (cratesData.crates) {
-        for (const crateData of cratesData.crates) {
+      const messageData = data as WeaponSpawnedData;
+      if (messageData.crates) {
+        for (const crateData of messageData.crates) {
           this.weaponCrateManager.spawnCrate(crateData);
         }
       }
@@ -336,13 +333,9 @@ export class GameSceneEventHandlers {
 
     // Store and register weapon:pickup_confirmed handler
     const weaponPickupConfirmedHandler = (data: unknown) => {
-      const pickupData = data as {
-        playerId: string;
-        crateId: string;
-        weaponType: string;
-      };
+      const messageData = data as WeaponPickupConfirmedData;
       // Mark crate as unavailable
-      this.weaponCrateManager.markUnavailable(pickupData.crateId);
+      this.weaponCrateManager.markUnavailable(messageData.crateId);
 
       // Hide pickup prompt if it's the same crate
       if (this.pickupPromptUI.isVisible()) {
@@ -354,13 +347,9 @@ export class GameSceneEventHandlers {
 
     // Store and register weapon:respawned handler
     const weaponRespawnedHandler = (data: unknown) => {
-      const respawnData = data as {
-        crateId: string;
-        weaponType: string;
-        position: { x: number; y: number };
-      };
+      const messageData = data as WeaponRespawnedData;
       // Mark crate as available again
-      this.weaponCrateManager.markAvailable(respawnData.crateId);
+      this.weaponCrateManager.markAvailable(messageData.crateId);
     };
     this.handlerRefs.set('weapon:respawned', weaponRespawnedHandler);
     this.wsClient.on('weapon:respawned', weaponRespawnedHandler);
