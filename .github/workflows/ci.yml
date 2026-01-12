@@ -37,6 +37,9 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Install and build events-schema
+        run: cd events-schema && npm install && npm run build
+
       - name: Install client dependencies
         run: cd stick-rumble-client && npm install
 
