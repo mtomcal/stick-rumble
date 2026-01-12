@@ -1,4 +1,4 @@
-.PHONY: help install dev-client dev-server dev test test-client test-server test-server-verbose test-integration test-coverage lint build clean check-zombies kill-dev
+.PHONY: help install dev-client dev-server dev test test-client test-server test-server-verbose test-integration test-coverage lint build clean check-zombies kill-dev schema-generate schema-validate test-schema
 
 # Default target - show help
 help:
@@ -26,6 +26,11 @@ help:
 	@echo "  make lint             Run linters for both client and server"
 	@echo "  make typecheck        Run TypeScript type checking"
 	@echo ""
+	@echo "Schema:"
+	@echo "  make schema-generate  Generate JSON Schema files from TypeBox"
+	@echo "  make schema-validate  Validate all JSON Schema files"
+	@echo "  make test-schema      Run events-schema tests"
+	@echo ""
 	@echo "Build:"
 	@echo "  make build            Build both client and server for production"
 	@echo "  make clean            Remove build artifacts"
@@ -36,7 +41,9 @@ install:
 	cd stick-rumble-client && npm install
 	@echo "Installing server dependencies..."
 	cd stick-rumble-server && go mod download
-	@echo "✓ All dependencies installed"
+	@echo "Installing events-schema dependencies..."
+	cd events-schema && npm install
+	@echo "All dependencies installed"
 
 # Development - Run both client and server
 dev:
@@ -164,4 +171,19 @@ kill-dev:
 	@echo "Killing orphaned dev processes..."
 	@lsof -ti:8080 | xargs kill -9 2>/dev/null || echo "Port 8080 was already free"
 	@lsof -ti:5173 | xargs kill -9 2>/dev/null || echo "Port 5173 was already free"
-	@echo "✓ Cleanup complete"
+	@echo "Cleanup complete"
+
+# Generate JSON Schema files from TypeBox definitions
+schema-generate:
+	@echo "Generating JSON Schema files..."
+	cd events-schema && npm run generate:schemas
+
+# Validate all JSON Schema files
+schema-validate:
+	@echo "Validating JSON Schema files..."
+	cd events-schema && npm run validate
+
+# Run events-schema tests
+test-schema:
+	@echo "Running events-schema tests..."
+	cd events-schema && npm test

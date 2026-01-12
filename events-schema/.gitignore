@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Generated schemas (rebuild from TypeBox definitions)
+schemas/common/
+schemas/client-to-server/*.json
+schemas/server-to-client/*.json
+
+# Generated TypeScript types (inferred from TypeBox at runtime)
+generated/typescript/*.ts
+
+# Generated Go structs
+generated/go/*.go
+
+# Test coverage
+coverage/
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
