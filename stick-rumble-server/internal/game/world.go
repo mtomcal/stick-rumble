@@ -9,13 +9,20 @@ import (
 // World manages the game state and all players
 type World struct {
 	players map[string]*PlayerState
+	clock   Clock
 	mu      sync.RWMutex
 }
 
-// NewWorld creates a new game world
+// NewWorld creates a new game world with a real clock
 func NewWorld() *World {
+	return NewWorldWithClock(&RealClock{})
+}
+
+// NewWorldWithClock creates a new game world with a custom clock (for testing)
+func NewWorldWithClock(clock Clock) *World {
 	return &World{
 		players: make(map[string]*PlayerState),
+		clock:   clock,
 	}
 }
 
@@ -24,7 +31,7 @@ func (w *World) AddPlayer(playerID string) *PlayerState {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	player := NewPlayerState(playerID)
+	player := NewPlayerStateWithClock(playerID, w.clock)
 	w.players[playerID] = player
 	return player
 }

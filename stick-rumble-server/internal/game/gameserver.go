@@ -32,6 +32,7 @@ type GameServer struct {
 	weaponMu           sync.RWMutex
 	tickRate           time.Duration
 	updateRate         time.Duration // Rate at which to broadcast updates to clients
+	clock              Clock         // Clock for time operations (injectable for testing)
 
 	// Broadcast function to send state updates to clients
 	broadcastFunc func(playerStates []PlayerState)
@@ -62,10 +63,15 @@ type GameServer struct {
 	wg      sync.WaitGroup
 }
 
-// NewGameServer creates a new game server
+// NewGameServer creates a new game server with a real clock
 func NewGameServer(broadcastFunc func(playerStates []PlayerState)) *GameServer {
+	return NewGameServerWithClock(broadcastFunc, &RealClock{})
+}
+
+// NewGameServerWithClock creates a new game server with a custom clock (for testing)
+func NewGameServerWithClock(broadcastFunc func(playerStates []PlayerState), clock Clock) *GameServer {
 	return &GameServer{
-		world:              NewWorld(),
+		world:              NewWorldWithClock(clock),
 		physics:            NewPhysics(),
 		projectileManager:  NewProjectileManager(),
 		weaponCrateManager: NewWeaponCrateManager(),
@@ -73,6 +79,7 @@ func NewGameServer(broadcastFunc func(playerStates []PlayerState)) *GameServer {
 		tickRate:           time.Duration(ServerTickInterval) * time.Millisecond,
 		updateRate:         time.Duration(ClientUpdateInterval) * time.Millisecond,
 		broadcastFunc:      broadcastFunc,
+		clock:              clock,
 		running:            false,
 	}
 }
@@ -108,7 +115,7 @@ func (gs *GameServer) tickLoop(ctx context.Context) {
 	ticker := time.NewTicker(gs.tickRate)
 	defer ticker.Stop()
 
-	lastTick := time.Now()
+	lastTick := gs.clock.Now()
 
 	for {
 		select {
@@ -193,7 +200,7 @@ func (gs *GameServer) AddPlayer(playerID string) *PlayerState {
 
 	// Create weapon state for the player (everyone starts with a pistol)
 	gs.weaponMu.Lock()
-	gs.weaponStates[playerID] = NewWeaponState(NewPistol())
+	gs.weaponStates[playerID] = NewWeaponStateWithClock(NewPistol(), gs.clock)
 	gs.weaponMu.Unlock()
 
 	return player
@@ -459,7 +466,7 @@ func (gs *GameServer) checkRespawns() {
 
 			// Reset weapon state to default pistol (AC: "respawn with default pistol")
 			gs.mu.Lock()
-			gs.weaponStates[player.ID] = NewWeaponState(NewPistol())
+			gs.weaponStates[player.ID] = NewWeaponStateWithClock(NewPistol(), gs.clock)
 			gs.mu.Unlock()
 
 			// Notify via callback
@@ -496,7 +503,7 @@ func (gs *GameServer) updateHealthRegeneration(deltaTime float64) {
 	}
 	gs.world.mu.RUnlock()
 
-	now := time.Now()
+	now := gs.clock.Now()
 
 	// Update each player's regeneration
 	for _, player := range players {

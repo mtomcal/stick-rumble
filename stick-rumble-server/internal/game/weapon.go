@@ -58,14 +58,21 @@ type WeaponState struct {
 	IsReloading     bool
 	LastShotTime    time.Time
 	ReloadStartTime time.Time
+	clock           Clock // Clock for time operations (injectable for testing)
 }
 
-// NewWeaponState creates a new weapon state with full ammo
+// NewWeaponState creates a new weapon state with full ammo and real clock
 func NewWeaponState(weapon *Weapon) *WeaponState {
+	return NewWeaponStateWithClock(weapon, &RealClock{})
+}
+
+// NewWeaponStateWithClock creates a new weapon state with a custom clock (for testing)
+func NewWeaponStateWithClock(weapon *Weapon, clock Clock) *WeaponState {
 	return &WeaponState{
 		Weapon:      weapon,
 		CurrentAmmo: weapon.MagazineSize,
 		IsReloading: false,
+		clock:       clock,
 	}
 }
 
@@ -84,7 +91,7 @@ func (ws *WeaponState) CanShoot() bool {
 	// Check fire rate cooldown
 	if !ws.LastShotTime.IsZero() {
 		cooldown := time.Duration(float64(time.Second) / ws.Weapon.FireRate)
-		if time.Since(ws.LastShotTime) < cooldown {
+		if ws.clock.Since(ws.LastShotTime) < cooldown {
 			return false
 		}
 	}
@@ -97,7 +104,7 @@ func (ws *WeaponState) RecordShot() {
 	if ws.CurrentAmmo > 0 {
 		ws.CurrentAmmo--
 	}
-	ws.LastShotTime = time.Now()
+	ws.LastShotTime = ws.clock.Now()
 }
 
 // StartReload begins the reload process
@@ -113,7 +120,7 @@ func (ws *WeaponState) StartReload() {
 	}
 
 	ws.IsReloading = true
-	ws.ReloadStartTime = time.Now()
+	ws.ReloadStartTime = ws.clock.Now()
 }
 
 // CheckReloadComplete checks if reload is done and refills ammo if so
@@ -123,7 +130,7 @@ func (ws *WeaponState) CheckReloadComplete() bool {
 		return false
 	}
 
-	if time.Since(ws.ReloadStartTime) >= ws.Weapon.ReloadTime {
+	if ws.clock.Since(ws.ReloadStartTime) >= ws.Weapon.ReloadTime {
 		ws.CurrentAmmo = ws.Weapon.MagazineSize
 		ws.IsReloading = false
 		return true

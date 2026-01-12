@@ -1,11 +1,29 @@
 package game
 
 import (
-	"context"
 	"sync"
 	"testing"
 	"time"
 )
+
+// simulateTick simulates a game server tick (copy from gameserver_tick_test.go)
+func simulateTickShooting(gs *GameServer, clock *ManualClock, deltaTime time.Duration) {
+	clock.Advance(deltaTime)
+	gs.updateAllPlayers(deltaTime.Seconds())
+	gs.projectileManager.Update(deltaTime.Seconds())
+	gs.checkHitDetection()
+	gs.checkReloads()
+	gs.checkRespawns()
+	gs.updateInvulnerability()
+	gs.updateHealthRegeneration(deltaTime.Seconds())
+	gs.checkWeaponRespawns()
+}
+
+func simulateTicksShooting(gs *GameServer, clock *ManualClock, count int, tickRate time.Duration) {
+	for i := 0; i < count; i++ {
+		simulateTickShooting(gs, clock, tickRate)
+	}
+}
 
 func TestGameServerPlayerShoot(t *testing.T) {
 	gs := NewGameServer(nil)
@@ -132,7 +150,9 @@ func TestGameServerReloadCompleteCallback(t *testing.T) {
 	var callbackCalled bool
 	var mu sync.Mutex
 
-	gs := NewGameServer(nil)
+	// Create ManualClock and GameServer with it
+	clock := NewManualClock(time.Now())
+	gs := NewGameServerWithClock(nil, clock)
 	playerID := "test-player-1"
 
 	// Set the reload complete callback
@@ -162,16 +182,9 @@ func TestGameServerReloadCompleteCallback(t *testing.T) {
 	}
 	mu.Unlock()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	gs.Start(ctx)
-
-	// Wait for reload to complete (1.5 seconds + buffer)
-	time.Sleep(1700 * time.Millisecond)
-
-	cancel()
-	gs.Stop()
+	// Simulate ticks for 1.7 seconds (reload time is 1.5s)
+	// At 60 ticks/second, 1.7s = 102 ticks
+	simulateTicksShooting(gs, clock, 102, time.Duration(ServerTickInterval)*time.Millisecond)
 
 	// Callback should have been called
 	mu.Lock()
@@ -192,7 +205,9 @@ func TestGameServerReloadCompleteCallback(t *testing.T) {
 }
 
 func TestGameServerReloadCompleteCallback_NoCallback(t *testing.T) {
-	gs := NewGameServer(nil)
+	// Create ManualClock and GameServer with it
+	clock := NewManualClock(time.Now())
+	gs := NewGameServerWithClock(nil, clock)
 	playerID := "test-player-1"
 
 	// Don't set callback - should not panic
@@ -206,16 +221,10 @@ func TestGameServerReloadCompleteCallback_NoCallback(t *testing.T) {
 	// Start reload
 	gs.PlayerReload(playerID)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	gs.Start(ctx)
-
-	// Wait for reload to complete (should not panic even without callback)
-	time.Sleep(1700 * time.Millisecond)
-
-	cancel()
-	gs.Stop()
+	// Simulate ticks for 1.7 seconds (reload time is 1.5s)
+	// At 60 ticks/second, 1.7s = 102 ticks
+	// Should not panic even without callback
+	simulateTicksShooting(gs, clock, 102, time.Duration(ServerTickInterval)*time.Millisecond)
 
 	// Ammo should still be refilled
 	if ws.CurrentAmmo != PistolMagazineSize {

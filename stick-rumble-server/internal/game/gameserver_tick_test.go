@@ -7,6 +7,30 @@ import (
 	"time"
 )
 
+// simulateTick simulates a game server tick by manually calling tick methods
+// and advancing the clock. This allows tests to run instantly without time.Sleep().
+func simulateTick(gs *GameServer, clock *ManualClock, deltaTime time.Duration) {
+	// Advance the clock
+	clock.Advance(deltaTime)
+
+	// Call the tick methods in the same order as tickLoop
+	gs.updateAllPlayers(deltaTime.Seconds())
+	gs.projectileManager.Update(deltaTime.Seconds())
+	gs.checkHitDetection()
+	gs.checkReloads()
+	gs.checkRespawns()
+	gs.updateInvulnerability()
+	gs.updateHealthRegeneration(deltaTime.Seconds())
+	gs.checkWeaponRespawns()
+}
+
+// simulateTicks runs multiple ticks
+func simulateTicks(gs *GameServer, clock *ManualClock, count int, tickRate time.Duration) {
+	for i := 0; i < count; i++ {
+		simulateTick(gs, clock, tickRate)
+	}
+}
+
 func TestGameServerTickLoop(t *testing.T) {
 	var broadcastCount int
 	var mu sync.Mutex
@@ -192,7 +216,9 @@ func TestGameServerGetActiveProjectiles(t *testing.T) {
 }
 
 func TestGameServerHealthRegeneration(t *testing.T) {
-	gs := NewGameServer(nil)
+	// Create ManualClock and GameServer with it
+	clock := NewManualClock(time.Now())
+	gs := NewGameServerWithClock(nil, clock)
 	playerID := "test-player-1"
 
 	// Add player (starts at 100 HP)
@@ -207,30 +233,23 @@ func TestGameServerHealthRegeneration(t *testing.T) {
 		t.Fatalf("Expected health to be 50 after damage, got %d", state.Health)
 	}
 
-	// Start the game server
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	gs.Start(ctx)
-
-	// Wait 5 seconds for regeneration delay to pass
-	time.Sleep(5 * time.Second)
+	// Simulate ticks for 5 seconds (health regen delay)
+	// At 60 ticks/second, 5s = 300 ticks
+	simulateTicks(gs, clock, 300, time.Duration(ServerTickInterval)*time.Millisecond)
 
 	// Get state immediately after delay
 	stateAfterDelay, _ := gs.GetPlayerState(playerID)
 	t.Logf("Health after 5s delay: %d HP, isRegenerating: %v", stateAfterDelay.Health, stateAfterDelay.IsRegeneratingHealth)
 
-	// Wait 100ms for regeneration to start applying (should apply ~1 HP)
-	time.Sleep(100 * time.Millisecond)
+	// Simulate 100ms (6 ticks at 60Hz)
+	simulateTicks(gs, clock, 6, time.Duration(ServerTickInterval)*time.Millisecond)
 
 	state100ms, _ := gs.GetPlayerState(playerID)
 	t.Logf("Health after 5.1s: %d HP, isRegenerating: %v", state100ms.Health, state100ms.IsRegeneratingHealth)
 
-	// Wait 1 more second for regeneration to apply (10 HP/s * 1s = 10 HP)
-	time.Sleep(1 * time.Second)
-
-	// Stop server
-	cancel()
-	gs.Stop()
+	// Simulate 1 more second for regeneration to apply (10 HP/s * 1s = 10 HP)
+	// At 60 ticks/second, 1s = 60 ticks
+	simulateTicks(gs, clock, 60, time.Duration(ServerTickInterval)*time.Millisecond)
 
 	// Check final health (should be 50 + ~10 = 60 HP)
 	finalState, _ := gs.GetPlayerState(playerID)
@@ -249,16 +268,13 @@ func TestGameServerHealthRegeneration(t *testing.T) {
 }
 
 func TestGameServerHealthRegenerationAfterRespawn(t *testing.T) {
-	gs := NewGameServer(nil)
+	// Create ManualClock and GameServer with it
+	clock := NewManualClock(time.Now())
+	gs := NewGameServerWithClock(nil, clock)
 	playerID := "test-player-1"
 
 	// Add player (starts at 100 HP)
 	gs.AddPlayer(playerID)
-
-	// Start the game server
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	gs.Start(ctx)
 
 	// Kill the player
 	gs.DamagePlayer(playerID, 100)
@@ -273,8 +289,9 @@ func TestGameServerHealthRegenerationAfterRespawn(t *testing.T) {
 		t.Fatalf("Dead player should have 0 HP, got %d", state.Health)
 	}
 
-	// Wait for respawn (3 seconds)
-	time.Sleep(3500 * time.Millisecond)
+	// Simulate ticks for 3.5 seconds (respawn delay is 3s)
+	// At 60 ticks/second, 3.5s = 210 ticks
+	simulateTicks(gs, clock, 210, time.Duration(ServerTickInterval)*time.Millisecond)
 
 	// Verify player respawned at full health
 	respawnedState, _ := gs.GetPlayerState(playerID)
@@ -292,16 +309,13 @@ func TestGameServerHealthRegenerationAfterRespawn(t *testing.T) {
 
 	t.Logf("Player damaged to 50 HP after respawn")
 
-	// Wait 5+ seconds for regeneration delay
-	time.Sleep(5500 * time.Millisecond)
+	// Simulate ticks for 5.5 seconds (health regen delay is 5s)
+	// At 60 ticks/second, 5.5s = 330 ticks
+	simulateTicks(gs, clock, 330, time.Duration(ServerTickInterval)*time.Millisecond)
 
 	// Check if regeneration is working
 	regenState, _ := gs.GetPlayerState(playerID)
 	t.Logf("Health after 5.5s: %d HP, isRegenerating: %v", regenState.Health, regenState.IsRegeneratingHealth)
-
-	// Stop server
-	cancel()
-	gs.Stop()
 
 	// Health should have regenerated
 	if regenState.Health <= 50 {
