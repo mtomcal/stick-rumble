@@ -1,16 +1,28 @@
 /**
  * Tests for check-schemas-up-to-date script
  */
-import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import { checkSchemasUpToDate, runCheckCli } from './check-schemas-up-to-date.js';
 import { buildSchemas } from './build-schemas.js';
-import { writeFileSync, readFileSync, renameSync, existsSync } from 'fs';
+import { writeFileSync, readFileSync, renameSync, existsSync, rmSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const rootDir = join(__dirname, '..');
+
+// Global setup - ensure clean state before any tests run
+beforeAll(() => {
+  // Remove any backup files from previous failed test runs
+  const backupPath = join(rootDir, 'schemas/common/velocity.json.backup');
+  if (existsSync(backupPath)) {
+    rmSync(backupPath);
+  }
+
+  // Rebuild all schemas to ensure clean starting state
+  buildSchemas();
+});
 
 describe('checkSchemasUpToDate', () => {
   beforeAll(() => {
@@ -34,28 +46,33 @@ describe('checkSchemasUpToDate', () => {
     expect(result).toBe(true);
     // If this passes, all 44 files were checked (3 common + 7 client-to-server + 34 server-to-client)
   });
+});
 
-  it.sequential('should return false when a schema file is stale', () => {
-    const testFilePath = join(rootDir, 'schemas/common/position.json');
-    const originalContent = readFileSync(testFilePath, 'utf8');
-
-    try {
-      // Modify the file to make it stale
-      writeFileSync(testFilePath, '{"modified": true}\n', 'utf8');
-
-      const result = checkSchemasUpToDate();
-      expect(result).toBe(false);
-    } finally {
-      // Restore by regenerating all schemas to ensure consistency
-      buildSchemas();
-    }
-
-    // Verify restoration worked
-    const restoredResult = checkSchemasUpToDate();
-    expect(restoredResult).toBe(true);
+// Separate suite for corruption tests with strict isolation
+describe('checkSchemasUpToDate - corruption scenarios', () => {
+  beforeEach(() => {
+    // Rebuild schemas before each test to ensure clean state
+    buildSchemas();
   });
 
-  it.sequential('should return false when a schema file is missing', () => {
+  afterEach(() => {
+    // Rebuild schemas after each test to prevent pollution
+    buildSchemas();
+  });
+
+  it('should return false when a schema file is stale', () => {
+    const testFilePath = join(rootDir, 'schemas/common/position.json');
+
+    // Modify the file to make it stale
+    writeFileSync(testFilePath, '{"modified": true}\n', 'utf8');
+
+    const result = checkSchemasUpToDate();
+    expect(result).toBe(false);
+
+    // Cleanup happens in afterEach
+  });
+
+  it('should return false when a schema file is missing', () => {
     const testFilePath = join(rootDir, 'schemas/common/velocity.json');
     const backupPath = join(rootDir, 'schemas/common/velocity.json.backup');
 
@@ -66,34 +83,50 @@ describe('checkSchemasUpToDate', () => {
       const result = checkSchemasUpToDate();
       expect(result).toBe(false);
     } finally {
-      // Restore by regenerating all schemas to ensure consistency
+      // Restore the file immediately
       if (existsSync(backupPath)) {
         renameSync(backupPath, testFilePath);
       }
-      buildSchemas();
     }
 
-    // Verify restoration worked
-    const restoredResult = checkSchemasUpToDate();
-    expect(restoredResult).toBe(true);
+    // Additional cleanup happens in afterEach
   });
 });
 
 describe('runCheckCli', () => {
+  beforeAll(() => {
+    // Ensure clean state before CLI tests
+    buildSchemas();
+  });
+
   it('should not exit when schemas are up-to-date', () => {
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((code) => {
       throw new Error(`process.exit called with code ${code}`);
     });
 
-    // Should not throw (not call process.exit)
-    expect(() => runCheckCli()).not.toThrow();
+    try {
+      // Should not throw (not call process.exit)
+      expect(() => runCheckCli()).not.toThrow();
+    } finally {
+      exitSpy.mockRestore();
+    }
+  });
+});
 
-    exitSpy.mockRestore();
+// Separate suite for CLI corruption test with strict isolation
+describe('runCheckCli - corruption scenarios', () => {
+  beforeEach(() => {
+    // Rebuild schemas before each test to ensure clean state
+    buildSchemas();
   });
 
-  it.sequential('should exit with code 1 when schemas are stale', () => {
+  afterEach(() => {
+    // Rebuild schemas after each test to prevent pollution
+    buildSchemas();
+  });
+
+  it('should exit with code 1 when schemas are stale', () => {
     const testFilePath = join(rootDir, 'schemas/common/position.json');
-    const originalContent = readFileSync(testFilePath, 'utf8');
 
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((code) => {
       throw new Error(`process.exit called with code ${code}`);
@@ -107,8 +140,7 @@ describe('runCheckCli', () => {
       expect(() => runCheckCli()).toThrow('process.exit called with code 1');
     } finally {
       exitSpy.mockRestore();
-      // Restore original content
-      writeFileSync(testFilePath, originalContent, 'utf8');
+      // Cleanup happens in afterEach
     }
   });
 });
