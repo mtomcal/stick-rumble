@@ -22,6 +22,9 @@ jobs:
       - name: Install dependencies
         run: make install
 
+      - name: Install and build events-schema
+        run: cd events-schema && npm install && npm run build
+
       - name: Run linters
         run: make lint
 
@@ -51,12 +54,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25'
 
       - name: Install server dependencies
         run: cd stick-rumble-server && go mod download
+
+      - name: Install and build events-schema
+        run: cd events-schema && npm install && npm run build
 
       - name: Run server tests
         run: make test-server
@@ -70,8 +79,8 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install events-schema dependencies
-        run: cd events-schema && npm install
+      - name: Install and build events-schema
+        run: cd events-schema && npm install && npm run build
 
       - name: Validate JSON schemas
         run: make schema-validate
@@ -90,6 +99,9 @@ jobs:
 
       - name: Install dependencies
         run: make install
+
+      - name: Install and build events-schema
+        run: cd events-schema && npm install && npm run build
 
       - name: Run integration tests
         run: make test-integration
