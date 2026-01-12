@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ShootingManager, type WeaponState } from './ShootingManager';
 import type { WebSocketClient } from '../network/WebSocketClient';
 import { WEAPON } from '../../shared/constants';
+import { ManualClock } from '../utils/Clock';
 
 // Create mock Phaser scene
 const createMockScene = () => {
@@ -24,17 +25,17 @@ describe('ShootingManager', () => {
   let scene: Phaser.Scene;
   let mockWsClient: ReturnType<typeof createMockWsClient>;
   let shootingManager: ShootingManager;
+  let clock: ManualClock;
 
   beforeEach(() => {
-    vi.useFakeTimers();
     scene = createMockScene();
     mockWsClient = createMockWsClient();
-    shootingManager = new ShootingManager(scene, mockWsClient as unknown as WebSocketClient);
+    clock = new ManualClock();
+    shootingManager = new ShootingManager(scene, mockWsClient as unknown as WebSocketClient, clock);
   });
 
   afterEach(() => {
     shootingManager.destroy();
-    vi.useRealTimers();
   });
 
   describe('initialization', () => {
@@ -85,7 +86,7 @@ describe('ShootingManager', () => {
       vi.clearAllMocks();
 
       // Advance time past cooldown (1/3 second = ~334ms for 3 rounds/sec)
-      vi.advanceTimersByTime(400);
+      clock.advance(400);
 
       shootingManager.shoot();
       expect(mockWsClient.send).toHaveBeenCalled();
@@ -247,12 +248,12 @@ describe('ShootingManager', () => {
       vi.clearAllMocks();
 
       // Try at half cooldown - should fail
-      vi.advanceTimersByTime(cooldownMs / 2);
+      clock.advance(cooldownMs / 2);
       shootingManager.shoot();
       expect(mockWsClient.send).not.toHaveBeenCalled();
 
       // Try at full cooldown - should succeed
-      vi.advanceTimersByTime(cooldownMs / 2 + 1);
+      clock.advance(cooldownMs / 2 + 1);
       shootingManager.shoot();
       expect(mockWsClient.send).toHaveBeenCalled();
     });
@@ -297,7 +298,7 @@ describe('ShootingManager', () => {
         vi.clearAllMocks();
 
         // Reset cooldown
-        vi.advanceTimersByTime(1000);
+        clock.advance(1000);
 
         shootingManager.setAimAngle(expectedAngle);
         shootingManager.shoot();
@@ -399,7 +400,7 @@ describe('ShootingManager', () => {
       shootingManager.disable();
 
       // Advance time past cooldown
-      vi.advanceTimersByTime(400);
+      clock.advance(400);
       vi.clearAllMocks();
 
       // Try to shoot - should NOT send
@@ -437,9 +438,9 @@ describe('ShootingManager', () => {
 
       // Try shooting multiple times with cooldown in between
       shootingManager.shoot();
-      vi.advanceTimersByTime(400);
+      clock.advance(400);
       shootingManager.shoot();
-      vi.advanceTimersByTime(400);
+      clock.advance(400);
       shootingManager.shoot();
 
       // Should never send
@@ -461,7 +462,7 @@ describe('ShootingManager', () => {
       expect(mockWsClient.send).not.toHaveBeenCalled();
 
       // After cooldown expires, should work
-      vi.advanceTimersByTime(400);
+      clock.advance(400);
       shootingManager.shoot();
       expect(mockWsClient.send).toHaveBeenCalledTimes(1);
     });

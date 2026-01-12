@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import type { WebSocketClient } from '../network/WebSocketClient';
 import { WEAPON } from '../../shared/constants';
+import type { Clock } from '../utils/Clock';
+import { RealClock } from '../utils/Clock';
 
 /**
  * Weapon state synchronized with server
@@ -17,18 +19,23 @@ export interface WeaponState {
  */
 export class ShootingManager {
   private wsClient: WebSocketClient;
+  private clock: Clock;
 
   private weaponState: WeaponState;
-  private lastShotTime: number = 0;
+  private lastShotTime: number;
   private fireCooldownMs: number;
   private aimAngle: number = 0;
   private isEnabled: boolean = true;
 
-  constructor(_scene: Phaser.Scene, wsClient: WebSocketClient) {
+  constructor(_scene: Phaser.Scene, wsClient: WebSocketClient, clock: Clock = new RealClock()) {
     this.wsClient = wsClient;
+    this.clock = clock;
 
     // Calculate fire rate cooldown in milliseconds
     this.fireCooldownMs = 1000 / WEAPON.PISTOL_FIRE_RATE;
+
+    // Initialize lastShotTime to allow immediate first shot
+    this.lastShotTime = this.clock.now() - this.fireCooldownMs;
 
     // Initialize weapon state with full ammo
     this.weaponState = {
@@ -56,12 +63,12 @@ export class ShootingManager {
     }
 
     // Record shot time for cooldown
-    this.lastShotTime = Date.now();
+    this.lastShotTime = this.clock.now();
 
     // Send shoot message to server
     this.wsClient.send({
       type: 'player:shoot',
-      timestamp: Date.now(),
+      timestamp: this.clock.now(),
       data: {
         aimAngle: this.aimAngle,
       },
@@ -88,7 +95,7 @@ export class ShootingManager {
     // Send reload message to server
     this.wsClient.send({
       type: 'player:reload',
-      timestamp: Date.now(),
+      timestamp: this.clock.now(),
     });
 
     return true;
@@ -109,7 +116,7 @@ export class ShootingManager {
     }
 
     // Check fire rate cooldown
-    const now = Date.now();
+    const now = this.clock.now();
     if (now - this.lastShotTime < this.fireCooldownMs) {
       return false;
     }
