@@ -22,7 +22,7 @@ import {
   clampToArena,
   checkAABBCollision,
 } from './physics';
-import { MOVEMENT, PLAYER, WEAPON } from '../../shared/constants';
+import { ARENA, MOVEMENT, PLAYER, WEAPON } from '../../shared/constants';
 
 // Generate unique IDs
 let projectileIdCounter = 0;
@@ -300,9 +300,9 @@ export class GameSimulation {
       // Check if out of bounds
       if (
         projectile.position.x < 0 ||
-        projectile.position.x > 1920 ||
+        projectile.position.x > ARENA.WIDTH ||
         projectile.position.y < 0 ||
-        projectile.position.y > 1080
+        projectile.position.y > ARENA.HEIGHT
       ) {
         projectile.active = false;
       }

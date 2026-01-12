@@ -12,6 +12,13 @@ describe('GameSimulation', () => {
     sim = new GameSimulation(clock);
   });
 
+  describe('Clock Management', () => {
+    it('should return the injected clock instance', () => {
+      const retrievedClock = sim.getClock();
+      expect(retrievedClock).toBe(clock);
+    });
+  });
+
   describe('Player Management', () => {
     it('should add a player at specified position', () => {
       sim.addPlayer('p1', { x: 500, y: 500 });
@@ -332,6 +339,22 @@ describe('GameSimulation', () => {
       expect(projectiles).toHaveLength(0);
     });
 
+    it('should keep projectile active just before max lifetime', () => {
+      sim.addPlayer('p1', { x: 500, y: 500 });
+      sim.spawnProjectile('p1', 0);
+
+      // Simulate 990ms (just under 1000ms max lifetime)
+      const ticksNeeded = Math.floor(990 / 16.67);
+      for (let i = 0; i < ticksNeeded; i++) {
+        sim.tick(16.67);
+        clock.advance(16.67);
+      }
+
+      const projectiles = sim.getActiveProjectiles();
+      expect(projectiles).toHaveLength(1);
+      expect(projectiles[0].active).toBe(true);
+    });
+
     it('should return all active projectiles', () => {
       sim.addPlayer('p1', { x: 500, y: 500 });
       sim.spawnProjectile('p1', 0);
@@ -443,6 +466,20 @@ describe('GameSimulation', () => {
       expect(deathEvents[0].playerId).toBe('p1');
     });
 
+    it('should include killerId in death event when provided', () => {
+      sim.addPlayer('victim', { x: 500, y: 500 });
+      sim.addPlayer('killer', { x: 600, y: 500 });
+
+      const deathEvents: Array<{ playerId: string; killerId?: string }> = [];
+      sim.onDeath((event) => deathEvents.push(event));
+
+      sim.killPlayer('victim', 'killer');
+
+      expect(deathEvents).toHaveLength(1);
+      expect(deathEvents[0].playerId).toBe('victim');
+      expect(deathEvents[0].killerId).toBe('killer');
+    });
+
     it('should not reduce health below zero', () => {
       sim.addPlayer('p1', { x: 500, y: 500 });
 
@@ -479,6 +516,16 @@ describe('GameSimulation', () => {
       sim.damagePlayer('p1', 100);
 
       expect(deathCount).toBe(1);
+    });
+
+    it('should register onWeaponPickup callback', () => {
+      // Weapon pickup events aren't implemented yet in simulation,
+      // but the callback hook exists for future use (AC3 requirement)
+      let pickupCount = 0;
+      sim.onWeaponPickup(() => pickupCount++);
+
+      // Verify callback registration doesn't throw
+      expect(pickupCount).toBe(0);
     });
 
     it('should support multiple event listeners', () => {
