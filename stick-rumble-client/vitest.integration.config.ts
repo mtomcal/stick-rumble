@@ -13,6 +13,8 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: './tests/setup.ts',
+    reporters: ['dot'],
+    silent: 'passed-only',
     include: ['**/*.integration.test.ts'],
     exclude: ['**/node_modules/**', '**/dist/**'],
     testTimeout: 10000,
