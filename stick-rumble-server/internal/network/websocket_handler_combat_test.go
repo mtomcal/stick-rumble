@@ -67,7 +67,6 @@ func TestOnHit(t *testing.T) {
 	})
 
 	t.Run("sends hit:confirmed message to attacker in room", func(t *testing.T) {
-		// This test verifies the fix for ReadyQ task 1d78d55d:
 		// hit:confirmed is now sent via SendToPlayer which works for players in rooms
 		handler := NewWebSocketHandler()
 		server := httptest.NewServer(http.HandlerFunc(handler.HandleWebSocket))

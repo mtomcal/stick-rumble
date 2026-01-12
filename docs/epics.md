@@ -33,7 +33,7 @@ This document provides the complete epic and story breakdown for Stick Rumble, d
 - **No commented-out code** or debug statements in final commits
 
 ### 3. Documentation
-- **Session logs** in ReadyQ capture implementation learnings and decisions
+- **Session logs** in Beads capture implementation learnings and decisions
 - **Code review checklist** completed before marking done
 - **README updates** where applicable (setup, configuration, usage)
 - **Inline comments** for complex business logic
@@ -384,7 +384,7 @@ So that the multiplayer foundation is proven to work.
 - **Acceptance testing with real browsers catches issues unit tests miss**: Playwright MCP testing revealed visual feedback bugs that passed all unit/integration tests. Browser automation now recommended for story completion validation.
 - **Smaller stories improve agent success rate**: Breaking Story 2.6 (6-8 systems) into 3 sub-stories and Story 2.7 (4 systems) into 2 sub-stories creates more focused tasks that agents can complete in 1-3 hours.
 - **Enforce coverage thresholds early**: 90% coverage threshold now enforced for all metrics (statements, branches, functions, lines) on both client and server.
-- **Documentation sync is critical**: Story 2.6.2 was completed but epic documentation still showed it as "NEXT - ready to start", causing confusion. Must update epics.md progress summary when marking ReadyQ stories as done to prevent documentation drift.
+- **Documentation sync is critical**: Story 2.6.2 was completed but epic documentation still showed it as "NEXT - ready to start", causing confusion. Must update epics.md progress summary when marking stories as done to prevent documentation drift.
 
 **Epic Completion Date:** December 9, 2025 - All 13 feature stories complete with post-epic bug fixes and quality improvements. Fully playable deathmatch delivered with health regeneration working correctly, sprite lifecycle management, and 88.62% branch coverage (Client: 97.3%, Server: 91.2%).
 
@@ -2497,7 +2497,7 @@ So that updates are deployed reliably and quickly.
 ### Story 9.5A: Backend Server Deployment to Cloud VPS
 
 **MOVED FROM EPIC 1:** Production deployment belongs in polish/launch epic.
-**NOTE:** Not yet added to ReadyQ - will be added when Epic 8 is complete.
+**NOTE:** Not yet added to Beads - will be added when Epic 8 is complete.
 
 As a developer,
 I want the backend Go server deployed to a cloud VPS with systemd service,
@@ -2531,7 +2531,7 @@ So that the game can be tested and played remotely in production.
 ### Story 9.5B: Frontend Deployment and SSL/TLS Configuration
 
 **MOVED FROM EPIC 1:** SSL/TLS configuration for production launch.
-**NOTE:** Not yet added to ReadyQ - will be added when Epic 8 is complete.
+**NOTE:** Not yet added to Beads - will be added when Epic 8 is complete.
 
 As a developer,
 I want the frontend deployed with SSL/TLS and configured to connect to the production backend,
