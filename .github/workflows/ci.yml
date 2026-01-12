@@ -103,5 +103,25 @@ jobs:
       - name: Install and build events-schema
         run: cd events-schema && npm install && npm run build
 
+      - name: Build server binary
+        run: cd stick-rumble-server && go build -o server-ci cmd/server/main.go
+
+      - name: Verify server binary exists
+        run: |
+          if [ ! -f stick-rumble-server/server-ci ]; then
+            echo "ERROR: Server binary not found after build"
+            exit 1
+          fi
+          echo "Server binary built successfully"
+
       - name: Run integration tests
         run: make test-integration
+
+      - name: Upload server logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-server-logs
+          path: integration-server.log
+          if-no-files-found: warn
+          retention-days: 7
