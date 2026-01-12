@@ -99,17 +99,25 @@ func (h *WebSocketHandler) onHit(hit game.HitEvent) {
 
 	damage := attackerWeapon.Weapon.Damage
 
+	// Create player:damaged message data
+	damagedData := map[string]interface{}{
+		"victimId":     hit.VictimID,
+		"attackerId":   hit.AttackerID,
+		"damage":       damage,
+		"newHealth":    victimState.Health,
+		"projectileId": hit.ProjectileID,
+	}
+
+	// Validate outgoing message schema (development mode only)
+	if err := h.validateOutgoingMessage("player:damaged", damagedData); err != nil {
+		log.Printf("Schema validation failed for player:damaged: %v", err)
+	}
+
 	// Broadcast player:damaged to all players in the room
 	damagedMessage := Message{
 		Type:      "player:damaged",
 		Timestamp: 0,
-		Data: map[string]interface{}{
-			"victimId":     hit.VictimID,
-			"attackerId":   hit.AttackerID,
-			"damage":       damage,
-			"newHealth":    victimState.Health,
-			"projectileId": hit.ProjectileID,
-		},
+		Data:      damagedData,
 	}
 
 	msgBytes, err := json.Marshal(damagedMessage)
@@ -124,15 +132,23 @@ func (h *WebSocketHandler) onHit(hit game.HitEvent) {
 		room.Broadcast(msgBytes, "")
 	}
 
+	// Create hit:confirmed message data
+	hitConfirmedData := map[string]interface{}{
+		"victimId":     hit.VictimID,
+		"damage":       damage,
+		"projectileId": hit.ProjectileID,
+	}
+
+	// Validate outgoing message schema (development mode only)
+	if err := h.validateOutgoingMessage("hit:confirmed", hitConfirmedData); err != nil {
+		log.Printf("Schema validation failed for hit:confirmed: %v", err)
+	}
+
 	// Send hit confirmation to the attacker
 	hitConfirmedMessage := Message{
 		Type:      "hit:confirmed",
 		Timestamp: 0,
-		Data: map[string]interface{}{
-			"victimId":     hit.VictimID,
-			"damage":       damage,
-			"projectileId": hit.ProjectileID,
-		},
+		Data:      hitConfirmedData,
 	}
 
 	confirmBytes, err := json.Marshal(hitConfirmedMessage)
@@ -156,13 +172,21 @@ func (h *WebSocketHandler) onHit(hit game.HitEvent) {
 		}
 		victimState.IncrementDeaths()
 
+		// Create player:death message data
+		deathData := map[string]interface{}{
+			"victimId":   hit.VictimID,
+			"attackerId": hit.AttackerID,
+		}
+
+		// Validate outgoing message schema (development mode only)
+		if err := h.validateOutgoingMessage("player:death", deathData); err != nil {
+			log.Printf("Schema validation failed for player:death: %v", err)
+		}
+
 		deathMessage := Message{
 			Type:      "player:death",
 			Timestamp: 0,
-			Data: map[string]interface{}{
-				"victimId":   hit.VictimID,
-				"attackerId": hit.AttackerID,
-			},
+			Data:      deathData,
 		}
 
 		deathBytes, err := json.Marshal(deathMessage)
@@ -175,16 +199,24 @@ func (h *WebSocketHandler) onHit(hit game.HitEvent) {
 			room.Broadcast(deathBytes, "")
 		}
 
+		// Create player:kill_credit message data
+		killCreditData := map[string]interface{}{
+			"killerId":    hit.AttackerID,
+			"victimId":    hit.VictimID,
+			"killerKills": attackerState.Kills,
+			"killerXP":    attackerState.XP,
+		}
+
+		// Validate outgoing message schema (development mode only)
+		if err := h.validateOutgoingMessage("player:kill_credit", killCreditData); err != nil {
+			log.Printf("Schema validation failed for player:kill_credit: %v", err)
+		}
+
 		// Broadcast kill credit with updated stats
 		killCreditMessage := Message{
 			Type:      "player:kill_credit",
 			Timestamp: 0,
-			Data: map[string]interface{}{
-				"killerId":    hit.AttackerID,
-				"victimId":    hit.VictimID,
-				"killerKills": attackerState.Kills,
-				"killerXP":    attackerState.XP,
-			},
+			Data:      killCreditData,
 		}
 
 		creditBytes, err := json.Marshal(killCreditMessage)
@@ -212,15 +244,23 @@ func (h *WebSocketHandler) onHit(hit game.HitEvent) {
 
 // onRespawn is called when a player respawns after death
 func (h *WebSocketHandler) onRespawn(playerID string, position game.Vector2) {
+	// Create player:respawn message data
+	respawnData := map[string]interface{}{
+		"playerId": playerID,
+		"position": position,
+		"health":   game.PlayerMaxHealth,
+	}
+
+	// Validate outgoing message schema (development mode only)
+	if err := h.validateOutgoingMessage("player:respawn", respawnData); err != nil {
+		log.Printf("Schema validation failed for player:respawn: %v", err)
+	}
+
 	// Create player:respawn message
 	respawnMessage := Message{
 		Type:      "player:respawn",
 		Timestamp: 0,
-		Data: map[string]interface{}{
-			"playerId": playerID,
-			"position": position,
-			"health":   game.PlayerMaxHealth,
-		},
+		Data:      respawnData,
 	}
 
 	msgBytes, err := json.Marshal(respawnMessage)

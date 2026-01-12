@@ -182,6 +182,8 @@ schema-generate:
 schema-validate:
 	@echo "Validating JSON Schema files..."
 	cd events-schema && npm run validate
+	@echo "Checking schema files are up to date..."
+	cd events-schema && npm run check:schemas
 
 # Run events-schema tests
 test-schema:

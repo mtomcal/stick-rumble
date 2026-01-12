@@ -33,13 +33,22 @@ func (h *WebSocketHandler) broadcastPlayerStates(playerStates []game.PlayerState
 		}
 	}
 
+	// Create player:move message data
+	data := map[string]interface{}{
+		"players": playerStates,
+	}
+
+	// Validate outgoing message schema (development mode only)
+	if err := h.validateOutgoingMessage("player:move", data); err != nil {
+		log.Printf("Schema validation failed for player:move: %v", err)
+		// Continue anyway - validation is for development debugging only
+	}
+
 	// Create player:move message
 	message := Message{
 		Type:      "player:move",
 		Timestamp: 0, // Will be set by each client
-		Data: map[string]interface{}{
-			"players": playerStates,
-		},
+		Data:      data,
 	}
 
 	msgBytes, err := json.Marshal(message)
@@ -65,15 +74,23 @@ func (h *WebSocketHandler) broadcastPlayerStates(playerStates []game.PlayerState
 
 // broadcastProjectileSpawn sends projectile spawn event to all clients
 func (h *WebSocketHandler) broadcastProjectileSpawn(proj *game.Projectile) {
+	// Create projectile:spawn message data
+	data := map[string]interface{}{
+		"id":       proj.ID,
+		"ownerId":  proj.OwnerID,
+		"position": proj.Position,
+		"velocity": proj.Velocity,
+	}
+
+	// Validate outgoing message schema (development mode only)
+	if err := h.validateOutgoingMessage("projectile:spawn", data); err != nil {
+		log.Printf("Schema validation failed for projectile:spawn: %v", err)
+	}
+
 	message := Message{
 		Type:      "projectile:spawn",
 		Timestamp: 0,
-		Data: map[string]interface{}{
-			"id":       proj.ID,
-			"ownerId":  proj.OwnerID,
-			"position": proj.Position,
-			"velocity": proj.Velocity,
-		},
+		Data:      data,
 	}
 
 	msgBytes, err := json.Marshal(message)
@@ -98,13 +115,21 @@ func (h *WebSocketHandler) broadcastMatchTimers() {
 
 		remainingSeconds := room.Match.GetRemainingSeconds()
 
+		// Create match:timer message data
+		data := map[string]interface{}{
+			"remainingSeconds": remainingSeconds,
+		}
+
+		// Validate outgoing message schema (development mode only)
+		if err := h.validateOutgoingMessage("match:timer", data); err != nil {
+			log.Printf("Schema validation failed for match:timer: %v", err)
+		}
+
 		// Create match:timer message
 		timerMessage := Message{
 			Type:      "match:timer",
 			Timestamp: 0,
-			Data: map[string]interface{}{
-				"remainingSeconds": remainingSeconds,
-			},
+			Data:      data,
 		}
 
 		msgBytes, err := json.Marshal(timerMessage)
@@ -134,15 +159,24 @@ func (h *WebSocketHandler) sendWeaponState(playerID string) {
 	}
 
 	current, max := ws.GetAmmoInfo()
+
+	// Create weapon:state message data
+	data := map[string]interface{}{
+		"currentAmmo": current,
+		"maxAmmo":     max,
+		"isReloading": ws.IsReloading,
+		"canShoot":    ws.CanShoot(),
+	}
+
+	// Validate outgoing message schema (development mode only)
+	if err := h.validateOutgoingMessage("weapon:state", data); err != nil {
+		log.Printf("Schema validation failed for weapon:state: %v", err)
+	}
+
 	message := Message{
 		Type:      "weapon:state",
 		Timestamp: 0,
-		Data: map[string]interface{}{
-			"currentAmmo": current,
-			"maxAmmo":     max,
-			"isReloading": ws.IsReloading,
-			"canShoot":    ws.CanShoot(),
-		},
+		Data:      data,
 	}
 
 	msgBytes, err := json.Marshal(message)
@@ -169,12 +203,20 @@ func (h *WebSocketHandler) sendWeaponState(playerID string) {
 
 // sendShootFailed sends a shoot failure message to the player
 func (h *WebSocketHandler) sendShootFailed(playerID string, reason string) {
+	// Create shoot:failed message data
+	data := map[string]interface{}{
+		"reason": reason,
+	}
+
+	// Validate outgoing message schema (development mode only)
+	if err := h.validateOutgoingMessage("shoot:failed", data); err != nil {
+		log.Printf("Schema validation failed for shoot:failed: %v", err)
+	}
+
 	message := Message{
 		Type:      "shoot:failed",
 		Timestamp: 0,
-		Data: map[string]interface{}{
-			"reason": reason,
-		},
+		Data:      data,
 	}
 
 	msgBytes, err := json.Marshal(message)
@@ -205,15 +247,23 @@ func (h *WebSocketHandler) broadcastMatchEnded(room *game.Room, world *game.Worl
 	winners := room.Match.DetermineWinners()
 	finalScores := room.Match.GetFinalScores(world)
 
+	// Create match:ended message data
+	data := map[string]interface{}{
+		"winners":     winners,
+		"finalScores": finalScores,
+		"reason":      room.Match.EndReason,
+	}
+
+	// Validate outgoing message schema (development mode only)
+	if err := h.validateOutgoingMessage("match:ended", data); err != nil {
+		log.Printf("Schema validation failed for match:ended: %v", err)
+	}
+
 	// Create match:ended message
 	message := Message{
 		Type:      "match:ended",
 		Timestamp: 0,
-		Data: map[string]interface{}{
-			"winners":     winners,
-			"finalScores": finalScores,
-			"reason":      room.Match.EndReason,
-		},
+		Data:      data,
 	}
 
 	msgBytes, err := json.Marshal(message)
@@ -229,15 +279,23 @@ func (h *WebSocketHandler) broadcastMatchEnded(room *game.Room, world *game.Worl
 
 // broadcastWeaponPickup broadcasts weapon pickup event to all clients
 func (h *WebSocketHandler) broadcastWeaponPickup(playerID, crateID, weaponType string, respawnTime time.Time) {
+	// Create weapon:pickup_confirmed message data
+	data := map[string]interface{}{
+		"playerId":        playerID,
+		"crateId":         crateID,
+		"weaponType":      weaponType,
+		"nextRespawnTime": respawnTime.Unix(),
+	}
+
+	// Validate outgoing message schema (development mode only)
+	if err := h.validateOutgoingMessage("weapon:pickup_confirmed", data); err != nil {
+		log.Printf("Schema validation failed for weapon:pickup_confirmed: %v", err)
+	}
+
 	message := Message{
 		Type:      "weapon:pickup_confirmed",
 		Timestamp: time.Now().UnixMilli(),
-		Data: map[string]interface{}{
-			"playerId":        playerID,
-			"crateId":         crateID,
-			"weaponType":      weaponType,
-			"nextRespawnTime": respawnTime.Unix(),
-		},
+		Data:      data,
 	}
 
 	msgBytes, err := json.Marshal(message)
@@ -252,14 +310,22 @@ func (h *WebSocketHandler) broadcastWeaponPickup(playerID, crateID, weaponType s
 
 // broadcastWeaponRespawn broadcasts weapon respawn event to all clients
 func (h *WebSocketHandler) broadcastWeaponRespawn(crate *game.WeaponCrate) {
+	// Create weapon:respawned message data
+	data := map[string]interface{}{
+		"crateId":    crate.ID,
+		"weaponType": crate.WeaponType,
+		"position":   crate.Position,
+	}
+
+	// Validate outgoing message schema (development mode only)
+	if err := h.validateOutgoingMessage("weapon:respawned", data); err != nil {
+		log.Printf("Schema validation failed for weapon:respawned: %v", err)
+	}
+
 	message := Message{
 		Type:      "weapon:respawned",
 		Timestamp: time.Now().UnixMilli(),
-		Data: map[string]interface{}{
-			"crateId":    crate.ID,
-			"weaponType": crate.WeaponType,
-			"position":   crate.Position,
-		},
+		Data:      data,
 	}
 
 	msgBytes, err := json.Marshal(message)
@@ -289,13 +355,21 @@ func (h *WebSocketHandler) sendWeaponSpawns(playerID string) {
 		crates = append(crates, crateData)
 	}
 
+	// Create weapon:spawned message data
+	data := map[string]interface{}{
+		"crates": crates,
+	}
+
+	// Validate outgoing message schema (development mode only)
+	if err := h.validateOutgoingMessage("weapon:spawned", data); err != nil {
+		log.Printf("Schema validation failed for weapon:spawned: %v", err)
+	}
+
 	// Create weapon:spawned message
 	message := Message{
 		Type:      "weapon:spawned",
 		Timestamp: time.Now().UnixMilli(),
-		Data: map[string]interface{}{
-			"crates": crates,
-		},
+		Data:      data,
 	}
 
 	msgBytes, err := json.Marshal(message)
