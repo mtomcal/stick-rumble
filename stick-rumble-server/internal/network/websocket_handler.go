@@ -34,6 +34,7 @@ type WebSocketHandler struct {
 	roomManager   *game.RoomManager
 	gameServer    *game.GameServer
 	timerInterval time.Duration // Interval for match timer broadcasts (default 1s)
+	validator     *SchemaValidator
 }
 
 // NewWebSocketHandler creates a new WebSocket handler with room management
@@ -43,9 +44,31 @@ func NewWebSocketHandler() *WebSocketHandler {
 
 // NewWebSocketHandlerWithConfig creates a WebSocket handler with custom timer interval
 func NewWebSocketHandlerWithConfig(timerInterval time.Duration) *WebSocketHandler {
+	// Load JSON schemas at startup
+	// Try different paths depending on where the code is running
+	schemaPaths := []string{
+		"../events-schema/schemas/client-to-server",       // From cmd/server/
+		"../../events-schema/schemas/client-to-server",    // From internal/network/
+		"../../../events-schema/schemas/client-to-server", // From tests
+	}
+
+	var schemaLoader *SchemaLoader
+	var err error
+	for _, path := range schemaPaths {
+		schemaLoader, err = NewSchemaLoader(path)
+		if err == nil {
+			break
+		}
+	}
+
+	if schemaLoader == nil {
+		log.Fatalf("FATAL: Failed to load JSON schemas from any path: %v", err)
+	}
+
 	handler := &WebSocketHandler{
 		roomManager:   game.NewRoomManager(),
 		timerInterval: timerInterval,
+		validator:     NewSchemaValidator(schemaLoader),
 	}
 
 	// Create game server with broadcast function
