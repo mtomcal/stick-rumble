@@ -31,6 +31,7 @@ make dev-server           # Run server only (http://localhost:8080)
 make test                 # Run all tests (client + server)
 make test-client          # Run client tests only
 make test-server          # Run server tests only
+make test-server-verbose  # Run server tests with verbose output (debugging)
 make test-integration     # Run integration tests (auto-starts server)
 make test-coverage        # Generate coverage reports for both
 
