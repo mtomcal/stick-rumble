@@ -336,15 +336,30 @@ describe.sequential('WebSocket Mouse Aim Integration Tests', () => {
 
         let client2Received = false;
         let client3Received = false;
+        let client2PlayerId: string | undefined;
+        let client3PlayerId: string | undefined;
         const testAngle = 1.57; // Approximately π/2
 
+        // Capture player IDs from room:joined events
+        client2.on('room:joined', (data: any) => {
+          client2PlayerId = data.playerId;
+        });
+        client3.on('room:joined', (data: any) => {
+          client3PlayerId = data.playerId;
+        });
+
+        // Connect all clients and wait for room:joined
+        await connectClientsToRoom(client1, client2, client3);
+
+        // Set up broadcast listeners AFTER we have player IDs
         const broadcastPromise = Promise.all([
           new Promise<void>((resolve, reject) => {
             const timeout = setTimeout(() => reject(new Error('Client2 timeout')), 5000);
             client2.on('player:move', (data: any) => {
               if (data.players && data.players.length > 0) {
-                const player1 = data.players.find((p: any) => p.aimAngle !== undefined);
-                if (player1 && Math.abs(player1.aimAngle - testAngle) < ANGLE_TOLERANCE) {
+                // Find a player that is NOT client2 (another player's data)
+                const otherPlayer = data.players.find((p: any) => p.id !== client2PlayerId && p.aimAngle !== undefined);
+                if (otherPlayer && Math.abs(otherPlayer.aimAngle - testAngle) < ANGLE_TOLERANCE) {
                   client2Received = true;
                   clearTimeout(timeout);
                   resolve();
@@ -356,8 +371,9 @@ describe.sequential('WebSocket Mouse Aim Integration Tests', () => {
             const timeout = setTimeout(() => reject(new Error('Client3 timeout')), 5000);
             client3.on('player:move', (data: any) => {
               if (data.players && data.players.length > 0) {
-                const player1 = data.players.find((p: any) => p.aimAngle !== undefined);
-                if (player1 && Math.abs(player1.aimAngle - testAngle) < ANGLE_TOLERANCE) {
+                // Find a player that is NOT client3 (another player's data)
+                const otherPlayer = data.players.find((p: any) => p.id !== client3PlayerId && p.aimAngle !== undefined);
+                if (otherPlayer && Math.abs(otherPlayer.aimAngle - testAngle) < ANGLE_TOLERANCE) {
                   client3Received = true;
                   clearTimeout(timeout);
                   resolve();
@@ -366,9 +382,6 @@ describe.sequential('WebSocket Mouse Aim Integration Tests', () => {
             });
           })
         ]);
-
-        // Connect all clients and wait for room:joined
-        await connectClientsToRoom(client1, client2, client3);
 
         // Client1 sends input with aimAngle
         const inputMessage: Message = {
