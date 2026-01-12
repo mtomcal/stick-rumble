@@ -11,19 +11,8 @@ const schemasDir = join(rootDir, 'schemas');
 const commonDir = join(schemasDir, 'common');
 
 describe('buildSchemas', () => {
-  // Clean up generated files before each test
-  beforeEach(() => {
-    if (existsSync(commonDir)) {
-      rmSync(commonDir, { recursive: true, force: true });
-    }
-  });
-
-  // Clean up after all tests
-  afterEach(() => {
-    if (existsSync(commonDir)) {
-      rmSync(commonDir, { recursive: true, force: true });
-    }
-  });
+  // Don't delete schemas - other tests may need them
+  // Tests should be able to run even if schemas already exist
 
   it('should create schema output directory', () => {
     buildSchemas();
