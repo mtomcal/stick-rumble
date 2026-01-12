@@ -5,6 +5,9 @@ export default defineConfig({
     globals: false,
     environment: 'node',
     include: ['src/**/*.test.ts'],
+    // Disable parallel file execution to prevent test isolation issues
+    // Tests that modify schema files must run sequentially to avoid race conditions
+    fileParallelism: false,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
