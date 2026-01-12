@@ -37,11 +37,17 @@ type PlayerState struct {
 	lastDamageTime         time.Time  // Private field: when player last took damage
 	regenAccumulator       float64    // Private field: accumulated fractional HP for regeneration
 	input                  InputState // Private field, accessed via methods
+	clock                  Clock      // Private field: clock for time operations (injectable for testing)
 	mu                     sync.RWMutex
 }
 
-// NewPlayerState creates a new player state with default spawn position
+// NewPlayerState creates a new player state with default spawn position and real clock
 func NewPlayerState(id string) *PlayerState {
+	return NewPlayerStateWithClock(id, &RealClock{})
+}
+
+// NewPlayerStateWithClock creates a new player state with a custom clock (for testing)
+func NewPlayerStateWithClock(id string, clock Clock) *PlayerState {
 	return &PlayerState{
 		ID: id,
 		Position: Vector2{
@@ -51,7 +57,8 @@ func NewPlayerState(id string) *PlayerState {
 		Velocity:       Vector2{X: 0, Y: 0},
 		Health:         PlayerMaxHealth,
 		input:          InputState{},
-		lastDamageTime: time.Now(), // Initialize to prevent immediate regeneration
+		clock:          clock,
+		lastDamageTime: clock.Now(), // Initialize to prevent immediate regeneration
 	}
 }
 
@@ -121,7 +128,7 @@ func (p *PlayerState) TakeDamage(amount int) {
 	if p.Health < 0 {
 		p.Health = 0
 	}
-	p.lastDamageTime = time.Now()
+	p.lastDamageTime = p.clock.Now()
 	p.IsRegeneratingHealth = false // Stop regeneration when taking damage
 	p.regenAccumulator = 0.0       // Reset regeneration accumulator
 }
@@ -157,7 +164,7 @@ func (p *PlayerState) Snapshot() PlayerState {
 func (p *PlayerState) MarkDead() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	now := time.Now()
+	now := p.clock.Now()
 	p.DeathTime = &now
 	p.Health = 0
 }
@@ -176,7 +183,7 @@ func (p *PlayerState) CanRespawn() bool {
 	if p.DeathTime == nil {
 		return false
 	}
-	return time.Since(*p.DeathTime).Seconds() >= RespawnDelay
+	return p.clock.Since(*p.DeathTime).Seconds() >= RespawnDelay
 }
 
 // Respawn resets the player to alive state at the given position (thread-safe)
@@ -188,16 +195,16 @@ func (p *PlayerState) Respawn(spawnPos Vector2) {
 	p.Velocity = Vector2{X: 0, Y: 0}
 	p.DeathTime = nil
 	p.IsInvulnerable = true
-	p.InvulnerabilityEndTime = time.Now().Add(time.Duration(SpawnInvulnerabilityDuration * float64(time.Second)))
-	p.regenAccumulator = 0.0      // Clear regeneration accumulator on respawn
-	p.lastDamageTime = time.Now() // Reset regeneration timer to prevent immediate regeneration
+	p.InvulnerabilityEndTime = p.clock.Now().Add(time.Duration(SpawnInvulnerabilityDuration * float64(time.Second)))
+	p.regenAccumulator = 0.0         // Clear regeneration accumulator on respawn
+	p.lastDamageTime = p.clock.Now() // Reset regeneration timer to prevent immediate regeneration
 }
 
 // UpdateInvulnerability checks and updates invulnerability status (thread-safe)
 func (p *PlayerState) UpdateInvulnerability() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if p.IsInvulnerable && time.Now().After(p.InvulnerabilityEndTime) {
+	if p.IsInvulnerable && p.clock.Now().After(p.InvulnerabilityEndTime) {
 		p.IsInvulnerable = false
 	}
 }
