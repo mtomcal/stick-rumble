@@ -3,7 +3,7 @@
 <html>
 	<head>
 		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-		<title>game: Go Coverage Report</title>
+		<title>network: Go Coverage Report</title>
 		<style>
 			body {
 				background: black;
@@ -55,21 +55,15 @@
 			<div id="nav">
 				<select id="files">
 				
-				<option value="file0">github.com/mtomcal/stick-rumble-server/internal/game/gameserver.go (89.9%)</option>
+				<option value="file0">github.com/mtomcal/stick-rumble-server/internal/network/broadcast_helper.go (85.6%)</option>
 				
-				<option value="file1">github.com/mtomcal/stick-rumble-server/internal/game/match.go (92.8%)</option>
+				<option value="file1">github.com/mtomcal/stick-rumble-server/internal/network/message_processor.go (84.4%)</option>
 				
-				<option value="file2">github.com/mtomcal/stick-rumble-server/internal/game/physics.go (90.2%)</option>
+				<option value="file2">github.com/mtomcal/stick-rumble-server/internal/network/schema_loader.go (95.0%)</option>
 				
-				<option value="file3">github.com/mtomcal/stick-rumble-server/internal/game/player.go (97.4%)</option>
+				<option value="file3">github.com/mtomcal/stick-rumble-server/internal/network/schema_validator.go (94.7%)</option>
 				
-				<option value="file4">github.com/mtomcal/stick-rumble-server/internal/game/projectile.go (100.0%)</option>
-				
-				<option value="file5">github.com/mtomcal/stick-rumble-server/internal/game/room.go (93.4%)</option>
-				
-				<option value="file6">github.com/mtomcal/stick-rumble-server/internal/game/weapon.go (100.0%)</option>
-				
-				<option value="file7">github.com/mtomcal/stick-rumble-server/internal/game/world.go (100.0%)</option>
+				<option value="file4">github.com/mtomcal/stick-rumble-server/internal/network/websocket_handler.go (96.6%)</option>
 				
 				</select>
 			</div>
@@ -83,2137 +77,1296 @@
 		</div>
 		<div id="content">
 		
-		<pre class="file" id="file0" style="display: none">package game
-
-import (
-        "context"
-        "log"
-        "sync"
-        "time"
-)
-
-// Shoot failure reasons
-const (
-        ShootFailedNoPlayer = "no_player"
-        ShootFailedCooldown = "cooldown"
-        ShootFailedEmpty    = "empty"
-        ShootFailedReload   = "reloading"
-)
-
-// ShootResult contains the result of a shoot attempt
-type ShootResult struct {
-        Success    bool
-        Reason     string
-        Projectile *Projectile
-}
-
-// GameServer manages the game loop and physics simulation
-type GameServer struct {
-        world             *World
-        physics           *Physics
-        projectileManager *ProjectileManager
-        weaponStates      map[string]*WeaponState
-        weaponMu          sync.RWMutex
-        tickRate          time.Duration
-        updateRate        time.Duration // Rate at which to broadcast updates to clients
-
-        // Broadcast function to send state updates to clients
-        broadcastFunc func(playerStates []PlayerState)
-
-        // Callback for when a player's reload completes
-        onReloadComplete func(playerID string)
-
-        // Callback for when a projectile hits a player
-        onHit func(hit HitEvent)
-
-        // Callback for when a player respawns
-        onRespawn func(playerID string, position Vector2)
-
-        // Callback for match timer updates
-        onMatchTimer func(roomID string, remainingSeconds int)
-
-        // Callback for checking time limit across all rooms
-        onCheckTimeLimit func()
-
-        running bool
-        mu      sync.RWMutex
-        wg      sync.WaitGroup
-}
-
-// NewGameServer creates a new game server
-func NewGameServer(broadcastFunc func(playerStates []PlayerState)) *GameServer <span class="cov8" title="1">{
-        return &amp;GameServer{
-                world:             NewWorld(),
-                physics:           NewPhysics(),
-                projectileManager: NewProjectileManager(),
-                weaponStates:      make(map[string]*WeaponState),
-                tickRate:          time.Duration(ServerTickInterval) * time.Millisecond,
-                updateRate:        time.Duration(ClientUpdateInterval) * time.Millisecond,
-                broadcastFunc:     broadcastFunc,
-                running:           false,
-        }
-}</span>
-
-// Start begins the game loop
-func (gs *GameServer) Start(ctx context.Context) <span class="cov8" title="1">{
-        gs.mu.Lock()
-        if gs.running </span><span class="cov0" title="0">{
-                gs.mu.Unlock()
-                return
-        }</span>
-        <span class="cov8" title="1">gs.running = true
-        gs.mu.Unlock()
-
-        gs.wg.Add(2)
-        go gs.tickLoop(ctx)
-        go gs.broadcastLoop(ctx)</span>
-}
-
-// Stop gracefully stops the game server
-func (gs *GameServer) Stop() <span class="cov8" title="1">{
-        gs.mu.Lock()
-        gs.running = false
-        gs.mu.Unlock()
-
-        gs.wg.Wait()
-}</span>
-
-// tickLoop runs the physics simulation at ServerTickRate (60Hz)
-func (gs *GameServer) tickLoop(ctx context.Context) <span class="cov8" title="1">{
-        defer gs.wg.Done()
-
-        ticker := time.NewTicker(gs.tickRate)
-        defer ticker.Stop()
-
-        lastTick := time.Now()
-
-        for </span><span class="cov8" title="1">{
-                select </span>{
-                case &lt;-ctx.Done():<span class="cov8" title="1">
-                        log.Println("Game tick loop stopped")
-                        return</span>
-                case now := &lt;-ticker.C:<span class="cov8" title="1">
-                        // Calculate delta time in seconds
-                        deltaTime := now.Sub(lastTick).Seconds()
-                        lastTick = now
-
-                        // Update all players
-                        gs.updateAllPlayers(deltaTime)
-
-                        // Update all projectiles
-                        gs.projectileManager.Update(deltaTime)
-
-                        // Check for projectile-player collisions (hit detection)
-                        gs.checkHitDetection()
-
-                        // Check for reload completions
-                        gs.checkReloads()
-
-                        // Check for respawns
-                        gs.checkRespawns()
-
-                        // Update invulnerability status
-                        gs.updateInvulnerability()
-
-                        // Update health regeneration
-                        gs.updateHealthRegeneration(deltaTime)</span>
-                }
-        }
-}
-
-// broadcastLoop sends state updates to clients at ClientUpdateRate (20Hz)
-func (gs *GameServer) broadcastLoop(ctx context.Context) <span class="cov8" title="1">{
-        defer gs.wg.Done()
-
-        ticker := time.NewTicker(gs.updateRate)
-        defer ticker.Stop()
-
-        for </span><span class="cov8" title="1">{
-                select </span>{
-                case &lt;-ctx.Done():<span class="cov8" title="1">
-                        log.Println("Game broadcast loop stopped")
-                        return</span>
-                case &lt;-ticker.C:<span class="cov8" title="1">
-                        // Get all player states and broadcast
-                        if gs.broadcastFunc != nil </span><span class="cov8" title="1">{
-                                playerStates := gs.world.GetAllPlayers()
-                                if len(playerStates) &gt; 0 </span><span class="cov8" title="1">{
-                                        gs.broadcastFunc(playerStates)
-                                }</span>
-                        }
-                }
-        }
-}
-
-// updateAllPlayers updates physics for all players
-func (gs *GameServer) updateAllPlayers(deltaTime float64) <span class="cov8" title="1">{
-        // Get all players (this is thread-safe and returns pointers)
-        gs.world.mu.RLock()
-        players := make([]*PlayerState, 0, len(gs.world.players))
-        for _, player := range gs.world.players </span><span class="cov8" title="1">{
-                players = append(players, player)
-        }</span>
-        <span class="cov8" title="1">gs.world.mu.RUnlock()
-
-        // Update each player's physics
-        for _, player := range players </span><span class="cov8" title="1">{
-                gs.physics.UpdatePlayer(player, deltaTime)
-        }</span>
-}
-
-// AddPlayer adds a new player to the game world
-func (gs *GameServer) AddPlayer(playerID string) *PlayerState <span class="cov8" title="1">{
-        player := gs.world.AddPlayer(playerID)
-
-        // Create weapon state for the player (everyone starts with a pistol)
-        gs.weaponMu.Lock()
-        gs.weaponStates[playerID] = NewWeaponState(NewPistol())
-        gs.weaponMu.Unlock()
-
-        return player
-}</span>
-
-// RemovePlayer removes a player from the game world
-func (gs *GameServer) RemovePlayer(playerID string) <span class="cov8" title="1">{
-        gs.world.RemovePlayer(playerID)
-
-        // Remove weapon state
-        gs.weaponMu.Lock()
-        delete(gs.weaponStates, playerID)
-        gs.weaponMu.Unlock()
-}</span>
-
-// UpdatePlayerInput updates a player's input state
-func (gs *GameServer) UpdatePlayerInput(playerID string, input InputState) bool <span class="cov8" title="1">{
-        return gs.world.UpdatePlayerInput(playerID, input)
-}</span>
-
-// GetPlayerState returns a snapshot of a player's state
-func (gs *GameServer) GetPlayerState(playerID string) (PlayerState, bool) <span class="cov8" title="1">{
-        player, exists := gs.world.GetPlayer(playerID)
-        if !exists </span><span class="cov8" title="1">{
-                return PlayerState{}, false
-        }</span>
-        <span class="cov8" title="1">return player.Snapshot(), true</span>
-}
-
-// IsRunning returns whether the game server is currently running
-func (gs *GameServer) IsRunning() bool <span class="cov8" title="1">{
-        gs.mu.RLock()
-        defer gs.mu.RUnlock()
-        return gs.running
-}</span>
-
-// GetWorld returns the game world
-func (gs *GameServer) GetWorld() *World <span class="cov0" title="0">{
-        return gs.world
-}</span>
-
-// SetOnReloadComplete sets the callback for when a player's reload completes
-func (gs *GameServer) SetOnReloadComplete(callback func(playerID string)) <span class="cov8" title="1">{
-        gs.onReloadComplete = callback
-}</span>
-
-// GetWeaponState returns the weapon state for a player
-func (gs *GameServer) GetWeaponState(playerID string) *WeaponState <span class="cov8" title="1">{
-        gs.weaponMu.RLock()
-        defer gs.weaponMu.RUnlock()
-        return gs.weaponStates[playerID]
-}</span>
-
-// PlayerShoot attempts to fire a projectile for the given player
-func (gs *GameServer) PlayerShoot(playerID string, aimAngle float64) ShootResult <span class="cov8" title="1">{
-        // Check if player exists
-        player, exists := gs.world.GetPlayer(playerID)
-        if !exists </span><span class="cov8" title="1">{
-                return ShootResult{Success: false, Reason: ShootFailedNoPlayer}
-        }</span>
-
-        // Get weapon state
-        <span class="cov8" title="1">gs.weaponMu.RLock()
-        ws := gs.weaponStates[playerID]
-        gs.weaponMu.RUnlock()
-
-        if ws == nil </span><span class="cov0" title="0">{
-                return ShootResult{Success: false, Reason: ShootFailedNoPlayer}
-        }</span>
-
-        // Check if reloading
-        <span class="cov8" title="1">if ws.IsReloading </span><span class="cov0" title="0">{
-                return ShootResult{Success: false, Reason: ShootFailedReload}
-        }</span>
-
-        // Check if magazine is empty
-        <span class="cov8" title="1">if ws.IsEmpty() </span><span class="cov8" title="1">{
-                return ShootResult{Success: false, Reason: ShootFailedEmpty}
-        }</span>
-
-        // Check fire rate cooldown
-        <span class="cov8" title="1">if !ws.CanShoot() </span><span class="cov8" title="1">{
-                return ShootResult{Success: false, Reason: ShootFailedCooldown}
-        }</span>
-
-        // Create projectile at player position
-        <span class="cov8" title="1">pos := player.GetPosition()
-        proj := gs.projectileManager.CreateProjectile(
-                playerID,
-                pos,
-                aimAngle,
-                ws.Weapon.ProjectileSpeed,
-        )
-
-        // Record the shot (decrements ammo, sets cooldown)
-        ws.RecordShot()
-
-        return ShootResult{
-                Success:    true,
-                Projectile: proj,
-        }</span>
-}
-
-// PlayerReload starts the reload process for a player
-func (gs *GameServer) PlayerReload(playerID string) bool <span class="cov8" title="1">{
-        gs.weaponMu.RLock()
-        ws := gs.weaponStates[playerID]
-        gs.weaponMu.RUnlock()
-
-        if ws == nil </span><span class="cov0" title="0">{
-                return false
-        }</span>
-
-        // Check if magazine is already full
-        <span class="cov8" title="1">if ws.CurrentAmmo &gt;= ws.Weapon.MagazineSize </span><span class="cov8" title="1">{
-                return false
-        }</span>
-
-        <span class="cov8" title="1">ws.StartReload()
-        return ws.IsReloading</span>
-}
-
-// checkReloads checks all players for completed reloads
-func (gs *GameServer) checkReloads() <span class="cov8" title="1">{
-        gs.weaponMu.RLock()
-        defer gs.weaponMu.RUnlock()
-
-        for playerID, ws := range gs.weaponStates </span><span class="cov8" title="1">{
-                if ws.CheckReloadComplete() </span><span class="cov8" title="1">{
-                        // Reload just completed - notify via callback
-                        if gs.onReloadComplete != nil </span><span class="cov8" title="1">{
-                                gs.onReloadComplete(playerID)
-                        }</span>
-                }
-        }
-}
-
-// GetActiveProjectiles returns snapshots of all active projectiles
-func (gs *GameServer) GetActiveProjectiles() []ProjectileSnapshot <span class="cov8" title="1">{
-        return gs.projectileManager.GetProjectileSnapshots()
-}</span>
-
-// SetOnHit sets the callback for when a projectile hits a player
-func (gs *GameServer) SetOnHit(callback func(hit HitEvent)) <span class="cov8" title="1">{
-        gs.onHit = callback
-}</span>
-
-// SetOnRespawn sets the callback for when a player respawns
-func (gs *GameServer) SetOnRespawn(callback func(playerID string, position Vector2)) <span class="cov0" title="0">{
-        gs.onRespawn = callback
-}</span>
-
-// MarkPlayerDead marks a player as dead
-func (gs *GameServer) MarkPlayerDead(playerID string) <span class="cov0" title="0">{
-        player, exists := gs.world.GetPlayer(playerID)
-        if exists </span><span class="cov0" title="0">{
-                player.MarkDead()
-        }</span>
-}
-
-// DamagePlayer applies damage to a player (for testing purposes)
-func (gs *GameServer) DamagePlayer(playerID string, damage int) <span class="cov0" title="0">{
-        player, exists := gs.world.GetPlayer(playerID)
-        if exists </span><span class="cov0" title="0">{
-                player.TakeDamage(damage)
-        }</span>
-}
-
-// checkHitDetection checks for projectile-player collisions and processes hits
-func (gs *GameServer) checkHitDetection() <span class="cov8" title="1">{
-        // Get all active projectiles
-        projectiles := gs.projectileManager.GetActiveProjectiles()
-        if len(projectiles) == 0 </span><span class="cov8" title="1">{
-                return
-        }</span>
-
-        // Get all players
-        <span class="cov8" title="1">gs.world.mu.RLock()
-        players := make([]*PlayerState, 0, len(gs.world.players))
-        for _, player := range gs.world.players </span><span class="cov8" title="1">{
-                players = append(players, player)
-        }</span>
-        <span class="cov8" title="1">gs.world.mu.RUnlock()
-
-        if len(players) == 0 </span><span class="cov0" title="0">{
-                return
-        }</span>
-
-        // Check for collisions
-        <span class="cov8" title="1">hits := gs.physics.CheckAllProjectileCollisions(projectiles, players)
-
-        // Process each hit
-        for _, hit := range hits </span><span class="cov8" title="1">{
-                // Get the attacker's weapon to determine damage
-                gs.weaponMu.RLock()
-                weaponState := gs.weaponStates[hit.AttackerID]
-                gs.weaponMu.RUnlock()
-
-                if weaponState == nil </span><span class="cov0" title="0">{
-                        continue</span>
-                }
-
-                <span class="cov8" title="1">damage := weaponState.Weapon.Damage
-
-                // Apply damage to victim
-                victim, exists := gs.world.GetPlayer(hit.VictimID)
-                if !exists </span><span class="cov0" title="0">{
-                        continue</span>
-                }
-
-                <span class="cov8" title="1">victim.TakeDamage(damage)
-
-                // Deactivate the projectile
-                gs.projectileManager.RemoveProjectile(hit.ProjectileID)
-
-                // Notify via callback
-                if gs.onHit != nil </span><span class="cov8" title="1">{
-                        gs.onHit(hit)
-                }</span>
-        }
-}
-
-// checkRespawns checks all dead players and respawns them if ready
-func (gs *GameServer) checkRespawns() <span class="cov8" title="1">{
-        // Get all players
-        gs.world.mu.RLock()
-        players := make([]*PlayerState, 0, len(gs.world.players))
-        for _, player := range gs.world.players </span><span class="cov8" title="1">{
-                players = append(players, player)
-        }</span>
-        <span class="cov8" title="1">gs.world.mu.RUnlock()
-
-        // Check each player for respawn
-        for _, player := range players </span><span class="cov8" title="1">{
-                if player.IsDead() &amp;&amp; player.CanRespawn() </span><span class="cov8" title="1">{
-                        // Get balanced spawn point
-                        spawnPos := gs.world.GetBalancedSpawnPoint(player.ID)
-
-                        // Respawn the player
-                        player.Respawn(spawnPos)
-
-                        // Reset weapon state to default pistol (AC: "respawn with default pistol")
-                        gs.mu.Lock()
-                        gs.weaponStates[player.ID] = NewWeaponState(NewPistol())
-                        gs.mu.Unlock()
-
-                        // Notify via callback
-                        if gs.onRespawn != nil </span><span class="cov0" title="0">{
-                                gs.onRespawn(player.ID, spawnPos)
-                        }</span>
-                }
-        }
-}
-
-// updateInvulnerability updates invulnerability status for all players
-func (gs *GameServer) updateInvulnerability() <span class="cov8" title="1">{
-        // Get all players
-        gs.world.mu.RLock()
-        players := make([]*PlayerState, 0, len(gs.world.players))
-        for _, player := range gs.world.players </span><span class="cov8" title="1">{
-                players = append(players, player)
-        }</span>
-        <span class="cov8" title="1">gs.world.mu.RUnlock()
-
-        // Update each player's invulnerability
-        for _, player := range players </span><span class="cov8" title="1">{
-                player.UpdateInvulnerability()
-        }</span>
-}
-
-// updateHealthRegeneration applies health regeneration to all players
-func (gs *GameServer) updateHealthRegeneration(deltaTime float64) <span class="cov8" title="1">{
-        // Get all players
-        gs.world.mu.RLock()
-        players := make([]*PlayerState, 0, len(gs.world.players))
-        for _, player := range gs.world.players </span><span class="cov8" title="1">{
-                players = append(players, player)
-        }</span>
-        <span class="cov8" title="1">gs.world.mu.RUnlock()
-
-        now := time.Now()
-
-        // Update each player's regeneration
-        for _, player := range players </span><span class="cov8" title="1">{
-                // Update regeneration state
-                player.UpdateRegenerationState(now)
-
-                // Apply regeneration if applicable
-                player.ApplyRegeneration(now, deltaTime)
-        }</span>
-}
-</pre>
-		
-		<pre class="file" id="file1" style="display: none">package game
-
-import (
-        "sync"
-        "time"
-)
-
-// MatchState represents the current state of a match
-type MatchState string
-
-const (
-        MatchStateWaiting MatchState = "waiting" // Waiting for players
-        MatchStateActive  MatchState = "active"  // Match in progress
-        MatchStateEnded   MatchState = "ended"   // Match completed
-)
-
-// MatchConfig contains configuration for a match
-type MatchConfig struct {
-        KillTarget       int // Number of kills needed to win (e.g., 20)
-        TimeLimitSeconds int // Time limit in seconds (e.g., 420 = 7 minutes)
-}
-
-// PlayerScore represents a player's final score in a match
-type PlayerScore struct {
-        PlayerID string `json:"playerId"`
-        Kills    int    `json:"kills"`
-        Deaths   int    `json:"deaths"`
-        XP       int    `json:"xp"`
-}
-
-// Match represents a game match with win conditions and state tracking
-type Match struct {
-        Config      MatchConfig
-        State       MatchState
-        StartTime   time.Time
-        EndReason   string         // "kill_target" or "time_limit"
-        PlayerKills map[string]int // Maps player ID to kill count
-        mu          sync.RWMutex
-}
-
-// NewMatch creates a new match with default configuration
-func NewMatch() *Match <span class="cov8" title="1">{
-        return &amp;Match{
-                Config: MatchConfig{
-                        KillTarget:       20,
-                        TimeLimitSeconds: 420, // 7 minutes
-                },
-                State:       MatchStateWaiting,
-                PlayerKills: make(map[string]int),
-        }
-}</span>
-
-// SetTestMode configures the match for fast testing
-// Reduces kill target to 2 and time limit to 10 seconds
-func (m *Match) SetTestMode() <span class="cov0" title="0">{
-        m.mu.Lock()
-        defer m.mu.Unlock()
-
-        m.Config.KillTarget = 2
-        m.Config.TimeLimitSeconds = 10
-}</span>
-
-// Start begins the match and records the start time
-func (m *Match) Start() <span class="cov8" title="1">{
-        m.mu.Lock()
-        defer m.mu.Unlock()
-
-        // Don't restart if already active
-        if m.State == MatchStateActive </span><span class="cov8" title="1">{
-                return
-        }</span>
-
-        <span class="cov8" title="1">m.State = MatchStateActive
-        m.StartTime = time.Now()</span>
-}
-
-// GetRemainingSeconds calculates the remaining time in the match
-func (m *Match) GetRemainingSeconds() int <span class="cov8" title="1">{
-        m.mu.RLock()
-        defer m.mu.RUnlock()
-
-        // If match not started, return full time
-        if m.StartTime.IsZero() </span><span class="cov8" title="1">{
-                return m.Config.TimeLimitSeconds
-        }</span>
-
-        <span class="cov8" title="1">elapsed := int(time.Since(m.StartTime).Seconds())
-        remaining := m.Config.TimeLimitSeconds - elapsed
-
-        if remaining &lt; 0 </span><span class="cov8" title="1">{
-                return 0
-        }</span>
-
-        <span class="cov8" title="1">return remaining</span>
-}
-
-// AddKill increments the kill count for a player
-func (m *Match) AddKill(playerID string) <span class="cov8" title="1">{
-        m.mu.Lock()
-        defer m.mu.Unlock()
-
-        m.PlayerKills[playerID]++
-}</span>
-
-// CheckKillTarget checks if any player has reached the kill target
-func (m *Match) CheckKillTarget() bool <span class="cov8" title="1">{
-        m.mu.RLock()
-        defer m.mu.RUnlock()
-
-        for _, kills := range m.PlayerKills </span><span class="cov8" title="1">{
-                if kills &gt;= m.Config.KillTarget </span><span class="cov8" title="1">{
-                        return true
-                }</span>
-        }
-
-        <span class="cov8" title="1">return false</span>
-}
-
-// CheckTimeLimit checks if the time limit has been reached
-func (m *Match) CheckTimeLimit() bool <span class="cov8" title="1">{
-        m.mu.RLock()
-        defer m.mu.RUnlock()
-
-        // If match not started, time limit not reached
-        if m.StartTime.IsZero() </span><span class="cov8" title="1">{
-                return false
-        }</span>
-
-        <span class="cov8" title="1">elapsed := time.Since(m.StartTime).Seconds()
-        return elapsed &gt;= float64(m.Config.TimeLimitSeconds)</span>
-}
-
-// EndMatch ends the match with the given reason
-func (m *Match) EndMatch(reason string) <span class="cov8" title="1">{
-        m.mu.Lock()
-        defer m.mu.Unlock()
-
-        // Only end once
-        if m.State == MatchStateEnded </span><span class="cov8" title="1">{
-                return
-        }</span>
-
-        <span class="cov8" title="1">m.State = MatchStateEnded
-        m.EndReason = reason</span>
-}
-
-// IsEnded returns true if the match has ended
-func (m *Match) IsEnded() bool <span class="cov8" title="1">{
-        m.mu.RLock()
-        defer m.mu.RUnlock()
-
-        return m.State == MatchStateEnded
-}</span>
-
-// DetermineWinners analyzes PlayerKills and returns player IDs with the highest kill count
-// Returns multiple IDs in case of a tie
-func (m *Match) DetermineWinners() []string <span class="cov8" title="1">{
-        m.mu.RLock()
-        defer m.mu.RUnlock()
-
-        // Handle empty match
-        if len(m.PlayerKills) == 0 </span><span class="cov8" title="1">{
-                return []string{}
-        }</span>
-
-        // Find the maximum kill count
-        <span class="cov8" title="1">maxKills := 0
-        for _, kills := range m.PlayerKills </span><span class="cov8" title="1">{
-                if kills &gt; maxKills </span><span class="cov8" title="1">{
-                        maxKills = kills
-                }</span>
-        }
-
-        // Collect all players with the maximum kill count
-        <span class="cov8" title="1">winners := []string{}
-        for playerID, kills := range m.PlayerKills </span><span class="cov8" title="1">{
-                if kills == maxKills </span><span class="cov8" title="1">{
-                        winners = append(winners, playerID)
-                }</span>
-        }
-
-        <span class="cov8" title="1">return winners</span>
-}
-
-// GetFinalScores collects final scores for all players in the match
-func (m *Match) GetFinalScores(world *World) []PlayerScore <span class="cov8" title="1">{
-        m.mu.RLock()
-        defer m.mu.RUnlock()
-
-        scores := []PlayerScore{}
-
-        // Get all players from the world
-        world.mu.RLock()
-        defer world.mu.RUnlock()
-
-        for playerID := range m.PlayerKills </span><span class="cov8" title="1">{
-                player, exists := world.players[playerID]
-                if !exists </span><span class="cov0" title="0">{
-                        continue</span>
-                }
-
-                // Create score entry with player stats
-                <span class="cov8" title="1">score := PlayerScore{
-                        PlayerID: playerID,
-                        Kills:    player.Kills,
-                        Deaths:   player.Deaths,
-                        XP:       player.XP,
-                }
-                scores = append(scores, score)</span>
-        }
-
-        <span class="cov8" title="1">return scores</span>
-}
-</pre>
-		
-		<pre class="file" id="file2" style="display: none">package game
-
-import (
-        "log"
-        "math"
-)
-
-// Physics handles game physics calculations
-type Physics struct{}
-
-// NewPhysics creates a new physics engine
-func NewPhysics() *Physics <span class="cov8" title="1">{
-        return &amp;Physics{}
-}</span>
-
-// UpdatePlayer updates a player's physics state based on input and delta time
-// deltaTime is in seconds
-func (p *Physics) UpdatePlayer(player *PlayerState, deltaTime float64) <span class="cov8" title="1">{
-        input := player.GetInput()
-        currentVel := player.GetVelocity()
-
-        // Calculate input direction vector
-        inputDir := Vector2{X: 0, Y: 0}
-
-        if input.Left </span><span class="cov8" title="1">{
-                inputDir.X -= 1
-        }</span>
-        <span class="cov8" title="1">if input.Right </span><span class="cov8" title="1">{
-                inputDir.X += 1
-        }</span>
-        <span class="cov8" title="1">if input.Up </span><span class="cov8" title="1">{
-                inputDir.Y -= 1
-        }</span>
-        <span class="cov8" title="1">if input.Down </span><span class="cov8" title="1">{
-                inputDir.Y += 1
-        }</span>
-
-        // Normalize input direction for diagonal movement
-        <span class="cov8" title="1">inputDir = normalize(inputDir)
-
-        // Apply acceleration or deceleration
-        var newVel Vector2
-        if inputDir.X != 0 || inputDir.Y != 0 </span><span class="cov8" title="1">{
-                // Player is giving input - accelerate toward target velocity
-                targetVel := Vector2{
-                        X: inputDir.X * MovementSpeed,
-                        Y: inputDir.Y * MovementSpeed,
-                }
-
-                newVel = accelerateToward(currentVel, targetVel, Acceleration, deltaTime)
-        }</span> else<span class="cov8" title="1"> {
-                // No input - decelerate to zero
-                newVel = decelerateToZero(currentVel, Deceleration, deltaTime)
-        }</span>
-
-        // Sanitize velocity before setting it
-        <span class="cov8" title="1">newVel = sanitizeVector2(newVel, "UpdatePlayer velocity")
-        player.SetVelocity(newVel)
-
-        // Update position based on velocity
-        currentPos := player.GetPosition()
-        newPos := Vector2{
-                X: currentPos.X + newVel.X*deltaTime,
-                Y: currentPos.Y + newVel.Y*deltaTime,
-        }
-
-        // Clamp position to arena bounds
-        newPos = clampToArena(newPos)
-
-        // Sanitize position before setting it
-        newPos = sanitizeVector2(newPos, "UpdatePlayer position")
-        player.SetPosition(newPos)</span>
-}
-
-// normalize returns a normalized vector (length = 1) or zero vector if input is zero
-func normalize(v Vector2) Vector2 <span class="cov8" title="1">{
-        length := math.Sqrt(v.X*v.X + v.Y*v.Y)
-        if length == 0 </span><span class="cov8" title="1">{
-                return Vector2{X: 0, Y: 0}
-        }</span>
-        <span class="cov8" title="1">return Vector2{
-                X: v.X / length,
-                Y: v.Y / length,
-        }</span>
-}
-
-// accelerateToward smoothly accelerates current velocity toward target velocity
-func accelerateToward(current, target Vector2, accel, deltaTime float64) Vector2 <span class="cov8" title="1">{
-        diff := Vector2{
-                X: target.X - current.X,
-                Y: target.Y - current.Y,
-        }
-
-        // Calculate the maximum change possible this frame
-        maxChange := accel * deltaTime
-
-        // If we're close enough, just snap to target
-        diffLength := math.Sqrt(diff.X*diff.X + diff.Y*diff.Y)
-        if diffLength &lt;= maxChange </span><span class="cov8" title="1">{
-                return target
-        }</span>
-
-        // Otherwise, move toward target by maxChange amount
-        <span class="cov8" title="1">diffNorm := Vector2{
-                X: diff.X / diffLength,
-                Y: diff.Y / diffLength,
-        }
-
-        return Vector2{
-                X: current.X + diffNorm.X*maxChange,
-                Y: current.Y + diffNorm.Y*maxChange,
-        }</span>
-}
-
-// decelerateToZero smoothly decelerates velocity to zero
-func decelerateToZero(current Vector2, decel, deltaTime float64) Vector2 <span class="cov8" title="1">{
-        return accelerateToward(current, Vector2{X: 0, Y: 0}, decel, deltaTime)
-}</span>
-
-// clampToArena ensures position stays within arena bounds
-func clampToArena(pos Vector2) Vector2 <span class="cov8" title="1">{
-        // Clamp to arena boundaries (accounting for player size)
-        halfWidth := PlayerWidth / 2
-        halfHeight := PlayerHeight / 2
-
-        x := math.Max(halfWidth, math.Min(pos.X, ArenaWidth-halfWidth))
-        y := math.Max(halfHeight, math.Min(pos.Y, ArenaHeight-halfHeight))
-
-        return Vector2{X: x, Y: y}
-}</span>
-
-// HitEvent represents a successful projectile hit
-type HitEvent struct {
-        ProjectileID string
-        VictimID     string
-        AttackerID   string
-}
-
-// calculateDistance returns the Euclidean distance between two positions
-func calculateDistance(pos1, pos2 Vector2) float64 <span class="cov8" title="1">{
-        dx := pos2.X - pos1.X
-        dy := pos2.Y - pos1.Y
-        return math.Sqrt(dx*dx + dy*dy)
-}</span>
-
-// sanitizeVector2 ensures a Vector2 contains no NaN or Inf values
-// If NaN or Inf is detected, it's replaced with 0 and logged as an error
-func sanitizeVector2(v Vector2, context string) Vector2 <span class="cov8" title="1">{
-        result := v
-        sanitized := false
-
-        if math.IsNaN(v.X) || math.IsInf(v.X, 0) </span><span class="cov0" title="0">{
-                log.Printf("ERROR: %s contains invalid X value: %v, replacing with 0", context, v.X)
-                result.X = 0
-                sanitized = true
-        }</span>
-        <span class="cov8" title="1">if math.IsNaN(v.Y) || math.IsInf(v.Y, 0) </span><span class="cov0" title="0">{
-                log.Printf("ERROR: %s contains invalid Y value: %v, replacing with 0", context, v.Y)
-                result.Y = 0
-                sanitized = true
-        }</span>
-
-        <span class="cov8" title="1">if sanitized </span><span class="cov0" title="0">{
-                log.Printf("WARNING: %s sanitized from %+v to %+v", context, v, result)
-        }</span>
-
-        <span class="cov8" title="1">return result</span>
-}
-
-// CheckProjectilePlayerCollision checks if a projectile intersects a player's hitbox using AABB
-// Hitbox is 32x64 pixels (PlayerWidth x PlayerHeight) centered on player position
-// Returns true if collision detected
-func (p *Physics) CheckProjectilePlayerCollision(proj *Projectile, player *PlayerState) bool <span class="cov8" title="1">{
-        // Don't check collision with dead players
-        if !player.IsAlive() </span><span class="cov8" title="1">{
-                return false
-        }</span>
-
-        // Don't check collision with invulnerable players (spawn protection)
-        <span class="cov8" title="1">if player.IsInvulnerable </span><span class="cov8" title="1">{
-                return false
-        }</span>
-
-        // Don't check collision with owner
-        <span class="cov8" title="1">if proj.OwnerID == player.ID </span><span class="cov8" title="1">{
-                return false
-        }</span>
-
-        <span class="cov8" title="1">playerPos := player.GetPosition()
-
-        // Validate range: reject hits beyond max projectile range
-        // This prevents impossible long-range hits
-        distanceTraveled := calculateDistance(proj.SpawnPosition, proj.Position)
-        if distanceTraveled &gt; ProjectileMaxRange </span><span class="cov8" title="1">{
-                return false
-        }</span>
-
-        // Calculate half-sizes for AABB collision
-        <span class="cov8" title="1">halfWidth := PlayerWidth / 2
-        halfHeight := PlayerHeight / 2
-
-        // AABB collision detection
-        // Check if projectile point is within the player's bounding box
-        if math.Abs(proj.Position.X-playerPos.X) &lt; halfWidth &amp;&amp;
-                math.Abs(proj.Position.Y-playerPos.Y) &lt; halfHeight </span><span class="cov8" title="1">{
-                return true
-        }</span>
-
-        <span class="cov8" title="1">return false</span>
-}
-
-// CheckAllProjectileCollisions checks all projectiles against all players
-// Returns a slice of HitEvents for all detected collisions
-func (p *Physics) CheckAllProjectileCollisions(projectiles []*Projectile, players []*PlayerState) []HitEvent <span class="cov8" title="1">{
-        hits := make([]HitEvent, 0)
-
-        for _, proj := range projectiles </span><span class="cov8" title="1">{
-                if !proj.Active </span><span class="cov0" title="0">{
-                        continue</span>
-                }
-
-                <span class="cov8" title="1">for _, player := range players </span><span class="cov8" title="1">{
-                        if p.CheckProjectilePlayerCollision(proj, player) </span><span class="cov8" title="1">{
-                                hits = append(hits, HitEvent{
-                                        ProjectileID: proj.ID,
-                                        VictimID:     player.ID,
-                                        AttackerID:   proj.OwnerID,
-                                })
-                                break</span> // Each projectile can only hit one player
-                        }
-                }
-        }
-
-        <span class="cov8" title="1">return hits</span>
-}
-</pre>
-		
-		<pre class="file" id="file3" style="display: none">package game
-
-import (
-        "sync"
-        "time"
-)
-
-// Vector2 represents a 2D vector for position and velocity
-type Vector2 struct {
-        X float64 `json:"x"`
-        Y float64 `json:"y"`
-}
-
-// InputState represents the player's current input (WASD keys and aim)
-type InputState struct {
-        Up       bool    `json:"up"`       // W key
-        Down     bool    `json:"down"`     // S key
-        Left     bool    `json:"left"`     // A key
-        Right    bool    `json:"right"`    // D key
-        AimAngle float64 `json:"aimAngle"` // Aim angle in radians
-}
-
-// PlayerState represents a player's physics state in the game world
-type PlayerState struct {
-        ID                     string     `json:"id"`
-        Position               Vector2    `json:"position"`
-        Velocity               Vector2    `json:"velocity"`
-        AimAngle               float64    `json:"aimAngle"`            // Aim angle in radians
-        Health                 int        `json:"health"`              // Current health (0-100)
-        IsInvulnerable         bool       `json:"isInvulnerable"`      // Spawn protection flag
-        InvulnerabilityEndTime time.Time  `json:"invulnerabilityEnd"`  // When spawn protection ends
-        DeathTime              *time.Time `json:"deathTime,omitempty"` // When player died (nil if alive)
-        Kills                  int        `json:"kills"`               // Number of kills
-        Deaths                 int        `json:"deaths"`              // Number of deaths
-        XP                     int        `json:"xp"`                  // Experience points
-        IsRegeneratingHealth   bool       `json:"isRegenerating"`      // Whether health is currently regenerating
-        lastDamageTime         time.Time  // Private field: when player last took damage
-        input                  InputState // Private field, accessed via methods
-        mu                     sync.RWMutex
-}
-
-// NewPlayerState creates a new player state with default spawn position
-func NewPlayerState(id string) *PlayerState <span class="cov8" title="1">{
-        return &amp;PlayerState{
-                ID: id,
-                Position: Vector2{
-                        X: ArenaWidth / 2,
-                        Y: ArenaHeight / 2,
-                },
-                Velocity: Vector2{X: 0, Y: 0},
-                Health:   PlayerMaxHealth,
-                input:    InputState{},
-        }
-}</span>
-
-// SetInput updates the player's input state (thread-safe)
-func (p *PlayerState) SetInput(input InputState) <span class="cov8" title="1">{
-        p.mu.Lock()
-        defer p.mu.Unlock()
-        p.input = input
-}</span>
-
-// GetInput retrieves the player's input state (thread-safe)
-func (p *PlayerState) GetInput() InputState <span class="cov8" title="1">{
-        p.mu.RLock()
-        defer p.mu.RUnlock()
-        return p.input
-}</span>
-
-// SetPosition updates the player's position (thread-safe)
-func (p *PlayerState) SetPosition(pos Vector2) <span class="cov8" title="1">{
-        p.mu.Lock()
-        defer p.mu.Unlock()
-        p.Position = pos
-}</span>
-
-// GetPosition retrieves the player's position (thread-safe)
-func (p *PlayerState) GetPosition() Vector2 <span class="cov8" title="1">{
-        p.mu.RLock()
-        defer p.mu.RUnlock()
-        return p.Position
-}</span>
-
-// SetVelocity updates the player's velocity (thread-safe)
-func (p *PlayerState) SetVelocity(vel Vector2) <span class="cov8" title="1">{
-        p.mu.Lock()
-        defer p.mu.Unlock()
-        p.Velocity = vel
-}</span>
-
-// GetVelocity retrieves the player's velocity (thread-safe)
-func (p *PlayerState) GetVelocity() Vector2 <span class="cov8" title="1">{
-        p.mu.RLock()
-        defer p.mu.RUnlock()
-        return p.Velocity
-}</span>
-
-// SetAimAngle updates the player's aim angle (thread-safe)
-func (p *PlayerState) SetAimAngle(angle float64) <span class="cov8" title="1">{
-        p.mu.Lock()
-        defer p.mu.Unlock()
-        p.AimAngle = angle
-}</span>
-
-// GetAimAngle retrieves the player's aim angle (thread-safe)
-func (p *PlayerState) GetAimAngle() float64 <span class="cov8" title="1">{
-        p.mu.RLock()
-        defer p.mu.RUnlock()
-        return p.AimAngle
-}</span>
-
-// TakeDamage reduces the player's health by the given amount (thread-safe)
-// Health will not go below 0
-// Updates lastDamageTime to reset regeneration timer
-func (p *PlayerState) TakeDamage(amount int) <span class="cov8" title="1">{
-        p.mu.Lock()
-        defer p.mu.Unlock()
-        p.Health -= amount
-        if p.Health &lt; 0 </span><span class="cov8" title="1">{
-                p.Health = 0
-        }</span>
-        <span class="cov8" title="1">p.lastDamageTime = time.Now()
-        p.IsRegeneratingHealth = false</span> // Stop regeneration when taking damage
-}
-
-// IsAlive returns true if the player has health remaining (thread-safe)
-func (p *PlayerState) IsAlive() bool <span class="cov8" title="1">{
-        p.mu.RLock()
-        defer p.mu.RUnlock()
-        return p.Health &gt; 0
-}</span>
-
-// Snapshot returns a thread-safe copy of the player's current state
-func (p *PlayerState) Snapshot() PlayerState <span class="cov8" title="1">{
-        p.mu.RLock()
-        defer p.mu.RUnlock()
-        return PlayerState{
-                ID:                     p.ID,
-                Position:               p.Position,
-                Velocity:               p.Velocity,
-                AimAngle:               p.AimAngle,
-                Health:                 p.Health,
-                IsInvulnerable:         p.IsInvulnerable,
-                InvulnerabilityEndTime: p.InvulnerabilityEndTime,
-                DeathTime:              p.DeathTime,
-                Kills:                  p.Kills,
-                Deaths:                 p.Deaths,
-                XP:                     p.XP,
-                IsRegeneratingHealth:   p.IsRegeneratingHealth,
-        }
-}</span>
-
-// MarkDead marks the player as dead and records the death time (thread-safe)
-func (p *PlayerState) MarkDead() <span class="cov8" title="1">{
-        p.mu.Lock()
-        defer p.mu.Unlock()
-        now := time.Now()
-        p.DeathTime = &amp;now
-        p.Health = 0
-}</span>
-
-// IsDead returns true if the player is currently dead (thread-safe)
-func (p *PlayerState) IsDead() bool <span class="cov8" title="1">{
-        p.mu.RLock()
-        defer p.mu.RUnlock()
-        return p.DeathTime != nil
-}</span>
-
-// CanRespawn returns true if the respawn delay has passed (thread-safe)
-func (p *PlayerState) CanRespawn() bool <span class="cov8" title="1">{
-        p.mu.RLock()
-        defer p.mu.RUnlock()
-        if p.DeathTime == nil </span><span class="cov8" title="1">{
-                return false
-        }</span>
-        <span class="cov8" title="1">return time.Since(*p.DeathTime).Seconds() &gt;= RespawnDelay</span>
-}
-
-// Respawn resets the player to alive state at the given position (thread-safe)
-func (p *PlayerState) Respawn(spawnPos Vector2) <span class="cov8" title="1">{
-        p.mu.Lock()
-        defer p.mu.Unlock()
-        p.Health = PlayerMaxHealth
-        p.Position = spawnPos
-        p.Velocity = Vector2{X: 0, Y: 0}
-        p.DeathTime = nil
-        p.IsInvulnerable = true
-        p.InvulnerabilityEndTime = time.Now().Add(time.Duration(SpawnInvulnerabilityDuration * float64(time.Second)))
-}</span>
-
-// UpdateInvulnerability checks and updates invulnerability status (thread-safe)
-func (p *PlayerState) UpdateInvulnerability() <span class="cov8" title="1">{
-        p.mu.Lock()
-        defer p.mu.Unlock()
-        if p.IsInvulnerable &amp;&amp; time.Now().After(p.InvulnerabilityEndTime) </span><span class="cov8" title="1">{
-                p.IsInvulnerable = false
-        }</span>
-}
-
-// IncrementKills increments the player's kill count (thread-safe)
-func (p *PlayerState) IncrementKills() <span class="cov8" title="1">{
-        p.mu.Lock()
-        defer p.mu.Unlock()
-        p.Kills++
-}</span>
-
-// IncrementDeaths increments the player's death count (thread-safe)
-func (p *PlayerState) IncrementDeaths() <span class="cov8" title="1">{
-        p.mu.Lock()
-        defer p.mu.Unlock()
-        p.Deaths++
-}</span>
-
-// AddXP adds experience points to the player (thread-safe)
-func (p *PlayerState) AddXP(amount int) <span class="cov8" title="1">{
-        p.mu.Lock()
-        defer p.mu.Unlock()
-        p.XP += amount
-}</span>
-
-// GetKDRatio calculates the kill/death ratio (thread-safe)
-// Returns 0 if player has no kills or deaths
-func (p *PlayerState) GetKDRatio() float64 <span class="cov8" title="1">{
-        p.mu.RLock()
-        defer p.mu.RUnlock()
-        if p.Deaths == 0 </span><span class="cov8" title="1">{
-                return float64(p.Kills)
-        }</span>
-        <span class="cov8" title="1">return float64(p.Kills) / float64(p.Deaths)</span>
-}
-
-// GetLastDamageTime returns the time when the player last took damage (thread-safe)
-func (p *PlayerState) GetLastDamageTime() time.Time <span class="cov8" title="1">{
-        p.mu.RLock()
-        defer p.mu.RUnlock()
-        return p.lastDamageTime
-}</span>
-
-// CanRegenerate checks if the player can regenerate health at the given time (thread-safe)
-// Returns true if enough time has passed since last damage and health is below max
-func (p *PlayerState) CanRegenerate(now time.Time) bool <span class="cov8" title="1">{
-        p.mu.RLock()
-        defer p.mu.RUnlock()
-
-        // Cannot regenerate if dead
-        if p.DeathTime != nil </span><span class="cov8" title="1">{
-                return false
-        }</span>
-
-        // Cannot regenerate if at full health
-        <span class="cov8" title="1">if p.Health &gt;= PlayerMaxHealth </span><span class="cov8" title="1">{
-                return false
-        }</span>
-
-        // Check if enough time has passed since last damage
-        <span class="cov8" title="1">timeSinceLastDamage := now.Sub(p.lastDamageTime).Seconds()
-        return timeSinceLastDamage &gt;= HealthRegenerationDelay</span>
-}
-
-// ApplyRegeneration applies health regeneration for the given deltaTime (thread-safe)
-// Only regenerates if conditions are met (delay passed, not at max health, not dead)
-func (p *PlayerState) ApplyRegeneration(now time.Time, deltaTime float64) <span class="cov8" title="1">{
-        p.mu.Lock()
-        defer p.mu.Unlock()
-
-        // Check if we can regenerate
-        if p.DeathTime != nil || p.Health &gt;= PlayerMaxHealth </span><span class="cov8" title="1">{
-                p.IsRegeneratingHealth = false
-                return
-        }</span>
-
-        <span class="cov8" title="1">timeSinceLastDamage := now.Sub(p.lastDamageTime).Seconds()
-        if timeSinceLastDamage &lt; HealthRegenerationDelay </span><span class="cov0" title="0">{
-                p.IsRegeneratingHealth = false
-                return
-        }</span>
-
-        // Apply regeneration (use float calculation then round to nearest int)
-        // This ensures regeneration works at 60Hz tick rate (deltaTime ≈ 0.0167s)
-        <span class="cov8" title="1">regenAmount := int(HealthRegenerationRate*deltaTime + 0.5)
-        if regenAmount &lt; 1 </span><span class="cov0" title="0">{
-                regenAmount = 1 // Ensure at least 1 HP per tick when regenerating
-        }</span>
-        <span class="cov8" title="1">p.Health += regenAmount
-
-        // Cap at max health
-        if p.Health &gt; PlayerMaxHealth </span><span class="cov8" title="1">{
-                p.Health = PlayerMaxHealth
-        }</span>
-
-        // Update regeneration state
-        <span class="cov8" title="1">p.IsRegeneratingHealth = p.Health &lt; PlayerMaxHealth</span>
-}
-
-// UpdateRegenerationState updates the IsRegeneratingHealth flag based on current conditions (thread-safe)
-func (p *PlayerState) UpdateRegenerationState(now time.Time) <span class="cov8" title="1">{
-        p.mu.Lock()
-        defer p.mu.Unlock()
-
-        // Update regeneration state
-        if p.DeathTime != nil || p.Health &gt;= PlayerMaxHealth </span><span class="cov8" title="1">{
-                p.IsRegeneratingHealth = false
-                return
-        }</span>
-
-        <span class="cov8" title="1">timeSinceLastDamage := now.Sub(p.lastDamageTime).Seconds()
-        p.IsRegeneratingHealth = timeSinceLastDamage &gt;= HealthRegenerationDelay</span>
-}
-
-// IsRegenerating returns whether the player is currently regenerating health (thread-safe)
-func (p *PlayerState) IsRegenerating() bool <span class="cov8" title="1">{
-        p.mu.RLock()
-        defer p.mu.RUnlock()
-        return p.IsRegeneratingHealth
-}</span>
-</pre>
-		
-		<pre class="file" id="file4" style="display: none">package game
-
-import (
-        "math"
-        "sync"
-        "time"
-
-        "github.com/google/uuid"
-)
-
-// Projectile represents a bullet/projectile in the game world
-type Projectile struct {
-        ID            string    `json:"id"`
-        OwnerID       string    `json:"ownerId"`
-        Position      Vector2   `json:"position"`
-        Velocity      Vector2   `json:"velocity"`
-        SpawnPosition Vector2   `json:"-"` // Initial position for range validation
-        CreatedAt     time.Time `json:"-"`
-        Active        bool      `json:"-"`
-}
-
-// ProjectileSnapshot is the network-transmittable version of Projectile
-type ProjectileSnapshot struct {
-        ID       string  `json:"id"`
-        OwnerID  string  `json:"ownerId"`
-        Position Vector2 `json:"position"`
-        Velocity Vector2 `json:"velocity"`
-}
-
-// NewProjectile creates a new projectile with calculated velocity from angle
-func NewProjectile(ownerID string, startPos Vector2, aimAngle float64, speed float64) *Projectile <span class="cov8" title="1">{
-        return &amp;Projectile{
-                ID:            uuid.New().String(),
-                OwnerID:       ownerID,
-                Position:      startPos,
-                SpawnPosition: startPos, // Store spawn position for range validation
-                Velocity: Vector2{
-                        X: math.Cos(aimAngle) * speed,
-                        Y: math.Sin(aimAngle) * speed,
-                },
-                CreatedAt: time.Now(),
-                Active:    true,
-        }
-}</span>
-
-// Update moves the projectile based on velocity and delta time
-func (p *Projectile) Update(deltaTime float64) <span class="cov8" title="1">{
-        p.Position.X += p.Velocity.X * deltaTime
-        p.Position.Y += p.Velocity.Y * deltaTime
-}</span>
-
-// IsExpired returns true if the projectile has exceeded its max lifetime
-func (p *Projectile) IsExpired() bool <span class="cov8" title="1">{
-        return time.Since(p.CreatedAt) &gt;= ProjectileMaxLifetime
-}</span>
-
-// IsOutOfBounds returns true if the projectile is outside the arena
-func (p *Projectile) IsOutOfBounds() bool <span class="cov8" title="1">{
-        return p.Position.X &lt; 0 || p.Position.X &gt; ArenaWidth ||
-                p.Position.Y &lt; 0 || p.Position.Y &gt; ArenaHeight
-}</span>
-
-// Deactivate marks the projectile as inactive (for removal)
-func (p *Projectile) Deactivate() <span class="cov8" title="1">{
-        p.Active = false
-}</span>
-
-// Snapshot returns a copy of the projectile state for network transmission
-func (p *Projectile) Snapshot() ProjectileSnapshot <span class="cov8" title="1">{
-        return ProjectileSnapshot{
-                ID:       p.ID,
-                OwnerID:  p.OwnerID,
-                Position: p.Position,
-                Velocity: p.Velocity,
-        }
-}</span>
-
-// ProjectileManager manages all active projectiles in the game
-type ProjectileManager struct {
-        projectiles map[string]*Projectile
-        mu          sync.RWMutex
-}
-
-// NewProjectileManager creates a new projectile manager
-func NewProjectileManager() *ProjectileManager <span class="cov8" title="1">{
-        return &amp;ProjectileManager{
-                projectiles: make(map[string]*Projectile),
-        }
-}</span>
-
-// CreateProjectile creates and adds a new projectile
-func (pm *ProjectileManager) CreateProjectile(ownerID string, startPos Vector2, aimAngle float64, speed float64) *Projectile <span class="cov8" title="1">{
-        pm.mu.Lock()
-        defer pm.mu.Unlock()
-
-        proj := NewProjectile(ownerID, startPos, aimAngle, speed)
-        pm.projectiles[proj.ID] = proj
-        return proj
-}</span>
-
-// Update updates all projectiles and removes inactive ones
-func (pm *ProjectileManager) Update(deltaTime float64) <span class="cov8" title="1">{
-        pm.mu.Lock()
-        defer pm.mu.Unlock()
-
-        // Collect IDs to remove
-        toRemove := make([]string, 0)
-
-        for id, proj := range pm.projectiles </span><span class="cov8" title="1">{
-                // Check if projectile should be removed
-                if !proj.Active || proj.IsExpired() || proj.IsOutOfBounds() </span><span class="cov8" title="1">{
-                        toRemove = append(toRemove, id)
-                        continue</span>
-                }
-
-                // Update position
-                <span class="cov8" title="1">proj.Update(deltaTime)
-
-                // Check bounds after update
-                if proj.IsOutOfBounds() </span><span class="cov8" title="1">{
-                        toRemove = append(toRemove, id)
-                }</span>
-        }
-
-        // Remove inactive projectiles
-        <span class="cov8" title="1">for _, id := range toRemove </span><span class="cov8" title="1">{
-                delete(pm.projectiles, id)
-        }</span>
-}
-
-// GetActiveProjectiles returns a slice of all active projectiles
-func (pm *ProjectileManager) GetActiveProjectiles() []*Projectile <span class="cov8" title="1">{
-        pm.mu.RLock()
-        defer pm.mu.RUnlock()
-
-        result := make([]*Projectile, 0, len(pm.projectiles))
-        for _, proj := range pm.projectiles </span><span class="cov8" title="1">{
-                if proj.Active </span><span class="cov8" title="1">{
-                        result = append(result, proj)
-                }</span>
-        }
-        <span class="cov8" title="1">return result</span>
-}
-
-// GetProjectileByID returns a projectile by its ID, or nil if not found
-func (pm *ProjectileManager) GetProjectileByID(id string) *Projectile <span class="cov8" title="1">{
-        pm.mu.RLock()
-        defer pm.mu.RUnlock()
-
-        return pm.projectiles[id]
-}</span>
-
-// RemoveProjectile removes a projectile by its ID
-func (pm *ProjectileManager) RemoveProjectile(id string) <span class="cov8" title="1">{
-        pm.mu.Lock()
-        defer pm.mu.Unlock()
-
-        delete(pm.projectiles, id)
-}</span>
-
-// GetProjectilesByOwner returns all projectiles owned by a specific player
-func (pm *ProjectileManager) GetProjectilesByOwner(ownerID string) []*Projectile <span class="cov8" title="1">{
-        pm.mu.RLock()
-        defer pm.mu.RUnlock()
-
-        result := make([]*Projectile, 0)
-        for _, proj := range pm.projectiles </span><span class="cov8" title="1">{
-                if proj.OwnerID == ownerID &amp;&amp; proj.Active </span><span class="cov8" title="1">{
-                        result = append(result, proj)
-                }</span>
-        }
-        <span class="cov8" title="1">return result</span>
-}
-
-// GetProjectileSnapshots returns snapshots of all active projectiles for network transmission
-func (pm *ProjectileManager) GetProjectileSnapshots() []ProjectileSnapshot <span class="cov8" title="1">{
-        pm.mu.RLock()
-        defer pm.mu.RUnlock()
-
-        result := make([]ProjectileSnapshot, 0, len(pm.projectiles))
-        for _, proj := range pm.projectiles </span><span class="cov8" title="1">{
-                if proj.Active </span><span class="cov8" title="1">{
-                        result = append(result, proj.Snapshot())
-                }</span>
-        }
-        <span class="cov8" title="1">return result</span>
-}
-</pre>
-		
-		<pre class="file" id="file5" style="display: none">package game
+		<pre class="file" id="file0" style="display: none">package network
 
 import (
         "encoding/json"
-        "errors"
+        "log"
+        "math"
+        "time"
+
+        "github.com/mtomcal/stick-rumble-server/internal/game"
+)
+
+// broadcastPlayerStates sends player position updates to all players
+func (h *WebSocketHandler) broadcastPlayerStates(playerStates []game.PlayerState) <span class="cov8" title="1">{
+        if len(playerStates) == 0 </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        // Validate player states for NaN/Inf values before marshaling
+        <span class="cov8" title="1">for i := range playerStates </span><span class="cov8" title="1">{
+                state := &amp;playerStates[i]
+                if math.IsNaN(state.Position.X) || math.IsNaN(state.Position.Y) ||
+                        math.IsInf(state.Position.X, 0) || math.IsInf(state.Position.Y, 0) </span><span class="cov8" title="1">{
+                        log.Printf("ERROR: Player %s has invalid position: %+v", state.ID, state.Position)
+                }</span>
+                <span class="cov8" title="1">if math.IsNaN(state.Velocity.X) || math.IsNaN(state.Velocity.Y) ||
+                        math.IsInf(state.Velocity.X, 0) || math.IsInf(state.Velocity.Y, 0) </span><span class="cov8" title="1">{
+                        log.Printf("ERROR: Player %s has invalid velocity: %+v", state.ID, state.Velocity)
+                }</span>
+                <span class="cov8" title="1">if math.IsNaN(state.AimAngle) || math.IsInf(state.AimAngle, 0) </span><span class="cov8" title="1">{
+                        log.Printf("ERROR: Player %s has invalid aimAngle: %v", state.ID, state.AimAngle)
+                        // Sanitize aim angle to prevent JSON marshal error
+                        state.AimAngle = 0
+                }</span>
+        }
+
+        // Create player:move message data
+        <span class="cov8" title="1">data := map[string]interface{}{
+                "players": playerStates,
+        }
+
+        // Validate outgoing message schema (development mode only)
+        if err := h.validateOutgoingMessage("player:move", data); err != nil </span><span class="cov0" title="0">{
+                log.Printf("Schema validation failed for player:move: %v", err)
+                // Continue anyway - validation is for development debugging only
+        }</span>
+
+        // Create player:move message
+        <span class="cov8" title="1">message := Message{
+                Type:      "player:move",
+                Timestamp: 0, // Will be set by each client
+                Data:      data,
+        }
+
+        msgBytes, err := json.Marshal(message)
+        if err != nil </span><span class="cov8" title="1">{
+                log.Printf("Error marshaling player:move message: %v", err)
+                log.Printf("Player states that failed to marshal: %+v", playerStates)
+                return
+        }</span>
+
+        // Broadcast to all players (both in rooms and waiting)
+        // This ensures all connected clients receive game state updates
+        <span class="cov8" title="1">for i := range playerStates </span><span class="cov8" title="1">{
+                room := h.roomManager.GetRoomByPlayerID(playerStates[i].ID)
+                if room != nil </span><span class="cov8" title="1">{
+                        // Player is in a room - broadcast to room
+                        room.Broadcast(msgBytes, "")
+                }</span> else<span class="cov8" title="1"> {
+                        // Player is not in a room yet (waiting) - send directly to their channel
+                        h.roomManager.SendToWaitingPlayer(playerStates[i].ID, msgBytes)
+                }</span>
+        }
+}
+
+// broadcastProjectileSpawn sends projectile spawn event to all clients
+func (h *WebSocketHandler) broadcastProjectileSpawn(proj *game.Projectile) <span class="cov8" title="1">{
+        // Create projectile:spawn message data
+        data := map[string]interface{}{
+                "id":       proj.ID,
+                "ownerId":  proj.OwnerID,
+                "position": proj.Position,
+                "velocity": proj.Velocity,
+        }
+
+        // Validate outgoing message schema (development mode only)
+        if err := h.validateOutgoingMessage("projectile:spawn", data); err != nil </span><span class="cov0" title="0">{
+                log.Printf("Schema validation failed for projectile:spawn: %v", err)
+        }</span>
+
+        <span class="cov8" title="1">message := Message{
+                Type:      "projectile:spawn",
+                Timestamp: 0,
+                Data:      data,
+        }
+
+        msgBytes, err := json.Marshal(message)
+        if err != nil </span><span class="cov8" title="1">{
+                log.Printf("Error marshaling projectile:spawn message: %v", err)
+                return
+        }</span>
+
+        // Broadcast to all rooms and waiting players
+        <span class="cov8" title="1">h.roomManager.BroadcastToAll(msgBytes)</span>
+}
+
+// broadcastMatchTimers broadcasts timer updates to all active rooms
+func (h *WebSocketHandler) broadcastMatchTimers() <span class="cov8" title="1">{
+        rooms := h.roomManager.GetAllRooms()
+
+        for _, room := range rooms </span><span class="cov8" title="1">{
+                // Skip if match ended
+                if room.Match.IsEnded() </span><span class="cov8" title="1">{
+                        continue</span>
+                }
+
+                <span class="cov8" title="1">remainingSeconds := room.Match.GetRemainingSeconds()
+
+                // Create match:timer message data
+                data := map[string]interface{}{
+                        "remainingSeconds": remainingSeconds,
+                }
+
+                // Validate outgoing message schema (development mode only)
+                if err := h.validateOutgoingMessage("match:timer", data); err != nil </span><span class="cov0" title="0">{
+                        log.Printf("Schema validation failed for match:timer: %v", err)
+                }</span>
+
+                // Create match:timer message
+                <span class="cov8" title="1">timerMessage := Message{
+                        Type:      "match:timer",
+                        Timestamp: 0,
+                        Data:      data,
+                }
+
+                msgBytes, err := json.Marshal(timerMessage)
+                if err != nil </span><span class="cov0" title="0">{
+                        log.Printf("Error marshaling match:timer message: %v", err)
+                        continue</span>
+                }
+
+                // Broadcast to all players in room
+                <span class="cov8" title="1">room.Broadcast(msgBytes, "")
+
+                // Check if time limit reached
+                if room.Match.CheckTimeLimit() </span><span class="cov8" title="1">{
+                        room.Match.EndMatch("time_limit")
+                        log.Printf("Match ended in room %s: time limit reached", room.ID)
+                        // Broadcast match:ended message to all players
+                        h.broadcastMatchEnded(room, h.gameServer.GetWorld())
+                }</span>
+        }
+}
+
+// sendWeaponState sends weapon state update to a specific player
+func (h *WebSocketHandler) sendWeaponState(playerID string) <span class="cov8" title="1">{
+        ws := h.gameServer.GetWeaponState(playerID)
+        if ws == nil </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">current, max := ws.GetAmmoInfo()
+
+        // Create weapon:state message data
+        data := map[string]interface{}{
+                "currentAmmo": current,
+                "maxAmmo":     max,
+                "isReloading": ws.IsReloading,
+                "canShoot":    ws.CanShoot(),
+        }
+
+        // Validate outgoing message schema (development mode only)
+        if err := h.validateOutgoingMessage("weapon:state", data); err != nil </span><span class="cov0" title="0">{
+                log.Printf("Schema validation failed for weapon:state: %v", err)
+        }</span>
+
+        <span class="cov8" title="1">message := Message{
+                Type:      "weapon:state",
+                Timestamp: 0,
+                Data:      data,
+        }
+
+        msgBytes, err := json.Marshal(message)
+        if err != nil </span><span class="cov0" title="0">{
+                log.Printf("Error marshaling weapon:state message: %v", err)
+                return
+        }</span>
+
+        // Send to the specific player
+        <span class="cov8" title="1">room := h.roomManager.GetRoomByPlayerID(playerID)
+        if room != nil </span><span class="cov8" title="1">{
+                player := room.GetPlayer(playerID)
+                if player != nil </span><span class="cov8" title="1">{
+                        select </span>{
+                        case player.SendChan &lt;- msgBytes:<span class="cov8" title="1"></span>
+                        default:<span class="cov8" title="1">
+                                log.Printf("Failed to send weapon:state to player %s (channel full)", playerID)</span>
+                        }
+                }
+        } else<span class="cov8" title="1"> {
+                h.roomManager.SendToWaitingPlayer(playerID, msgBytes)
+        }</span>
+}
+
+// sendShootFailed sends a shoot failure message to the player
+func (h *WebSocketHandler) sendShootFailed(playerID string, reason string) <span class="cov8" title="1">{
+        // Create shoot:failed message data
+        data := map[string]interface{}{
+                "reason": reason,
+        }
+
+        // Validate outgoing message schema (development mode only)
+        if err := h.validateOutgoingMessage("shoot:failed", data); err != nil </span><span class="cov0" title="0">{
+                log.Printf("Schema validation failed for shoot:failed: %v", err)
+        }</span>
+
+        <span class="cov8" title="1">message := Message{
+                Type:      "shoot:failed",
+                Timestamp: 0,
+                Data:      data,
+        }
+
+        msgBytes, err := json.Marshal(message)
+        if err != nil </span><span class="cov0" title="0">{
+                log.Printf("Error marshaling shoot:failed message: %v", err)
+                return
+        }</span>
+
+        // Send to the specific player
+        <span class="cov8" title="1">room := h.roomManager.GetRoomByPlayerID(playerID)
+        if room != nil </span><span class="cov8" title="1">{
+                player := room.GetPlayer(playerID)
+                if player != nil </span><span class="cov8" title="1">{
+                        select </span>{
+                        case player.SendChan &lt;- msgBytes:<span class="cov8" title="1"></span>
+                        default:<span class="cov8" title="1">
+                                log.Printf("Failed to send shoot:failed to player %s (channel full)", playerID)</span>
+                        }
+                }
+        } else<span class="cov8" title="1"> {
+                h.roomManager.SendToWaitingPlayer(playerID, msgBytes)
+        }</span>
+}
+
+// broadcastMatchEnded broadcasts match end event to all players in a room
+func (h *WebSocketHandler) broadcastMatchEnded(room *game.Room, world *game.World) <span class="cov8" title="1">{
+        // Check if match exists
+        if room.Match == nil </span><span class="cov8" title="1">{
+                log.Printf("Cannot broadcast match ended: match is nil for room %s", room.ID)
+                return
+        }</span>
+
+        // Determine winners and get final scores
+        <span class="cov8" title="1">winners := room.Match.DetermineWinners()
+        finalScores := room.Match.GetFinalScores(world)
+
+        // Create match:ended message data
+        data := map[string]interface{}{
+                "winners":     winners,
+                "finalScores": finalScores,
+                "reason":      room.Match.EndReason,
+        }
+
+        // Validate outgoing message schema (development mode only)
+        if err := h.validateOutgoingMessage("match:ended", data); err != nil </span><span class="cov8" title="1">{
+                log.Printf("Schema validation failed for match:ended: %v", err)
+        }</span>
+
+        // Create match:ended message
+        <span class="cov8" title="1">message := Message{
+                Type:      "match:ended",
+                Timestamp: 0,
+                Data:      data,
+        }
+
+        msgBytes, err := json.Marshal(message)
+        if err != nil </span><span class="cov0" title="0">{
+                log.Printf("Error marshaling match:ended message: %v", err)
+                return
+        }</span>
+
+        // Broadcast to all players in the room
+        <span class="cov8" title="1">room.Broadcast(msgBytes, "")
+        log.Printf("Match ended in room %s - reason: %s, winners: %v", room.ID, room.Match.EndReason, winners)</span>
+}
+
+// broadcastWeaponPickup broadcasts weapon pickup event to all clients
+func (h *WebSocketHandler) broadcastWeaponPickup(playerID, crateID, weaponType string, respawnTime time.Time) <span class="cov8" title="1">{
+        // Create weapon:pickup_confirmed message data
+        data := map[string]interface{}{
+                "playerId":        playerID,
+                "crateId":         crateID,
+                "weaponType":      weaponType,
+                "nextRespawnTime": respawnTime.Unix(),
+        }
+
+        // Validate outgoing message schema (development mode only)
+        if err := h.validateOutgoingMessage("weapon:pickup_confirmed", data); err != nil </span><span class="cov0" title="0">{
+                log.Printf("Schema validation failed for weapon:pickup_confirmed: %v", err)
+        }</span>
+
+        <span class="cov8" title="1">message := Message{
+                Type:      "weapon:pickup_confirmed",
+                Timestamp: time.Now().UnixMilli(),
+                Data:      data,
+        }
+
+        msgBytes, err := json.Marshal(message)
+        if err != nil </span><span class="cov0" title="0">{
+                log.Printf("Error marshaling weapon:pickup_confirmed message: %v", err)
+                return
+        }</span>
+
+        // Broadcast to all players
+        <span class="cov8" title="1">h.roomManager.BroadcastToAll(msgBytes)</span>
+}
+
+// broadcastWeaponRespawn broadcasts weapon respawn event to all clients
+func (h *WebSocketHandler) broadcastWeaponRespawn(crate *game.WeaponCrate) <span class="cov8" title="1">{
+        // Create weapon:respawned message data
+        data := map[string]interface{}{
+                "crateId":    crate.ID,
+                "weaponType": crate.WeaponType,
+                "position":   crate.Position,
+        }
+
+        // Validate outgoing message schema (development mode only)
+        if err := h.validateOutgoingMessage("weapon:respawned", data); err != nil </span><span class="cov0" title="0">{
+                log.Printf("Schema validation failed for weapon:respawned: %v", err)
+        }</span>
+
+        <span class="cov8" title="1">message := Message{
+                Type:      "weapon:respawned",
+                Timestamp: time.Now().UnixMilli(),
+                Data:      data,
+        }
+
+        msgBytes, err := json.Marshal(message)
+        if err != nil </span><span class="cov8" title="1">{
+                log.Printf("Error marshaling weapon:respawned message: %v", err)
+                return
+        }</span>
+
+        // Broadcast to all players
+        <span class="cov8" title="1">h.roomManager.BroadcastToAll(msgBytes)</span>
+}
+
+// sendWeaponSpawns sends initial weapon spawn state to a specific player
+func (h *WebSocketHandler) sendWeaponSpawns(playerID string) <span class="cov8" title="1">{
+        // Get all weapon crates from the manager
+        allCrates := h.gameServer.GetWeaponCrateManager().GetAllCrates()
+
+        // Build crates array for the message
+        crates := make([]map[string]interface{}, 0, len(allCrates))
+        for _, crate := range allCrates </span><span class="cov8" title="1">{
+                crateData := map[string]interface{}{
+                        "id":          crate.ID,
+                        "position":    map[string]interface{}{"x": crate.Position.X, "y": crate.Position.Y},
+                        "weaponType":  crate.WeaponType,
+                        "isAvailable": crate.IsAvailable,
+                }
+                crates = append(crates, crateData)
+        }</span>
+
+        // Create weapon:spawned message data
+        <span class="cov8" title="1">data := map[string]interface{}{
+                "crates": crates,
+        }
+
+        // Validate outgoing message schema (development mode only)
+        if err := h.validateOutgoingMessage("weapon:spawned", data); err != nil </span><span class="cov0" title="0">{
+                log.Printf("Schema validation failed for weapon:spawned: %v", err)
+        }</span>
+
+        // Create weapon:spawned message
+        <span class="cov8" title="1">message := Message{
+                Type:      "weapon:spawned",
+                Timestamp: time.Now().UnixMilli(),
+                Data:      data,
+        }
+
+        msgBytes, err := json.Marshal(message)
+        if err != nil </span><span class="cov0" title="0">{
+                log.Printf("Error marshaling weapon:spawned message: %v", err)
+                return
+        }</span>
+
+        // Send to the specific player
+        <span class="cov8" title="1">room := h.roomManager.GetRoomByPlayerID(playerID)
+        if room != nil </span><span class="cov8" title="1">{
+                player := room.GetPlayer(playerID)
+                if player != nil </span><span class="cov8" title="1">{
+                        select </span>{
+                        case player.SendChan &lt;- msgBytes:<span class="cov8" title="1"></span>
+                                // Message sent successfully
+                        default:<span class="cov8" title="1">
+                                log.Printf("Failed to send weapon:spawned to player %s (channel full)", playerID)</span>
+                        }
+                }
+        } else<span class="cov8" title="1"> {
+                // Player not in a room yet, send to waiting player
+                h.roomManager.SendToWaitingPlayer(playerID, msgBytes)
+        }</span>
+}
+</pre>
+		
+		<pre class="file" id="file1" style="display: none">package network
+
+import (
+        "encoding/json"
+        "log"
+
+        "github.com/mtomcal/stick-rumble-server/internal/game"
+)
+
+// handleInputState processes player input state updates
+func (h *WebSocketHandler) handleInputState(playerID string, data any) <span class="cov8" title="1">{
+        // Check if player's match has ended - reject input if so
+        room := h.roomManager.GetRoomByPlayerID(playerID)
+        if room != nil &amp;&amp; room.Match.IsEnded() </span><span class="cov8" title="1">{
+                // Silently ignore input after match ends (AC: "server stops accepting input:state messages")
+                return
+        }</span>
+
+        // Validate data against JSON schema
+        <span class="cov8" title="1">if err := h.validator.Validate("input-state-data", data); err != nil </span><span class="cov8" title="1">{
+                log.Printf("Schema validation failed for input:state from %s: %v", playerID, err)
+                return
+        }</span>
+
+        // After validation, we can safely type assert
+        <span class="cov8" title="1">dataMap := data.(map[string]interface{})
+
+        input := game.InputState{
+                Up:       dataMap["up"].(bool),
+                Down:     dataMap["down"].(bool),
+                Left:     dataMap["left"].(bool),
+                Right:    dataMap["right"].(bool),
+                AimAngle: dataMap["aimAngle"].(float64),
+        }
+
+        // Update game server with input
+        success := h.gameServer.UpdatePlayerInput(playerID, input)
+        if !success </span><span class="cov8" title="1">{
+                log.Printf("Failed to update input for player %s", playerID)
+        }</span>
+}
+
+// handlePlayerShoot processes player shoot messages
+func (h *WebSocketHandler) handlePlayerShoot(playerID string, data any) <span class="cov8" title="1">{
+        // Validate data against JSON schema
+        if err := h.validator.Validate("player-shoot-data", data); err != nil </span><span class="cov8" title="1">{
+                log.Printf("Schema validation failed for player:shoot from %s: %v", playerID, err)
+                return
+        }</span>
+
+        // After validation, we can safely type assert
+        <span class="cov8" title="1">dataMap := data.(map[string]interface{})
+        aimAngle := dataMap["aimAngle"].(float64)
+
+        // Attempt to shoot
+        result := h.gameServer.PlayerShoot(playerID, aimAngle)
+
+        if result.Success </span><span class="cov8" title="1">{
+                // Broadcast projectile spawn to all players
+                h.broadcastProjectileSpawn(result.Projectile)
+
+                // Send weapon state update to the shooter
+                h.sendWeaponState(playerID)
+        }</span> else<span class="cov8" title="1"> {
+                // Send failure reason to player (for empty click sound, etc.)
+                h.sendShootFailed(playerID, result.Reason)
+        }</span>
+}
+
+// handlePlayerReload processes player reload messages
+func (h *WebSocketHandler) handlePlayerReload(playerID string) <span class="cov8" title="1">{
+        success := h.gameServer.PlayerReload(playerID)
+
+        if success </span><span class="cov8" title="1">{
+                // Send weapon state update to the player
+                h.sendWeaponState(playerID)
+        }</span>
+}
+
+// onReloadComplete is called when a player's reload finishes
+func (h *WebSocketHandler) onReloadComplete(playerID string) <span class="cov8" title="1">{
+        // Send updated weapon state to the player
+        h.sendWeaponState(playerID)
+}</span>
+
+// onHit is called when a projectile hits a player
+func (h *WebSocketHandler) onHit(hit game.HitEvent) <span class="cov8" title="1">{
+        // Get victim's current state (including updated health)
+        victimState, victimExists := h.gameServer.GetPlayerState(hit.VictimID)
+        if !victimExists </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        // Get attacker's weapon to determine damage dealt
+        <span class="cov8" title="1">attackerWeapon := h.gameServer.GetWeaponState(hit.AttackerID)
+        if attackerWeapon == nil </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">damage := attackerWeapon.Weapon.Damage
+
+        // Create player:damaged message data
+        damagedData := map[string]interface{}{
+                "victimId":     hit.VictimID,
+                "attackerId":   hit.AttackerID,
+                "damage":       damage,
+                "newHealth":    victimState.Health,
+                "projectileId": hit.ProjectileID,
+        }
+
+        // Validate outgoing message schema (development mode only)
+        if err := h.validateOutgoingMessage("player:damaged", damagedData); err != nil </span><span class="cov0" title="0">{
+                log.Printf("Schema validation failed for player:damaged: %v", err)
+        }</span>
+
+        // Broadcast player:damaged to all players in the room
+        <span class="cov8" title="1">damagedMessage := Message{
+                Type:      "player:damaged",
+                Timestamp: 0,
+                Data:      damagedData,
+        }
+
+        msgBytes, err := json.Marshal(damagedMessage)
+        if err != nil </span><span class="cov0" title="0">{
+                log.Printf("Error marshaling player:damaged message: %v", err)
+                return
+        }</span>
+
+        // Broadcast to all players in the room
+        <span class="cov8" title="1">room := h.roomManager.GetRoomByPlayerID(hit.VictimID)
+        if room != nil </span><span class="cov8" title="1">{
+                room.Broadcast(msgBytes, "")
+        }</span>
+
+        // Create hit:confirmed message data
+        <span class="cov8" title="1">hitConfirmedData := map[string]interface{}{
+                "victimId":     hit.VictimID,
+                "damage":       damage,
+                "projectileId": hit.ProjectileID,
+        }
+
+        // Validate outgoing message schema (development mode only)
+        if err := h.validateOutgoingMessage("hit:confirmed", hitConfirmedData); err != nil </span><span class="cov0" title="0">{
+                log.Printf("Schema validation failed for hit:confirmed: %v", err)
+        }</span>
+
+        // Send hit confirmation to the attacker
+        <span class="cov8" title="1">hitConfirmedMessage := Message{
+                Type:      "hit:confirmed",
+                Timestamp: 0,
+                Data:      hitConfirmedData,
+        }
+
+        confirmBytes, err := json.Marshal(hitConfirmedMessage)
+        if err != nil </span><span class="cov0" title="0">{
+                log.Printf("Error marshaling hit:confirmed message: %v", err)
+                return
+        }</span>
+
+        <span class="cov8" title="1">h.roomManager.SendToPlayer(hit.AttackerID, confirmBytes)
+
+        // If victim died, mark as dead and broadcast player:death
+        if !victimState.IsAlive() </span><span class="cov8" title="1">{
+                // Mark player as dead
+                h.gameServer.MarkPlayerDead(hit.VictimID)
+
+                // Update stats: increment attacker kills and victim deaths
+                attackerState, attackerExists := h.gameServer.GetPlayerState(hit.AttackerID)
+                if attackerExists </span><span class="cov8" title="1">{
+                        attackerState.IncrementKills()
+                        attackerState.AddXP(game.KillXPReward)
+                }</span>
+                <span class="cov8" title="1">victimState.IncrementDeaths()
+
+                // Create player:death message data
+                deathData := map[string]interface{}{
+                        "victimId":   hit.VictimID,
+                        "attackerId": hit.AttackerID,
+                }
+
+                // Validate outgoing message schema (development mode only)
+                if err := h.validateOutgoingMessage("player:death", deathData); err != nil </span><span class="cov0" title="0">{
+                        log.Printf("Schema validation failed for player:death: %v", err)
+                }</span>
+
+                <span class="cov8" title="1">deathMessage := Message{
+                        Type:      "player:death",
+                        Timestamp: 0,
+                        Data:      deathData,
+                }
+
+                deathBytes, err := json.Marshal(deathMessage)
+                if err != nil </span><span class="cov0" title="0">{
+                        log.Printf("Error marshaling player:death message: %v", err)
+                        return
+                }</span>
+
+                <span class="cov8" title="1">if room != nil </span><span class="cov8" title="1">{
+                        room.Broadcast(deathBytes, "")
+                }</span>
+
+                // Create player:kill_credit message data
+                <span class="cov8" title="1">killCreditData := map[string]interface{}{
+                        "killerId":    hit.AttackerID,
+                        "victimId":    hit.VictimID,
+                        "killerKills": attackerState.Kills,
+                        "killerXP":    attackerState.XP,
+                }
+
+                // Validate outgoing message schema (development mode only)
+                if err := h.validateOutgoingMessage("player:kill_credit", killCreditData); err != nil </span><span class="cov0" title="0">{
+                        log.Printf("Schema validation failed for player:kill_credit: %v", err)
+                }</span>
+
+                // Broadcast kill credit with updated stats
+                <span class="cov8" title="1">killCreditMessage := Message{
+                        Type:      "player:kill_credit",
+                        Timestamp: 0,
+                        Data:      killCreditData,
+                }
+
+                creditBytes, err := json.Marshal(killCreditMessage)
+                if err != nil </span><span class="cov0" title="0">{
+                        log.Printf("Error marshaling player:kill_credit message: %v", err)
+                        return
+                }</span>
+
+                <span class="cov8" title="1">if room != nil </span><span class="cov8" title="1">{
+                        room.Broadcast(creditBytes, "")
+
+                        // Track kill in match and check win conditions
+                        room.Match.AddKill(hit.AttackerID)
+
+                        // Check if kill target reached
+                        if room.Match.CheckKillTarget() </span><span class="cov0" title="0">{
+                                room.Match.EndMatch("kill_target")
+                                log.Printf("Match ended in room %s: kill target reached", room.ID)
+                                // Broadcast match:ended message to all players
+                                h.broadcastMatchEnded(room, h.gameServer.GetWorld())
+                        }</span>
+                }
+        }
+}
+
+// onRespawn is called when a player respawns after death
+func (h *WebSocketHandler) onRespawn(playerID string, position game.Vector2) <span class="cov8" title="1">{
+        // Create player:respawn message data
+        respawnData := map[string]interface{}{
+                "playerId": playerID,
+                "position": position,
+                "health":   game.PlayerMaxHealth,
+        }
+
+        // Validate outgoing message schema (development mode only)
+        if err := h.validateOutgoingMessage("player:respawn", respawnData); err != nil </span><span class="cov0" title="0">{
+                log.Printf("Schema validation failed for player:respawn: %v", err)
+        }</span>
+
+        // Create player:respawn message
+        <span class="cov8" title="1">respawnMessage := Message{
+                Type:      "player:respawn",
+                Timestamp: 0,
+                Data:      respawnData,
+        }
+
+        msgBytes, err := json.Marshal(respawnMessage)
+        if err != nil </span><span class="cov8" title="1">{
+                log.Printf("Error marshaling player:respawn message: %v", err)
+                return
+        }</span>
+
+        // Broadcast to all players in the room
+        <span class="cov8" title="1">room := h.roomManager.GetRoomByPlayerID(playerID)
+        if room != nil </span><span class="cov8" title="1">{
+                room.Broadcast(msgBytes, "")
+        }</span>
+}
+
+// handleWeaponPickup processes weapon pickup attempts from players
+func (h *WebSocketHandler) handleWeaponPickup(playerID string, data any) <span class="cov8" title="1">{
+        // Validate data against JSON schema
+        if err := h.validator.Validate("weapon-pickup-attempt-data", data); err != nil </span><span class="cov8" title="1">{
+                log.Printf("Schema validation failed for weapon:pickup_attempt from %s: %v", playerID, err)
+                return
+        }</span>
+
+        // After validation, we can safely type assert
+        <span class="cov8" title="1">dataMap := data.(map[string]interface{})
+        crateID := dataMap["crateId"].(string)
+
+        // Get weapon crate
+        crate := h.gameServer.GetWeaponCrateManager().GetCrate(crateID)
+        if crate == nil </span><span class="cov8" title="1">{
+                log.Printf("Invalid crateId %s from player %s", crateID, playerID)
+                return
+        }</span>
+
+        // Check if crate is available
+        <span class="cov8" title="1">if !crate.IsAvailable </span><span class="cov8" title="1">{
+                log.Printf("Player %s attempted to pickup unavailable crate %s", playerID, crateID)
+                return
+        }</span>
+
+        // Get player state from world
+        <span class="cov8" title="1">playerState, exists := h.gameServer.GetWorld().GetPlayer(playerID)
+        if !exists </span><span class="cov8" title="1">{
+                log.Printf("Player %s not found for weapon pickup", playerID)
+                return
+        }</span>
+
+        // Check if player is alive
+        <span class="cov8" title="1">if !playerState.IsAlive() </span><span class="cov8" title="1">{
+                log.Printf("Dead player %s attempted weapon pickup", playerID)
+                return
+        }</span>
+
+        // Check proximity using physics system
+        <span class="cov8" title="1">physics := game.NewPhysics()
+        if !physics.CheckPlayerCrateProximity(playerState, crate) </span><span class="cov8" title="1">{
+                log.Printf("Player %s out of range for crate %s", playerID, crateID)
+                return
+        }</span>
+
+        // All validation passed - perform pickup
+        // 1. Mark crate as picked up
+        <span class="cov8" title="1">success := h.gameServer.GetWeaponCrateManager().PickupCrate(crateID)
+        if !success </span><span class="cov0" title="0">{
+                log.Printf("Failed to pick up crate %s (race condition)", crateID)
+                return
+        }</span>
+
+        // 2. Create new weapon for player
+        <span class="cov8" title="1">newWeapon, err := game.CreateWeaponByType(crate.WeaponType)
+        if err != nil </span><span class="cov0" title="0">{
+                log.Printf("Failed to create weapon %s: %v", crate.WeaponType, err)
+                // Return crate to available state
+                crate.IsAvailable = true
+                return
+        }</span>
+
+        // 3. Replace player's weapon
+        <span class="cov8" title="1">h.gameServer.SetWeaponState(playerID, game.NewWeaponState(newWeapon))
+
+        // 4. Call pickup callback to broadcast to clients
+        if h.gameServer.GetWeaponCrateManager().GetCrate(crateID) != nil </span><span class="cov8" title="1">{
+                updatedCrate := h.gameServer.GetWeaponCrateManager().GetCrate(crateID)
+                h.broadcastWeaponPickup(playerID, crateID, crate.WeaponType, updatedCrate.RespawnTime)
+
+                // 5. Send updated weapon state to picker
+                h.sendWeaponState(playerID)
+        }</span>
+
+        <span class="cov8" title="1">log.Printf("Player %s picked up %s from crate %s", playerID, crate.WeaponType, crateID)</span>
+}
+
+// onWeaponRespawn is called when a weapon crate respawns
+func (h *WebSocketHandler) onWeaponRespawn(crate *game.WeaponCrate) <span class="cov8" title="1">{
+        h.broadcastWeaponRespawn(crate)
+        log.Printf("Weapon crate %s respawned (%s)", crate.ID, crate.WeaponType)
+}</span>
+</pre>
+		
+		<pre class="file" id="file2" style="display: none">package network
+
+import (
+        "fmt"
         "log"
         "os"
+        "path/filepath"
+        "strings"
+        "sync"
+
+        "github.com/kaptinlin/jsonschema"
+)
+
+// CompiledSchema wraps a compiled JSON schema
+type CompiledSchema struct {
+        Name   string
+        Schema *jsonschema.Schema
+}
+
+// SchemaLoader manages loading and caching of JSON schemas
+type SchemaLoader struct {
+        schemas map[string]*CompiledSchema
+        mu      sync.RWMutex
+}
+
+// Singleton instances for schema loaders
+var (
+        clientToServerLoader     *SchemaLoader
+        clientToServerLoaderOnce sync.Once
+        serverToClientLoader     *SchemaLoader
+        serverToClientLoaderOnce sync.Once
+)
+
+// GetClientToServerSchemaLoader returns the singleton client-to-server schema loader
+func GetClientToServerSchemaLoader() *SchemaLoader <span class="cov8" title="1">{
+        clientToServerLoaderOnce.Do(func() </span><span class="cov8" title="1">{
+                paths := []string{
+                        "../events-schema/schemas/client-to-server",       // From cmd/server/
+                        "../../events-schema/schemas/client-to-server",    // From internal/network/
+                        "../../../events-schema/schemas/client-to-server", // From tests
+                }
+
+                var err error
+                for _, path := range paths </span><span class="cov8" title="1">{
+                        clientToServerLoader, err = NewSchemaLoader(path)
+                        if err == nil </span><span class="cov8" title="1">{
+                                return
+                        }</span>
+                }
+
+                <span class="cov0" title="0">log.Fatalf("FATAL: Failed to load client-to-server JSON schemas from any path: %v", err)</span>
+        })
+        <span class="cov8" title="1">return clientToServerLoader</span>
+}
+
+// GetServerToClientSchemaLoader returns the singleton server-to-client schema loader
+func GetServerToClientSchemaLoader() *SchemaLoader <span class="cov8" title="1">{
+        serverToClientLoaderOnce.Do(func() </span><span class="cov8" title="1">{
+                paths := []string{
+                        "../events-schema/schemas/server-to-client",       // From cmd/server/
+                        "../../events-schema/schemas/server-to-client",    // From internal/network/
+                        "../../../events-schema/schemas/server-to-client", // From tests
+                }
+
+                var err error
+                for _, path := range paths </span><span class="cov8" title="1">{
+                        serverToClientLoader, err = NewSchemaLoader(path)
+                        if err == nil </span><span class="cov8" title="1">{
+                                return
+                        }</span>
+                }
+
+                <span class="cov0" title="0">log.Fatalf("FATAL: Failed to load server-to-client JSON schemas from any path: %v", err)</span>
+        })
+        <span class="cov8" title="1">return serverToClientLoader</span>
+}
+
+// resetSchemaLoaderSingletons resets singleton instances (for testing only)
+func resetSchemaLoaderSingletons() <span class="cov8" title="1">{
+        clientToServerLoader = nil
+        clientToServerLoaderOnce = sync.Once{}
+        serverToClientLoader = nil
+        serverToClientLoaderOnce = sync.Once{}
+}</span>
+
+// NewSchemaLoader creates a new schema loader and loads all schemas from the directory
+func NewSchemaLoader(schemaDir string) (*SchemaLoader, error) <span class="cov8" title="1">{
+        loader := &amp;SchemaLoader{
+                schemas: make(map[string]*CompiledSchema),
+        }
+
+        // Check if directory exists
+        if _, err := os.Stat(schemaDir); os.IsNotExist(err) </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("schema directory does not exist: %s", schemaDir)
+        }</span>
+
+        // Walk the directory and load all JSON schema files
+        <span class="cov8" title="1">err := filepath.Walk(schemaDir, func(path string, info os.FileInfo, err error) error </span><span class="cov8" title="1">{
+                if err != nil </span><span class="cov8" title="1">{
+                        return err
+                }</span>
+
+                // Skip directories and non-JSON files
+                <span class="cov8" title="1">if info.IsDir() || !strings.HasSuffix(path, ".json") </span><span class="cov8" title="1">{
+                        return nil
+                }</span>
+
+                // Load the schema file
+                <span class="cov8" title="1">if err := loader.loadSchemaFile(path); err != nil </span><span class="cov0" title="0">{
+                        return fmt.Errorf("failed to load schema %s: %w", path, err)
+                }</span>
+
+                <span class="cov8" title="1">return nil</span>
+        })
+
+        <span class="cov8" title="1">if err != nil </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("failed to load schemas: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">log.Printf("Loaded %d JSON schemas from %s", len(loader.schemas), schemaDir)
+        return loader, nil</span>
+}
+
+// loadSchemaFile loads a single JSON schema file
+func (l *SchemaLoader) loadSchemaFile(filePath string) error <span class="cov8" title="1">{
+        // Read schema file
+        schemaBytes, err := os.ReadFile(filePath)
+        if err != nil </span><span class="cov8" title="1">{
+                return fmt.Errorf("failed to read schema file: %w", err)
+        }</span>
+
+        // Create JSON schema compiler
+        <span class="cov8" title="1">compiler := jsonschema.NewCompiler()
+
+        // Compile the schema
+        schema, err := compiler.Compile(schemaBytes)
+        if err != nil </span><span class="cov8" title="1">{
+                return fmt.Errorf("failed to compile schema: %w", err)
+        }</span>
+
+        // Extract schema name from filename (without extension)
+        <span class="cov8" title="1">fileName := filepath.Base(filePath)
+        schemaName := strings.TrimSuffix(fileName, ".json")
+
+        // Store compiled schema
+        l.mu.Lock()
+        defer l.mu.Unlock()
+
+        l.schemas[schemaName] = &amp;CompiledSchema{
+                Name:   schemaName,
+                Schema: schema,
+        }
+
+        log.Printf("Loaded schema: %s", schemaName)
+        return nil</span>
+}
+
+// GetSchema retrieves a compiled schema by name (returns nil if not found)
+func (l *SchemaLoader) GetSchema(name string) *CompiledSchema <span class="cov8" title="1">{
+        l.mu.RLock()
+        defer l.mu.RUnlock()
+        return l.schemas[name]
+}</span>
+
+// GetSchemaNames returns all loaded schema names
+func (l *SchemaLoader) GetSchemaNames() []string <span class="cov8" title="1">{
+        l.mu.RLock()
+        defer l.mu.RUnlock()
+
+        names := make([]string, 0, len(l.schemas))
+        for name := range l.schemas </span><span class="cov8" title="1">{
+                names = append(names, name)
+        }</span>
+        <span class="cov8" title="1">return names</span>
+}
+</pre>
+		
+		<pre class="file" id="file3" style="display: none">package network
+
+import (
+        "fmt"
+        "log"
+)
+
+// SchemaValidator provides validation using pre-loaded JSON schemas
+type SchemaValidator struct {
+        loader *SchemaLoader
+}
+
+// NewSchemaValidator creates a new schema validator
+func NewSchemaValidator(loader *SchemaLoader) *SchemaValidator <span class="cov8" title="1">{
+        return &amp;SchemaValidator{
+                loader: loader,
+        }
+}</span>
+
+// Validate validates data against a named schema
+// Returns nil if validation succeeds, error if validation fails
+func (v *SchemaValidator) Validate(schemaName string, data interface{}) error <span class="cov8" title="1">{
+        // Check if data is nil
+        if data == nil </span><span class="cov8" title="1">{
+                return fmt.Errorf("validation failed: data is nil")
+        }</span>
+
+        // Get the schema
+        <span class="cov8" title="1">compiledSchema := v.loader.GetSchema(schemaName)
+        if compiledSchema == nil </span><span class="cov8" title="1">{
+                return fmt.Errorf("schema not found: %s", schemaName)
+        }</span>
+
+        // Validate the data using zero-copy validation (direct on interface{})
+        <span class="cov8" title="1">result := compiledSchema.Schema.Validate(data)
+
+        // Check if validation passed
+        if !result.IsValid() </span><span class="cov8" title="1">{
+                // Get all validation errors as a flat list
+                errorList := result.ToList()
+                if errorList != nil &amp;&amp; len(errorList.Errors) &gt; 0 </span><span class="cov8" title="1">{
+                        // Log detailed errors server-side (don't expose to clients)
+                        log.Printf("Schema validation failed for %s: %v", schemaName, errorList.Errors)
+                        return fmt.Errorf("validation failed for %s: %d errors", schemaName, len(errorList.Errors))
+                }</span>
+                <span class="cov0" title="0">return fmt.Errorf("validation failed for %s", schemaName)</span>
+        }
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+// ValidateAndLog validates data and logs detailed errors
+// Returns true if valid, false if invalid
+func (v *SchemaValidator) ValidateAndLog(schemaName string, data interface{}, playerID string) bool <span class="cov8" title="1">{
+        err := v.Validate(schemaName, data)
+        if err != nil </span><span class="cov8" title="1">{
+                log.Printf("Validation error for player %s: %v", playerID, err)
+                return false
+        }</span>
+        <span class="cov8" title="1">return true</span>
+}
+</pre>
+		
+		<pre class="file" id="file4" style="display: none">package network
+
+import (
+        "context"
+        "encoding/json"
+        "fmt"
+        "log"
+        "net/http"
+        "os"
+        "strings"
         "sync"
         "time"
 
         "github.com/google/uuid"
+        "github.com/gorilla/websocket"
+        "github.com/mtomcal/stick-rumble-server/internal/game"
 )
 
-// Player represents a connected player
-type Player struct {
-        ID       string
-        SendChan chan []byte
+var upgrader = websocket.Upgrader{
+        ReadBufferSize:  1024,
+        WriteBufferSize: 1024,
+        CheckOrigin: func(r *http.Request) bool <span class="cov8" title="1">{
+                // MVP: Allow all origins (for localhost development)
+                // Production: Restrict to your domain
+                return true
+        }</span>,
 }
 
-// Room represents a game room with multiple players
-type Room struct {
-        ID         string
-        Players    []*Player
-        MaxPlayers int
-        Match      *Match // Match state tracking
-        mu         sync.RWMutex
+// Message represents the standard WebSocket message format
+type Message struct {
+        Type      string `json:"type"`
+        Timestamp int64  `json:"timestamp"`
+        Data      any    `json:"data,omitempty"`
 }
 
-// NewRoom creates a new room with a unique ID
-func NewRoom() *Room <span class="cov8" title="1">{
-        match := NewMatch()
-
-        // Enable test mode if TEST_MODE environment variable is set
-        if os.Getenv("TEST_MODE") == "true" </span><span class="cov0" title="0">{
-                match.SetTestMode()
-                log.Println("Match created in TEST MODE (kill target: 2, time limit: 10s)")
-        }</span>
-
-        <span class="cov8" title="1">return &amp;Room{
-                ID:         uuid.New().String(),
-                Players:    make([]*Player, 0, 8),
-                MaxPlayers: 8,
-                Match:      match,
-        }</span>
+// WebSocketHandler manages WebSocket connections and room management
+type WebSocketHandler struct {
+        roomManager       *game.RoomManager
+        gameServer        *game.GameServer
+        timerInterval     time.Duration // Interval for match timer broadcasts (default 1s)
+        validator         *SchemaValidator
+        outgoingValidator *SchemaValidator
 }
 
-// AddPlayer adds a player to the room
-func (r *Room) AddPlayer(player *Player) error <span class="cov8" title="1">{
-        r.mu.Lock()
-        defer r.mu.Unlock()
+// NewWebSocketHandler creates a new WebSocket handler with room management
+func NewWebSocketHandler() *WebSocketHandler <span class="cov8" title="1">{
+        return NewWebSocketHandlerWithConfig(1 * time.Second)
+}</span>
 
-        if len(r.Players) &gt;= r.MaxPlayers </span><span class="cov8" title="1">{
-                return errors.New("room is full")
-        }</span>
+// NewWebSocketHandlerWithConfig creates a WebSocket handler with custom timer interval
+func NewWebSocketHandlerWithConfig(timerInterval time.Duration) *WebSocketHandler <span class="cov8" title="1">{
+        // Use singleton schema loaders to avoid loading schemas multiple times
+        // This prevents race conditions and reduces memory usage in tests
+        schemaLoader := GetClientToServerSchemaLoader()
+        outgoingSchemaLoader := GetServerToClientSchemaLoader()
 
-        <span class="cov8" title="1">r.Players = append(r.Players, player)
-        return nil</span>
-}
-
-// RemovePlayer removes a player from the room by ID
-func (r *Room) RemovePlayer(playerID string) bool <span class="cov8" title="1">{
-        r.mu.Lock()
-        defer r.mu.Unlock()
-
-        for i, player := range r.Players </span><span class="cov8" title="1">{
-                if player.ID == playerID </span><span class="cov8" title="1">{
-                        // Remove player from slice
-                        r.Players = append(r.Players[:i], r.Players[i+1:]...)
-                        return true
-                }</span>
+        handler := &amp;WebSocketHandler{
+                roomManager:       game.NewRoomManager(),
+                timerInterval:     timerInterval,
+                validator:         NewSchemaValidator(schemaLoader),
+                outgoingValidator: NewSchemaValidator(outgoingSchemaLoader),
         }
-        <span class="cov8" title="1">return false</span>
-}
 
-// IsEmpty returns true if the room has no players (thread-safe)
-func (r *Room) IsEmpty() bool <span class="cov8" title="1">{
-        r.mu.RLock()
-        defer r.mu.RUnlock()
-        return len(r.Players) == 0
+        // Create game server with broadcast function
+        handler.gameServer = game.NewGameServer(handler.broadcastPlayerStates)
+
+        // Register callback for reload completion to notify clients
+        handler.gameServer.SetOnReloadComplete(handler.onReloadComplete)
+
+        // Register callback for hit events
+        handler.gameServer.SetOnHit(handler.onHit)
+
+        // Register callback for respawn events
+        handler.gameServer.SetOnRespawn(handler.onRespawn)
+
+        // Register callback for weapon respawn events
+        handler.gameServer.SetOnWeaponRespawn(handler.onWeaponRespawn)
+
+        return handler
 }</span>
 
-// PlayerCount returns the number of players in the room (thread-safe)
-func (r *Room) PlayerCount() int <span class="cov8" title="1">{
-        r.mu.RLock()
-        defer r.mu.RUnlock()
-        return len(r.Players)
-}</span>
+// matchTimerLoop broadcasts match timer updates at the configured interval
+func (h *WebSocketHandler) matchTimerLoop(ctx context.Context) <span class="cov8" title="1">{
+        ticker := time.NewTicker(h.timerInterval)
+        defer ticker.Stop()
 
-// Broadcast sends a message to all players in the room, optionally excluding a sender
-func (r *Room) Broadcast(message []byte, excludePlayerID string) <span class="cov8" title="1">{
-        r.mu.RLock()
-        defer r.mu.RUnlock()
-
-        for _, player := range r.Players </span><span class="cov8" title="1">{
-                if player.ID != excludePlayerID </span><span class="cov8" title="1">{
-                        // Use recover to handle closed channel panics gracefully
-                        func() </span><span class="cov8" title="1">{
-                                defer func() </span><span class="cov8" title="1">{
-                                        if rec := recover(); rec != nil </span><span class="cov8" title="1">{
-                                                log.Printf("Warning: Could not send message to player %s (channel closed)", player.ID)
-                                        }</span>
-                                }()
-
-                                <span class="cov8" title="1">select </span>{
-                                case player.SendChan &lt;- message:<span class="cov8" title="1"></span>
-                                        // Message sent successfully
-                                default:<span class="cov8" title="1">
-                                        log.Printf("Warning: Could not send message to player %s (channel full)", player.ID)</span>
-                                }
-                        }()
+        for </span><span class="cov8" title="1">{
+                select </span>{
+                case &lt;-ctx.Done():<span class="cov8" title="1">
+                        log.Println("Match timer loop stopped")
+                        return</span>
+                case &lt;-ticker.C:<span class="cov8" title="1">
+                        h.broadcastMatchTimers()</span>
                 }
         }
 }
 
-// GetPlayer returns a player by ID, or nil if not found
-func (r *Room) GetPlayer(playerID string) *Player <span class="cov8" title="1">{
-        r.mu.RLock()
-        defer r.mu.RUnlock()
+// Global handler instance for the legacy function to share room state
+// Uses lazy initialization to prevent schema loading at package init time
+var (
+        globalHandler     *WebSocketHandler
+        globalHandlerOnce sync.Once
+)
 
-        for _, player := range r.Players </span><span class="cov8" title="1">{
-                if player.ID == playerID </span><span class="cov8" title="1">{
-                        return player
-                }</span>
-        }
-        <span class="cov8" title="1">return nil</span>
+// getGlobalHandler returns the singleton global handler instance
+func getGlobalHandler() *WebSocketHandler <span class="cov8" title="1">{
+        globalHandlerOnce.Do(func() </span><span class="cov8" title="1">{
+                globalHandler = NewWebSocketHandler()
+        }</span>)
+        <span class="cov8" title="1">return globalHandler</span>
 }
 
-// RoomManager manages all game rooms and player assignments
-type RoomManager struct {
-        rooms          map[string]*Room
-        waitingPlayers []*Player
-        playerToRoom   map[string]string // Maps player ID to room ID
-        mu             sync.RWMutex
-}
-
-// NewRoomManager creates a new room manager
-func NewRoomManager() *RoomManager <span class="cov8" title="1">{
-        return &amp;RoomManager{
-                rooms:          make(map[string]*Room),
-                waitingPlayers: make([]*Player, 0),
-                playerToRoom:   make(map[string]string),
-        }
+// resetGlobalHandler resets the global handler (for testing only)
+func resetGlobalHandler() <span class="cov8" title="1">{
+        globalHandler = nil
+        globalHandlerOnce = sync.Once{}
 }</span>
 
-// AddPlayer adds a player and creates a room if we have 2 waiting players
-func (rm *RoomManager) AddPlayer(player *Player) *Room <span class="cov8" title="1">{
-        rm.mu.Lock()
-        defer rm.mu.Unlock()
+// Start starts the game server tick loop and match timer broadcasts
+func (h *WebSocketHandler) Start(ctx context.Context) <span class="cov8" title="1">{
+        h.gameServer.Start(ctx)
+        go h.matchTimerLoop(ctx)
+}</span>
 
-        // Add to waiting list
-        rm.waitingPlayers = append(rm.waitingPlayers, player)
+// Stop stops the game server
+func (h *WebSocketHandler) Stop() <span class="cov8" title="1">{
+        h.gameServer.Stop()
+}</span>
 
-        // If we have 2 players, create a room
-        if len(rm.waitingPlayers) &gt;= 2 </span><span class="cov8" title="1">{
-                // Create new room
-                room := NewRoom()
+// StartGlobalHandler starts the global handler's game server
+func StartGlobalHandler(ctx context.Context) <span class="cov8" title="1">{
+        getGlobalHandler().Start(ctx)
+}</span>
 
-                // Add both waiting players to the room
-                player1 := rm.waitingPlayers[0]
-                player2 := rm.waitingPlayers[1]
+// StopGlobalHandler stops the global handler's game server
+func StopGlobalHandler() <span class="cov8" title="1">{
+        getGlobalHandler().Stop()
+}</span>
 
-                room.AddPlayer(player1)
-                room.AddPlayer(player2)
-
-                // Clear waiting list
-                rm.waitingPlayers = rm.waitingPlayers[2:]
-
-                // Register room
-                rm.rooms[room.ID] = room
-                rm.playerToRoom[player1.ID] = room.ID
-                rm.playerToRoom[player2.ID] = room.ID
-
-                // Start the match
-                room.Match.Start()
-
-                // Log room creation
-                log.Printf("Room created: %s with players: [%s, %s]", room.ID, player1.ID, player2.ID)
-
-                // Send room:joined messages to both players
-                rm.sendRoomJoinedMessage(player1, room)
-                rm.sendRoomJoinedMessage(player2, room)
-
-                return room
+// validateOutgoingMessage validates outgoing server→client messages against JSON schemas
+// Only validates when ENABLE_SCHEMA_VALIDATION environment variable is set to "true"
+// Returns nil if validation passes or is disabled, error if validation fails
+func (h *WebSocketHandler) validateOutgoingMessage(messageType string, data interface{}) (err error) <span class="cov8" title="1">{
+        // Check if schema validation is enabled (development mode only)
+        if os.Getenv("ENABLE_SCHEMA_VALIDATION") != "true" </span><span class="cov8" title="1">{
+                return nil // Skip validation in production
         }</span>
 
-        // Not enough players yet
+        // Recover from any panics in the validator library (e.g., NaN values)
+        <span class="cov8" title="1">defer func() </span><span class="cov8" title="1">{
+                if r := recover(); r != nil </span><span class="cov0" title="0">{
+                        log.Printf("Schema validator panicked for %s: %v", messageType, r)
+                        err = fmt.Errorf("validator panic: %v", r)
+                }</span>
+        }()
+
+        // Map message type to schema name (message:type_subtype → message-type-subtype-data)
+        // Server-to-client schemas follow the pattern: {message-type}-data.json
+        // Replace colons and underscores with hyphens to match filename convention
+        <span class="cov8" title="1">schemaName := strings.ReplaceAll(messageType, ":", "-")
+        schemaName = strings.ReplaceAll(schemaName, "_", "-")
+        schemaName = schemaName + "-data"
+
+        // Validate the data against the schema
+        err = h.outgoingValidator.Validate(schemaName, data)
+        if err != nil </span><span class="cov8" title="1">{
+                log.Printf("Outgoing message validation failed for %s: %v", messageType, err)
+                return err
+        }</span>
+
         <span class="cov8" title="1">return nil</span>
 }
 
-// sendRoomJoinedMessage sends a room:joined message to a player
-func (rm *RoomManager) sendRoomJoinedMessage(player *Player, room *Room) <span class="cov8" title="1">{
-        message := map[string]interface{}{
-                "type":      "room:joined",
-                "timestamp": time.Now().UnixMilli(),
-                "data": map[string]interface{}{
-                        "roomId":   room.ID,
-                        "playerId": player.ID,
-                },
-        }
-
-        msgBytes, err := json.Marshal(message)
-        if err != nil </span><span class="cov0" title="0">{
-                log.Printf("Error marshaling room:joined message: %v", err)
+// HandleWebSocket upgrades HTTP connection to WebSocket and manages message loop
+func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        // Upgrade HTTP connection to WebSocket
+        conn, err := upgrader.Upgrade(w, r, nil)
+        if err != nil </span><span class="cov8" title="1">{
+                log.Println("WebSocket upgrade failed:", err)
                 return
         }</span>
+        <span class="cov8" title="1">defer conn.Close()
 
-        // Use recover to handle closed channel panics gracefully
-        <span class="cov8" title="1">func() </span><span class="cov8" title="1">{
-                defer func() </span><span class="cov8" title="1">{
-                        if rec := recover(); rec != nil </span><span class="cov0" title="0">{
-                                log.Printf("Warning: Could not send room:joined message to player %s (channel closed)", player.ID)
+        // Create player with unique ID
+        playerID := uuid.New().String()
+        // Buffer size 256: Allows burst messages while preventing memory exhaustion.
+        // If buffer fills (slow/unresponsive client), messages are dropped with log warning.
+        sendChan := make(chan []byte, 256)
+        player := &amp;game.Player{
+                ID:       playerID,
+                SendChan: sendChan,
+        }
+
+        log.Printf("Client connected: %s", playerID)
+
+        // Add player to room manager
+        room := h.roomManager.AddPlayer(player)
+
+        // Add player to game server
+        h.gameServer.AddPlayer(playerID)
+
+        // If player joined a room, send initial weapon spawn state to all players
+        if room != nil </span><span class="cov8" title="1">{
+                // Send weapon spawns to all players in the newly created room
+                for _, p := range room.GetPlayers() </span><span class="cov8" title="1">{
+                        h.sendWeaponSpawns(p.ID)
+                }</span>
+        }
+
+        // Start goroutine to send messages to client
+        <span class="cov8" title="1">done := make(chan struct{})
+        go func() </span><span class="cov8" title="1">{
+                defer close(done)
+                for msg := range sendChan </span><span class="cov8" title="1">{
+                        if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil </span><span class="cov8" title="1">{
+                                log.Printf("Write error for %s: %v", playerID, err)
+                                return
                         }</span>
-                }()
-
-                <span class="cov8" title="1">select </span>{
-                case player.SendChan &lt;- msgBytes:<span class="cov8" title="1"></span>
-                        // Message sent successfully
-                default:<span class="cov0" title="0">
-                        log.Printf("Warning: Could not send room:joined message to player %s (channel full)", player.ID)</span>
                 }
         }()
-}
 
-// RemovePlayer removes a player from their room and notifies other players
-func (rm *RoomManager) RemovePlayer(playerID string) <span class="cov8" title="1">{
-        rm.mu.Lock()
-        defer rm.mu.Unlock()
-
-        // Find and remove from waiting list if present
-        for i, player := range rm.waitingPlayers </span><span class="cov8" title="1">{
-                if player.ID == playerID </span><span class="cov8" title="1">{
-                        rm.waitingPlayers = append(rm.waitingPlayers[:i], rm.waitingPlayers[i+1:]...)
-                        return
-                }</span>
-        }
-
-        // Find player's room
-        <span class="cov8" title="1">roomID, exists := rm.playerToRoom[playerID]
-        if !exists </span><span class="cov8" title="1">{
-                return
-        }</span>
-
-        <span class="cov8" title="1">room, exists := rm.rooms[roomID]
-        if !exists </span><span class="cov0" title="0">{
-                return
-        }</span>
-
-        // Remove player from room
-        <span class="cov8" title="1">room.RemovePlayer(playerID)
-
-        // Send player:left message to remaining players
-        message := map[string]interface{}{
-                "type":      "player:left",
-                "timestamp": time.Now().UnixMilli(),
-                "data": map[string]interface{}{
-                        "playerId": playerID,
-                },
-        }
-
-        msgBytes, err := json.Marshal(message)
-        if err != nil </span><span class="cov0" title="0">{
-                log.Printf("Error marshaling player:left message: %v", err)
-        }</span> else<span class="cov8" title="1"> {
-                room.Broadcast(msgBytes, "")
-        }</span>
-
-        // Clean up player to room mapping
-        <span class="cov8" title="1">delete(rm.playerToRoom, playerID)
-
-        // If room is empty, remove it
-        if room.IsEmpty() </span><span class="cov8" title="1">{
-                delete(rm.rooms, roomID)
-                log.Printf("Room %s removed (no players remaining)", roomID)
-        }</span>
-}
-
-// GetRoomByPlayerID finds a room by player ID
-func (rm *RoomManager) GetRoomByPlayerID(playerID string) *Room <span class="cov8" title="1">{
-        rm.mu.RLock()
-        defer rm.mu.RUnlock()
-
-        roomID, exists := rm.playerToRoom[playerID]
-        if !exists </span><span class="cov8" title="1">{
-                return nil
-        }</span>
-
-        <span class="cov8" title="1">return rm.rooms[roomID]</span>
-}
-
-// SendToWaitingPlayer sends a message to a waiting player (not in a room yet)
-func (rm *RoomManager) SendToWaitingPlayer(playerID string, msgBytes []byte) <span class="cov8" title="1">{
-        rm.mu.RLock()
-        defer rm.mu.RUnlock()
-
-        for _, player := range rm.waitingPlayers </span><span class="cov8" title="1">{
-                if player.ID == playerID </span><span class="cov8" title="1">{
-                        // Use recover to handle closed channel panics gracefully
-                        func() </span><span class="cov8" title="1">{
-                                defer func() </span><span class="cov8" title="1">{
-                                        if rec := recover(); rec != nil </span><span class="cov8" title="1">{
-                                                log.Printf("Warning: Could not send message to waiting player %s (channel closed)", playerID)
-                                        }</span>
-                                }()
-
-                                <span class="cov8" title="1">select </span>{
-                                case player.SendChan &lt;- msgBytes:<span class="cov8" title="1"></span>
-                                        // Message sent successfully
-                                default:<span class="cov8" title="1">
-                                        log.Printf("Warning: Could not send message to waiting player %s (channel full)", playerID)</span>
-                                }
-                        }()
-                        <span class="cov8" title="1">return</span>
-                }
-        }
-}
-
-// SendToPlayer sends a message to any player (in room or waiting)
-// Returns true if player was found and message was queued, false otherwise
-func (rm *RoomManager) SendToPlayer(playerID string, msgBytes []byte) bool <span class="cov8" title="1">{
-        rm.mu.RLock()
-        defer rm.mu.RUnlock()
-
-        // First, check if player is in a room
-        roomID, inRoom := rm.playerToRoom[playerID]
-        if inRoom </span><span class="cov8" title="1">{
-                room, roomExists := rm.rooms[roomID]
-                if roomExists </span><span class="cov8" title="1">{
-                        player := room.GetPlayer(playerID)
-                        if player != nil </span><span class="cov8" title="1">{
-                                // Use recover to handle closed channel panics gracefully
-                                func() </span><span class="cov8" title="1">{
-                                        defer func() </span><span class="cov8" title="1">{
-                                                if rec := recover(); rec != nil </span><span class="cov8" title="1">{
-                                                        log.Printf("Warning: Could not send message to player %s (channel closed)", playerID)
-                                                }</span>
-                                        }()
-
-                                        <span class="cov8" title="1">select </span>{
-                                        case player.SendChan &lt;- msgBytes:<span class="cov8" title="1"></span>
-                                                // Message sent successfully
-                                        default:<span class="cov8" title="1">
-                                                log.Printf("Warning: Could not send message to player %s (channel full)", playerID)</span>
-                                        }
-                                }()
-                                <span class="cov8" title="1">return true</span>
-                        }
-                }
-        }
-
-        // Second, check waiting players
-        <span class="cov8" title="1">for _, player := range rm.waitingPlayers </span><span class="cov8" title="1">{
-                if player.ID == playerID </span><span class="cov8" title="1">{
-                        // Use recover to handle closed channel panics gracefully
-                        func() </span><span class="cov8" title="1">{
-                                defer func() </span><span class="cov8" title="1">{
-                                        if rec := recover(); rec != nil </span><span class="cov0" title="0">{
-                                                log.Printf("Warning: Could not send message to waiting player %s (channel closed)", playerID)
-                                        }</span>
-                                }()
-
-                                <span class="cov8" title="1">select </span>{
-                                case player.SendChan &lt;- msgBytes:<span class="cov8" title="1"></span>
-                                        // Message sent successfully
-                                default:<span class="cov0" title="0">
-                                        log.Printf("Warning: Could not send message to waiting player %s (channel full)", playerID)</span>
-                                }
-                        }()
-                        <span class="cov8" title="1">return true</span>
-                }
-        }
-
-        // Player not found
-        <span class="cov8" title="1">return false</span>
-}
-
-// BroadcastToAll sends a message to all players (in rooms and waiting)
-func (rm *RoomManager) BroadcastToAll(msgBytes []byte) <span class="cov8" title="1">{
-        rm.mu.RLock()
-        defer rm.mu.RUnlock()
-
-        // Broadcast to all rooms
-        for _, room := range rm.rooms </span><span class="cov8" title="1">{
-                room.Broadcast(msgBytes, "")
-        }</span>
-
-        // Send to all waiting players
-        <span class="cov8" title="1">for _, player := range rm.waitingPlayers </span><span class="cov8" title="1">{
-                // Use recover to handle closed channel panics gracefully
-                func() </span><span class="cov8" title="1">{
-                        defer func() </span><span class="cov8" title="1">{
-                                if rec := recover(); rec != nil </span><span class="cov8" title="1">{
-                                        log.Printf("Warning: Could not send message to waiting player %s (channel closed)", player.ID)
-                                }</span>
-                        }()
-
-                        <span class="cov8" title="1">select </span>{
-                        case player.SendChan &lt;- msgBytes:<span class="cov8" title="1"></span>
-                                // Message sent successfully
-                        default:<span class="cov8" title="1">
-                                log.Printf("Warning: Could not send message to waiting player %s (channel full)", player.ID)</span>
-                        }
-                }()
-        }
-}
-
-// GetAllRooms returns a snapshot of all active rooms (thread-safe)
-func (rm *RoomManager) GetAllRooms() []*Room <span class="cov8" title="1">{
-        rm.mu.RLock()
-        defer rm.mu.RUnlock()
-
-        rooms := make([]*Room, 0, len(rm.rooms))
-        for _, room := range rm.rooms </span><span class="cov8" title="1">{
-                rooms = append(rooms, room)
-        }</span>
-        <span class="cov8" title="1">return rooms</span>
-}
-</pre>
-		
-		<pre class="file" id="file6" style="display: none">package game
-
-import (
-        "time"
-)
-
-// Weapon constants for Pistol (from Story 2.3 requirements)
-const (
-        // PistolDamage is the damage per shot (25 damage = 4 shots to kill at 100 health)
-        PistolDamage = 25
-
-        // PistolFireRate is rounds per second (3 rounds/sec = 333ms cooldown)
-        PistolFireRate = 3.0
-
-        // PistolMagazineSize is the number of rounds before reload required
-        PistolMagazineSize = 15
-
-        // PistolReloadTime is the time required to reload in milliseconds
-        PistolReloadTime = 1500 * time.Millisecond
-
-        // PistolProjectileSpeed is the projectile travel speed in pixels per second
-        PistolProjectileSpeed = 800.0
-
-        // ProjectileMaxLifetime is the maximum time a projectile exists (1 second)
-        ProjectileMaxLifetime = 1 * time.Second
-
-        // ProjectileMaxRange is the maximum range for hit detection (px)
-        // Set to projectile speed * lifetime = 800px/s * 1s = 800px
-        ProjectileMaxRange = 800.0
-)
-
-// Weapon defines a weapon type with its properties
-type Weapon struct {
-        Name            string
-        Damage          int
-        FireRate        float64       // Rounds per second
-        MagazineSize    int           // Rounds per magazine
-        ReloadTime      time.Duration // Time to reload
-        ProjectileSpeed float64       // Projectile speed in px/s
-}
-
-// NewPistol creates a new Pistol weapon instance
-func NewPistol() *Weapon <span class="cov8" title="1">{
-        return &amp;Weapon{
-                Name:            "Pistol",
-                Damage:          PistolDamage,
-                FireRate:        PistolFireRate,
-                MagazineSize:    PistolMagazineSize,
-                ReloadTime:      PistolReloadTime,
-                ProjectileSpeed: PistolProjectileSpeed,
-        }
-}</span>
-
-// WeaponState tracks the current state of a player's weapon
-type WeaponState struct {
-        Weapon          *Weapon
-        CurrentAmmo     int
-        IsReloading     bool
-        LastShotTime    time.Time
-        ReloadStartTime time.Time
-}
-
-// NewWeaponState creates a new weapon state with full ammo
-func NewWeaponState(weapon *Weapon) *WeaponState <span class="cov8" title="1">{
-        return &amp;WeaponState{
-                Weapon:      weapon,
-                CurrentAmmo: weapon.MagazineSize,
-                IsReloading: false,
-        }
-}</span>
-
-// CanShoot returns true if the weapon can fire
-func (ws *WeaponState) CanShoot() bool <span class="cov8" title="1">{
-        // Cannot shoot while reloading
-        if ws.IsReloading </span><span class="cov8" title="1">{
-                return false
-        }</span>
-
-        // Cannot shoot with empty magazine
-        <span class="cov8" title="1">if ws.CurrentAmmo &lt;= 0 </span><span class="cov8" title="1">{
-                return false
-        }</span>
-
-        // Check fire rate cooldown
-        <span class="cov8" title="1">if !ws.LastShotTime.IsZero() </span><span class="cov8" title="1">{
-                cooldown := time.Duration(float64(time.Second) / ws.Weapon.FireRate)
-                if time.Since(ws.LastShotTime) &lt; cooldown </span><span class="cov8" title="1">{
-                        return false
-                }</span>
-        }
-
-        <span class="cov8" title="1">return true</span>
-}
-
-// RecordShot records that a shot was fired, decrements ammo
-func (ws *WeaponState) RecordShot() <span class="cov8" title="1">{
-        if ws.CurrentAmmo &gt; 0 </span><span class="cov8" title="1">{
-                ws.CurrentAmmo--
-        }</span>
-        <span class="cov8" title="1">ws.LastShotTime = time.Now()</span>
-}
-
-// StartReload begins the reload process
-func (ws *WeaponState) StartReload() <span class="cov8" title="1">{
-        // Don't reload if already reloading
-        if ws.IsReloading </span><span class="cov8" title="1">{
-                return
-        }</span>
-
-        // Don't reload if magazine is full
-        <span class="cov8" title="1">if ws.CurrentAmmo &gt;= ws.Weapon.MagazineSize </span><span class="cov8" title="1">{
-                return
-        }</span>
-
-        <span class="cov8" title="1">ws.IsReloading = true
-        ws.ReloadStartTime = time.Now()</span>
-}
-
-// CheckReloadComplete checks if reload is done and refills ammo if so
-// Returns true if reload just completed
-func (ws *WeaponState) CheckReloadComplete() bool <span class="cov8" title="1">{
-        if !ws.IsReloading </span><span class="cov8" title="1">{
-                return false
-        }</span>
-
-        <span class="cov8" title="1">if time.Since(ws.ReloadStartTime) &gt;= ws.Weapon.ReloadTime </span><span class="cov8" title="1">{
-                ws.CurrentAmmo = ws.Weapon.MagazineSize
-                ws.IsReloading = false
-                return true
-        }</span>
-
-        <span class="cov8" title="1">return false</span>
-}
-
-// IsEmpty returns true if the magazine is empty
-func (ws *WeaponState) IsEmpty() bool <span class="cov8" title="1">{
-        return ws.CurrentAmmo &lt;= 0
-}</span>
-
-// GetAmmoInfo returns current and max ammo
-func (ws *WeaponState) GetAmmoInfo() (current, max int) <span class="cov8" title="1">{
-        return ws.CurrentAmmo, ws.Weapon.MagazineSize
-}</span>
-</pre>
-		
-		<pre class="file" id="file7" style="display: none">package game
-
-import (
-        "math"
-        "math/rand"
-        "sync"
-)
-
-// World manages the game state and all players
-type World struct {
-        players map[string]*PlayerState
-        mu      sync.RWMutex
-}
-
-// NewWorld creates a new game world
-func NewWorld() *World <span class="cov8" title="1">{
-        return &amp;World{
-                players: make(map[string]*PlayerState),
-        }
-}</span>
-
-// AddPlayer adds a new player to the world
-func (w *World) AddPlayer(playerID string) *PlayerState <span class="cov8" title="1">{
-        w.mu.Lock()
-        defer w.mu.Unlock()
-
-        player := NewPlayerState(playerID)
-        w.players[playerID] = player
-        return player
-}</span>
-
-// RemovePlayer removes a player from the world
-func (w *World) RemovePlayer(playerID string) <span class="cov8" title="1">{
-        w.mu.Lock()
-        defer w.mu.Unlock()
-        delete(w.players, playerID)
-}</span>
-
-// GetPlayer retrieves a player by ID
-func (w *World) GetPlayer(playerID string) (*PlayerState, bool) <span class="cov8" title="1">{
-        w.mu.RLock()
-        defer w.mu.RUnlock()
-        player, exists := w.players[playerID]
-        return player, exists
-}</span>
-
-// GetAllPlayers returns snapshots of all players (thread-safe)
-func (w *World) GetAllPlayers() []PlayerState <span class="cov8" title="1">{
-        w.mu.RLock()
-        defer w.mu.RUnlock()
-
-        snapshots := make([]PlayerState, 0, len(w.players))
-        for _, player := range w.players </span><span class="cov8" title="1">{
-                snapshots = append(snapshots, player.Snapshot())
-        }</span>
-        <span class="cov8" title="1">return snapshots</span>
-}
-
-// PlayerCount returns the number of players in the world
-func (w *World) PlayerCount() int <span class="cov8" title="1">{
-        w.mu.RLock()
-        defer w.mu.RUnlock()
-        return len(w.players)
-}</span>
-
-// UpdatePlayerInput updates a player's input state
-func (w *World) UpdatePlayerInput(playerID string, input InputState) bool <span class="cov8" title="1">{
-        player, exists := w.GetPlayer(playerID)
-        if !exists </span><span class="cov8" title="1">{
-                return false
-        }</span>
-        <span class="cov8" title="1">player.SetInput(input)
-        // Also update the player's aim angle for broadcasting
-        player.SetAimAngle(input.AimAngle)
-        return true</span>
-}
-
-// GetBalancedSpawnPoint finds a spawn point furthest from all living enemy players
-// Returns the center position if no enemies are present
-func (w *World) GetBalancedSpawnPoint(excludePlayerID string) Vector2 <span class="cov8" title="1">{
-        w.mu.RLock()
-        defer w.mu.RUnlock()
-
-        // Collect positions of all living enemy players
-        enemyPositions := make([]Vector2, 0)
-        for id, player := range w.players </span><span class="cov8" title="1">{
-                if id != excludePlayerID &amp;&amp; !player.IsDead() </span><span class="cov8" title="1">{
-                        enemyPositions = append(enemyPositions, player.GetPosition())
-                }</span>
-        }
-
-        // If no enemies, spawn at center
-        <span class="cov8" title="1">if len(enemyPositions) == 0 </span><span class="cov8" title="1">{
-                return Vector2{X: ArenaWidth / 2, Y: ArenaHeight / 2}
-        }</span>
-
-        // Try 10 random spawn candidates and pick the one furthest from enemies
-        <span class="cov8" title="1">bestSpawn := Vector2{X: ArenaWidth / 2, Y: ArenaHeight / 2}
-        bestMinDistance := 0.0
-
-        for i := 0; i &lt; 10; i++ </span><span class="cov8" title="1">{
-                // Generate random spawn point with margin from edges
-                margin := 100.0
-                candidate := Vector2{
-                        X: margin + rand.Float64()*(ArenaWidth-2*margin),
-                        Y: margin + rand.Float64()*(ArenaHeight-2*margin),
+        // Message handling loop
+        <span class="cov8" title="1">for </span><span class="cov8" title="1">{
+                // Read message from client
+                _, messageBytes, err := conn.ReadMessage()
+                if err != nil </span><span class="cov8" title="1">{
+                        if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) </span><span class="cov8" title="1">{
+                                log.Printf("WebSocket error: %v", err)
+                        }</span> else<span class="cov8" title="1"> {
+                                log.Printf("Client disconnected: %s", playerID)
+                        }</span>
+                        <span class="cov8" title="1">break</span>
                 }
 
-                // Find minimum distance to any enemy
-                minDistance := math.MaxFloat64
-                for _, enemyPos := range enemyPositions </span><span class="cov8" title="1">{
-                        dist := distance(candidate, enemyPos)
-                        if dist &lt; minDistance </span><span class="cov8" title="1">{
-                                minDistance = dist
+                // Parse JSON message
+                <span class="cov8" title="1">var msg Message
+                if err := json.Unmarshal(messageBytes, &amp;msg); err != nil </span><span class="cov8" title="1">{
+                        log.Printf("Failed to parse message: %v", err)
+                        continue</span>
+                }
+
+                <span class="cov8" title="1">log.Printf("Received from %s: type=%s, timestamp=%d", playerID, msg.Type, msg.Timestamp)
+
+                // Handle different message types
+                switch msg.Type </span>{
+                case "input:state":<span class="cov8" title="1">
+                        // Handle player input
+                        h.handleInputState(playerID, msg.Data)</span>
+
+                case "player:shoot":<span class="cov8" title="1">
+                        // Handle player shooting
+                        h.handlePlayerShoot(playerID, msg.Data)</span>
+
+                case "player:reload":<span class="cov8" title="1">
+                        // Handle player reloading
+                        h.handlePlayerReload(playerID)</span>
+
+                case "weapon:pickup_attempt":<span class="cov0" title="0">
+                        // Handle weapon pickup
+                        h.handleWeaponPickup(playerID, msg.Data)</span>
+
+                default:<span class="cov8" title="1">
+                        // Broadcast other messages to room (for backward compatibility with tests)
+                        room := h.roomManager.GetRoomByPlayerID(playerID)
+                        if room != nil </span><span class="cov8" title="1">{
+                                room.Broadcast(messageBytes, playerID)
                         }</span>
                 }
-
-                // Keep the spawn point with the largest minimum distance
-                <span class="cov8" title="1">if minDistance &gt; bestMinDistance </span><span class="cov8" title="1">{
-                        bestMinDistance = minDistance
-                        bestSpawn = candidate
-                }</span>
         }
 
-        <span class="cov8" title="1">return bestSpawn</span>
+        // Clean up on disconnect
+        <span class="cov8" title="1">h.roomManager.RemovePlayer(playerID)
+        h.gameServer.RemovePlayer(playerID)
+        close(sendChan)
+        &lt;-done // Wait for send goroutine to finish
+
+        log.Printf("Connection closed: %s", playerID)</span>
 }
 
-// distance calculates the Euclidean distance between two points
-func distance(a, b Vector2) float64 <span class="cov8" title="1">{
-        dx := a.X - b.X
-        dy := a.Y - b.Y
-        return math.Sqrt(dx*dx + dy*dy)
+// HandleWebSocket is the legacy function for backward compatibility
+// It uses a shared global handler to ensure all connections share the same room state
+func HandleWebSocket(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        getGlobalHandler().HandleWebSocket(w, r)
 }</span>
 </pre>
 		
