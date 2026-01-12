@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import { PLAYER } from '../../shared/constants';
+import type { Clock } from '../utils/Clock';
+import { RealClock } from '../utils/Clock';
 
 /**
  * Player state from server
@@ -28,14 +30,25 @@ const AIM_INDICATOR_LENGTH = 50;
  */
 export class PlayerManager {
   private scene: Phaser.Scene;
+  // Clock is injected for future use in client-side prediction (Phase 2: GameSimulation)
+  // Currently, all timing is server-authoritative
+  private _clock: Clock;
   private players: Map<string, Phaser.GameObjects.Rectangle> = new Map();
   private playerLabels: Map<string, Phaser.GameObjects.Text> = new Map();
   private aimIndicators: Map<string, Phaser.GameObjects.Line> = new Map();
   private localPlayerId: string | null = null;
   private playerStates: Map<string, PlayerState> = new Map();
 
-  constructor(scene: Phaser.Scene) {
+  constructor(scene: Phaser.Scene, clock: Clock = new RealClock()) {
     this.scene = scene;
+    this._clock = clock;
+  }
+
+  /**
+   * Get the clock instance (for testing and future use in client-side prediction)
+   */
+  getClock(): Clock {
+    return this._clock;
   }
 
   /**
