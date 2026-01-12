@@ -177,6 +177,13 @@ stick-rumble/
 │           │   ├── utils/
 │           │   └── world/
 │           └── services/
+├── events-schema/                 # Shared TypeBox schemas for WebSocket messages
+│   ├── src/
+│   │   └── schemas/               # Schema definitions
+│   │       ├── common.ts          # Shared types (Position, Velocity, Message)
+│   │       ├── client-to-server.ts # Client→Server messages
+│   │       └── server-to-client.ts # Server→Client messages (16 types)
+│   └── generated/                 # Generated JSON schemas for Go server
 ├── internal/                      # Root-level shared packages
 │   └── game/                      # Shared game logic (if needed)
 ├── stick-rumble-client/           # Frontend application
@@ -309,6 +316,99 @@ npm test -- WebSocketClient.integration.test.ts
 - Client logs: "WebSocket connected" in browser console
 - Check browser DevTools → Network → WS tab for WebSocket messages
 - Server-side: Add `log.Println()` statements in `websocket_handler.go`
+
+### Events Schema System
+
+The project uses a shared schema system (`events-schema/`) for type-safe WebSocket messages between client and server.
+
+**Package Location:** `events-schema/`
+
+**Key Files:**
+- `src/schemas/common.ts` - Shared types (Position, Velocity, Message base)
+- `src/schemas/client-to-server.ts` - Client→Server message schemas
+- `src/schemas/server-to-client.ts` - Server→Client message schemas (16 types)
+- `src/index.ts` - Public exports
+- `src/build-schemas.ts` - Generates JSON schemas for Go server
+- `src/validate-schemas.ts` - Validates generated schemas
+- `src/check-schemas-up-to-date.ts` - CI drift detection
+
+**Schema Commands:**
+```bash
+# From project root
+make schema-build         # Generate JSON schemas from TypeBox
+make schema-validate      # Check schemas are up-to-date (CI uses this)
+
+# From events-schema/
+npm run build:schemas     # Generate schemas
+npm run check:schemas     # Verify no drift
+npm test                  # Run schema unit tests
+```
+
+**Adding a New WebSocket Message Type (Schema-First Approach):**
+
+1. **Define schema in TypeBox** (`events-schema/src/schemas/`):
+   ```typescript
+   // In server-to-client.ts or client-to-server.ts
+   import { Type, type Static } from '@sinclair/typebox';
+   import { createTypedMessageSchema } from './common.js';
+
+   export const MyNewDataSchema = Type.Object({
+     fieldName: Type.String({ description: 'Field description' }),
+   });
+   export type MyNewData = Static<typeof MyNewDataSchema>;
+
+   export const MyNewMessageSchema = createTypedMessageSchema('my:new', MyNewDataSchema);
+   export type MyNewMessage = Static<typeof MyNewMessageSchema>;
+   ```
+
+2. **Export from index.ts**:
+   ```typescript
+   export { MyNewDataSchema, MyNewMessageSchema, type MyNewData, type MyNewMessage } from './schemas/server-to-client.js';
+   ```
+
+3. **Add tests** in corresponding `.test.ts` file
+
+4. **Generate JSON schemas**:
+   ```bash
+   make schema-build
+   ```
+
+5. **Update client handlers** (`stick-rumble-client/src/game/scenes/GameSceneEventHandlers.ts`):
+   ```typescript
+   import type { MyNewData } from '@stick-rumble/events-schema';
+
+   // In handler:
+   const data = message.data as MyNewData;
+   ```
+
+6. **Update server broadcast** (`stick-rumble-server/internal/network/`):
+   - Add validation call if ENABLE_SCHEMA_VALIDATION is set
+   - The server loads JSON schemas from `events-schema/generated/`
+
+**Server-Side Schema Validation:**
+- Enabled via `ENABLE_SCHEMA_VALIDATION=true` environment variable
+- Development-only (skipped in production for performance)
+- Validates outgoing messages in `broadcast_helper.go` and `message_processor.go`
+- Logs warnings on validation failures without blocking messages
+
+**Available Message Types:**
+
+Client→Server:
+- `input:state` - WASD input state
+- `player:shoot` - Shoot request
+- `player:reload` - Reload request
+- `weapon:pickup_attempt` - Weapon pickup request
+
+Server→Client (16 types):
+- `room:joined` - Player joined room
+- `player:move` - Player position updates (20Hz)
+- `projectile:spawn` / `projectile:destroy` - Projectile lifecycle
+- `weapon:state` - Ammo/reload state
+- `shoot:failed` - Shoot rejection reason
+- `player:damaged` / `hit:confirmed` - Damage events
+- `player:death` / `player:kill_credit` / `player:respawn` - Death/respawn cycle
+- `match:timer` / `match:ended` - Match state
+- `weapon:spawned` / `weapon:pickup_confirmed` / `weapon:respawned` - Weapon crates
 
 ## Technology Versions
 
