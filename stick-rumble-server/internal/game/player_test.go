@@ -387,7 +387,8 @@ func TestPlayerState_CanRespawn_NotDead(t *testing.T) {
 }
 
 func TestPlayerState_CanRespawn_TooSoon(t *testing.T) {
-	player := NewPlayerState("test-player")
+	clock := NewManualClock(time.Now())
+	player := NewPlayerStateWithClock("test-player", clock)
 	player.MarkDead()
 
 	// Immediately after death, should not be able to respawn
@@ -396,18 +397,19 @@ func TestPlayerState_CanRespawn_TooSoon(t *testing.T) {
 	}
 
 	// After 1 second (less than RespawnDelay), still cannot respawn
-	time.Sleep(1 * time.Second)
+	clock.Advance(1 * time.Second)
 	if player.CanRespawn() {
 		t.Error("Should not be able to respawn before RespawnDelay")
 	}
 }
 
 func TestPlayerState_CanRespawn_AfterDelay(t *testing.T) {
-	player := NewPlayerState("test-player")
+	clock := NewManualClock(time.Now())
+	player := NewPlayerStateWithClock("test-player", clock)
 	player.MarkDead()
 
-	// Wait for respawn delay
-	time.Sleep(time.Duration(RespawnDelay*float64(time.Second)) + 100*time.Millisecond)
+	// Advance clock past respawn delay
+	clock.Advance(time.Duration(RespawnDelay*float64(time.Second)) + 100*time.Millisecond)
 
 	// Should be able to respawn now
 	if !player.CanRespawn() {
@@ -861,7 +863,9 @@ func TestPlayerState_RegenerationStopsAtMaxHealth(t *testing.T) {
 }
 
 func TestPlayerState_DamageResetsRegenerationTimer(t *testing.T) {
-	player := NewPlayerState("test-player")
+	// Create player with ManualClock
+	clock := NewManualClock(time.Now())
+	player := NewPlayerStateWithClock("test-player", clock)
 
 	// Take damage
 	player.TakeDamage(60)
@@ -869,8 +873,8 @@ func TestPlayerState_DamageResetsRegenerationTimer(t *testing.T) {
 	// Record when damage was taken
 	firstDamageTime := player.GetLastDamageTime()
 
-	// Wait 3 seconds
-	time.Sleep(3 * time.Second)
+	// Advance clock by 3 seconds
+	clock.Advance(3 * time.Second)
 
 	// Take damage again (this should reset the timer)
 	player.TakeDamage(10)
@@ -883,7 +887,7 @@ func TestPlayerState_DamageResetsRegenerationTimer(t *testing.T) {
 	}
 
 	// Should not be able to regenerate yet (timer was reset)
-	now := time.Now()
+	now := clock.Now()
 	if player.CanRegenerate(now) {
 		t.Error("Player should not be able to regenerate immediately after taking damage")
 	}
@@ -1195,7 +1199,8 @@ func TestPlayerState_Respawn_ResetsRegenerationState(t *testing.T) {
 
 // Test that lastDamageTime is reset on respawn
 func TestPlayerState_Respawn_ResetsLastDamageTime(t *testing.T) {
-	player := NewPlayerState("test-player")
+	clock := NewManualClock(time.Now())
+	player := NewPlayerStateWithClock("test-player", clock)
 
 	// Record initial lastDamageTime
 	initialTime := player.GetLastDamageTime()
@@ -1204,8 +1209,8 @@ func TestPlayerState_Respawn_ResetsLastDamageTime(t *testing.T) {
 	player.TakeDamage(100)
 	player.MarkDead()
 
-	// Wait 1 second before respawn
-	time.Sleep(1 * time.Second)
+	// Advance clock by 1 second before respawn
+	clock.Advance(1 * time.Second)
 
 	// Respawn
 	player.Respawn(Vector2{X: 500, Y: 300})
@@ -1218,7 +1223,7 @@ func TestPlayerState_Respawn_ResetsLastDamageTime(t *testing.T) {
 		t.Error("lastDamageTime should be updated on respawn to a more recent time")
 	}
 
-	timeSinceRespawn := time.Since(respawnTime)
+	timeSinceRespawn := clock.Since(respawnTime)
 	if timeSinceRespawn < 0 || timeSinceRespawn > 2*time.Second {
 		t.Errorf("lastDamageTime should be reset to recent time on respawn, got %v ago", timeSinceRespawn)
 	}

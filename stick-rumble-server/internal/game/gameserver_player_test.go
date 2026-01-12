@@ -134,7 +134,9 @@ func TestGameServerGetWeaponState(t *testing.T) {
 }
 
 func TestGameServerRespawn_WeaponStateReset(t *testing.T) {
-	gs := NewGameServer(nil)
+	// Create ManualClock and GameServer with it
+	clock := NewManualClock(time.Now())
+	gs := NewGameServerWithClock(nil, clock)
 	playerID := "test-player-1"
 
 	// Add player and get weapon state
@@ -145,6 +147,8 @@ func TestGameServerRespawn_WeaponStateReset(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		if ws.CanShoot() {
 			ws.RecordShot()
+			// Advance clock past fire rate cooldown
+			clock.Advance(400 * time.Millisecond)
 		}
 	}
 
@@ -163,8 +167,8 @@ func TestGameServerRespawn_WeaponStateReset(t *testing.T) {
 	player, _ := gs.world.GetPlayer(playerID)
 	player.MarkDead()
 
-	// Wait for respawn delay and manually call checkRespawns
-	time.Sleep(time.Duration(RespawnDelay*1000+100) * time.Millisecond)
+	// Advance clock past respawn delay and manually call checkRespawns
+	clock.Advance(time.Duration(RespawnDelay*1000+100) * time.Millisecond)
 	gs.checkRespawns()
 
 	// Get weapon state after respawn
