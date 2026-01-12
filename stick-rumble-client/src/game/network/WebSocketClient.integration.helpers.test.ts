@@ -34,7 +34,7 @@ describe('WebSocketClient.integration.helpers', () => {
     });
 
     it('should export DEFAULT_TIMEOUT', () => {
-      expect(DEFAULT_TIMEOUT).toBe(5000);
+      expect(DEFAULT_TIMEOUT).toBe(15000); // Increased for CI reliability
     });
 
     it('should export DEFAULT_POLL_INTERVAL', () => {
