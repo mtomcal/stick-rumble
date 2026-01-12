@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ProjectileManager, type ProjectileData } from './ProjectileManager';
-import { EFFECTS } from '../../shared/constants';
+import { EFFECTS, WEAPON } from '../../shared/constants';
+import { ManualClock } from '../utils/Clock';
 
 // Mock Phaser scene
 const createMockScene = () => {
@@ -73,20 +74,47 @@ const createMockScene = () => {
 describe('ProjectileManager', () => {
   let scene: ReturnType<typeof createMockScene>;
   let projectileManager: ProjectileManager;
+  let clock: ManualClock;
 
   beforeEach(() => {
-    vi.useFakeTimers();
     scene = createMockScene();
-    projectileManager = new ProjectileManager(scene);
+    clock = new ManualClock();
+    projectileManager = new ProjectileManager(scene, clock);
   });
 
   afterEach(() => {
     projectileManager.destroy();
-    vi.useRealTimers();
   });
 
   describe('initialization', () => {
     it('should start with no projectiles', () => {
+      expect(projectileManager.getProjectileCount()).toBe(0);
+    });
+
+    it('should use injected clock for time tracking', () => {
+      const projectileData: ProjectileData = {
+        id: 'proj-1',
+        ownerId: 'player-1',
+        position: { x: 100, y: 100 },
+        velocity: { x: 100, y: 0 },
+      };
+
+      // Clock starts at 0
+      expect(clock.now()).toBe(0);
+
+      projectileManager.spawnProjectile(projectileData);
+
+      // Advance clock
+      clock.advance(500);
+
+      // Projectile should still exist (lifetime is 1000ms)
+      expect(projectileManager.getProjectileCount()).toBe(1);
+
+      // Advance past lifetime
+      clock.advance(600);
+      projectileManager.update(0.016);
+
+      // Projectile should be removed
       expect(projectileManager.getProjectileCount()).toBe(0);
     });
   });
@@ -214,8 +242,8 @@ describe('ProjectileManager', () => {
 
       projectileManager.spawnProjectile(projectileData);
 
-      // Advance time past max lifetime (1 second)
-      vi.advanceTimersByTime(1100);
+      // Advance clock past max lifetime
+      clock.advance(WEAPON.PROJECTILE_MAX_LIFETIME + 100);
       projectileManager.update(0.016);
 
       expect(projectileManager.getProjectileCount()).toBe(0);

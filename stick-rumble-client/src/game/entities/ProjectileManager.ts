@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import { ARENA, EFFECTS, WEAPON } from '../../shared/constants';
+import type { Clock } from '../utils/Clock';
+import { RealClock } from '../utils/Clock';
 
 /**
  * Projectile data received from server
@@ -30,9 +32,11 @@ interface Projectile {
 export class ProjectileManager {
   private scene: Phaser.Scene;
   private projectiles: Map<string, Projectile> = new Map();
+  private clock: Clock;
 
-  constructor(scene: Phaser.Scene) {
+  constructor(scene: Phaser.Scene, clock: Clock = new RealClock()) {
     this.scene = scene;
+    this.clock = clock;
   }
 
   /**
@@ -67,7 +71,7 @@ export class ProjectileManager {
       velocity: { ...data.velocity },
       sprite,
       tracer,
-      createdAt: Date.now(),
+      createdAt: this.clock.now(),
     };
 
     this.projectiles.set(data.id, projectile);
@@ -127,7 +131,7 @@ export class ProjectileManager {
       }
 
       // Check if expired (max lifetime)
-      const age = Date.now() - projectile.createdAt;
+      const age = this.clock.now() - projectile.createdAt;
       if (age >= WEAPON.PROJECTILE_MAX_LIFETIME) {
         toRemove.push(id);
       }

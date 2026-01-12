@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PlayerManager, type PlayerState } from './PlayerManager';
+import { ManualClock } from '../utils/Clock';
 
 // Create mock Phaser scene
 const createMockScene = () => {
@@ -72,15 +73,28 @@ const createMockScene = () => {
 describe('PlayerManager', () => {
   let playerManager: PlayerManager;
   let mockScene: ReturnType<typeof createMockScene>;
+  let clock: ManualClock;
 
   beforeEach(() => {
     mockScene = createMockScene();
-    playerManager = new PlayerManager(mockScene as unknown as Phaser.Scene);
+    clock = new ManualClock();
+    playerManager = new PlayerManager(mockScene as unknown as Phaser.Scene, clock);
   });
 
   describe('constructor', () => {
     it('should initialize without errors', () => {
       expect(playerManager).toBeDefined();
+    });
+
+    it('should use injected clock', () => {
+      const injectedClock = playerManager.getClock();
+      expect(injectedClock).toBe(clock);
+      expect(injectedClock.now()).toBe(0); // ManualClock starts at 0
+    });
+
+    it('should advance clock time when clock.advance() is called', () => {
+      clock.advance(1000);
+      expect(playerManager.getClock().now()).toBe(1000);
     });
   });
 
@@ -450,7 +464,7 @@ describe('PlayerManager', () => {
 
       // Mark as dead
       const deadState: PlayerState[] = [
-        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, deathTime: Date.now() },
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, deathTime: clock.now() },
       ];
 
       expect(() => playerManager.updatePlayers(deadState)).not.toThrow();
@@ -471,7 +485,7 @@ describe('PlayerManager', () => {
 
       // Mark as dead
       const deadState: PlayerState[] = [
-        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, deathTime: Date.now() },
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, deathTime: clock.now() },
       ];
 
       playerManager.updatePlayers(deadState);
@@ -482,7 +496,7 @@ describe('PlayerManager', () => {
 
     it('should restore visual effects when player respawns', () => {
       const deadState: PlayerState[] = [
-        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, deathTime: Date.now() },
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, deathTime: clock.now() },
       ];
 
       playerManager.updatePlayers(deadState);
@@ -507,7 +521,7 @@ describe('PlayerManager', () => {
     it('should return list of living players excluding dead ones', () => {
       const playerStates: PlayerState[] = [
         { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
-        { id: 'player-2', position: { x: 300, y: 400 }, velocity: { x: 0, y: 0 }, deathTime: Date.now() },
+        { id: 'player-2', position: { x: 300, y: 400 }, velocity: { x: 0, y: 0 }, deathTime: clock.now() },
         { id: 'player-3', position: { x: 500, y: 600 }, velocity: { x: 0, y: 0 } },
       ];
 
@@ -522,8 +536,8 @@ describe('PlayerManager', () => {
 
     it('should return empty array when no living players exist', () => {
       const playerStates: PlayerState[] = [
-        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, deathTime: Date.now() },
-        { id: 'player-2', position: { x: 300, y: 400 }, velocity: { x: 0, y: 0 }, deathTime: Date.now() },
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, deathTime: clock.now() },
+        { id: 'player-2', position: { x: 300, y: 400 }, velocity: { x: 0, y: 0 }, deathTime: clock.now() },
       ];
 
       playerManager.updatePlayers(playerStates);
@@ -545,7 +559,7 @@ describe('PlayerManager', () => {
       expect(playerManager.isLocalPlayerDead()).toBe(false);
 
       const deadState: PlayerState[] = [
-        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, deathTime: Date.now() },
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, deathTime: clock.now() },
       ];
 
       playerManager.updatePlayers(deadState);
