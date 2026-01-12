@@ -61,21 +61,48 @@ export const clients: WebSocketClient[] = [];
 /**
  * Helper function to wait for server health check
  * Polls the health endpoint until server is ready
+ *
+ * Increased timeout to 20 attempts x 500ms = 10 seconds total
+ * This accounts for CI environment startup delays
  */
 export async function waitForServer(): Promise<void> {
-  const maxAttempts = 10;
+  const maxAttempts = 20; // Increased from 10 to 20 (10 seconds total)
+  const pollInterval = 500; // ms between attempts
+  const totalTimeout = maxAttempts * pollInterval;
+
+  let lastError: Error | null = null;
+  let lastStatus: number | null = null;
+
   for (let i = 0; i < maxAttempts; i++) {
     try {
       const response = await fetch(HEALTH_URL);
+      lastStatus = response.status;
+
       if (response.ok) {
+        console.log(`[waitForServer] Server ready after ${(i + 1) * pollInterval}ms`);
         return;
       }
-    } catch {
-      // Server not ready yet
+
+      console.log(`[waitForServer] Attempt ${i + 1}/${maxAttempts}: Server responded with status ${response.status}`);
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.log(`[waitForServer] Attempt ${i + 1}/${maxAttempts}: ${lastError.message}`);
     }
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise(resolve => setTimeout(resolve, pollInterval));
   }
-  throw new Error('Server not ready after health check attempts');
+
+  // Provide detailed error message
+  const errorDetails = [];
+  if (lastError) {
+    errorDetails.push(`Last error: ${lastError.message}`);
+  }
+  if (lastStatus !== null) {
+    errorDetails.push(`Last status: ${lastStatus}`);
+  }
+  errorDetails.push(`Timeout: ${totalTimeout}ms`);
+  errorDetails.push(`Health URL: ${HEALTH_URL}`);
+
+  throw new Error(`Server not ready after ${maxAttempts} health check attempts. ${errorDetails.join(', ')}`);
 }
 
 /**
