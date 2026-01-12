@@ -23,3 +23,9 @@ dist-ssr
 *.sln
 *.sw?
 trees/
+
+# Swarm worker state
+.swarm/
+
+# Local development
+.env.local
