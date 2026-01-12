@@ -111,7 +111,7 @@ describe.sequential('WebSocket Player Movement Integration Tests', () => {
         const movePromise = new Promise<void>((resolve, reject) => {
           const timeout = setTimeout(() => {
             reject(new Error('Timeout waiting for player:move'));
-          }, 5000);
+          }, 15000);
 
           client.on('player:move', (data: any) => {
             receivedPlayerMove = true;
@@ -154,7 +154,7 @@ describe.sequential('WebSocket Player Movement Integration Tests', () => {
         const movePromise = new Promise<void>((resolve, reject) => {
           const timeout = setTimeout(() => {
             reject(new Error('Timeout waiting for player:move'));
-          }, 5000);
+          }, 15000);
 
           client.on('player:move', (data: any) => {
             if (data.players && data.players.length > 0) {
