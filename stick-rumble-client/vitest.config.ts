@@ -13,6 +13,8 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: './tests/setup.ts',
+    reporters: ['dot'],
+    silent: 'passed-only',
     exclude: [
       '**/node_modules/**',
       '**/dist/**',
@@ -20,7 +22,7 @@ export default defineConfig({
     ],
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'html', 'json-summary'],
+      reporter: ['json-summary', 'html'],
       exclude: [
         'node_modules/',
         'tests/',
