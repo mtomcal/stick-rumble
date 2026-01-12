@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -31,10 +33,11 @@ type Message struct {
 
 // WebSocketHandler manages WebSocket connections and room management
 type WebSocketHandler struct {
-	roomManager   *game.RoomManager
-	gameServer    *game.GameServer
-	timerInterval time.Duration // Interval for match timer broadcasts (default 1s)
-	validator     *SchemaValidator
+	roomManager       *game.RoomManager
+	gameServer        *game.GameServer
+	timerInterval     time.Duration // Interval for match timer broadcasts (default 1s)
+	validator         *SchemaValidator
+	outgoingValidator *SchemaValidator
 }
 
 // NewWebSocketHandler creates a new WebSocket handler with room management
@@ -44,9 +47,9 @@ func NewWebSocketHandler() *WebSocketHandler {
 
 // NewWebSocketHandlerWithConfig creates a WebSocket handler with custom timer interval
 func NewWebSocketHandlerWithConfig(timerInterval time.Duration) *WebSocketHandler {
-	// Load JSON schemas at startup
+	// Load client-to-server JSON schemas at startup
 	// Try different paths depending on where the code is running
-	schemaPaths := []string{
+	clientToServerPaths := []string{
 		"../events-schema/schemas/client-to-server",       // From cmd/server/
 		"../../events-schema/schemas/client-to-server",    // From internal/network/
 		"../../../events-schema/schemas/client-to-server", // From tests
@@ -54,7 +57,7 @@ func NewWebSocketHandlerWithConfig(timerInterval time.Duration) *WebSocketHandle
 
 	var schemaLoader *SchemaLoader
 	var err error
-	for _, path := range schemaPaths {
+	for _, path := range clientToServerPaths {
 		schemaLoader, err = NewSchemaLoader(path)
 		if err == nil {
 			break
@@ -62,13 +65,33 @@ func NewWebSocketHandlerWithConfig(timerInterval time.Duration) *WebSocketHandle
 	}
 
 	if schemaLoader == nil {
-		log.Fatalf("FATAL: Failed to load JSON schemas from any path: %v", err)
+		log.Fatalf("FATAL: Failed to load client-to-server JSON schemas from any path: %v", err)
+	}
+
+	// Load server-to-client JSON schemas for outgoing message validation
+	serverToClientPaths := []string{
+		"../events-schema/schemas/server-to-client",       // From cmd/server/
+		"../../events-schema/schemas/server-to-client",    // From internal/network/
+		"../../../events-schema/schemas/server-to-client", // From tests
+	}
+
+	var outgoingSchemaLoader *SchemaLoader
+	for _, path := range serverToClientPaths {
+		outgoingSchemaLoader, err = NewSchemaLoader(path)
+		if err == nil {
+			break
+		}
+	}
+
+	if outgoingSchemaLoader == nil {
+		log.Fatalf("FATAL: Failed to load server-to-client JSON schemas from any path: %v", err)
 	}
 
 	handler := &WebSocketHandler{
-		roomManager:   game.NewRoomManager(),
-		timerInterval: timerInterval,
-		validator:     NewSchemaValidator(schemaLoader),
+		roomManager:       game.NewRoomManager(),
+		timerInterval:     timerInterval,
+		validator:         NewSchemaValidator(schemaLoader),
+		outgoingValidator: NewSchemaValidator(outgoingSchemaLoader),
 	}
 
 	// Create game server with broadcast function
@@ -127,6 +150,32 @@ func StartGlobalHandler(ctx context.Context) {
 // StopGlobalHandler stops the global handler's game server
 func StopGlobalHandler() {
 	globalHandler.Stop()
+}
+
+// validateOutgoingMessage validates outgoing server→client messages against JSON schemas
+// Only validates when ENABLE_SCHEMA_VALIDATION environment variable is set to "true"
+// Returns nil if validation passes or is disabled, error if validation fails
+func (h *WebSocketHandler) validateOutgoingMessage(messageType string, data interface{}) error {
+	// Check if schema validation is enabled (development mode only)
+	if os.Getenv("ENABLE_SCHEMA_VALIDATION") != "true" {
+		return nil // Skip validation in production
+	}
+
+	// Map message type to schema name (message:type_subtype → message-type-subtype-data)
+	// Server-to-client schemas follow the pattern: {message-type}-data.json
+	// Replace colons and underscores with hyphens to match filename convention
+	schemaName := strings.ReplaceAll(messageType, ":", "-")
+	schemaName = strings.ReplaceAll(schemaName, "_", "-")
+	schemaName = schemaName + "-data"
+
+	// Validate the data against the schema
+	err := h.outgoingValidator.Validate(schemaName, data)
+	if err != nil {
+		log.Printf("Outgoing message validation failed for %s: %v", messageType, err)
+		return err
+	}
+
+	return nil
 }
 
 // HandleWebSocket upgrades HTTP connection to WebSocket and manages message loop
