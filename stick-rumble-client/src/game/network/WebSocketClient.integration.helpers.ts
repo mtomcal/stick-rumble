@@ -204,7 +204,8 @@ export async function connectClientsToRoom(
 }
 
 // Default timeout constants for event-driven waits
-export const DEFAULT_TIMEOUT = 5000;
+// Increased to 15000ms for CI environments which have slower startup times
+export const DEFAULT_TIMEOUT = 15000;
 export const DEFAULT_POLL_INTERVAL = 50;
 
 /**

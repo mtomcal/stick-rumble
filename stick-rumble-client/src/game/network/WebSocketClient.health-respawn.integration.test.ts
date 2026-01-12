@@ -112,7 +112,7 @@ describe.sequential('WebSocket Health and Respawn Integration Tests', () => {
 
         let playerWithInvulnerability: any = null;
         const statePromise = new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error('Timeout')), 5000);
+          const timeout = setTimeout(() => reject(new Error('Timeout')), 15000);
           client2.on('player:move', (data: any) => {
             if (data.players && data.players.length > 0) {
               // Check if any player has isInvulnerable field
@@ -173,7 +173,7 @@ describe.sequential('WebSocket Health and Respawn Integration Tests', () => {
 
         let playerWithStats: any = null;
         const statePromise = new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error('Timeout')), 5000);
+          const timeout = setTimeout(() => reject(new Error('Timeout')), 15000);
           client2.on('player:move', (data: any) => {
             if (data.players && data.players.length > 0) {
               // Check if player has stats fields
@@ -225,7 +225,7 @@ describe.sequential('WebSocket Health and Respawn Integration Tests', () => {
 
         let playerWithRegenFlag: any = null;
         const regenFlagPromise = new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error('Timeout')), 5000);
+          const timeout = setTimeout(() => reject(new Error('Timeout')), 15000);
           client2.on('player:move', (data: any) => {
             if (data.players && data.players.length > 0) {
               // Check if any player has isRegenerating field (JSON field name from server)
@@ -272,7 +272,7 @@ describe.sequential('WebSocket Health and Respawn Integration Tests', () => {
         let sawBothFields = false;
 
         const bothFieldsPromise = new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error('Timeout')), 5000);
+          const timeout = setTimeout(() => reject(new Error('Timeout')), 15000);
           client2.on('player:move', (data: any) => {
             if (data.players && data.players.length > 0) {
               // Verify player state includes both invulnerability AND regeneration fields

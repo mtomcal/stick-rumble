@@ -200,7 +200,7 @@ describe.sequential('WebSocket Player Movement Integration Tests', () => {
 
         const movePromises = Promise.all([
           new Promise<void>((resolve, reject) => {
-            const timeout = setTimeout(() => reject(new Error('Client1 timeout')), 5000);
+            const timeout = setTimeout(() => reject(new Error('Client1 timeout')), 15000);
             client1.on('player:move', () => {
               client1ReceivedMove = true;
               clearTimeout(timeout);
@@ -208,7 +208,7 @@ describe.sequential('WebSocket Player Movement Integration Tests', () => {
             });
           }),
           new Promise<void>((resolve, reject) => {
-            const timeout = setTimeout(() => reject(new Error('Client2 timeout')), 5000);
+            const timeout = setTimeout(() => reject(new Error('Client2 timeout')), 15000);
             client2.on('player:move', () => {
               client2ReceivedMove = true;
               clearTimeout(timeout);
@@ -246,7 +246,7 @@ describe.sequential('WebSocket Player Movement Integration Tests', () => {
 
         // First, wait for the initial player:move to establish baseline position
         const getInitialPosition = new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error('Timeout getting initial position')), 5000);
+          const timeout = setTimeout(() => reject(new Error('Timeout getting initial position')), 15000);
           client.on('player:move', (data: any) => {
             if (data.players && data.players.length > 0 && !initialPosition) {
               const player = data.players[0];
@@ -262,7 +262,7 @@ describe.sequential('WebSocket Player Movement Integration Tests', () => {
 
         // Now collect positions AND velocities AFTER sending input
         const collectDataAfterInput = new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error('Timeout collecting data after input')), 5000);
+          const timeout = setTimeout(() => reject(new Error('Timeout collecting data after input')), 15000);
           let count = 0;
 
           client.on('player:move', (data: any) => {
@@ -312,7 +312,7 @@ describe.sequential('WebSocket Player Movement Integration Tests', () => {
         const positions: { x: number; y: number }[] = [];
 
         const collectPositions = new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error('Timeout')), 5000);
+          const timeout = setTimeout(() => reject(new Error('Timeout')), 15000);
           let count = 0;
 
           client.on('player:move', (data: any) => {

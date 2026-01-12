@@ -62,7 +62,7 @@ describe.sequential('WebSocket Health Regeneration Integration Tests', () => {
         let playerWithRegenField: { isRegenerating: boolean; health: number } | null = null;
 
         const regenFieldPromise = new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error('Timeout waiting for isRegenerating field')), 5000);
+          const timeout = setTimeout(() => reject(new Error('Timeout waiting for isRegenerating field')), 15000);
 
           client2.on('player:move', (data: any) => {
             if (data.players && data.players.length > 0) {
@@ -101,7 +101,7 @@ describe.sequential('WebSocket Health Regeneration Integration Tests', () => {
         let fullHealthPlayer: { isRegenerating: boolean; health: number } | null = null;
 
         const fullHealthPromise = new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error('Timeout waiting for full health player')), 5000);
+          const timeout = setTimeout(() => reject(new Error('Timeout waiting for full health player')), 15000);
 
           client2.on('player:move', (data: any) => {
             if (data.players && data.players.length > 0) {
@@ -146,7 +146,7 @@ describe.sequential('WebSocket Health Regeneration Integration Tests', () => {
         let client3SawField = false;
 
         const multiClientPromise = new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error('Timeout waiting for multi-client broadcast')), 5000);
+          const timeout = setTimeout(() => reject(new Error('Timeout waiting for multi-client broadcast')), 15000);
 
           const checkComplete = () => {
             if (client2SawField && client3SawField) {
@@ -209,7 +209,7 @@ describe.sequential('WebSocket Health Regeneration Integration Tests', () => {
         const stateMessages: Array<{ isRegenerating: boolean; health: number }> = [];
 
         const serverStatePromise = new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error('Timeout waiting for server state')), 5000);
+          const timeout = setTimeout(() => reject(new Error('Timeout waiting for server state')), 15000);
 
           client2.on('player:move', (data: any) => {
             if (data.players && data.players.length > 0) {
