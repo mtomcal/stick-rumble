@@ -16,19 +16,21 @@ func (h *WebSocketHandler) handleInputState(playerID string, data any) {
 		return
 	}
 
-	// Convert data to InputState
-	dataMap, ok := data.(map[string]interface{})
-	if !ok {
-		log.Printf("Invalid input:state data format from %s", playerID)
+	// Validate data against JSON schema
+	if err := h.validator.Validate("input-state-data", data); err != nil {
+		log.Printf("Schema validation failed for input:state from %s: %v", playerID, err)
 		return
 	}
 
+	// After validation, we can safely type assert
+	dataMap := data.(map[string]interface{})
+
 	input := game.InputState{
-		Up:       getBool(dataMap, "up"),
-		Down:     getBool(dataMap, "down"),
-		Left:     getBool(dataMap, "left"),
-		Right:    getBool(dataMap, "right"),
-		AimAngle: getFloat64(dataMap, "aimAngle"),
+		Up:       dataMap["up"].(bool),
+		Down:     dataMap["down"].(bool),
+		Left:     dataMap["left"].(bool),
+		Right:    dataMap["right"].(bool),
+		AimAngle: dataMap["aimAngle"].(float64),
 	}
 
 	// Update game server with input
@@ -40,14 +42,15 @@ func (h *WebSocketHandler) handleInputState(playerID string, data any) {
 
 // handlePlayerShoot processes player shoot messages
 func (h *WebSocketHandler) handlePlayerShoot(playerID string, data any) {
-	// Convert data to get aim angle
-	dataMap, ok := data.(map[string]interface{})
-	if !ok {
-		log.Printf("Invalid player:shoot data format from %s", playerID)
+	// Validate data against JSON schema
+	if err := h.validator.Validate("player-shoot-data", data); err != nil {
+		log.Printf("Schema validation failed for player:shoot from %s: %v", playerID, err)
 		return
 	}
 
-	aimAngle := getFloat64(dataMap, "aimAngle")
+	// After validation, we can safely type assert
+	dataMap := data.(map[string]interface{})
+	aimAngle := dataMap["aimAngle"].(float64)
 
 	// Attempt to shoot
 	result := h.gameServer.PlayerShoot(playerID, aimAngle)
@@ -233,59 +236,17 @@ func (h *WebSocketHandler) onRespawn(playerID string, position game.Vector2) {
 	}
 }
 
-// getBool safely extracts a boolean value from a map
-func getBool(m map[string]interface{}, key string) bool {
-	val, ok := m[key]
-	if !ok {
-		return false
-	}
-	boolVal, ok := val.(bool)
-	if !ok {
-		return false
-	}
-	return boolVal
-}
-
-// getFloat64 safely extracts a float64 value from a map
-func getFloat64(m map[string]interface{}, key string) float64 {
-	val, ok := m[key]
-	if !ok {
-		return 0
-	}
-	floatVal, ok := val.(float64)
-	if !ok {
-		return 0
-	}
-	return floatVal
-}
-
-// getString safely extracts a string value from a map
-func getString(m map[string]interface{}, key string) string {
-	val, ok := m[key]
-	if !ok {
-		return ""
-	}
-	strVal, ok := val.(string)
-	if !ok {
-		return ""
-	}
-	return strVal
-}
-
 // handleWeaponPickup processes weapon pickup attempts from players
 func (h *WebSocketHandler) handleWeaponPickup(playerID string, data any) {
-	// Convert data to map
-	dataMap, ok := data.(map[string]interface{})
-	if !ok {
-		log.Printf("Invalid weapon:pickup_attempt data format from %s", playerID)
+	// Validate data against JSON schema
+	if err := h.validator.Validate("weapon-pickup-attempt-data", data); err != nil {
+		log.Printf("Schema validation failed for weapon:pickup_attempt from %s: %v", playerID, err)
 		return
 	}
 
-	crateID := getString(dataMap, "crateId")
-	if crateID == "" {
-		log.Printf("Missing crateId in weapon:pickup_attempt from %s", playerID)
-		return
-	}
+	// After validation, we can safely type assert
+	dataMap := data.(map[string]interface{})
+	crateID := dataMap["crateId"].(string)
 
 	// Get weapon crate
 	crate := h.gameServer.GetWeaponCrateManager().GetCrate(crateID)

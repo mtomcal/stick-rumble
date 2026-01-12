@@ -12,132 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// TestGetFloat64 tests the getFloat64 helper function
-func TestGetFloat64(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    map[string]interface{}
-		key      string
-		expected float64
-	}{
-		{
-			name:     "returns float64 value",
-			input:    map[string]interface{}{"key": 1.5},
-			key:      "key",
-			expected: 1.5,
-		},
-		{
-			name:     "returns zero for missing key",
-			input:    map[string]interface{}{"other": 1.5},
-			key:      "key",
-			expected: 0,
-		},
-		{
-			name:     "returns zero for non-float64 string value",
-			input:    map[string]interface{}{"key": "1.5"},
-			key:      "key",
-			expected: 0,
-		},
-		{
-			name:     "returns zero for non-float64 bool value",
-			input:    map[string]interface{}{"key": true},
-			key:      "key",
-			expected: 0,
-		},
-		{
-			name:     "returns zero for nil value",
-			input:    map[string]interface{}{"key": nil},
-			key:      "key",
-			expected: 0,
-		},
-		{
-			name:     "returns zero for empty map",
-			input:    map[string]interface{}{},
-			key:      "key",
-			expected: 0,
-		},
-		{
-			name:     "returns negative float64 value",
-			input:    map[string]interface{}{"key": -3.14159},
-			key:      "key",
-			expected: -3.14159,
-		},
-		{
-			name:     "returns zero float64 value",
-			input:    map[string]interface{}{"key": 0.0},
-			key:      "key",
-			expected: 0.0,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := getFloat64(tt.input, tt.key)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-// TestGetBool tests the getBool helper function
-func TestGetBool(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    map[string]interface{}
-		key      string
-		expected bool
-	}{
-		{
-			name:     "returns true for true value",
-			input:    map[string]interface{}{"key": true},
-			key:      "key",
-			expected: true,
-		},
-		{
-			name:     "returns false for false value",
-			input:    map[string]interface{}{"key": false},
-			key:      "key",
-			expected: false,
-		},
-		{
-			name:     "returns false for missing key",
-			input:    map[string]interface{}{"other": true},
-			key:      "key",
-			expected: false,
-		},
-		{
-			name:     "returns false for non-boolean string value",
-			input:    map[string]interface{}{"key": "true"},
-			key:      "key",
-			expected: false,
-		},
-		{
-			name:     "returns false for non-boolean int value",
-			input:    map[string]interface{}{"key": 1},
-			key:      "key",
-			expected: false,
-		},
-		{
-			name:     "returns false for nil value",
-			input:    map[string]interface{}{"key": nil},
-			key:      "key",
-			expected: false,
-		},
-		{
-			name:     "returns false for empty map",
-			input:    map[string]interface{}{},
-			key:      "key",
-			expected: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := getBool(tt.input, tt.key)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
 // TestHandleInputState tests the handleInputState function
 func TestHandleInputState(t *testing.T) {
 	t.Run("processes valid input state", func(t *testing.T) {
@@ -149,10 +23,11 @@ func TestHandleInputState(t *testing.T) {
 
 		// Create valid input data
 		validData := map[string]interface{}{
-			"up":    true,
-			"down":  false,
-			"left":  true,
-			"right": false,
+			"up":       true,
+			"down":     false,
+			"left":     true,
+			"right":    false,
+			"aimAngle": 1.5,
 		}
 
 		// Handle the input state
@@ -221,10 +96,11 @@ func TestHandleInputState(t *testing.T) {
 
 		// Create valid input data for non-existent player
 		validData := map[string]interface{}{
-			"up":    true,
-			"down":  false,
-			"left":  false,
-			"right": false,
+			"up":       true,
+			"down":     false,
+			"left":     false,
+			"right":    false,
+			"aimAngle": 0.0,
 		}
 
 		// Verify player doesn't exist before
