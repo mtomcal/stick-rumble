@@ -9,6 +9,7 @@
     "build": "tsc && npm run generate:schemas",
     "generate:schemas": "node --import tsx src/build-schemas.ts",
     "validate": "node --import tsx src/validate-schemas.ts",
+    "check:schemas": "node --import tsx src/check-schemas-up-to-date.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

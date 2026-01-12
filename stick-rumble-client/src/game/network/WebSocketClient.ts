@@ -1,3 +1,13 @@
+import Ajv, { type ValidateFunction } from 'ajv';
+import {
+  InputStateDataSchema,
+  PlayerShootDataSchema,
+  WeaponPickupAttemptDataSchema,
+  type InputStateData,
+  type PlayerShootData,
+  type WeaponPickupAttemptData,
+} from '@stick-rumble/events-schema';
+
 export interface Message {
   type: string;
   timestamp: number;
@@ -16,6 +26,14 @@ export interface MatchEndedData {
   finalScores: PlayerScore[];
   reason: 'kill_target' | 'time_limit';
 }
+
+// Initialize AJV validators at module load (compiled once for performance)
+const ajv = new Ajv();
+const validateInputState: ValidateFunction<InputStateData> = ajv.compile(InputStateDataSchema);
+const validatePlayerShoot: ValidateFunction<PlayerShootData> = ajv.compile(PlayerShootDataSchema);
+const validateWeaponPickupAttempt: ValidateFunction<WeaponPickupAttemptData> = ajv.compile(
+  WeaponPickupAttemptDataSchema
+);
 
 export class WebSocketClient {
   private ws: WebSocket | null = null;
@@ -182,5 +200,66 @@ export class WebSocketClient {
       total += handlers.size;
     });
     return total;
+  }
+
+  /**
+   * Send validated input state message.
+   * @param data - Input state data (WASD keys and aim angle)
+   */
+  sendInputState(data: InputStateData): void {
+    if (!validateInputState(data)) {
+      console.error('Validation failed for input:state:', validateInputState.errors);
+      return;
+    }
+
+    this.send({
+      type: 'input:state',
+      timestamp: Date.now(),
+      data,
+    });
+  }
+
+  /**
+   * Send validated player shoot message.
+   * @param data - Shoot data (aim angle)
+   */
+  sendShoot(data: PlayerShootData): void {
+    if (!validatePlayerShoot(data)) {
+      console.error('Validation failed for player:shoot:', validatePlayerShoot.errors);
+      return;
+    }
+
+    this.send({
+      type: 'player:shoot',
+      timestamp: Date.now(),
+      data,
+    });
+  }
+
+  /**
+   * Send player reload message (no data payload).
+   */
+  sendReload(): void {
+    this.send({
+      type: 'player:reload',
+      timestamp: Date.now(),
+    });
+  }
+
+  /**
+   * Send validated weapon pickup attempt message.
+   * @param data - Weapon pickup data (crate ID)
+   */
+  sendWeaponPickupAttempt(data: WeaponPickupAttemptData): void {
+    if (!validateWeaponPickupAttempt(data)) {
+      console.error('Validation failed for weapon:pickup_attempt:', validateWeaponPickupAttempt.errors);
+      return;
+    }
+
+    this.send({
+      type: 'weapon:pickup_attempt',
+      timestamp: Date.now(),
+      data,
+    });
   }
 }

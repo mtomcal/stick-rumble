@@ -9,6 +9,15 @@ import { fileURLToPath } from 'url';
 
 // Import schemas
 import { PositionSchema, VelocitySchema, MessageSchema } from './schemas/common.js';
+import {
+  InputStateDataSchema,
+  InputStateMessageSchema,
+  PlayerShootDataSchema,
+  PlayerShootMessageSchema,
+  PlayerReloadMessageSchema,
+  WeaponPickupAttemptDataSchema,
+  WeaponPickupAttemptMessageSchema,
+} from './schemas/client-to-server.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -34,6 +43,35 @@ const schemas: SchemaExport[] = [
   {
     schema: MessageSchema,
     outputPath: 'schemas/common/message.json',
+  },
+  // Client-to-server schemas
+  {
+    schema: InputStateDataSchema,
+    outputPath: 'schemas/client-to-server/input-state-data.json',
+  },
+  {
+    schema: InputStateMessageSchema,
+    outputPath: 'schemas/client-to-server/input-state-message.json',
+  },
+  {
+    schema: PlayerShootDataSchema,
+    outputPath: 'schemas/client-to-server/player-shoot-data.json',
+  },
+  {
+    schema: PlayerShootMessageSchema,
+    outputPath: 'schemas/client-to-server/player-shoot-message.json',
+  },
+  {
+    schema: PlayerReloadMessageSchema,
+    outputPath: 'schemas/client-to-server/player-reload-message.json',
+  },
+  {
+    schema: WeaponPickupAttemptDataSchema,
+    outputPath: 'schemas/client-to-server/weapon-pickup-attempt-data.json',
+  },
+  {
+    schema: WeaponPickupAttemptMessageSchema,
+    outputPath: 'schemas/client-to-server/weapon-pickup-attempt-message.json',
   },
 ];
 

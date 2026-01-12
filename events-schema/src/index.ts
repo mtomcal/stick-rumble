@@ -23,3 +23,21 @@ export {
   type Velocity,
   type Message,
 } from './schemas/common.js';
+
+// Export client-to-server schemas and types
+export {
+  InputStateDataSchema,
+  InputStateMessageSchema,
+  PlayerShootDataSchema,
+  PlayerShootMessageSchema,
+  PlayerReloadMessageSchema,
+  WeaponPickupAttemptDataSchema,
+  WeaponPickupAttemptMessageSchema,
+  type InputStateData,
+  type InputStateMessage,
+  type PlayerShootData,
+  type PlayerShootMessage,
+  type PlayerReloadMessage,
+  type WeaponPickupAttemptData,
+  type WeaponPickupAttemptMessage,
+} from './schemas/client-to-server.js';

@@ -107,5 +107,9 @@ export function runValidationCli(schemasDirOverride?: string): void {
   }
 }
 
-// Run validation when executed directly
-runValidationCli();
+// Run validation when executed directly (but not when imported by tests)
+/* c8 ignore start */
+if (import.meta.url === `file://${process.argv[1]}`) {
+  runValidationCli();
+}
+/* c8 ignore stop */
