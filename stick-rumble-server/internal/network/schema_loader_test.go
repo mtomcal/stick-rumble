@@ -240,3 +240,68 @@ func TestSchemaLoaderGetSchemaNames(t *testing.T) {
 		}
 	}
 }
+
+func TestSingletonSchemaLoaders(t *testing.T) {
+	// Reset singletons for testing
+	resetSchemaLoaderSingletons()
+
+	// Get client-to-server loader multiple times
+	loader1 := GetClientToServerSchemaLoader()
+	loader2 := GetClientToServerSchemaLoader()
+
+	if loader1 == nil || loader2 == nil {
+		t.Fatal("Expected non-nil schema loaders")
+	}
+
+	// Verify same instance is returned (singleton pattern)
+	if loader1 != loader2 {
+		t.Error("GetClientToServerSchemaLoader() returned different instances, expected singleton")
+	}
+
+	// Get server-to-client loader multiple times
+	outLoader1 := GetServerToClientSchemaLoader()
+	outLoader2 := GetServerToClientSchemaLoader()
+
+	if outLoader1 == nil || outLoader2 == nil {
+		t.Fatal("Expected non-nil outgoing schema loaders")
+	}
+
+	// Verify same instance is returned (singleton pattern)
+	if outLoader1 != outLoader2 {
+		t.Error("GetServerToClientSchemaLoader() returned different instances, expected singleton")
+	}
+
+	// Verify they are different loaders
+	if loader1 == outLoader1 {
+		t.Error("Client-to-server and server-to-client loaders should be different instances")
+	}
+}
+
+func TestConcurrentSingletonAccess(t *testing.T) {
+	// Reset singletons for testing
+	resetSchemaLoaderSingletons()
+
+	// Test concurrent access to singleton loaders
+	done := make(chan bool)
+	loaders := make([]*SchemaLoader, 20)
+
+	for i := 0; i < 20; i++ {
+		go func(index int) {
+			loaders[index] = GetClientToServerSchemaLoader()
+			done <- true
+		}(i)
+	}
+
+	// Wait for all goroutines
+	for i := 0; i < 20; i++ {
+		<-done
+	}
+
+	// Verify all goroutines got the same instance
+	firstLoader := loaders[0]
+	for i := 1; i < 20; i++ {
+		if loaders[i] != firstLoader {
+			t.Errorf("Loader at index %d is different from first loader (concurrent access failed)", i)
+		}
+	}
+}

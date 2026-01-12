@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -47,45 +48,10 @@ func NewWebSocketHandler() *WebSocketHandler {
 
 // NewWebSocketHandlerWithConfig creates a WebSocket handler with custom timer interval
 func NewWebSocketHandlerWithConfig(timerInterval time.Duration) *WebSocketHandler {
-	// Load client-to-server JSON schemas at startup
-	// Try different paths depending on where the code is running
-	clientToServerPaths := []string{
-		"../events-schema/schemas/client-to-server",       // From cmd/server/
-		"../../events-schema/schemas/client-to-server",    // From internal/network/
-		"../../../events-schema/schemas/client-to-server", // From tests
-	}
-
-	var schemaLoader *SchemaLoader
-	var err error
-	for _, path := range clientToServerPaths {
-		schemaLoader, err = NewSchemaLoader(path)
-		if err == nil {
-			break
-		}
-	}
-
-	if schemaLoader == nil {
-		log.Fatalf("FATAL: Failed to load client-to-server JSON schemas from any path: %v", err)
-	}
-
-	// Load server-to-client JSON schemas for outgoing message validation
-	serverToClientPaths := []string{
-		"../events-schema/schemas/server-to-client",       // From cmd/server/
-		"../../events-schema/schemas/server-to-client",    // From internal/network/
-		"../../../events-schema/schemas/server-to-client", // From tests
-	}
-
-	var outgoingSchemaLoader *SchemaLoader
-	for _, path := range serverToClientPaths {
-		outgoingSchemaLoader, err = NewSchemaLoader(path)
-		if err == nil {
-			break
-		}
-	}
-
-	if outgoingSchemaLoader == nil {
-		log.Fatalf("FATAL: Failed to load server-to-client JSON schemas from any path: %v", err)
-	}
+	// Use singleton schema loaders to avoid loading schemas multiple times
+	// This prevents race conditions and reduces memory usage in tests
+	schemaLoader := GetClientToServerSchemaLoader()
+	outgoingSchemaLoader := GetServerToClientSchemaLoader()
 
 	handler := &WebSocketHandler{
 		roomManager:       game.NewRoomManager(),
@@ -129,7 +95,25 @@ func (h *WebSocketHandler) matchTimerLoop(ctx context.Context) {
 }
 
 // Global handler instance for the legacy function to share room state
-var globalHandler = NewWebSocketHandler()
+// Uses lazy initialization to prevent schema loading at package init time
+var (
+	globalHandler     *WebSocketHandler
+	globalHandlerOnce sync.Once
+)
+
+// getGlobalHandler returns the singleton global handler instance
+func getGlobalHandler() *WebSocketHandler {
+	globalHandlerOnce.Do(func() {
+		globalHandler = NewWebSocketHandler()
+	})
+	return globalHandler
+}
+
+// resetGlobalHandler resets the global handler (for testing only)
+func resetGlobalHandler() {
+	globalHandler = nil
+	globalHandlerOnce = sync.Once{}
+}
 
 // Start starts the game server tick loop and match timer broadcasts
 func (h *WebSocketHandler) Start(ctx context.Context) {
@@ -144,12 +128,12 @@ func (h *WebSocketHandler) Stop() {
 
 // StartGlobalHandler starts the global handler's game server
 func StartGlobalHandler(ctx context.Context) {
-	globalHandler.Start(ctx)
+	getGlobalHandler().Start(ctx)
 }
 
 // StopGlobalHandler stops the global handler's game server
 func StopGlobalHandler() {
-	globalHandler.Stop()
+	getGlobalHandler().Stop()
 }
 
 // validateOutgoingMessage validates outgoing server→client messages against JSON schemas
@@ -287,5 +271,5 @@ func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Reques
 // HandleWebSocket is the legacy function for backward compatibility
 // It uses a shared global handler to ensure all connections share the same room state
 func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
-	globalHandler.HandleWebSocket(w, r)
+	getGlobalHandler().HandleWebSocket(w, r)
 }

@@ -23,6 +23,66 @@ type SchemaLoader struct {
 	mu      sync.RWMutex
 }
 
+// Singleton instances for schema loaders
+var (
+	clientToServerLoader     *SchemaLoader
+	clientToServerLoaderOnce sync.Once
+	serverToClientLoader     *SchemaLoader
+	serverToClientLoaderOnce sync.Once
+)
+
+// GetClientToServerSchemaLoader returns the singleton client-to-server schema loader
+func GetClientToServerSchemaLoader() *SchemaLoader {
+	clientToServerLoaderOnce.Do(func() {
+		paths := []string{
+			"../events-schema/schemas/client-to-server",       // From cmd/server/
+			"../../events-schema/schemas/client-to-server",    // From internal/network/
+			"../../../events-schema/schemas/client-to-server", // From tests
+		}
+
+		var err error
+		for _, path := range paths {
+			clientToServerLoader, err = NewSchemaLoader(path)
+			if err == nil {
+				return
+			}
+		}
+
+		log.Fatalf("FATAL: Failed to load client-to-server JSON schemas from any path: %v", err)
+	})
+	return clientToServerLoader
+}
+
+// GetServerToClientSchemaLoader returns the singleton server-to-client schema loader
+func GetServerToClientSchemaLoader() *SchemaLoader {
+	serverToClientLoaderOnce.Do(func() {
+		paths := []string{
+			"../events-schema/schemas/server-to-client",       // From cmd/server/
+			"../../events-schema/schemas/server-to-client",    // From internal/network/
+			"../../../events-schema/schemas/server-to-client", // From tests
+		}
+
+		var err error
+		for _, path := range paths {
+			serverToClientLoader, err = NewSchemaLoader(path)
+			if err == nil {
+				return
+			}
+		}
+
+		log.Fatalf("FATAL: Failed to load server-to-client JSON schemas from any path: %v", err)
+	})
+	return serverToClientLoader
+}
+
+// resetSchemaLoaderSingletons resets singleton instances (for testing only)
+func resetSchemaLoaderSingletons() {
+	clientToServerLoader = nil
+	clientToServerLoaderOnce = sync.Once{}
+	serverToClientLoader = nil
+	serverToClientLoaderOnce = sync.Once{}
+}
+
 // NewSchemaLoader creates a new schema loader and loads all schemas from the directory
 func NewSchemaLoader(schemaDir string) (*SchemaLoader, error) {
 	loader := &SchemaLoader{
