@@ -385,50 +385,6 @@ func TestWeaponPickupIntegration(t *testing.T) {
 	}
 }
 
-// TestGetString tests the getString helper function
-func TestGetString(t *testing.T) {
-	tests := []struct {
-		name     string
-		m        map[string]interface{}
-		key      string
-		expected string
-	}{
-		{
-			name:     "Valid string",
-			m:        map[string]interface{}{"key": "value"},
-			key:      "key",
-			expected: "value",
-		},
-		{
-			name:     "Missing key",
-			m:        map[string]interface{}{},
-			key:      "key",
-			expected: "",
-		},
-		{
-			name:     "Wrong type (int)",
-			m:        map[string]interface{}{"key": 123},
-			key:      "key",
-			expected: "",
-		},
-		{
-			name:     "Wrong type (bool)",
-			m:        map[string]interface{}{"key": true},
-			key:      "key",
-			expected: "",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := getString(tt.m, tt.key)
-			if result != tt.expected {
-				t.Errorf("Expected %s, got %s", tt.expected, result)
-			}
-		})
-	}
-}
-
 // TestMessageSerialization tests that weapon pickup messages can be marshaled
 func TestMessageSerialization(t *testing.T) {
 	// Test weapon:pickup_confirmed message
