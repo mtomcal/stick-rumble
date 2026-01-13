@@ -320,7 +320,7 @@ func getExpectedWeaponName(weaponType string) string {
 	case "uzi":
 		return "Uzi"
 	case "ak47":
-		return "AK-47"
+		return "AK47"
 	case "shotgun":
 		return "Shotgun"
 	default:
