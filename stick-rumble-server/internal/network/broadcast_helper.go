@@ -243,6 +243,12 @@ func (h *WebSocketHandler) sendShootFailed(playerID string, reason string) {
 
 // broadcastMatchEnded broadcasts match end event to all players in a room
 func (h *WebSocketHandler) broadcastMatchEnded(room *game.Room, world *game.World) {
+	// Check if match exists
+	if room.Match == nil {
+		log.Printf("Cannot broadcast match ended: match is nil for room %s", room.ID)
+		return
+	}
+
 	// Determine winners and get final scores
 	winners := room.Match.DetermineWinners()
 	finalScores := room.Match.GetFinalScores(world)
