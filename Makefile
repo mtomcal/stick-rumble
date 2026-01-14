@@ -1,4 +1,4 @@
-.PHONY: help install dev-client dev-server dev test test-client test-server test-server-verbose test-integration test-coverage lint build clean check-zombies kill-dev schema-generate schema-validate test-schema
+.PHONY: help install dev-client dev-server dev test test-client test-server test-server-verbose test-integration test-coverage test-visual test-visual-update lint build clean check-zombies kill-dev schema-generate schema-validate test-schema
 
 # Default target - show help
 help:
@@ -21,6 +21,8 @@ help:
 	@echo "  make test-server-verbose  Run server tests with verbose output"
 	@echo "  make test-integration Run integration tests (starts server automatically)"
 	@echo "  make test-coverage    Run tests with coverage reports"
+	@echo "  make test-visual      Run visual regression tests (requires Playwright deps)"
+	@echo "  make test-visual-update   Update visual regression baselines"
 	@echo ""
 	@echo "Code Quality:"
 	@echo "  make lint             Run linters for both client and server"
@@ -221,3 +223,15 @@ schema-validate:
 test-schema:
 	@echo "Running events-schema tests..."
 	cd events-schema && npm test
+
+# Run visual regression tests
+test-visual:
+	@echo "Running visual regression tests..."
+	@echo "Note: Requires Playwright system dependencies (run 'npx playwright install-deps chromium')"
+	cd stick-rumble-client && npm run test:visual
+
+# Update visual regression baselines
+test-visual-update:
+	@echo "Updating visual regression baselines..."
+	@echo "Note: Requires Playwright system dependencies (run 'npx playwright install-deps chromium')"
+	cd stick-rumble-client && npm run test:visual:update
