@@ -1,0 +1,36 @@
+{
+  "$id": "player_melee_attackMessage",
+  "description": "player:melee_attack WebSocket message",
+  "type": "object",
+  "required": [
+    "type",
+    "timestamp",
+    "data"
+  ],
+  "properties": {
+    "type": {
+      "description": "Message type identifier",
+      "const": "player:melee_attack",
+      "type": "string"
+    },
+    "timestamp": {
+      "description": "Unix timestamp in milliseconds",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "data": {
+      "$id": "PlayerMeleeAttackData",
+      "description": "Player melee attack action payload",
+      "type": "object",
+      "required": [
+        "aimAngle"
+      ],
+      "properties": {
+        "aimAngle": {
+          "description": "Aim angle in radians for melee swing direction",
+          "type": "number"
+        }
+      }
+    }
+  }
+}
