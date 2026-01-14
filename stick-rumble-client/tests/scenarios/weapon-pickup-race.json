@@ -1,0 +1,57 @@
+{
+  "name": "weapon-pickup-race",
+  "description": "Two players start equidistant from a weapon crate in the center. Both race to pick it up.",
+  "players": [
+    {
+      "id": "player1",
+      "startPosition": { "x": 760, "y": 540 }
+    },
+    {
+      "id": "player2",
+      "startPosition": { "x": 1160, "y": 540 }
+    }
+  ],
+  "inputs": [
+    {
+      "tick": 0,
+      "playerId": "player1",
+      "input": {
+        "up": false,
+        "down": false,
+        "left": false,
+        "right": true
+      }
+    },
+    {
+      "tick": 0,
+      "playerId": "player2",
+      "input": {
+        "up": false,
+        "down": false,
+        "left": true,
+        "right": false
+      }
+    },
+    {
+      "tick": 60,
+      "playerId": "player1",
+      "input": {
+        "up": false,
+        "down": false,
+        "left": false,
+        "right": false
+      }
+    },
+    {
+      "tick": 60,
+      "playerId": "player2",
+      "input": {
+        "up": false,
+        "down": false,
+        "left": false,
+        "right": false
+      }
+    }
+  ],
+  "duration": 120
+}

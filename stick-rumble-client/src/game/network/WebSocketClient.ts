@@ -45,15 +45,60 @@ export class WebSocketClient {
   private shouldReconnect = true;
   private debugMode = false;
   private clientId: string;
+  private inputRecordingEnabled = false;
+  private frameNumber = 0;
+  private inputLogCallback?: (tick: number, input: InputStateData) => void;
 
   constructor(url: string, debugMode = false) {
     this.url = url;
     this.debugMode = debugMode;
     this.clientId = `client-${Math.random().toString(36).substring(7)}`;
+
+    // Enable input recording if environment variable is set
+    if (import.meta.env.VITE_LOG_INPUT_RECORDING === 'true') {
+      this.inputRecordingEnabled = true;
+      console.log('[InputRecording] Enabled via VITE_LOG_INPUT_RECORDING');
+    }
   }
 
   setDebugMode(enabled: boolean): void {
     this.debugMode = enabled;
+  }
+
+  /**
+   * Enable or disable input recording
+   * @param enabled Whether to enable input recording
+   */
+  setInputRecording(enabled: boolean): void {
+    this.inputRecordingEnabled = enabled;
+    if (enabled) {
+      console.log('[InputRecording] Enabled');
+    } else {
+      console.log('[InputRecording] Disabled');
+    }
+  }
+
+  /**
+   * Set callback for input recording
+   * This callback is called every time an input state is sent
+   * @param callback Function to call with tick number and input data
+   */
+  onInputRecorded(callback: (tick: number, input: InputStateData) => void): void {
+    this.inputLogCallback = callback;
+  }
+
+  /**
+   * Get current frame number (useful for recording)
+   */
+  getFrameNumber(): number {
+    return this.frameNumber;
+  }
+
+  /**
+   * Reset frame number (useful for new recording sessions)
+   */
+  resetFrameNumber(): void {
+    this.frameNumber = 0;
   }
 
   private debug(message: string, ...args: unknown[]): void {
@@ -210,6 +255,17 @@ export class WebSocketClient {
     if (!validateInputState(data)) {
       console.error('Validation failed for input:state:', validateInputState.errors);
       return;
+    }
+
+    // Log input if recording is enabled
+    if (this.inputRecordingEnabled) {
+      if (this.debugMode) {
+        console.log(`[InputRecording] Frame ${this.frameNumber}:`, data);
+      }
+      if (this.inputLogCallback) {
+        this.inputLogCallback(this.frameNumber, data);
+      }
+      this.frameNumber++;
     }
 
     this.send({

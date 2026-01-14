@@ -5,5 +5,7 @@
  */
 
 export { GameSimulation } from './GameSimulation';
+export { InputRecorder } from './InputRecorder';
+export { ScenarioRunner } from './ScenarioRunner';
 export * from './types';
 export * from './physics';

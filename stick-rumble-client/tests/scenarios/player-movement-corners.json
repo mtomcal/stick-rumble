@@ -1,0 +1,63 @@
+{
+  "name": "player-movement-corners",
+  "description": "Single player moves to all four corners of the arena to test movement and boundary constraints.",
+  "players": [
+    {
+      "id": "player1",
+      "startPosition": { "x": 960, "y": 540 }
+    }
+  ],
+  "inputs": [
+    {
+      "tick": 0,
+      "playerId": "player1",
+      "input": {
+        "up": true,
+        "down": false,
+        "left": true,
+        "right": false
+      }
+    },
+    {
+      "tick": 120,
+      "playerId": "player1",
+      "input": {
+        "up": true,
+        "down": false,
+        "left": false,
+        "right": true
+      }
+    },
+    {
+      "tick": 240,
+      "playerId": "player1",
+      "input": {
+        "up": false,
+        "down": true,
+        "left": false,
+        "right": true
+      }
+    },
+    {
+      "tick": 360,
+      "playerId": "player1",
+      "input": {
+        "up": false,
+        "down": true,
+        "left": true,
+        "right": false
+      }
+    },
+    {
+      "tick": 480,
+      "playerId": "player1",
+      "input": {
+        "up": false,
+        "down": false,
+        "left": false,
+        "right": false
+      }
+    }
+  ],
+  "duration": 600
+}
