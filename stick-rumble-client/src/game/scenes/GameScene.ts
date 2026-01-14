@@ -11,6 +11,7 @@ import { PickupPromptUI } from '../ui/PickupPromptUI';
 import { GameSceneUI } from './GameSceneUI';
 import { GameSceneSpectator } from './GameSceneSpectator';
 import { GameSceneEventHandlers } from './GameSceneEventHandlers';
+import { ScreenShake } from '../effects/ScreenShake';
 import { ARENA } from '../../shared/constants';
 
 export class GameScene extends Phaser.Scene {
@@ -26,6 +27,7 @@ export class GameScene extends Phaser.Scene {
   private ui!: GameSceneUI;
   private spectator!: GameSceneSpectator;
   private eventHandlers!: GameSceneEventHandlers;
+  private screenShake!: ScreenShake;
   private lastDeltaTime: number = 0;
   private isCameraFollowing: boolean = false;
   private nearbyWeaponCrate: { id: string; weaponType: string } | null = null;
@@ -90,6 +92,9 @@ export class GameScene extends Phaser.Scene {
     // Initialize spectator module
     this.spectator = new GameSceneSpectator(this, this.playerManager, () => this.stopCameraFollow());
 
+    // Initialize screen shake for recoil feedback (Story 3.3 Polish)
+    this.screenShake = new ScreenShake(this.cameras.main);
+
     // Connect to WebSocket server
     const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws';
     this.wsClient = new WebSocketClient(wsUrl);
@@ -107,6 +112,9 @@ export class GameScene extends Phaser.Scene {
       this.weaponCrateManager,
       this.pickupPromptUI
     );
+
+    // Inject screen shake into event handlers for recoil feedback (Story 3.3 Polish)
+    this.eventHandlers.setScreenShake(this.screenShake);
 
     // Setup message handlers before connecting
     this.eventHandlers.setupEventHandlers();
