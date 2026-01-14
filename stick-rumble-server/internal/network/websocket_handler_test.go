@@ -1,6 +1,7 @@
 package network
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -22,15 +23,21 @@ import (
 type testServer struct {
 	*httptest.Server
 	handler *WebSocketHandler
+	ctx     context.Context
+	cancel  context.CancelFunc
 }
 
 // newTestServer creates a test server with the default WebSocket handler
 func newTestServer() *testServer {
 	handler := NewWebSocketHandler()
 	server := httptest.NewServer(http.HandlerFunc(handler.HandleWebSocket))
+	ctx, cancel := context.WithCancel(context.Background())
+	handler.Start(ctx)
 	return &testServer{
 		Server:  server,
 		handler: handler,
+		ctx:     ctx,
+		cancel:  cancel,
 	}
 }
 
@@ -38,10 +45,21 @@ func newTestServer() *testServer {
 func newTestServerWithConfig(timerInterval time.Duration) *testServer {
 	handler := NewWebSocketHandlerWithConfig(timerInterval)
 	server := httptest.NewServer(http.HandlerFunc(handler.HandleWebSocket))
+	ctx, cancel := context.WithCancel(context.Background())
+	handler.Start(ctx)
 	return &testServer{
 		Server:  server,
 		handler: handler,
+		ctx:     ctx,
+		cancel:  cancel,
 	}
+}
+
+// Close closes the test server and stops the game server
+func (ts *testServer) Close() {
+	ts.cancel()
+	ts.handler.Stop()
+	ts.Server.Close()
 }
 
 // wsURL returns the WebSocket URL for the test server
@@ -67,6 +85,10 @@ func (ts *testServer) connectTwoClients(t *testing.T) (*websocket.Conn, *websock
 func readMessage(t *testing.T, conn *websocket.Conn, timeout time.Duration) (*Message, error) {
 	conn.SetReadDeadline(time.Now().Add(timeout))
 	_, msgBytes, err := conn.ReadMessage()
+	// Clear the deadline after reading (success or failure)
+	// This prevents gorilla/websocket from marking the connection as permanently failed
+	conn.SetReadDeadline(time.Time{})
+
 	if err != nil {
 		return nil, err
 	}

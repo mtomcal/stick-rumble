@@ -34,14 +34,14 @@ func TestBroadcastPlayerMove(t *testing.T) {
 	data, ok := msg.Data.(map[string]interface{})
 	require.True(t, ok)
 
-	updates, ok := data["updates"].([]interface{})
+	players, ok := data["players"].([]interface{})
 	require.True(t, ok)
-	assert.NotEmpty(t, updates, "Should have player updates")
+	assert.NotEmpty(t, players, "Should have player updates")
 
 	// Verify update structure
-	for _, update := range updates {
-		updateMap := update.(map[string]interface{})
-		playerID := updateMap["playerId"].(string)
+	for _, player := range players {
+		updateMap := player.(map[string]interface{})
+		playerID := updateMap["id"].(string)
 		assert.NotEmpty(t, playerID)
 		assert.Contains(t, []string{player1ID, player2ID}, playerID)
 
