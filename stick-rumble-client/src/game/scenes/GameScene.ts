@@ -183,6 +183,9 @@ export class GameScene extends Phaser.Scene {
           // Create reload UI elements
           this.ui.createReloadProgressBar(10, 70, 200, 10);
           this.ui.createReloadCircleIndicator();
+
+          // Create crosshair system
+          this.ui.createCrosshair();
         })
         .catch(err => {
           console.error('Failed to connect:', err);
@@ -225,9 +228,37 @@ export class GameScene extends Phaser.Scene {
       this.ui.updateReloadCircle(progress);
     }
 
+    // Update crosshair
+    if (this.playerManager && this.eventHandlers) {
+      const isMoving = this.playerManager.isLocalPlayerMoving();
+      const weaponType = this.eventHandlers.getCurrentWeaponType();
+
+      // Map weapon type to spread degrees (matching server values)
+      const WEAPON_SPREAD: Record<string, number> = {
+        'uzi': 5.0,
+        'ak47': 3.0,
+        'shotgun': 15.0,
+        'pistol': 2.0,
+        'bat': 0,
+        'katana': 0,
+      };
+
+      const spreadDegrees = WEAPON_SPREAD[weaponType.toLowerCase()] || 0;
+      this.ui.updateCrosshair(isMoving, spreadDegrees, weaponType);
+    }
+
     // Update spectator mode
     if (this.spectator && this.spectator.isActive()) {
       this.spectator.updateSpectatorMode();
+      // Hide crosshair when spectating
+      if (this.ui) {
+        this.ui.setCrosshairSpectating(true);
+      }
+    } else {
+      // Show crosshair when not spectating
+      if (this.ui) {
+        this.ui.setCrosshairSpectating(false);
+      }
     }
   }
 

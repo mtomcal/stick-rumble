@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { ShootingManager } from '../input/ShootingManager';
 import type { PlayerManager } from '../entities/PlayerManager';
+import { Crosshair } from '../entities/Crosshair';
 
 /**
  * GameSceneUI - Manages all UI elements for the game scene
@@ -15,6 +16,7 @@ export class GameSceneUI {
   private reloadProgressBarBg: Phaser.GameObjects.Graphics | null = null;
   private reloadIndicatorText: Phaser.GameObjects.Text | null = null;
   private reloadCircle: Phaser.GameObjects.Graphics | null = null;
+  private crosshair: Crosshair | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -157,6 +159,41 @@ export class GameSceneUI {
     this.reloadCircle.beginPath();
     this.reloadCircle.arc(centerX, centerY, radius, startAngle, endAngle, false);
     this.reloadCircle.strokePath();
+  }
+
+  /**
+   * Create crosshair system
+   */
+  createCrosshair(): void {
+    this.crosshair = new Crosshair(this.scene);
+  }
+
+  /**
+   * Update crosshair position and spread
+   * @param isMoving - Whether the player is currently moving
+   * @param spreadDegrees - Current weapon spread in degrees
+   * @param weaponType - Current weapon type (optional)
+   */
+  updateCrosshair(isMoving: boolean, spreadDegrees: number, weaponType?: string): void {
+    if (!this.crosshair) {
+      return;
+    }
+
+    if (weaponType) {
+      this.crosshair.setWeaponType(weaponType);
+    }
+
+    this.crosshair.update(isMoving, spreadDegrees);
+  }
+
+  /**
+   * Set crosshair spectating mode
+   * Safe to call even if crosshair not created yet
+   */
+  setCrosshairSpectating(isSpectating: boolean): void {
+    if (this.crosshair) {
+      this.crosshair.setSpectating(isSpectating);
+    }
   }
 
   /**
@@ -369,6 +406,9 @@ export class GameSceneUI {
     }
     if (this.reloadCircle) {
       this.reloadCircle.destroy();
+    }
+    if (this.crosshair) {
+      this.crosshair.destroy();
     }
   }
 }
