@@ -42,6 +42,8 @@ export class ShootingManager {
   private aimAngle: number = 0;
   private isEnabled: boolean = true;
   private weaponType: WeaponType = 'Pistol';
+  private reloadStartTime: number = 0;
+  private reloadDuration: number = 2000; // Default 2 seconds
 
   constructor(_scene: Phaser.Scene, wsClient: WebSocketClient, clock: Clock = new RealClock()) {
     this.wsClient = wsClient;
@@ -147,7 +149,25 @@ export class ShootingManager {
    * Update weapon state from server
    */
   updateWeaponState(state: WeaponState): void {
+    // Track reload start when isReloading transitions from false to true
+    if (state.isReloading && !this.weaponState.isReloading) {
+      this.reloadStartTime = this.clock.now();
+    }
+
     this.weaponState = { ...state };
+  }
+
+  /**
+   * Get reload progress (0 to 1)
+   */
+  getReloadProgress(): number {
+    if (!this.weaponState.isReloading || this.reloadStartTime === 0) {
+      return 0;
+    }
+
+    const elapsed = this.clock.now() - this.reloadStartTime;
+    const progress = Math.min(elapsed / this.reloadDuration, 1.0);
+    return progress;
   }
 
   /**
