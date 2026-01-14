@@ -1,0 +1,29 @@
+{
+  "$id": "MeleeHitData",
+  "description": "Melee hit event payload",
+  "type": "object",
+  "required": [
+    "attackerId",
+    "victims",
+    "knockbackApplied"
+  ],
+  "properties": {
+    "attackerId": {
+      "description": "Player who performed the melee attack",
+      "minLength": 1,
+      "type": "string"
+    },
+    "victims": {
+      "description": "Array of player IDs hit by the attack",
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      }
+    },
+    "knockbackApplied": {
+      "description": "Whether knockback was applied (Bat only)",
+      "type": "boolean"
+    }
+  }
+}

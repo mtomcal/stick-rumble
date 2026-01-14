@@ -23,11 +23,14 @@ test.describe('Health Bar Visual Regression', () => {
       (window as any).setHealthBarState(100, 100, false);
     });
 
-    // Wait for rendering
-    await page.waitForTimeout(100);
+    // Wait for Phaser to complete a render cycle
+    await page.waitForFunction(() => {
+      const game = (window as any).game;
+      return game && game.loop && game.loop.frame > 0;
+    });
 
     // Take screenshot of the canvas area where health bar is rendered
-    await expect(page.locator('canvas')).toHaveScreenshot('health-bar-100.png', {
+    await expect(page).toHaveScreenshot('health-bar-100.png', {
       clip: { x: 0, y: 0, width: 250, height: 70 }
     });
   });
@@ -38,9 +41,13 @@ test.describe('Health Bar Visual Regression', () => {
       (window as any).setHealthBarState(50, 100, false);
     });
 
-    await page.waitForTimeout(100);
+    // Wait for Phaser to complete a render cycle
+    await page.waitForFunction(() => {
+      const game = (window as any).game;
+      return game && game.loop && game.loop.frame > 0;
+    });
 
-    await expect(page.locator('canvas')).toHaveScreenshot('health-bar-50.png', {
+    await expect(page).toHaveScreenshot('health-bar-50.png', {
       clip: { x: 0, y: 0, width: 250, height: 70 }
     });
   });
@@ -51,9 +58,13 @@ test.describe('Health Bar Visual Regression', () => {
       (window as any).setHealthBarState(10, 100, false);
     });
 
-    await page.waitForTimeout(100);
+    // Wait for Phaser to complete a render cycle
+    await page.waitForFunction(() => {
+      const game = (window as any).game;
+      return game && game.loop && game.loop.frame > 0;
+    });
 
-    await expect(page.locator('canvas')).toHaveScreenshot('health-bar-10.png', {
+    await expect(page).toHaveScreenshot('health-bar-10.png', {
       clip: { x: 0, y: 0, width: 250, height: 70 }
     });
   });
@@ -64,22 +75,30 @@ test.describe('Health Bar Visual Regression', () => {
       (window as any).setHealthBarState(0, 100, false);
     });
 
-    await page.waitForTimeout(100);
+    // Wait for Phaser to complete a render cycle
+    await page.waitForFunction(() => {
+      const game = (window as any).game;
+      return game && game.loop && game.loop.frame > 0;
+    });
 
-    await expect(page.locator('canvas')).toHaveScreenshot('health-bar-0.png', {
+    await expect(page).toHaveScreenshot('health-bar-0.png', {
       clip: { x: 0, y: 0, width: 250, height: 70 }
     });
   });
 
-  test('should render health bar with regeneration effect disabled', async ({ page }) => {
-    // Set health with regeneration (but capture static state without animation)
+  test('should render health bar with regeneration effect', async ({ page }) => {
+    // Set health with regeneration enabled
     await page.evaluate(() => {
       (window as any).setHealthBarState(75, 100, true);
     });
 
-    await page.waitForTimeout(100);
+    // Wait for Phaser to complete a render cycle
+    await page.waitForFunction(() => {
+      const game = (window as any).game;
+      return game && game.loop && game.loop.frame > 0;
+    });
 
-    await expect(page.locator('canvas')).toHaveScreenshot('health-bar-regenerating.png', {
+    await expect(page).toHaveScreenshot('health-bar-regenerating.png', {
       clip: { x: 0, y: 0, width: 250, height: 70 }
     });
   });
