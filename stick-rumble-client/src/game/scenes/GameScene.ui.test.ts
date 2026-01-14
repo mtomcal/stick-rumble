@@ -213,8 +213,8 @@ describe('GameScene - UI', () => {
         mockWebSocketInstance.onmessage(weaponStateMessage as MessageEvent);
       }
 
-      // Verify ammo text shows reloading indicator
-      expect(mockAmmoText.setText).toHaveBeenCalledWith('5/15 [RELOADING]');
+      // Verify ammo text no longer shows [RELOADING] text (uses progress bars instead)
+      expect(mockAmmoText.setText).toHaveBeenCalledWith('5/15');
     });
   });
 

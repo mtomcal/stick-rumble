@@ -619,3 +619,40 @@ func TestCalculateDamageFalloff_ShotgunRange(t *testing.T) {
 		t.Errorf("expected damage 0 at max range, got %f", damage)
 	}
 }
+
+// Cancel reload tests
+
+func TestWeaponState_CancelReload(t *testing.T) {
+	pistol := NewPistol()
+	state := NewWeaponState(pistol)
+	state.CurrentAmmo = 5 // Partially empty
+	state.StartReload()
+
+	if !state.IsReloading {
+		t.Fatal("should be reloading before cancel")
+	}
+
+	// Cancel reload
+	state.CancelReload()
+
+	if state.IsReloading {
+		t.Error("should not be reloading after cancel")
+	}
+
+	// Ammo should remain at pre-reload value
+	if state.CurrentAmmo != 5 {
+		t.Errorf("ammo should remain at 5 after cancel, got %d", state.CurrentAmmo)
+	}
+}
+
+func TestWeaponState_CancelReload_WhenNotReloading(t *testing.T) {
+	pistol := NewPistol()
+	state := NewWeaponState(pistol)
+
+	// Cancel reload when not reloading should be a no-op
+	state.CancelReload()
+
+	if state.IsReloading {
+		t.Error("should not be reloading")
+	}
+}

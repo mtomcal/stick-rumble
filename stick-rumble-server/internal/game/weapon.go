@@ -166,6 +166,17 @@ func (ws *WeaponState) CheckReloadComplete() bool {
 	return false
 }
 
+// CancelReload cancels an in-progress reload
+// Used when switching weapons or picking up a new weapon
+func (ws *WeaponState) CancelReload() {
+	if !ws.IsReloading {
+		return
+	}
+
+	ws.IsReloading = false
+	// Ammo remains at current value (reload progress is lost)
+}
+
 // IsEmpty returns true if the magazine is empty
 func (ws *WeaponState) IsEmpty() bool {
 	return ws.CurrentAmmo <= 0

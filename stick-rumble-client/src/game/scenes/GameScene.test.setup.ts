@@ -63,6 +63,20 @@ export const createMockScene = () => {
     setDepth: vi.fn().mockReturnThis(),
   };
 
+  const mockGraphics = {
+    fillStyle: vi.fn().mockReturnThis(),
+    fillRect: vi.fn().mockReturnThis(),
+    lineStyle: vi.fn().mockReturnThis(),
+    beginPath: vi.fn().mockReturnThis(),
+    arc: vi.fn().mockReturnThis(),
+    strokePath: vi.fn().mockReturnThis(),
+    clear: vi.fn().mockReturnThis(),
+    setScrollFactor: vi.fn().mockReturnThis(),
+    setDepth: vi.fn().mockReturnThis(),
+    setVisible: vi.fn().mockReturnThis(),
+    destroy: vi.fn(),
+  };
+
   const mockContext = {
     add: {
       text: vi.fn().mockReturnValue(mockText),
@@ -70,6 +84,7 @@ export const createMockScene = () => {
       line: vi.fn().mockReturnValue(mockLine),
       circle: vi.fn().mockReturnValue({ destroy: vi.fn() }),
       container: vi.fn().mockReturnValue(mockContainer),
+      graphics: vi.fn().mockReturnValue(mockGraphics),
     },
     cameras: {
       main: mockCamera,
