@@ -12,6 +12,7 @@ vi.mock('phaser', () => ({
           A: 65,
           S: 83,
           D: 68,
+          SHIFT: 16,
         },
       },
     },
@@ -25,6 +26,7 @@ const createMockScene = () => {
     A: { isDown: false },
     S: { isDown: false },
     D: { isDown: false },
+    SHIFT: { isDown: false },
   };
 
   const mockActivePointer = {
@@ -96,6 +98,7 @@ describe('InputManager', () => {
         left: false,
         right: false,
         aimAngle: 0,
+        isSprinting: false,
       });
     });
   });
@@ -109,6 +112,7 @@ describe('InputManager', () => {
         A: expect.any(Number),
         S: expect.any(Number),
         D: expect.any(Number),
+        SHIFT: expect.any(Number),
       });
     });
 
@@ -179,6 +183,7 @@ describe('InputManager', () => {
           left: false,
           right: false,
           aimAngle: expect.any(Number),
+          isSprinting: false,
         },
       });
     });
@@ -197,6 +202,7 @@ describe('InputManager', () => {
           left: true,
           right: false,
           aimAngle: expect.any(Number),
+          isSprinting: false,
         },
       });
     });
@@ -215,6 +221,7 @@ describe('InputManager', () => {
           left: false,
           right: false,
           aimAngle: expect.any(Number),
+          isSprinting: false,
         },
       });
     });
@@ -233,6 +240,7 @@ describe('InputManager', () => {
           left: false,
           right: true,
           aimAngle: expect.any(Number),
+          isSprinting: false,
         },
       });
     });
@@ -252,6 +260,7 @@ describe('InputManager', () => {
           left: false,
           right: true,
           aimAngle: expect.any(Number),
+          isSprinting: false,
         },
       });
     });
@@ -287,6 +296,7 @@ describe('InputManager', () => {
           left: false,
           right: false,
           aimAngle: expect.any(Number),
+          isSprinting: false,
         },
       });
     });
@@ -331,6 +341,7 @@ describe('InputManager', () => {
         left: true,
         right: false,
         aimAngle: expect.any(Number),
+        isSprinting: false,
       });
     });
 
@@ -398,6 +409,7 @@ describe('InputManager', () => {
           left: false,
           right: false,
           aimAngle: expect.any(Number),
+          isSprinting: false,
         },
       });
     });
@@ -519,6 +531,7 @@ describe('InputManager', () => {
           left: false,
           right: false,
           aimAngle: expect.any(Number),
+          isSprinting: false,
         },
       });
 

@@ -90,6 +90,7 @@ describe('Server-to-Client Schemas', () => {
             maxHealth: 100,
             rotation: 1.57,
             isDead: false,
+            isSprinting: true,
           },
           {
             id: 'player-2',
@@ -99,6 +100,7 @@ describe('Server-to-Client Schemas', () => {
             maxHealth: 100,
             rotation: 0,
             isDead: false,
+            isSprinting: false,
           },
         ],
       };
@@ -116,6 +118,7 @@ describe('Server-to-Client Schemas', () => {
             maxHealth: 100,
             rotation: 1.57,
             isDead: false,
+            isSprinting: false,
           },
         ],
       };

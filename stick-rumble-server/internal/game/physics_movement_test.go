@@ -335,3 +335,121 @@ func TestUpdatePlayer_NeverProducesNaN(t *testing.T) {
 		})
 	}
 }
+
+// Sprint mechanic tests
+
+func TestUpdatePlayerSprintSpeed(t *testing.T) {
+	physics := NewPhysics()
+	player := NewPlayerState("test-player")
+
+	// Set input: moving right while sprinting
+	player.SetInput(InputState{Right: true, IsSprinting: true})
+
+	// Simulate movement over several seconds to reach target velocity
+	// At 50 px/s² acceleration, reaching 300 px/s takes 6 seconds
+	// 60 Hz * 7 seconds = 420 frames to be safe
+	for i := 0; i < 420; i++ {
+		physics.UpdatePlayer(player, 1.0/60.0)
+	}
+
+	vel := player.GetVelocity()
+
+	// Velocity should approach sprint speed (300 px/s), not normal speed (200 px/s)
+	tolerance := 1.0
+	if math.Abs(vel.X-SprintSpeed) > tolerance {
+		t.Errorf("Sprint velocity should be ~%v, got %v", SprintSpeed, vel.X)
+	}
+
+	// Should not exceed sprint speed
+	if vel.X > SprintSpeed+tolerance {
+		t.Errorf("Velocity exceeded sprint speed: %v > %v", vel.X, SprintSpeed)
+	}
+}
+
+func TestUpdatePlayerNormalSpeed(t *testing.T) {
+	physics := NewPhysics()
+	player := NewPlayerState("test-player")
+
+	// Set input: moving right WITHOUT sprinting
+	player.SetInput(InputState{Right: true, IsSprinting: false})
+
+	// Simulate movement over several seconds to reach target velocity
+	// At 50 px/s² acceleration, reaching 200 px/s takes 4 seconds
+	// 60 Hz * 5 seconds = 300 frames to be safe
+	for i := 0; i < 300; i++ {
+		physics.UpdatePlayer(player, 1.0/60.0)
+	}
+
+	vel := player.GetVelocity()
+
+	// Velocity should approach normal speed (200 px/s), not sprint speed (300 px/s)
+	tolerance := 1.0
+	if math.Abs(vel.X-MovementSpeed) > tolerance {
+		t.Errorf("Normal velocity should be ~%v, got %v", MovementSpeed, vel.X)
+	}
+
+	// Should not exceed normal speed
+	if vel.X > MovementSpeed+tolerance {
+		t.Errorf("Velocity exceeded normal speed: %v > %v", vel.X, MovementSpeed)
+	}
+}
+
+func TestSprintSpeedTransition(t *testing.T) {
+	physics := NewPhysics()
+	player := NewPlayerState("test-player")
+
+	// Start sprinting
+	player.SetInput(InputState{Right: true, IsSprinting: true})
+
+	// Build up to sprint speed
+	for i := 0; i < 420; i++ {
+		physics.UpdatePlayer(player, 1.0/60.0)
+	}
+
+	velSprint := player.GetVelocity()
+
+	// Stop sprinting (but keep moving)
+	player.SetInput(InputState{Right: true, IsSprinting: false})
+
+	// Allow velocity to adjust to normal speed (decelerate from 300 to 200 takes ~2 seconds)
+	for i := 0; i < 150; i++ {
+		physics.UpdatePlayer(player, 1.0/60.0)
+	}
+
+	velNormal := player.GetVelocity()
+
+	// Sprint velocity should be faster than normal velocity
+	if velSprint.X <= velNormal.X {
+		t.Errorf("Sprint velocity (%v) should be faster than normal velocity (%v)", velSprint.X, velNormal.X)
+	}
+
+	// Normal velocity should be close to MovementSpeed
+	tolerance := 1.0
+	if math.Abs(velNormal.X-MovementSpeed) > tolerance {
+		t.Errorf("After stopping sprint, velocity should return to ~%v, got %v", MovementSpeed, velNormal.X)
+	}
+}
+
+func TestSprintWithDiagonalMovement(t *testing.T) {
+	physics := NewPhysics()
+	player := NewPlayerState("test-player")
+
+	// Sprint diagonally (up-right)
+	player.SetInput(InputState{Up: true, Right: true, IsSprinting: true})
+
+	// Simulate movement (7 seconds to reach full sprint speed)
+	for i := 0; i < 420; i++ {
+		physics.UpdatePlayer(player, 1.0/60.0)
+	}
+
+	vel := player.GetVelocity()
+
+	// Calculate velocity magnitude
+	velMagnitude := math.Sqrt(vel.X*vel.X + vel.Y*vel.Y)
+
+	// Magnitude should be close to sprint speed (normalized diagonal movement)
+	tolerance := 1.0
+	if math.Abs(velMagnitude-SprintSpeed) > tolerance {
+		t.Errorf("Diagonal sprint velocity magnitude should be ~%v, got %v", SprintSpeed, velMagnitude)
+	}
+}

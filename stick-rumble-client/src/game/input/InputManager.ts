@@ -10,6 +10,7 @@ export interface InputState {
   left: boolean;  // A key
   right: boolean; // D key
   aimAngle: number; // Aim angle in radians
+  isSprinting: boolean; // Shift key for sprint
 }
 
 // Minimum angle change threshold to send update (about 5 degrees)
@@ -26,6 +27,7 @@ export class InputManager {
     A: Phaser.Input.Keyboard.Key;
     S: Phaser.Input.Keyboard.Key;
     D: Phaser.Input.Keyboard.Key;
+    SHIFT: Phaser.Input.Keyboard.Key;
   };
   private currentState: InputState;
   private lastSentState: InputState;
@@ -38,8 +40,8 @@ export class InputManager {
   constructor(scene: Phaser.Scene, wsClient: WebSocketClient) {
     this.scene = scene;
     this.wsClient = wsClient;
-    this.currentState = { up: false, down: false, left: false, right: false, aimAngle: 0 };
-    this.lastSentState = { up: false, down: false, left: false, right: false, aimAngle: 0 };
+    this.currentState = { up: false, down: false, left: false, right: false, aimAngle: 0, isSprinting: false };
+    this.lastSentState = { up: false, down: false, left: false, right: false, aimAngle: 0, isSprinting: false };
   }
 
   /**
@@ -51,17 +53,19 @@ export class InputManager {
       return;
     }
 
-    // Setup WASD keys
+    // Setup WASD + Shift keys
     this.keys = this.scene.input.keyboard.addKeys({
       W: Phaser.Input.Keyboard.KeyCodes.W,
       A: Phaser.Input.Keyboard.KeyCodes.A,
       S: Phaser.Input.Keyboard.KeyCodes.S,
       D: Phaser.Input.Keyboard.KeyCodes.D,
+      SHIFT: Phaser.Input.Keyboard.KeyCodes.SHIFT,
     }) as {
       W: Phaser.Input.Keyboard.Key;
       A: Phaser.Input.Keyboard.Key;
       S: Phaser.Input.Keyboard.Key;
       D: Phaser.Input.Keyboard.Key;
+      SHIFT: Phaser.Input.Keyboard.Key;
     };
   }
 
@@ -83,6 +87,7 @@ export class InputManager {
       left: this.keys.A.isDown,
       right: this.keys.D.isDown,
       aimAngle: this.aimAngle,
+      isSprinting: this.keys.SHIFT.isDown,
     };
 
     // Only send if state has changed
@@ -149,7 +154,8 @@ export class InputManager {
       this.currentState.up !== this.lastSentState.up ||
       this.currentState.down !== this.lastSentState.down ||
       this.currentState.left !== this.lastSentState.left ||
-      this.currentState.right !== this.lastSentState.right;
+      this.currentState.right !== this.lastSentState.right ||
+      this.currentState.isSprinting !== this.lastSentState.isSprinting;
 
     // Check if aim angle changed significantly
     const aimAngleChanged = Math.abs(this.currentState.aimAngle - this.lastSentAimAngle) > AIM_ANGLE_THRESHOLD;

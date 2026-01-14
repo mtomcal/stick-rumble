@@ -5,6 +5,12 @@ const (
 	// MovementSpeed is the maximum movement speed in pixels per second
 	MovementSpeed = 200.0
 
+	// SprintSpeed is the maximum sprint speed in pixels per second (1.5x normal speed)
+	SprintSpeed = 300.0
+
+	// SprintSpreadMultiplier is the accuracy penalty multiplier while sprinting (1.5x spread)
+	SprintSpreadMultiplier = 1.5
+
 	// Acceleration is the rate at which players accelerate in pixels per second squared
 	Acceleration = 50.0
 

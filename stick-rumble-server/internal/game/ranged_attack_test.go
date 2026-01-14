@@ -90,7 +90,7 @@ func TestApplyRecoilToAngle_NoRecoilPattern(t *testing.T) {
 	baseAngle := math.Pi / 4
 	weapon := NewShotgun() // Shotgun has no recoil
 
-	result := ApplyRecoilToAngle(baseAngle, weapon.Recoil, 5, false, weapon)
+	result := ApplyRecoilToAngle(baseAngle, weapon.Recoil, 5, false, false, weapon)
 
 	if result != baseAngle {
 		t.Errorf("expected no recoil when pattern is nil, got angle %f (base %f)", result, baseAngle)
@@ -102,7 +102,7 @@ func TestApplyRecoilToAngle_UziVerticalClimb(t *testing.T) {
 	baseAngle := 0.0
 
 	// First shot: 2° vertical recoil
-	angle1 := ApplyRecoilToAngle(baseAngle, uzi.Recoil, 1, false, uzi)
+	angle1 := ApplyRecoilToAngle(baseAngle, uzi.Recoil, 1, false, false, uzi)
 	expectedRadians1 := (2.0 * math.Pi) / 180.0
 	tolerance := 0.1 // Radians tolerance (account for random horizontal)
 
@@ -112,7 +112,7 @@ func TestApplyRecoilToAngle_UziVerticalClimb(t *testing.T) {
 	}
 
 	// Fifth shot: 10° vertical recoil (5 shots * 2° each)
-	angle5 := ApplyRecoilToAngle(baseAngle, uzi.Recoil, 5, false, uzi)
+	angle5 := ApplyRecoilToAngle(baseAngle, uzi.Recoil, 5, false, false, uzi)
 	expectedRadians5 := (10.0 * math.Pi) / 180.0
 
 	if math.Abs(angle5-baseAngle-expectedRadians5) > tolerance {
@@ -126,7 +126,7 @@ func TestApplyRecoilToAngle_MaxAccumulation(t *testing.T) {
 	baseAngle := 0.0
 
 	// Fire 20 shots (should hit 20° max, but max accumulation is 20°)
-	angle20 := ApplyRecoilToAngle(baseAngle, uzi.Recoil, 20, false, uzi)
+	angle20 := ApplyRecoilToAngle(baseAngle, uzi.Recoil, 20, false, false, uzi)
 	maxRadians := (uzi.Recoil.MaxAccumulation * math.Pi) / 180.0
 	tolerance := 0.1
 
@@ -143,7 +143,7 @@ func TestApplyRecoilToAngle_AK47HorizontalSpread(t *testing.T) {
 	// Fire multiple shots and check that horizontal recoil is applied
 	angles := make([]float64, 10)
 	for i := 0; i < 10; i++ {
-		angles[i] = ApplyRecoilToAngle(baseAngle, ak47.Recoil, 1, false, ak47)
+		angles[i] = ApplyRecoilToAngle(baseAngle, ak47.Recoil, 1, false, false, ak47)
 	}
 
 	// Check that angles vary (horizontal recoil is random)
@@ -165,12 +165,12 @@ func TestApplyRecoilToAngle_MovementSpread(t *testing.T) {
 	baseAngle := 0.0
 
 	// Fire while stationary
-	angleStationary := ApplyRecoilToAngle(baseAngle, uzi.Recoil, 1, false, uzi)
+	angleStationary := ApplyRecoilToAngle(baseAngle, uzi.Recoil, 1, false, false, uzi)
 
 	// Fire while moving (should have additional spread)
 	anglesMoving := make([]float64, 10)
 	for i := 0; i < 10; i++ {
-		anglesMoving[i] = ApplyRecoilToAngle(baseAngle, uzi.Recoil, 1, true, uzi)
+		anglesMoving[i] = ApplyRecoilToAngle(baseAngle, uzi.Recoil, 1, true, false, uzi)
 	}
 
 	// Movement spread should cause variation
@@ -206,5 +206,52 @@ func TestShotgunPelletDamage(t *testing.T) {
 
 	if ShotgunPelletCount != 8 {
 		t.Errorf("shotgun should fire 8 pellets, got %d", ShotgunPelletCount)
+	}
+}
+
+func TestApplyRecoilToAngle_SprintSpreadMultiplier(t *testing.T) {
+	uzi := NewUzi()
+	baseAngle := 0.0
+
+	// Fire multiple times while moving (not sprinting)
+	anglesMoving := make([]float64, 100)
+	for i := 0; i < 100; i++ {
+		anglesMoving[i] = ApplyRecoilToAngle(baseAngle, uzi.Recoil, 1, true, false, uzi)
+	}
+
+	// Fire multiple times while sprinting (should have 1.5x spread)
+	anglesSprinting := make([]float64, 100)
+	for i := 0; i < 100; i++ {
+		anglesSprinting[i] = ApplyRecoilToAngle(baseAngle, uzi.Recoil, 1, true, true, uzi)
+	}
+
+	// Calculate the absolute deviation from base angle for each set
+	movingDeviations := 0.0
+	for _, angle := range anglesMoving {
+		movingDeviations += math.Abs(angle - baseAngle)
+	}
+	avgMovingDeviation := movingDeviations / float64(len(anglesMoving))
+
+	sprintingDeviations := 0.0
+	for _, angle := range anglesSprinting {
+		sprintingDeviations += math.Abs(angle - baseAngle)
+	}
+	avgSprintingDeviation := sprintingDeviations / float64(len(anglesSprinting))
+
+	// Sprint spread should be approximately 1.5x the moving spread
+	// Allow for 20% tolerance due to randomness
+	expectedRatio := SprintSpreadMultiplier
+	actualRatio := avgSprintingDeviation / avgMovingDeviation
+	tolerance := 0.2
+
+	if math.Abs(actualRatio-expectedRatio) > tolerance {
+		t.Errorf("Sprint spread multiplier should be ~%v, got %v (moving avg: %v, sprint avg: %v)",
+			expectedRatio, actualRatio, avgMovingDeviation, avgSprintingDeviation)
+	}
+
+	// Sprint deviation should always be greater than moving deviation (on average)
+	if avgSprintingDeviation <= avgMovingDeviation {
+		t.Errorf("Sprinting deviation (%v) should be greater than moving deviation (%v)",
+			avgSprintingDeviation, avgMovingDeviation)
 	}
 }

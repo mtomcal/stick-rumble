@@ -143,3 +143,35 @@ func TestServerGracefulShutdown(t *testing.T) {
 		t.Error("Server did not shut down within timeout")
 	}
 }
+
+// TestServerDefaultPort verifies the server uses default port when PORT env is not set
+func TestServerDefaultPort(t *testing.T) {
+	// Ensure PORT is not set
+	os.Unsetenv("PORT")
+
+	// Start server in background
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		if err := startServer(ctx); err != nil && err != http.ErrServerClosed {
+			t.Logf("Server error: %v", err)
+		}
+	}()
+
+	// Wait for server to start on default port 8080
+	client := &http.Client{Timeout: 2 * time.Second}
+	maxAttempts := 20
+
+	for i := 0; i < maxAttempts; i++ {
+		resp, err := client.Get("http://localhost:8080/health")
+		if err == nil {
+			resp.Body.Close()
+			// Server started successfully on default port
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	t.Error("Server did not start on default port 8080")
+}

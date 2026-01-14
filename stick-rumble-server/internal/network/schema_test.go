@@ -315,3 +315,90 @@ func TestSchemaValidationEnabled(t *testing.T) {
 	// Handler should initialize with schema validation enabled
 	assert.NotNil(t, handler.gameServer)
 }
+
+func TestValidateAndLogWithValidData(t *testing.T) {
+	// Create a simple schema
+	tmpDir := t.TempDir()
+	schemaContent := `{
+  "type": "object",
+  "properties": {
+    "name": {"type": "string"}
+  },
+  "required": ["name"]
+}`
+	schemaPath := filepath.Join(tmpDir, "test-schema.json")
+	err := os.WriteFile(schemaPath, []byte(schemaContent), 0644)
+	require.NoError(t, err)
+
+	loader, err := NewSchemaLoader(tmpDir)
+	require.NoError(t, err)
+
+	validator := NewSchemaValidator(loader)
+	require.NotNil(t, validator)
+
+	// Valid data
+	validData := map[string]interface{}{
+		"name": "Test Player",
+	}
+
+	// Should return true for valid data
+	result := validator.ValidateAndLog("test-schema", validData, "player-123")
+	assert.True(t, result, "ValidateAndLog should return true for valid data")
+}
+
+func TestValidateAndLogWithInvalidData(t *testing.T) {
+	// Create a simple schema
+	tmpDir := t.TempDir()
+	schemaContent := `{
+  "type": "object",
+  "properties": {
+    "name": {"type": "string"}
+  },
+  "required": ["name"]
+}`
+	schemaPath := filepath.Join(tmpDir, "test-schema.json")
+	err := os.WriteFile(schemaPath, []byte(schemaContent), 0644)
+	require.NoError(t, err)
+
+	loader, err := NewSchemaLoader(tmpDir)
+	require.NoError(t, err)
+
+	validator := NewSchemaValidator(loader)
+	require.NotNil(t, validator)
+
+	// Invalid data - missing required field
+	invalidData := map[string]interface{}{
+		"age": 25,
+	}
+
+	// Should return false for invalid data
+	result := validator.ValidateAndLog("test-schema", invalidData, "player-456")
+	assert.False(t, result, "ValidateAndLog should return false for invalid data")
+}
+
+func TestValidateOutgoingMessageDisabled(t *testing.T) {
+	// Ensure ENABLE_SCHEMA_VALIDATION is not set
+	os.Unsetenv("ENABLE_SCHEMA_VALIDATION")
+
+	handler := NewWebSocketHandler()
+	require.NotNil(t, handler)
+
+	// Should not validate when disabled (return nil)
+	data := map[string]interface{}{"test": "value"}
+	err := handler.validateOutgoingMessage("test:message", data)
+	assert.NoError(t, err, "Should not validate when ENABLE_SCHEMA_VALIDATION is disabled")
+}
+
+func TestValidateOutgoingMessageEnabled(t *testing.T) {
+	// Enable schema validation
+	os.Setenv("ENABLE_SCHEMA_VALIDATION", "true")
+	defer os.Unsetenv("ENABLE_SCHEMA_VALIDATION")
+
+	handler := NewWebSocketHandler()
+	require.NotNil(t, handler)
+
+	// Test with non-existent schema (should error)
+	data := map[string]interface{}{"test": "value"}
+	err := handler.validateOutgoingMessage("nonexistent:message", data)
+	assert.Error(t, err, "Should error when schema not found")
+}

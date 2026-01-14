@@ -38,13 +38,19 @@ func (p *Physics) UpdatePlayer(player *PlayerState, deltaTime float64) {
 	// Normalize input direction for diagonal movement
 	inputDir = normalize(inputDir)
 
+	// Determine movement speed based on sprint state
+	moveSpeed := MovementSpeed
+	if input.IsSprinting {
+		moveSpeed = SprintSpeed
+	}
+
 	// Apply acceleration or deceleration
 	var newVel Vector2
 	if inputDir.X != 0 || inputDir.Y != 0 {
 		// Player is giving input - accelerate toward target velocity
 		targetVel := Vector2{
-			X: inputDir.X * MovementSpeed,
-			Y: inputDir.Y * MovementSpeed,
+			X: inputDir.X * moveSpeed,
+			Y: inputDir.Y * moveSpeed,
 		}
 
 		newVel = accelerateToward(currentVel, targetVel, Acceleration, deltaTime)
