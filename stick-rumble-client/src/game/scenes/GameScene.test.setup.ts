@@ -86,6 +86,20 @@ export const createMockScene = () => {
       container: vi.fn().mockReturnValue(mockContainer),
       graphics: vi.fn().mockReturnValue(mockGraphics),
     },
+    load: {
+      audio: vi.fn(),
+    },
+    sound: {
+      add: vi.fn().mockReturnValue({
+        play: vi.fn(),
+        stop: vi.fn(),
+        setVolume: vi.fn().mockReturnThis(),
+        setPan: vi.fn().mockReturnThis(),
+        once: vi.fn(),
+      }),
+      volume: 1,
+      mute: false,
+    },
     cameras: {
       main: mockCamera,
     },
