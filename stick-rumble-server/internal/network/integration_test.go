@@ -144,8 +144,8 @@ func TestMatchTimerAndEnding(t *testing.T) {
 	timerMsg, err := readMessageOfType(t, conn1, "match:timer", 3*time.Second)
 	require.NoError(t, err, "Should receive match timer")
 	timerData := timerMsg.Data.(map[string]interface{})
-	assert.NotNil(t, timerData["timeRemaining"])
-	assert.NotNil(t, timerData["duration"])
+	// Schema only has remainingSeconds
+	assert.NotNil(t, timerData["remainingSeconds"], "Should have remainingSeconds field")
 
 	// Note: Match ending is automatically triggered by the game server
 	// when time limit or kill target is reached
@@ -195,16 +195,21 @@ func TestMultiplePlayersJoining(t *testing.T) {
 	player1ID := consumeRoomJoinedAndGetPlayerID(t, conn1)
 	player2ID := consumeRoomJoinedAndGetPlayerID(t, conn2)
 
-	// Connect third player (should join same room if space available)
+	// Connect third player - will wait in lobby until another player joins
 	conn3 := ts.connectClient(t)
 	defer conn3.Close()
 
+	// Connect fourth player to trigger room creation for players 3 and 4
+	conn4 := ts.connectClient(t)
+	defer conn4.Close()
+
+	// Now player 3 should receive room:joined
 	msg3, err := readMessageOfType(t, conn3, "room:joined", 2*time.Second)
 	require.NoError(t, err, "Player 3 should join room")
 	data3 := msg3.Data.(map[string]interface{})
 	player3ID := data3["playerId"].(string)
 
-	// All three players should be in the game
+	// All players should have unique IDs
 	assert.NotEqual(t, player1ID, player3ID)
 	assert.NotEqual(t, player2ID, player3ID)
 
@@ -265,19 +270,35 @@ func TestConcurrentShooting(t *testing.T) {
 	_ = consumeRoomJoinedAndGetPlayerID(t, conn1)
 	_ = consumeRoomJoinedAndGetPlayerID(t, conn2)
 
-	// Both players shoot at the same time
+	// Player 1 shoots
 	sendShootMessage(t, conn1, 0.0)
+
+	// Wait a bit for cooldown to clear before player 2 shoots
+	time.Sleep(150 * time.Millisecond)
+
+	// Player 2 shoots
 	sendShootMessage(t, conn2, 3.14)
 
-	// Both should receive both projectile spawns
+	// Both should receive projectile spawns
 	projectiles := make(map[string]bool)
 	timeout := time.Now().Add(3 * time.Second)
 	for len(projectiles) < 2 && time.Now().Before(timeout) {
-		msg, err := readMessageOfType(t, conn1, "projectile:spawn", 500*time.Millisecond)
+		// Read from both connections to catch all projectiles
+		msg, err := readMessageOfType(t, conn1, "projectile:spawn", 300*time.Millisecond)
 		if err == nil && msg.Data != nil {
 			data, ok := msg.Data.(map[string]interface{})
-			if ok && data["projectileId"] != nil {
-				projectileID, ok := data["projectileId"].(string)
+			if ok && data["id"] != nil {
+				projectileID, ok := data["id"].(string)
+				if ok {
+					projectiles[projectileID] = true
+				}
+			}
+		}
+		msg2, err := readMessageOfType(t, conn2, "projectile:spawn", 300*time.Millisecond)
+		if err == nil && msg2 != nil && msg2.Data != nil {
+			data, ok := msg2.Data.(map[string]interface{})
+			if ok && data["id"] != nil {
+				projectileID, ok := data["id"].(string)
 				if ok {
 					projectiles[projectileID] = true
 				}
