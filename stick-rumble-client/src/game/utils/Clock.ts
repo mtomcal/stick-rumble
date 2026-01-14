@@ -87,4 +87,12 @@ export class ManualClock implements Clock {
   advance(ms: number): void {
     this.currentTime += ms;
   }
+
+  /**
+   * Resets the clock to a specific time.
+   * @param time Time in milliseconds. Defaults to 0.
+   */
+  reset(time: number = 0): void {
+    this.currentTime = time;
+  }
 }

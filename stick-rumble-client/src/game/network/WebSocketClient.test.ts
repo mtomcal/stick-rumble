@@ -569,4 +569,148 @@ describe('WebSocketClient', () => {
       vi.useRealTimers();
     });
   });
+
+  describe('input recording', () => {
+    it('should not record inputs by default', async () => {
+      const client = new WebSocketClient('ws://localhost:8080/ws');
+      const connectPromise = client.connect();
+
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen({} as Event);
+      }
+
+      await connectPromise;
+
+      const callback = vi.fn();
+      client.onInputRecorded(callback);
+
+      client.sendInputState({ up: false, down: false, left: false, right: true, aimAngle: 0 });
+
+      expect(callback).not.toHaveBeenCalled();
+      expect(client.getFrameNumber()).toBe(0);
+    });
+
+    it('should record inputs when enabled', async () => {
+      const client = new WebSocketClient('ws://localhost:8080/ws');
+      const connectPromise = client.connect();
+
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen({} as Event);
+      }
+
+      await connectPromise;
+
+      const callback = vi.fn();
+      client.onInputRecorded(callback);
+      client.setInputRecording(true);
+
+      const inputData = { up: false, down: false, left: false, right: true, aimAngle: 0 };
+      client.sendInputState(inputData);
+
+      expect(callback).toHaveBeenCalledOnce();
+      expect(callback).toHaveBeenCalledWith(0, inputData);
+      expect(client.getFrameNumber()).toBe(1);
+    });
+
+    it('should increment frame number for each input', async () => {
+      const client = new WebSocketClient('ws://localhost:8080/ws');
+      const connectPromise = client.connect();
+
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen({} as Event);
+      }
+
+      await connectPromise;
+
+      const callback = vi.fn();
+      client.onInputRecorded(callback);
+      client.setInputRecording(true);
+
+      client.sendInputState({ up: false, down: false, left: false, right: true, aimAngle: 0 });
+      client.sendInputState({ up: true, down: false, left: false, right: false, aimAngle: 1.5 });
+      client.sendInputState({ up: false, down: true, left: false, right: false, aimAngle: 3.0 });
+
+      expect(callback).toHaveBeenCalledTimes(3);
+      expect(callback).toHaveBeenNthCalledWith(1, 0, expect.anything());
+      expect(callback).toHaveBeenNthCalledWith(2, 1, expect.anything());
+      expect(callback).toHaveBeenNthCalledWith(3, 2, expect.anything());
+      expect(client.getFrameNumber()).toBe(3);
+    });
+
+    it('should stop recording when disabled', async () => {
+      const client = new WebSocketClient('ws://localhost:8080/ws');
+      const connectPromise = client.connect();
+
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen({} as Event);
+      }
+
+      await connectPromise;
+
+      const callback = vi.fn();
+      client.onInputRecorded(callback);
+      client.setInputRecording(true);
+
+      client.sendInputState({ up: false, down: false, left: false, right: true, aimAngle: 0 });
+
+      expect(callback).toHaveBeenCalledOnce();
+
+      // Disable recording
+      client.setInputRecording(false);
+      callback.mockClear();
+
+      client.sendInputState({ up: true, down: false, left: false, right: false, aimAngle: 1.5 });
+
+      expect(callback).not.toHaveBeenCalled();
+      expect(client.getFrameNumber()).toBe(1); // Should not increment when disabled
+    });
+
+    it('should reset frame number', async () => {
+      const client = new WebSocketClient('ws://localhost:8080/ws');
+      const connectPromise = client.connect();
+
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen({} as Event);
+      }
+
+      await connectPromise;
+
+      const callback = vi.fn();
+      client.onInputRecorded(callback);
+      client.setInputRecording(true);
+
+      client.sendInputState({ up: false, down: false, left: false, right: true, aimAngle: 0 });
+      client.sendInputState({ up: true, down: false, left: false, right: false, aimAngle: 1.5 });
+
+      expect(client.getFrameNumber()).toBe(2);
+
+      client.resetFrameNumber();
+
+      expect(client.getFrameNumber()).toBe(0);
+
+      client.sendInputState({ up: false, down: true, left: false, right: false, aimAngle: 3.0 });
+
+      expect(callback).toHaveBeenLastCalledWith(0, expect.anything());
+    });
+
+    it('should work without callback set', async () => {
+      const client = new WebSocketClient('ws://localhost:8080/ws');
+      const connectPromise = client.connect();
+
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen({} as Event);
+      }
+
+      await connectPromise;
+
+      client.setInputRecording(true);
+
+      // Should not throw without callback
+      expect(() => {
+        client.sendInputState({ up: false, down: false, left: false, right: true, aimAngle: 0 });
+      }).not.toThrow();
+
+      expect(client.getFrameNumber()).toBe(1);
+    });
+  });
 });
