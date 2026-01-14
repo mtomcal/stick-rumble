@@ -84,6 +84,20 @@ describe('PickupPromptUI', () => {
   });
 
   describe('show', () => {
+    it('should do nothing if promptText is null', () => {
+      // Destroy the UI to set promptText to null
+      ui.destroy();
+
+      // Calling show should not throw
+      expect(() => ui.show('uzi')).not.toThrow();
+
+      // mockText methods should not be called after destroy
+      vi.clearAllMocks();
+      ui.show('uzi');
+      expect(mockText.setText).not.toHaveBeenCalled();
+      expect(mockText.setVisible).not.toHaveBeenCalled();
+    });
+
     it('should display prompt with uppercase weapon name', () => {
       ui.show('uzi');
 
@@ -141,6 +155,19 @@ describe('PickupPromptUI', () => {
       vi.clearAllMocks();
     });
 
+    it('should do nothing if promptText is null', () => {
+      // Destroy the UI to set promptText to null
+      ui.destroy();
+
+      // Calling hide should not throw
+      expect(() => ui.hide()).not.toThrow();
+
+      // mockText methods should not be called after destroy
+      vi.clearAllMocks();
+      ui.hide();
+      expect(mockText.setVisible).not.toHaveBeenCalled();
+    });
+
     it('should hide the prompt text', () => {
       ui.hide();
 
@@ -178,6 +205,12 @@ describe('PickupPromptUI', () => {
     it('should return false after hide is called', () => {
       ui.show('uzi');
       ui.hide();
+
+      expect(ui.isVisible()).toBe(false);
+    });
+
+    it('should return false when promptText is null (after destroy)', () => {
+      ui.destroy();
 
       expect(ui.isVisible()).toBe(false);
     });

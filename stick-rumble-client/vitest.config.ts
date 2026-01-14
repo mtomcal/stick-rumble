@@ -39,7 +39,7 @@ export default defineConfig({
       thresholds: {
         lines: 90,
         functions: 90,
-        branches: 85.19, // Current achievable - GameScene branches need additional coverage
+        branches: 93.25, // Improved with comprehensive GameScene and UI tests
         statements: 90,
       },
     },
