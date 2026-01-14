@@ -1,0 +1,37 @@
+{
+  "name": "face-off-combat",
+  "description": "Two players face off and shoot at each other. First shooter wins.",
+  "players": [
+    {
+      "id": "player1",
+      "startPosition": { "x": 100, "y": 500 }
+    },
+    {
+      "id": "player2",
+      "startPosition": { "x": 200, "y": 500 }
+    }
+  ],
+  "inputs": [
+    {
+      "tick": 10,
+      "playerId": "player1",
+      "input": {
+        "up": false,
+        "down": false,
+        "left": false,
+        "right": false
+      }
+    },
+    {
+      "tick": 15,
+      "playerId": "player2",
+      "input": {
+        "up": false,
+        "down": false,
+        "left": false,
+        "right": false
+      }
+    }
+  ],
+  "duration": 100
+}

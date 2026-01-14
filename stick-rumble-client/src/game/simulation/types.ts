@@ -73,3 +73,82 @@ export interface WeaponPickupEvent {
   crateId: string;
   weaponType: string;
 }
+
+/**
+ * Input frame captured at a specific tick
+ * Used for recording and replaying player inputs
+ */
+export interface InputFrame {
+  tick: number;
+  playerId: string;
+  input: InputState;
+}
+
+/**
+ * Player spawn configuration for scenarios
+ */
+export interface PlayerSpawn {
+  id: string;
+  startPosition: Vector2;
+}
+
+/**
+ * Scenario definition for deterministic replay testing
+ */
+export interface Scenario {
+  name: string;
+  description?: string;
+  players: PlayerSpawn[];
+  inputs: InputFrame[];
+  duration: number; // Duration in ticks
+}
+
+/**
+ * Assertion to check during scenario replay
+ */
+export interface Assertion {
+  tick: number;
+  description: string;
+  check: (sim: GameSimulationLike) => boolean;
+}
+
+/**
+ * Minimal interface for GameSimulation to avoid circular dependency
+ */
+export interface GameSimulationLike {
+  getPlayerState(id: string): SimulatedPlayerState | undefined;
+  getAllPlayers(): SimulatedPlayerState[];
+  getActiveProjectiles(): Projectile[];
+  spawnProjectile(ownerId: string, aimAngle: number): Projectile;
+}
+
+/**
+ * Result of a single assertion
+ */
+export interface AssertionResult {
+  tick: number;
+  description: string;
+  passed: boolean;
+  error?: string;
+}
+
+/**
+ * Result of running a scenario
+ */
+export interface ScenarioResult {
+  scenarioName: string;
+  passed: boolean;
+  assertions: AssertionResult[];
+  duration: number; // Duration in ms
+}
+
+/**
+ * Metadata for a recording session
+ */
+export interface RecordingMetadata {
+  name: string;
+  description?: string;
+  recordedAt: string; // ISO timestamp
+  playerCount: number;
+  duration: number; // Duration in ticks
+}
