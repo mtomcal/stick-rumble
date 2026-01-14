@@ -68,7 +68,8 @@ describe.sequential('WebSocket Player Movement Integration Tests', () => {
             up: true,
             down: false,
             left: false,
-            right: true
+            right: true,
+            aimAngle: 0
           }
         };
 
@@ -90,7 +91,8 @@ describe.sequential('WebSocket Player Movement Integration Tests', () => {
             up: false,
             down: false,
             left: false,
-            right: false
+            right: false,
+            aimAngle: 0
           }
         };
 
@@ -134,7 +136,8 @@ describe.sequential('WebSocket Player Movement Integration Tests', () => {
             up: true,
             down: false,
             left: false,
-            right: false
+            right: false,
+            aimAngle: 0
           }
         };
 
@@ -174,7 +177,7 @@ describe.sequential('WebSocket Player Movement Integration Tests', () => {
         const inputMessage: Message = {
           type: 'input:state',
           timestamp: Date.now(),
-          data: { up: true, down: false, left: false, right: false }
+          data: { up: true, down: false, left: false, right: false, aimAngle: 0 }
         };
 
         client.send(inputMessage);
@@ -227,7 +230,7 @@ describe.sequential('WebSocket Player Movement Integration Tests', () => {
         const inputMessage: Message = {
           type: 'input:state',
           timestamp: Date.now(),
-          data: { up: true, down: false, left: false, right: false }
+          data: { up: true, down: false, left: false, right: false, aimAngle: 0 }
         };
 
         client1.send(inputMessage);
@@ -271,7 +274,7 @@ describe.sequential('WebSocket Player Movement Integration Tests', () => {
           const inputMessage: Message = {
             type: 'input:state',
             timestamp: Date.now(),
-            data: { up: true, down: false, left: false, right: false }
+            data: { up: true, down: false, left: false, right: false, aimAngle: 0 }
           };
           client1.send(inputMessage);
         };
@@ -330,7 +333,7 @@ describe.sequential('WebSocket Player Movement Integration Tests', () => {
         const inputMessage: Message = {
           type: 'input:state',
           timestamp: Date.now(),
-          data: { up: true, down: false, left: true, right: false }
+          data: { up: true, down: false, left: true, right: false, aimAngle: 0 }
         };
 
         client.send(inputMessage);
