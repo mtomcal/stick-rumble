@@ -40,7 +40,7 @@ func CalculateShotgunPelletAngles(aimAngle float64, spreadDegrees float64) []flo
 
 // ApplyRecoilToAngle applies recoil pattern to aim angle
 // Returns the modified angle in radians with recoil applied
-func ApplyRecoilToAngle(baseAngle float64, recoil *RecoilPattern, shotsFired int, isMoving bool, weapon *Weapon) float64 {
+func ApplyRecoilToAngle(baseAngle float64, recoil *RecoilPattern, shotsFired int, isMoving bool, isSprinting bool, weapon *Weapon) float64 {
 	if recoil == nil {
 		return baseAngle
 	}
@@ -58,6 +58,11 @@ func ApplyRecoilToAngle(baseAngle float64, recoil *RecoilPattern, shotsFired int
 	movementSpreadDegrees := 0.0
 	if isMoving && weapon.SpreadDegrees > 0 {
 		movementSpreadDegrees = (rand.Float64() - 0.5) * 2.0 * weapon.SpreadDegrees
+
+		// Apply sprint multiplier if sprinting (1.5x spread)
+		if isSprinting {
+			movementSpreadDegrees *= SprintSpreadMultiplier
+		}
 	}
 
 	// Convert to radians and apply
