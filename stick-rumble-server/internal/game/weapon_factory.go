@@ -2,66 +2,90 @@ package game
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
+var (
+	// Global weapon configs loaded once at startup
+	weaponConfigs     map[string]*WeaponConfig
+	weaponConfigsOnce sync.Once
+)
+
+// initWeaponConfigs initializes weapon configs from JSON file or falls back to hardcoded values
+func initWeaponConfigs() {
+	weaponConfigsOnce.Do(func() {
+		// Try to load from file at project root
+		configPath := filepath.Join("..", "..", "weapon-configs.json")
+		weaponConfigs = LoadWeaponConfigsOrDefault(configPath)
+	})
+}
+
+// getWeaponConfig returns the weapon config for a given weapon name
+func getWeaponConfig(name string) *WeaponConfig {
+	initWeaponConfigs()
+	return weaponConfigs[name]
+}
+
 // NewBat creates a new Bat weapon instance
-// Stats from weapon-balance-analysis.md and Story 3.2:
-// - Damage: 25
-// - Fire Rate: 2.0/s (0.5s cooldown)
-// - Range: 64px (melee)
-// - Arc: 90 degrees
-// - Knockback: 40px (200 px/s for 0.2s)
+// Stats loaded from weapon-configs.json or hardcoded defaults
 func NewBat() *Weapon {
+	config := getWeaponConfig("Bat")
+	if config != nil {
+		return config.ToWeapon()
+	}
+
+	// Fallback to hardcoded values if config not found
 	return &Weapon{
 		Name:              "Bat",
 		Damage:            25,
 		FireRate:          2.0,
-		MagazineSize:      0,   // Melee has no ammo
-		ReloadTime:        0,   // Melee has no reload
-		ProjectileSpeed:   0,   // Melee has no projectiles
-		Range:             64,  // 64px melee range
-		ArcDegrees:        90,  // 90-degree swing arc
-		KnockbackDistance: 40,  // 40px knockback
-		Recoil:            nil, // No recoil for melee
-		SpreadDegrees:     0,   // No spread for melee
+		MagazineSize:      0,
+		ReloadTime:        0,
+		ProjectileSpeed:   0,
+		Range:             64,
+		ArcDegrees:        90,
+		KnockbackDistance: 40,
+		Recoil:            nil,
+		SpreadDegrees:     0,
 	}
 }
 
 // NewKatana creates a new Katana weapon instance
-// Stats from weapon-balance-analysis.md and Story 3.2:
-// - Damage: 45
-// - Fire Rate: 1.25/s (0.8s cooldown)
-// - Range: 80px (melee)
-// - Arc: 90 degrees
-// - Knockback: None
+// Stats loaded from weapon-configs.json or hardcoded defaults
 func NewKatana() *Weapon {
+	config := getWeaponConfig("Katana")
+	if config != nil {
+		return config.ToWeapon()
+	}
+
+	// Fallback to hardcoded values if config not found
 	return &Weapon{
 		Name:              "Katana",
 		Damage:            45,
 		FireRate:          1.25,
-		MagazineSize:      0,   // Melee has no ammo
-		ReloadTime:        0,   // Melee has no reload
-		ProjectileSpeed:   0,   // Melee has no projectiles
-		Range:             80,  // 80px melee range (longer than Bat)
-		ArcDegrees:        90,  // 90-degree swing arc
-		KnockbackDistance: 0,   // No knockback
-		Recoil:            nil, // No recoil for melee
-		SpreadDegrees:     0,   // No spread for melee
+		MagazineSize:      0,
+		ReloadTime:        0,
+		ProjectileSpeed:   0,
+		Range:             80,
+		ArcDegrees:        90,
+		KnockbackDistance: 0,
+		Recoil:            nil,
+		SpreadDegrees:     0,
 	}
 }
 
 // NewUzi creates a new Uzi weapon instance
-// Stats from weapon-balance-analysis.md and Story 3.3:
-// - Damage: 8
-// - Fire Rate: 10.0/s
-// - Magazine Size: 30
-// - Reload Time: 1.5s
-// - Range: 600px
-// - Recoil: 2° vertical per shot, recovers over 0.5s
-// - Spread: +/-5° while moving
+// Stats loaded from weapon-configs.json or hardcoded defaults
 func NewUzi() *Weapon {
+	config := getWeaponConfig("Uzi")
+	if config != nil {
+		return config.ToWeapon()
+	}
+
+	// Fallback to hardcoded values if config not found
 	return &Weapon{
 		Name:              "Uzi",
 		Damage:            8,
@@ -73,25 +97,24 @@ func NewUzi() *Weapon {
 		ArcDegrees:        0,
 		KnockbackDistance: 0,
 		Recoil: &RecoilPattern{
-			VerticalPerShot:   2.0,  // 2° climb per shot
-			HorizontalPerShot: 0.0,  // No horizontal recoil
-			RecoveryTime:      0.5,  // 0.5s recovery
-			MaxAccumulation:   20.0, // Max 20° recoil (10 shots worth)
+			VerticalPerShot:   2.0,
+			HorizontalPerShot: 0.0,
+			RecoveryTime:      0.5,
+			MaxAccumulation:   20.0,
 		},
-		SpreadDegrees: 5.0, // +/-5° while moving
+		SpreadDegrees: 5.0,
 	}
 }
 
 // NewAK47 creates a new AK47 weapon instance
-// Stats from weapon-balance-analysis.md and Story 3.3:
-// - Damage: 20
-// - Fire Rate: 6.0/s
-// - Magazine Size: 30
-// - Reload Time: 2.0s
-// - Range: 800px
-// - Recoil: balanced horizontal + vertical, +/-3° pattern
-// - Spread: +/-3° while moving
+// Stats loaded from weapon-configs.json or hardcoded defaults
 func NewAK47() *Weapon {
+	config := getWeaponConfig("AK47")
+	if config != nil {
+		return config.ToWeapon()
+	}
+
+	// Fallback to hardcoded values if config not found
 	return &Weapon{
 		Name:              "AK47",
 		Damage:            20,
@@ -103,37 +126,36 @@ func NewAK47() *Weapon {
 		ArcDegrees:        0,
 		KnockbackDistance: 0,
 		Recoil: &RecoilPattern{
-			VerticalPerShot:   1.5,  // 1.5° vertical per shot
-			HorizontalPerShot: 3.0,  // +/-3° horizontal per shot
-			RecoveryTime:      0.6,  // 0.6s recovery
-			MaxAccumulation:   15.0, // Max 15° recoil
+			VerticalPerShot:   1.5,
+			HorizontalPerShot: 3.0,
+			RecoveryTime:      0.6,
+			MaxAccumulation:   15.0,
 		},
-		SpreadDegrees: 3.0, // +/-3° while moving
+		SpreadDegrees: 3.0,
 	}
 }
 
 // NewShotgun creates a new Shotgun weapon instance
-// Stats from weapon-balance-analysis.md and Story 3.3:
-// - Damage: 60 total (8 pellets x 7.5 damage each)
-// - Fire Rate: 1.0/s
-// - Magazine Size: 6
-// - Reload Time: 2.5s
-// - Range: 300px
-// - Spread: 15° cone (pellets)
-// - No recoil pattern (1 shot/second is slow enough)
+// Stats loaded from weapon-configs.json or hardcoded defaults
 func NewShotgun() *Weapon {
+	config := getWeaponConfig("Shotgun")
+	if config != nil {
+		return config.ToWeapon()
+	}
+
+	// Fallback to hardcoded values if config not found
 	return &Weapon{
 		Name:              "Shotgun",
-		Damage:            60, // Total damage for all 8 pellets
+		Damage:            60,
 		FireRate:          1.0,
 		MagazineSize:      6,
 		ReloadTime:        2500 * time.Millisecond,
 		ProjectileSpeed:   800.0,
 		Range:             300,
-		ArcDegrees:        15.0, // 15° cone spread for pellets
+		ArcDegrees:        15.0,
 		KnockbackDistance: 0,
-		Recoil:            nil, // No recoil (slow fire rate)
-		SpreadDegrees:     0,   // No additional movement spread
+		Recoil:            nil,
+		SpreadDegrees:     0,
 	}
 }
 
