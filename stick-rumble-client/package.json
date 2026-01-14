@@ -16,7 +16,9 @@
     "test:integration": "vitest --run --config vitest.integration.config.ts --reporter=dot --silent=passed-only",
     "test:all": "vitest --run --config vitest.integration.config.ts --reporter=dot --silent=passed-only && vitest --run --reporter=dot --silent=passed-only",
     "test:ui": "vitest --ui",
-    "test:coverage": "vitest --run --coverage --reporter=dot --silent=passed-only"
+    "test:coverage": "vitest --run --coverage --reporter=dot --silent=passed-only",
+    "test:visual": "playwright test",
+    "test:visual:update": "playwright test --update-snapshots"
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.27",
@@ -28,6 +30,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@playwright/test": "^1.57.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",
     "@types/node": "^24.10.1",
