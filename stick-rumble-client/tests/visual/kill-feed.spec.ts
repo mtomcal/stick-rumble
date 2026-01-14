@@ -18,11 +18,14 @@ test.describe('Kill Feed Visual Regression', () => {
   });
 
   test('should render empty kill feed', async ({ page }) => {
-    // Kill feed starts empty
-    await page.waitForTimeout(100);
+    // Kill feed starts empty, wait for Phaser to complete a render cycle
+    await page.waitForFunction(() => {
+      const game = (window as any).game;
+      return game && game.loop && game.loop.frame > 0;
+    });
 
     // Screenshot top-right area where kill feed is rendered (x: 500, y: 0, 300x150)
-    await expect(page.locator('canvas')).toHaveScreenshot('kill-feed-empty.png', {
+    await expect(page).toHaveScreenshot('kill-feed-empty.png', {
       clip: { x: 500, y: 0, width: 300, height: 150 }
     });
   });
@@ -33,9 +36,13 @@ test.describe('Kill Feed Visual Regression', () => {
       (window as any).addKillFeedEntry('Player1', 'Player2');
     });
 
-    await page.waitForTimeout(100);
+    // Wait for Phaser to complete a render cycle
+    await page.waitForFunction(() => {
+      const game = (window as any).game;
+      return game && game.loop && game.loop.frame > 0;
+    });
 
-    await expect(page.locator('canvas')).toHaveScreenshot('kill-feed-single.png', {
+    await expect(page).toHaveScreenshot('kill-feed-single.png', {
       clip: { x: 500, y: 0, width: 300, height: 150 }
     });
   });
@@ -48,9 +55,13 @@ test.describe('Kill Feed Visual Regression', () => {
       (window as any).addKillFeedEntry('Player2', 'Player3');
     });
 
-    await page.waitForTimeout(100);
+    // Wait for Phaser to complete a render cycle
+    await page.waitForFunction(() => {
+      const game = (window as any).game;
+      return game && game.loop && game.loop.frame > 0;
+    });
 
-    await expect(page.locator('canvas')).toHaveScreenshot('kill-feed-multiple.png', {
+    await expect(page).toHaveScreenshot('kill-feed-multiple.png', {
       clip: { x: 500, y: 0, width: 300, height: 150 }
     });
   });
@@ -65,9 +76,13 @@ test.describe('Kill Feed Visual Regression', () => {
       (window as any).addKillFeedEntry('Player5', 'Player1');
     });
 
-    await page.waitForTimeout(100);
+    // Wait for Phaser to complete a render cycle
+    await page.waitForFunction(() => {
+      const game = (window as any).game;
+      return game && game.loop && game.loop.frame > 0;
+    });
 
-    await expect(page.locator('canvas')).toHaveScreenshot('kill-feed-max.png', {
+    await expect(page).toHaveScreenshot('kill-feed-max.png', {
       clip: { x: 500, y: 0, width: 300, height: 150 }
     });
   });
