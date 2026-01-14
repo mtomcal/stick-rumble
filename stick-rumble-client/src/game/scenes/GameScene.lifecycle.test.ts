@@ -105,6 +105,63 @@ describe('GameScene - Lifecycle Management', () => {
       // Should call cleanup
       expect(cleanupMock).toHaveBeenCalled();
     });
+
+    it('should cleanup all managers when cleanup is called', () => {
+      const mockSceneContext = createMockScene();
+      Object.assign(scene, mockSceneContext);
+
+      // Create mocks for all managers
+      const mockEventHandlers = { destroy: vi.fn() };
+      const mockPlayerManager = { destroy: vi.fn() };
+      const mockProjectileManager = { destroy: vi.fn() };
+      const mockWeaponCrateManager = { destroy: vi.fn() };
+      const mockPickupPromptUI = { destroy: vi.fn() };
+      const mockHealthBarUI = { destroy: vi.fn() };
+      const mockKillFeedUI = { destroy: vi.fn() };
+      const mockUI = { destroy: vi.fn() };
+      const mockSpectator = { destroy: vi.fn() };
+      const mockInputManager = { destroy: vi.fn() };
+      const mockShootingManager = { destroy: vi.fn() };
+      const mockWsClient = { disconnect: vi.fn() };
+
+      // Assign mocked managers to scene
+      (scene as any).eventHandlers = mockEventHandlers;
+      (scene as any).playerManager = mockPlayerManager;
+      (scene as any).projectileManager = mockProjectileManager;
+      (scene as any).weaponCrateManager = mockWeaponCrateManager;
+      (scene as any).pickupPromptUI = mockPickupPromptUI;
+      (scene as any).healthBarUI = mockHealthBarUI;
+      (scene as any).killFeedUI = mockKillFeedUI;
+      (scene as any).ui = mockUI;
+      (scene as any).spectator = mockSpectator;
+      (scene as any).inputManager = mockInputManager;
+      (scene as any).shootingManager = mockShootingManager;
+      (scene as any).wsClient = mockWsClient;
+
+      // Call cleanup
+      (scene as any).cleanup();
+
+      // Verify all destroy methods were called
+      expect(mockEventHandlers.destroy).toHaveBeenCalled();
+      expect(mockPlayerManager.destroy).toHaveBeenCalled();
+      expect(mockProjectileManager.destroy).toHaveBeenCalled();
+      expect(mockWeaponCrateManager.destroy).toHaveBeenCalled();
+      expect(mockPickupPromptUI.destroy).toHaveBeenCalled();
+      expect(mockHealthBarUI.destroy).toHaveBeenCalled();
+      expect(mockKillFeedUI.destroy).toHaveBeenCalled();
+      expect(mockUI.destroy).toHaveBeenCalled();
+      expect(mockSpectator.destroy).toHaveBeenCalled();
+      expect(mockInputManager.destroy).toHaveBeenCalled();
+      expect(mockShootingManager.destroy).toHaveBeenCalled();
+      expect(mockWsClient.disconnect).toHaveBeenCalled();
+    });
+
+    it('should not throw when cleanup is called with undefined managers', () => {
+      // Don't assign any managers - they will be undefined
+      expect(() => {
+        (scene as any).cleanup();
+      }).not.toThrow();
+    });
   });
 
   describe('restartMatch', () => {
