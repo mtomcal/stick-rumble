@@ -117,4 +117,79 @@ describe('ScreenShake', () => {
       }).not.toThrow();
     });
   });
+
+  describe('Weapon recoil shake (Story 3.3 Polish)', () => {
+    it('should shake with Uzi intensity', () => {
+      screenShake.shakeOnWeaponFire('uzi');
+
+      expect(camera.shake).toHaveBeenCalled();
+      const callArgs = (camera.shake as ReturnType<typeof vi.fn>).mock.calls[0];
+      const intensity = callArgs[1];
+
+      expect(intensity).toBe(0.005);
+    });
+
+    it('should shake with AK47 intensity', () => {
+      screenShake.shakeOnWeaponFire('ak47');
+
+      expect(camera.shake).toHaveBeenCalled();
+      const callArgs = (camera.shake as ReturnType<typeof vi.fn>).mock.calls[0];
+      const intensity = callArgs[1];
+
+      expect(intensity).toBe(0.007);
+    });
+
+    it('should shake with Shotgun intensity', () => {
+      screenShake.shakeOnWeaponFire('shotgun');
+
+      expect(camera.shake).toHaveBeenCalled();
+      const callArgs = (camera.shake as ReturnType<typeof vi.fn>).mock.calls[0];
+      const intensity = callArgs[1];
+
+      expect(intensity).toBe(0.012);
+    });
+
+    it('should be case insensitive', () => {
+      screenShake.shakeOnWeaponFire('UZI');
+
+      expect(camera.shake).toHaveBeenCalled();
+      const callArgs = (camera.shake as ReturnType<typeof vi.fn>).mock.calls[0];
+      const intensity = callArgs[1];
+
+      expect(intensity).toBe(0.005);
+    });
+
+    it('should NOT shake for Pistol', () => {
+      screenShake.shakeOnWeaponFire('pistol');
+
+      expect(camera.shake).not.toHaveBeenCalled();
+    });
+
+    it('should NOT shake for Bat', () => {
+      screenShake.shakeOnWeaponFire('bat');
+
+      expect(camera.shake).not.toHaveBeenCalled();
+    });
+
+    it('should NOT shake for Katana', () => {
+      screenShake.shakeOnWeaponFire('katana');
+
+      expect(camera.shake).not.toHaveBeenCalled();
+    });
+
+    it('should NOT shake for unknown weapon', () => {
+      screenShake.shakeOnWeaponFire('unknown');
+
+      expect(camera.shake).not.toHaveBeenCalled();
+    });
+
+    it('should use appropriate duration for recoil', () => {
+      screenShake.shakeOnWeaponFire('ak47');
+
+      const callArgs = (camera.shake as ReturnType<typeof vi.fn>).mock.calls[0];
+      const duration = callArgs[0];
+
+      expect(duration).toBe(100); // Recoil duration
+    });
+  });
 });
