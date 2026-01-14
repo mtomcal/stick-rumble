@@ -12,6 +12,7 @@ import { GameSceneUI } from './GameSceneUI';
 import { GameSceneSpectator } from './GameSceneSpectator';
 import { GameSceneEventHandlers } from './GameSceneEventHandlers';
 import { ScreenShake } from '../effects/ScreenShake';
+import { AudioManager } from '../audio/AudioManager';
 import { ARENA } from '../../shared/constants';
 
 export class GameScene extends Phaser.Scene {
@@ -28,6 +29,7 @@ export class GameScene extends Phaser.Scene {
   private spectator!: GameSceneSpectator;
   private eventHandlers!: GameSceneEventHandlers;
   private screenShake!: ScreenShake;
+  private audioManager!: AudioManager;
   private lastDeltaTime: number = 0;
   private isCameraFollowing: boolean = false;
   private nearbyWeaponCrate: { id: string; weaponType: string } | null = null;
@@ -37,7 +39,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   preload(): void {
-    // Assets will be loaded here in future stories
+    // Load audio assets
+    AudioManager.preload(this);
   }
 
   create(): void {
@@ -95,6 +98,9 @@ export class GameScene extends Phaser.Scene {
     // Initialize screen shake for recoil feedback (Story 3.3 Polish)
     this.screenShake = new ScreenShake(this.cameras.main);
 
+    // Initialize audio manager (Story 3.3 Polish: Weapon-Specific Firing Sounds)
+    this.audioManager = new AudioManager(this);
+
     // Connect to WebSocket server
     const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws';
     this.wsClient = new WebSocketClient(wsUrl);
@@ -115,6 +121,9 @@ export class GameScene extends Phaser.Scene {
 
     // Inject screen shake into event handlers for recoil feedback (Story 3.3 Polish)
     this.eventHandlers.setScreenShake(this.screenShake);
+
+    // Inject audio manager into event handlers for weapon firing sounds (Story 3.3 Polish)
+    this.eventHandlers.setAudioManager(this.audioManager);
 
     // Setup message handlers before connecting
     this.eventHandlers.setupEventHandlers();
@@ -340,6 +349,9 @@ export class GameScene extends Phaser.Scene {
     }
     if (this.spectator) {
       this.spectator.destroy();
+    }
+    if (this.audioManager) {
+      this.audioManager.destroy();
     }
     if (this.inputManager) {
       this.inputManager.destroy();
