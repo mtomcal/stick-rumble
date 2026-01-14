@@ -36,6 +36,8 @@ import {
   WeaponPickupConfirmedMessageSchema,
   WeaponRespawnedDataSchema,
   WeaponRespawnedMessageSchema,
+  MeleeHitDataSchema,
+  MeleeHitMessageSchema,
 } from './server-to-client.js';
 
 describe('Server-to-Client Schemas', () => {
@@ -448,6 +450,111 @@ describe('Server-to-Client Schemas', () => {
         position: { x: 500, y: 600 },
       };
       expect(Value.Check(WeaponRespawnedDataSchema, data)).toBe(false);
+    });
+  });
+
+  describe('MeleeHitDataSchema', () => {
+    it('should validate valid melee hit data', () => {
+      const data = {
+        attackerId: 'player-1',
+        victims: ['player-2', 'player-3'],
+        knockbackApplied: true,
+      };
+      expect(Value.Check(MeleeHitDataSchema, data)).toBe(true);
+    });
+
+    it('should reject empty attackerId', () => {
+      const data = {
+        attackerId: '',
+        victims: ['player-2'],
+        knockbackApplied: true,
+      };
+      expect(Value.Check(MeleeHitDataSchema, data)).toBe(false);
+    });
+
+    it('should accept empty victims array', () => {
+      const data = {
+        attackerId: 'player-1',
+        victims: [],
+        knockbackApplied: false,
+      };
+      expect(Value.Check(MeleeHitDataSchema, data)).toBe(true);
+    });
+
+    it('should reject victims array with empty strings', () => {
+      const data = {
+        attackerId: 'player-1',
+        victims: ['player-2', ''],
+        knockbackApplied: true,
+      };
+      expect(Value.Check(MeleeHitDataSchema, data)).toBe(false);
+    });
+
+    it('should accept knockbackApplied false (Katana)', () => {
+      const data = {
+        attackerId: 'player-1',
+        victims: ['player-2'],
+        knockbackApplied: false,
+      };
+      expect(Value.Check(MeleeHitDataSchema, data)).toBe(true);
+    });
+
+    it('should accept knockbackApplied true (Bat)', () => {
+      const data = {
+        attackerId: 'player-1',
+        victims: ['player-2'],
+        knockbackApplied: true,
+      };
+      expect(Value.Check(MeleeHitDataSchema, data)).toBe(true);
+    });
+
+    it('should accept multiple victims (AoE)', () => {
+      const data = {
+        attackerId: 'player-1',
+        victims: ['player-2', 'player-3', 'player-4'],
+        knockbackApplied: true,
+      };
+      expect(Value.Check(MeleeHitDataSchema, data)).toBe(true);
+    });
+  });
+
+  describe('MeleeHitMessageSchema', () => {
+    it('should validate complete melee:hit message', () => {
+      const message = {
+        type: 'melee:hit',
+        timestamp: Date.now(),
+        data: {
+          attackerId: 'player-1',
+          victims: ['player-2'],
+          knockbackApplied: true,
+        },
+      };
+      expect(Value.Check(MeleeHitMessageSchema, message)).toBe(true);
+    });
+
+    it('should reject wrong message type', () => {
+      const message = {
+        type: 'player:hit',
+        timestamp: Date.now(),
+        data: {
+          attackerId: 'player-1',
+          victims: ['player-2'],
+          knockbackApplied: true,
+        },
+      };
+      expect(Value.Check(MeleeHitMessageSchema, message)).toBe(false);
+    });
+
+    it('should reject missing timestamp', () => {
+      const message = {
+        type: 'melee:hit',
+        data: {
+          attackerId: 'player-1',
+          victims: ['player-2'],
+          knockbackApplied: true,
+        },
+      };
+      expect(Value.Check(MeleeHitMessageSchema, message)).toBe(false);
     });
   });
 
