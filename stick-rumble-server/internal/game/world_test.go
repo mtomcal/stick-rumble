@@ -1,6 +1,7 @@
 package game
 
 import (
+	"math/rand"
 	"sync"
 	"testing"
 )
@@ -259,6 +260,10 @@ func TestWorld_GetBalancedSpawnPoint_WithinBounds(t *testing.T) {
 func TestWorld_GetBalancedSpawnPoint_MaximizesDistance(t *testing.T) {
 	world := NewWorld()
 
+	// Use fixed seed for deterministic testing
+	// Seed 42 is known to produce spawns >1000px from (200,200)
+	world.SetRandSource(rand.NewSource(42))
+
 	// Add enemies in one corner
 	world.AddPlayer("player-1").SetPosition(Vector2{X: 200, Y: 200})
 	world.AddPlayer("player-2").SetPosition(Vector2{X: 250, Y: 250})
@@ -276,6 +281,30 @@ func TestWorld_GetBalancedSpawnPoint_MaximizesDistance(t *testing.T) {
 	// With enemies clustered at (200,200), spawn should be >1000 pixels away
 	if minDist < 1000 {
 		t.Errorf("Spawn distance from enemies = %.2f, expected >1000 for balanced spawning", minDist)
+	}
+}
+
+func TestWorld_SetRandSource(t *testing.T) {
+	world := NewWorld()
+
+	// Set a fixed seed
+	seed := int64(12345)
+	world.SetRandSource(rand.NewSource(seed))
+
+	// Get spawn points - should be deterministic
+	world.AddPlayer("player-1").SetPosition(Vector2{X: 200, Y: 200})
+
+	spawn1 := world.GetBalancedSpawnPoint("player-2")
+
+	// Reset world and use same seed - should get same result
+	world2 := NewWorld()
+	world2.SetRandSource(rand.NewSource(seed))
+	world2.AddPlayer("player-1").SetPosition(Vector2{X: 200, Y: 200})
+
+	spawn2 := world2.GetBalancedSpawnPoint("player-2")
+
+	if spawn1.X != spawn2.X || spawn1.Y != spawn2.Y {
+		t.Errorf("SetRandSource() with same seed produced different results: %v vs %v", spawn1, spawn2)
 	}
 }
 

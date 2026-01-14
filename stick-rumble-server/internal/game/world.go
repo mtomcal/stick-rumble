@@ -10,7 +10,9 @@ import (
 type World struct {
 	players map[string]*PlayerState
 	clock   Clock
+	rng     *rand.Rand // Random number generator for spawn points (protected by rngMu)
 	mu      sync.RWMutex
+	rngMu   sync.Mutex // Protects rng access (rand.Rand is not thread-safe)
 }
 
 // NewWorld creates a new game world with a real clock
@@ -23,6 +25,7 @@ func NewWorldWithClock(clock Clock) *World {
 	return &World{
 		players: make(map[string]*PlayerState),
 		clock:   clock,
+		rng:     rand.New(rand.NewSource(rand.Int63())), // Use a random seed by default
 	}
 }
 
@@ -82,6 +85,13 @@ func (w *World) UpdatePlayerInput(playerID string, input InputState) bool {
 	return true
 }
 
+// SetRandSource sets a custom random source for spawn point generation (for testing)
+func (w *World) SetRandSource(source rand.Source) {
+	w.rngMu.Lock()
+	defer w.rngMu.Unlock()
+	w.rng = rand.New(source)
+}
+
 // GetBalancedSpawnPoint finds a spawn point furthest from all living enemy players
 // Returns the center position if no enemies are present
 func (w *World) GetBalancedSpawnPoint(excludePlayerID string) Vector2 {
@@ -108,10 +118,14 @@ func (w *World) GetBalancedSpawnPoint(excludePlayerID string) Vector2 {
 	for i := 0; i < 10; i++ {
 		// Generate random spawn point with margin from edges
 		margin := 100.0
+
+		// Protect rand.Rand access (not thread-safe)
+		w.rngMu.Lock()
 		candidate := Vector2{
-			X: margin + rand.Float64()*(ArenaWidth-2*margin),
-			Y: margin + rand.Float64()*(ArenaHeight-2*margin),
+			X: margin + w.rng.Float64()*(ArenaWidth-2*margin),
+			Y: margin + w.rng.Float64()*(ArenaHeight-2*margin),
 		}
+		w.rngMu.Unlock()
 
 		// Find minimum distance to any enemy
 		minDistance := math.MaxFloat64
