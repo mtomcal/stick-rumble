@@ -31,3 +31,5 @@ coverage
 *.njsproj
 *.sln
 *.sw?
+# Playwright screenshots
+tests/screenshots/

@@ -116,7 +116,7 @@ describe('HealthBarUI', () => {
     healthBar.updateHealth(50, 100);
 
     expect(mockHealthBar.setDisplaySize).toHaveBeenCalledWith(100, 30);
-    // Color change is tested through fillColor property (mocked in implementation)
+    expect(mockHealthBar.fillColor).toBe(0xffff00); // Yellow color
   });
 
   it('should change health bar color to red when health is below 30%', () => {
@@ -125,7 +125,7 @@ describe('HealthBarUI', () => {
     healthBar.updateHealth(20, 100);
 
     expect(mockHealthBar.setDisplaySize).toHaveBeenCalledWith(40, 30);
-    // Color change is tested through fillColor property (mocked in implementation)
+    expect(mockHealthBar.fillColor).toBe(0xff0000); // Red color
   });
 
   it('should handle zero health', () => {
@@ -162,6 +162,39 @@ describe('HealthBarUI', () => {
 
     expect(mockHealthBar.setDisplaySize).toHaveBeenCalledWith(120, 30);
     expect(mockHealthText.setText).toHaveBeenCalledWith('60/100');
+  });
+
+  it('should keep health bar green when health is above 60%', () => {
+    const healthBar = new HealthBarUI(mockScene, 10, 70);
+
+    healthBar.updateHealth(80, 100);
+
+    expect(mockHealthBar.setDisplaySize).toHaveBeenCalledWith(160, 30);
+    expect(mockHealthBar.fillColor).toBe(0x00ff00); // Green color
+  });
+
+  it('should transition from green to yellow at 60% threshold', () => {
+    const healthBar = new HealthBarUI(mockScene, 10, 70);
+
+    // Start with >60% (green)
+    healthBar.updateHealth(61, 100);
+    expect(mockHealthBar.fillColor).toBe(0x00ff00);
+
+    // Drop to exactly 60% (still yellow since >0.6 is false)
+    healthBar.updateHealth(60, 100);
+    expect(mockHealthBar.fillColor).toBe(0xffff00);
+  });
+
+  it('should transition from yellow to red at 30% threshold', () => {
+    const healthBar = new HealthBarUI(mockScene, 10, 70);
+
+    // Start with >30% (yellow)
+    healthBar.updateHealth(31, 100);
+    expect(mockHealthBar.fillColor).toBe(0xffff00);
+
+    // Drop to exactly 30% (still red since >0.3 is false)
+    healthBar.updateHealth(30, 100);
+    expect(mockHealthBar.fillColor).toBe(0xff0000);
   });
 
   it('should clamp negative health to zero', () => {
