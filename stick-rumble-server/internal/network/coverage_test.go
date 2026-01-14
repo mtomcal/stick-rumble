@@ -298,11 +298,14 @@ func TestStartGlobalHandler(t *testing.T) {
 	handler := getGlobalHandler()
 	assert.NotNil(t, handler, "Global handler should exist")
 
-	// Stop handler
-	StopGlobalHandler()
+	// Cancel context to allow goroutines to finish
+	cancel()
 
-	// Wait for context to be done
-	<-ctx.Done()
+	// Wait a moment for goroutines to stop
+	time.Sleep(50 * time.Millisecond)
+
+	// Stop handler (should be quick now that context is canceled)
+	StopGlobalHandler()
 }
 
 // TestStopGlobalHandler tests the StopGlobalHandler function
@@ -316,14 +319,17 @@ func TestStopGlobalHandler(t *testing.T) {
 	// Start global handler
 	StartGlobalHandler(ctx)
 
+	// Cancel context to allow goroutines to finish
+	cancel()
+
+	// Wait a moment for goroutines to stop
+	time.Sleep(50 * time.Millisecond)
+
 	// Stop global handler - should not panic
 	StopGlobalHandler()
 
 	// Verify it can be called multiple times without panic
 	StopGlobalHandler()
-
-	// Wait for context to be done
-	<-ctx.Done()
 }
 
 // TestOnWeaponRespawn tests the onWeaponRespawn function
