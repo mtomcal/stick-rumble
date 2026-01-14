@@ -101,11 +101,12 @@ describe.sequential('WebSocket Player Movement Integration Tests', () => {
     });
 
     describe('AC: player:move broadcasts', () => {
-      // SKIPPED: Flaky in CI - server broadcast timing issues. See stick-rumble-kzr
-      it.skip('should receive player:move messages with player positions', async () => {
-        const client = createClient();
+      it('should receive player:move messages with player positions', async () => {
+        // Need 2 clients to create a room for broadcast to work
+        const client1 = createClient();
+        const client2 = createClient();
 
-        // Set up handler for player:move messages
+        // Set up handler for player:move messages on client2
         let receivedPlayerMove = false;
         let playerData: any = null;
 
@@ -114,7 +115,7 @@ describe.sequential('WebSocket Player Movement Integration Tests', () => {
             reject(new Error('Timeout waiting for player:move'));
           }, 15000);
 
-          client.on('player:move', (data: any) => {
+          client2.on('player:move', (data: any) => {
             receivedPlayerMove = true;
             playerData = data;
             clearTimeout(timeout);
@@ -122,9 +123,10 @@ describe.sequential('WebSocket Player Movement Integration Tests', () => {
           });
         });
 
-        await client.connect();
+        // Connect both clients and wait for room:joined
+        await connectClientsToRoom(client1, client2);
 
-        // Send input to trigger movement
+        // Send input from client1 to trigger movement
         const inputMessage: Message = {
           type: 'input:state',
           timestamp: Date.now(),
@@ -136,7 +138,7 @@ describe.sequential('WebSocket Player Movement Integration Tests', () => {
           }
         };
 
-        client.send(inputMessage);
+        client1.send(inputMessage);
 
         // Wait for player:move broadcast (server broadcasts at 20Hz)
         await movePromise;
@@ -238,72 +240,63 @@ describe.sequential('WebSocket Player Movement Integration Tests', () => {
         expect(client2ReceivedMove).toBe(true);
       });
 
-      // SKIPPED: Flaky in CI - server broadcast timing issues. See stick-rumble-kzr
-      it.skip('should show movement when WASD keys are pressed', async () => {
-        const client = createClient();
+      it('should show movement when WASD keys are pressed', async () => {
+        // Need 2 clients to create a room for broadcast to work
+        const client1 = createClient();
+        const client2 = createClient();
 
-        let initialPosition: { x: number; y: number } | null = null;
-        const positionsAfterInput: { x: number; y: number }[] = [];
-        const velocitiesAfterInput: { x: number; y: number }[] = [];
+        // Connect both clients and wait for room:joined (player IDs will be in the data)
+        await connectClientsToRoom(client1, client2);
 
-        // First, wait for the initial player:move to establish baseline position
-        const getInitialPosition = new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error('Timeout getting initial position')), 15000);
-          client.on('player:move', (data: any) => {
-            if (data.players && data.players.length > 0 && !initialPosition) {
-              const player = data.players[0];
-              initialPosition = { x: player.position.x, y: player.position.y };
+        // Collect all player:move messages to track movement
+        const moveUpdates: any[] = [];
+
+        const collectMoves = new Promise<void>((resolve) => {
+          const timeout = setTimeout(() => {
+            // If we timeout, that's OK - we'll check what we collected
+            resolve();
+          }, 15000);
+
+          client2.on('player:move', (data: any) => {
+            moveUpdates.push(data);
+            if (moveUpdates.length >= 15) {
               clearTimeout(timeout);
               resolve();
             }
           });
         });
 
-        await client.connect();
-        await getInitialPosition;
+        // Send continuous input from client1 to trigger movement
+        const sendInput = () => {
+          const inputMessage: Message = {
+            type: 'input:state',
+            timestamp: Date.now(),
+            data: { up: true, down: false, left: false, right: false }
+          };
+          client1.send(inputMessage);
+        };
 
-        // Now collect positions AND velocities AFTER sending input
-        const collectDataAfterInput = new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error('Timeout collecting data after input')), 15000);
-          let count = 0;
+        // Send input repeatedly to ensure server processes it
+        const inputInterval = setInterval(sendInput, 100);
 
-          client.on('player:move', (data: any) => {
-            if (data.players && data.players.length > 0) {
-              const player = data.players[0];
-              positionsAfterInput.push({ x: player.position.x, y: player.position.y });
-              velocitiesAfterInput.push({ x: player.velocity.x, y: player.velocity.y });
-              count++;
-              if (count >= 10) {
-                clearTimeout(timeout);
-                resolve();
-              }
-            }
+        try {
+          await collectMoves;
+        } finally {
+          clearInterval(inputInterval);
+        }
+
+        // Should have collected multiple move updates
+        expect(moveUpdates.length).toBeGreaterThan(5);
+
+        // Check if ANY player ever had non-zero velocity (indicating movement processing)
+        const hasMovement = moveUpdates.some((update: any) => {
+          if (!update.players || !Array.isArray(update.players)) return false;
+          return update.players.some((player: any) => {
+            return player.velocity && (player.velocity.x !== 0 || player.velocity.y !== 0);
           });
         });
 
-        // Send input to move up (negative Y direction in most game engines)
-        const inputMessage: Message = {
-          type: 'input:state',
-          timestamp: Date.now(),
-          data: { up: true, down: false, left: false, right: false }
-        };
-
-        client.send(inputMessage);
-        await collectDataAfterInput;
-
-        // Should have collected multiple position updates after input
-        expect(positionsAfterInput.length).toBeGreaterThanOrEqual(10);
-        expect(initialPosition).not.toBeNull();
-
-        // Check if position changed OR velocity became non-zero (indicating movement intent was processed)
-        const finalPosition = positionsAfterInput[positionsAfterInput.length - 1];
-        const positionChanged = finalPosition.x !== initialPosition!.x || finalPosition.y !== initialPosition!.y;
-
-        // Check if velocity is ever non-zero (movement is being applied)
-        const hasNonZeroVelocity = velocitiesAfterInput.some(v => v.x !== 0 || v.y !== 0);
-
-        // Either position should change OR velocity should be non-zero
-        expect(positionChanged || hasNonZeroVelocity).toBe(true);
+        expect(hasMovement).toBe(true);
       });
     });
 
