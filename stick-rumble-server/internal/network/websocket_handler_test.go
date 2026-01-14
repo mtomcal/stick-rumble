@@ -440,16 +440,12 @@ func TestShootWithNoAmmo(t *testing.T) {
 	player1ID := consumeRoomJoinedAndGetPlayerID(t, conn1)
 	_ = consumeRoomJoinedAndGetPlayerID(t, conn2)
 
-	// Deplete ammo by shooting multiple times
-	for i := 0; i < 35; i++ { // Default pistol has 30 ammo
-		sendShootMessage(t, conn1, 0.0)
-	}
+	// Directly set ammo to 0 to avoid cooldown issues when shooting rapidly
+	weapon := ts.handler.gameServer.GetWeaponState(player1ID)
+	require.NotNil(t, weapon)
+	weapon.CurrentAmmo = 0
 
-	// Wait for weapon state to update
-	_, err := readMessageOfType(t, conn1, "weapon:state", 2*time.Second)
-	require.NoError(t, err)
-
-	// Try to shoot again - should fail
+	// Try to shoot with no ammo - should fail
 	sendShootMessage(t, conn1, 0.0)
 
 	// Should receive shoot:failed message
@@ -462,10 +458,10 @@ func TestShootWithNoAmmo(t *testing.T) {
 	require.True(t, ok)
 	assert.Contains(t, []string{"no_ammo", "empty"}, reason)
 
-	// Verify weapon state
-	weapon := ts.handler.gameServer.GetWeaponState(player1ID)
-	assert.NotNil(t, weapon)
-	assert.Equal(t, 0, weapon.CurrentAmmo)
+	// Verify weapon state remains at 0
+	weaponAfter := ts.handler.gameServer.GetWeaponState(player1ID)
+	assert.NotNil(t, weaponAfter)
+	assert.Equal(t, 0, weaponAfter.CurrentAmmo)
 }
 
 func TestReloading(t *testing.T) {
@@ -538,7 +534,7 @@ func TestHitDetectionAndDamage(t *testing.T) {
 
 	data, ok := msg.Data.(map[string]interface{})
 	require.True(t, ok)
-	assert.Equal(t, player2ID, data["playerId"])
+	assert.Equal(t, player2ID, data["victimId"])
 	assert.NotNil(t, data["newHealth"])
 	assert.NotNil(t, data["damage"])
 
@@ -564,11 +560,12 @@ func TestPlayerDeath(t *testing.T) {
 	player1ID := consumeRoomJoinedAndGetPlayerID(t, conn1)
 	player2ID := consumeRoomJoinedAndGetPlayerID(t, conn2)
 
-	// Reduce player 2's health to near death
-	player2State, _ := ts.handler.gameServer.GetPlayerState(player2ID)
-	player2State.Health = 1
+	// Kill player 2 completely using DamagePlayer (onHit checks IsAlive() which requires health <= 0)
+	// The onHit callback is called after damage is applied by the projectile system,
+	// so we need to set health to 0 before calling it directly in tests
+	ts.handler.gameServer.DamagePlayer(player2ID, game.PlayerMaxHealth)
 
-	// Deal killing blow
+	// Trigger the onHit callback (which in production would be called after projectile collision)
 	ts.handler.onHit(game.HitEvent{
 		VictimID:     player2ID,
 		AttackerID:   player1ID,
@@ -581,7 +578,7 @@ func TestPlayerDeath(t *testing.T) {
 
 	data, ok := msg.Data.(map[string]interface{})
 	require.True(t, ok)
-	assert.Equal(t, player2ID, data["playerId"])
+	assert.Equal(t, player2ID, data["victimId"])
 
 	// Player 1 should receive kill credit
 	killMsg, err := readMessageOfType(t, conn1, "player:kill_credit", 2*time.Second)
