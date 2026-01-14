@@ -1,0 +1,61 @@
+{
+  "$id": "ProjectileSpawnData",
+  "description": "Projectile spawn event payload",
+  "type": "object",
+  "required": [
+    "id",
+    "ownerId",
+    "position",
+    "velocity"
+  ],
+  "properties": {
+    "id": {
+      "description": "Unique projectile identifier",
+      "minLength": 1,
+      "type": "string"
+    },
+    "ownerId": {
+      "description": "Player who fired the projectile",
+      "minLength": 1,
+      "type": "string"
+    },
+    "position": {
+      "$id": "Position",
+      "description": "A 2D position coordinate",
+      "type": "object",
+      "required": [
+        "x",
+        "y"
+      ],
+      "properties": {
+        "x": {
+          "description": "X coordinate",
+          "type": "number"
+        },
+        "y": {
+          "description": "Y coordinate",
+          "type": "number"
+        }
+      }
+    },
+    "velocity": {
+      "$id": "Velocity",
+      "description": "A 2D velocity vector",
+      "type": "object",
+      "required": [
+        "x",
+        "y"
+      ],
+      "properties": {
+        "x": {
+          "description": "X velocity component",
+          "type": "number"
+        },
+        "y": {
+          "description": "Y velocity component",
+          "type": "number"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "$id": "weapon_respawnedMessage",
+  "description": "weapon:respawned WebSocket message",
+  "type": "object",
+  "required": [
+    "type",
+    "timestamp",
+    "data"
+  ],
+  "properties": {
+    "type": {
+      "description": "Message type identifier",
+      "const": "weapon:respawned",
+      "type": "string"
+    },
+    "timestamp": {
+      "description": "Unix timestamp in milliseconds",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "data": {
+      "$id": "WeaponRespawnedData",
+      "description": "Weapon respawned event payload",
+      "type": "object",
+      "required": [
+        "crateId",
+        "weaponType",
+        "position"
+      ],
+      "properties": {
+        "crateId": {
+          "description": "Crate that respawned",
+          "minLength": 1,
+          "type": "string"
+        },
+        "weaponType": {
+          "description": "Type of weapon in the crate",
+          "minLength": 1,
+          "type": "string"
+        },
+        "position": {
+          "$id": "Position",
+          "description": "A 2D position coordinate",
+          "type": "object",
+          "required": [
+            "x",
+            "y"
+          ],
+          "properties": {
+            "x": {
+              "description": "X coordinate",
+              "type": "number"
+            },
+            "y": {
+              "description": "Y coordinate",
+              "type": "number"
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "$id": "weapon_stateMessage",
+  "description": "weapon:state WebSocket message",
+  "type": "object",
+  "required": [
+    "type",
+    "timestamp",
+    "data"
+  ],
+  "properties": {
+    "type": {
+      "description": "Message type identifier",
+      "const": "weapon:state",
+      "type": "string"
+    },
+    "timestamp": {
+      "description": "Unix timestamp in milliseconds",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "data": {
+      "$id": "WeaponStateData",
+      "description": "Weapon state payload",
+      "type": "object",
+      "required": [
+        "currentAmmo",
+        "maxAmmo",
+        "isReloading",
+        "canShoot"
+      ],
+      "properties": {
+        "currentAmmo": {
+          "description": "Current ammunition count",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "maxAmmo": {
+          "description": "Maximum ammunition capacity",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "isReloading": {
+          "description": "Whether the weapon is currently reloading",
+          "type": "boolean"
+        },
+        "canShoot": {
+          "description": "Whether the weapon can currently shoot",
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

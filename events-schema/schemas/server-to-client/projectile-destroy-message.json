@@ -1,0 +1,37 @@
+{
+  "$id": "projectile_destroyMessage",
+  "description": "projectile:destroy WebSocket message",
+  "type": "object",
+  "required": [
+    "type",
+    "timestamp",
+    "data"
+  ],
+  "properties": {
+    "type": {
+      "description": "Message type identifier",
+      "const": "projectile:destroy",
+      "type": "string"
+    },
+    "timestamp": {
+      "description": "Unix timestamp in milliseconds",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "data": {
+      "$id": "ProjectileDestroyData",
+      "description": "Projectile destroy event payload",
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "description": "Unique projectile identifier",
+          "minLength": 1,
+          "type": "string"
+        }
+      }
+    }
+  }
+}

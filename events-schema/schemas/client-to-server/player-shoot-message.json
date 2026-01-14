@@ -1,0 +1,36 @@
+{
+  "$id": "player_shootMessage",
+  "description": "player:shoot WebSocket message",
+  "type": "object",
+  "required": [
+    "type",
+    "timestamp",
+    "data"
+  ],
+  "properties": {
+    "type": {
+      "description": "Message type identifier",
+      "const": "player:shoot",
+      "type": "string"
+    },
+    "timestamp": {
+      "description": "Unix timestamp in milliseconds",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "data": {
+      "$id": "PlayerShootData",
+      "description": "Player shoot action payload",
+      "type": "object",
+      "required": [
+        "aimAngle"
+      ],
+      "properties": {
+        "aimAngle": {
+          "description": "Aim angle in radians",
+          "type": "number"
+        }
+      }
+    }
+  }
+}

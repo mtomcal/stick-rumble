@@ -1,0 +1,15 @@
+{
+  "$id": "ProjectileDestroyData",
+  "description": "Projectile destroy event payload",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "id": {
+      "description": "Unique projectile identifier",
+      "minLength": 1,
+      "type": "string"
+    }
+  }
+}

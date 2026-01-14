@@ -1,0 +1,33 @@
+{
+  "$id": "WeaponPickupConfirmedData",
+  "description": "Weapon pickup confirmed event payload",
+  "type": "object",
+  "required": [
+    "playerId",
+    "crateId",
+    "weaponType",
+    "nextRespawnTime"
+  ],
+  "properties": {
+    "playerId": {
+      "description": "Player who picked up the weapon",
+      "minLength": 1,
+      "type": "string"
+    },
+    "crateId": {
+      "description": "Crate that was picked up",
+      "minLength": 1,
+      "type": "string"
+    },
+    "weaponType": {
+      "description": "Type of weapon picked up",
+      "minLength": 1,
+      "type": "string"
+    },
+    "nextRespawnTime": {
+      "description": "Time until the crate respawns (milliseconds)",
+      "minimum": 0,
+      "type": "integer"
+    }
+  }
+}

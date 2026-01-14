@@ -1,0 +1,15 @@
+{
+  "$id": "WeaponPickupAttemptData",
+  "description": "Weapon pickup attempt payload",
+  "type": "object",
+  "required": [
+    "crateId"
+  ],
+  "properties": {
+    "crateId": {
+      "description": "Unique identifier for the weapon crate",
+      "minLength": 1,
+      "type": "string"
+    }
+  }
+}

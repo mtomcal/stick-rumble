@@ -1,0 +1,34 @@
+{
+  "$id": "InputStateData",
+  "description": "Player input state payload",
+  "type": "object",
+  "required": [
+    "up",
+    "down",
+    "left",
+    "right",
+    "aimAngle"
+  ],
+  "properties": {
+    "up": {
+      "description": "W key pressed",
+      "type": "boolean"
+    },
+    "down": {
+      "description": "S key pressed",
+      "type": "boolean"
+    },
+    "left": {
+      "description": "A key pressed",
+      "type": "boolean"
+    },
+    "right": {
+      "description": "D key pressed",
+      "type": "boolean"
+    },
+    "aimAngle": {
+      "description": "Aim angle in radians",
+      "type": "number"
+    }
+  }
+}

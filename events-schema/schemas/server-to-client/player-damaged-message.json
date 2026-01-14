@@ -1,0 +1,61 @@
+{
+  "$id": "player_damagedMessage",
+  "description": "player:damaged WebSocket message",
+  "type": "object",
+  "required": [
+    "type",
+    "timestamp",
+    "data"
+  ],
+  "properties": {
+    "type": {
+      "description": "Message type identifier",
+      "const": "player:damaged",
+      "type": "string"
+    },
+    "timestamp": {
+      "description": "Unix timestamp in milliseconds",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "data": {
+      "$id": "PlayerDamagedData",
+      "description": "Player damaged event payload",
+      "type": "object",
+      "required": [
+        "victimId",
+        "attackerId",
+        "damage",
+        "newHealth",
+        "projectileId"
+      ],
+      "properties": {
+        "victimId": {
+          "description": "Player who took damage",
+          "minLength": 1,
+          "type": "string"
+        },
+        "attackerId": {
+          "description": "Player who dealt damage",
+          "minLength": 1,
+          "type": "string"
+        },
+        "damage": {
+          "description": "Amount of damage dealt",
+          "minimum": 0,
+          "type": "number"
+        },
+        "newHealth": {
+          "description": "Victim health after damage",
+          "minimum": 0,
+          "type": "number"
+        },
+        "projectileId": {
+          "description": "Projectile that caused damage",
+          "minLength": 1,
+          "type": "string"
+        }
+      }
+    }
+  }
+}

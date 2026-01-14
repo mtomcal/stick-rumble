@@ -1,0 +1,113 @@
+{
+  "$id": "player_moveMessage",
+  "description": "player:move WebSocket message",
+  "type": "object",
+  "required": [
+    "type",
+    "timestamp",
+    "data"
+  ],
+  "properties": {
+    "type": {
+      "description": "Message type identifier",
+      "const": "player:move",
+      "type": "string"
+    },
+    "timestamp": {
+      "description": "Unix timestamp in milliseconds",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "data": {
+      "$id": "PlayerMoveData",
+      "description": "Player movement update payload",
+      "type": "object",
+      "required": [
+        "players"
+      ],
+      "properties": {
+        "players": {
+          "description": "Array of player states",
+          "type": "array",
+          "items": {
+            "$id": "PlayerState",
+            "description": "Player state for movement updates",
+            "type": "object",
+            "required": [
+              "id",
+              "position",
+              "velocity",
+              "health",
+              "maxHealth",
+              "rotation",
+              "isDead"
+            ],
+            "properties": {
+              "id": {
+                "description": "Player unique identifier",
+                "minLength": 1,
+                "type": "string"
+              },
+              "position": {
+                "$id": "Position",
+                "description": "A 2D position coordinate",
+                "type": "object",
+                "required": [
+                  "x",
+                  "y"
+                ],
+                "properties": {
+                  "x": {
+                    "description": "X coordinate",
+                    "type": "number"
+                  },
+                  "y": {
+                    "description": "Y coordinate",
+                    "type": "number"
+                  }
+                }
+              },
+              "velocity": {
+                "$id": "Velocity",
+                "description": "A 2D velocity vector",
+                "type": "object",
+                "required": [
+                  "x",
+                  "y"
+                ],
+                "properties": {
+                  "x": {
+                    "description": "X velocity component",
+                    "type": "number"
+                  },
+                  "y": {
+                    "description": "Y velocity component",
+                    "type": "number"
+                  }
+                }
+              },
+              "health": {
+                "description": "Current health",
+                "minimum": 0,
+                "type": "number"
+              },
+              "maxHealth": {
+                "description": "Maximum health",
+                "minimum": 0,
+                "type": "number"
+              },
+              "rotation": {
+                "description": "Player rotation in radians",
+                "type": "number"
+              },
+              "isDead": {
+                "description": "Whether the player is dead",
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
