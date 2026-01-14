@@ -1,4 +1,4 @@
-.PHONY: help install dev-client dev-server dev test test-client test-server test-server-verbose test-integration test-coverage test-visual test-visual-update lint build clean check-zombies kill-dev schema-generate schema-validate test-schema
+.PHONY: help install dev-client dev-server dev test test-client test-server test-server-verbose test-integration test-coverage test-visual test-visual-update lint build clean check-zombies kill-dev schema-generate schema-validate test-schema weapon-config-validate
 
 # Default target - show help
 help:
@@ -28,10 +28,11 @@ help:
 	@echo "  make lint             Run linters for both client and server"
 	@echo "  make typecheck        Run TypeScript type checking"
 	@echo ""
-	@echo "Schema:"
-	@echo "  make schema-generate  Generate JSON Schema files from TypeBox"
-	@echo "  make schema-validate  Validate all JSON Schema files"
-	@echo "  make test-schema      Run events-schema tests"
+	@echo "Schema & Config:"
+	@echo "  make schema-generate       Generate JSON Schema files from TypeBox"
+	@echo "  make schema-validate       Validate all JSON Schema files"
+	@echo "  make test-schema           Run events-schema tests"
+	@echo "  make weapon-config-validate Validate weapon-configs.json"
 	@echo ""
 	@echo "Build:"
 	@echo "  make build            Build both client and server for production"
@@ -223,6 +224,62 @@ schema-validate:
 test-schema:
 	@echo "Running events-schema tests..."
 	cd events-schema && npm test
+
+# Validate weapon configs
+weapon-config-validate:
+	@echo "Validating weapon-configs.json..."
+	@if [ ! -f weapon-configs.json ]; then \
+		echo "ERROR: weapon-configs.json not found in project root"; \
+		exit 1; \
+	fi
+	@echo "  ✓ File exists"
+	@if ! command -v jq > /dev/null 2>&1; then \
+		echo "WARNING: jq not installed, skipping JSON validation"; \
+		echo "  Install with: apt-get install jq (Ubuntu) or brew install jq (macOS)"; \
+	else \
+		if ! jq empty weapon-configs.json > /dev/null 2>&1; then \
+			echo "ERROR: Invalid JSON syntax in weapon-configs.json"; \
+			exit 1; \
+		fi; \
+		echo "  ✓ Valid JSON syntax"; \
+		REQUIRED_WEAPONS="Pistol Bat Katana Uzi AK47 Shotgun"; \
+		for weapon in $$REQUIRED_WEAPONS; do \
+			if ! jq -e ".weapons.$$weapon" weapon-configs.json > /dev/null 2>&1; then \
+				echo "ERROR: Missing required weapon: $$weapon"; \
+				exit 1; \
+			fi; \
+		done; \
+		echo "  ✓ All required weapons present"; \
+		REQUIRED_FIELDS="name damage fireRate magazineSize reloadTimeMs projectileSpeed range arcDegrees knockbackDistance spreadDegrees"; \
+		for weapon in $$REQUIRED_WEAPONS; do \
+			for field in $$REQUIRED_FIELDS; do \
+				if ! jq -e ".weapons.$$weapon.$$field" weapon-configs.json > /dev/null 2>&1; then \
+					echo "ERROR: Missing field '$$field' for weapon '$$weapon'"; \
+					exit 1; \
+				fi; \
+			done; \
+		done; \
+		echo "  ✓ All required fields present"; \
+	fi
+	@echo ""
+	@echo "Checking server config path..."
+	@if [ ! -f stick-rumble-client/public/weapon-configs.json ]; then \
+		echo "ERROR: weapon-configs.json not found in stick-rumble-client/public/"; \
+		echo "  Run: cp weapon-configs.json stick-rumble-client/public/"; \
+		exit 1; \
+	fi
+	@echo "  ✓ Client public config exists"
+	@if command -v diff > /dev/null 2>&1; then \
+		if ! diff -q weapon-configs.json stick-rumble-client/public/weapon-configs.json > /dev/null 2>&1; then \
+			echo "ERROR: weapon-configs.json files don't match!"; \
+			echo "  Root and client/public configs must be identical"; \
+			echo "  Run: cp weapon-configs.json stick-rumble-client/public/"; \
+			exit 1; \
+		fi; \
+		echo "  ✓ Config files match"; \
+	fi
+	@echo ""
+	@echo "✓ Weapon configuration validation passed"
 
 # Run visual regression tests
 test-visual:
