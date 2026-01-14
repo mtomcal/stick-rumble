@@ -29,17 +29,27 @@ const (
 	ProjectileMaxRange = 800.0
 )
 
+// RecoilPattern defines how a weapon's aim is affected by firing
+type RecoilPattern struct {
+	VerticalPerShot   float64 // Degrees of vertical climb per shot
+	HorizontalPerShot float64 // Degrees of horizontal spread per shot (+/- random)
+	RecoveryTime      float64 // Seconds for recoil to fully recover
+	MaxAccumulation   float64 // Maximum accumulated recoil in degrees
+}
+
 // Weapon defines a weapon type with its properties
 type Weapon struct {
 	Name              string
 	Damage            int
-	FireRate          float64       // Rounds per second (or swings per second for melee)
-	MagazineSize      int           // Rounds per magazine (0 for melee)
-	ReloadTime        time.Duration // Time to reload (0 for melee)
-	ProjectileSpeed   float64       // Projectile speed in px/s (0 for melee)
-	Range             float64       // Maximum range in pixels (for melee and ranged)
-	ArcDegrees        float64       // Swing arc in degrees (for melee, 0 for ranged)
-	KnockbackDistance float64       // Knockback distance in pixels (Bat only)
+	FireRate          float64        // Rounds per second (or swings per second for melee)
+	MagazineSize      int            // Rounds per magazine (0 for melee)
+	ReloadTime        time.Duration  // Time to reload (0 for melee)
+	ProjectileSpeed   float64        // Projectile speed in px/s (0 for melee)
+	Range             float64        // Maximum range in pixels (for melee and ranged)
+	ArcDegrees        float64        // Swing arc in degrees (for melee, 0 for ranged)
+	KnockbackDistance float64        // Knockback distance in pixels (Bat only)
+	Recoil            *RecoilPattern // Recoil pattern (nil for no recoil)
+	SpreadDegrees     float64        // Movement spread in degrees (+/- while moving, 0 for stationary)
 }
 
 // IsMelee returns true if this is a melee weapon
@@ -59,6 +69,8 @@ func NewPistol() *Weapon {
 		Range:             ProjectileMaxRange,
 		ArcDegrees:        0,
 		KnockbackDistance: 0,
+		Recoil:            nil, // Pistol has no recoil pattern
+		SpreadDegrees:     0,   // Pistol has no movement spread
 	}
 }
 
@@ -162,4 +174,32 @@ func (ws *WeaponState) IsEmpty() bool {
 // GetAmmoInfo returns current and max ammo
 func (ws *WeaponState) GetAmmoInfo() (current, max int) {
 	return ws.CurrentAmmo, ws.Weapon.MagazineSize
+}
+
+// CalculateDamageFalloff calculates damage with distance-based falloff
+// Damage falloff starts at 50% of max range and decreases linearly to 0 at max range
+// Formula from Story 3.3:
+//
+//	if (distance > maxRange * 0.5) {
+//	  damageFalloff = 1.0 - ((distance - maxRange * 0.5) / (maxRange * 0.5))
+//	  actualDamage = baseDamage * damageFalloff
+//	}
+func CalculateDamageFalloff(baseDamage int, distance float64, maxRange float64) float64 {
+	// No falloff within first half of range
+	falloffStart := maxRange * 0.5
+	if distance <= falloffStart {
+		return float64(baseDamage)
+	}
+
+	// Beyond max range, no damage
+	if distance >= maxRange {
+		return 0
+	}
+
+	// Linear falloff from half range to max range
+	falloffRange := maxRange - falloffStart
+	distanceBeyondFalloffStart := distance - falloffStart
+	damageFalloff := 1.0 - (distanceBeyondFalloffStart / falloffRange)
+
+	return float64(baseDamage) * damageFalloff
 }
