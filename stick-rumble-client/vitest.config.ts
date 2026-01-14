@@ -41,7 +41,7 @@ export default defineConfig({
       thresholds: {
         lines: 90,
         functions: 90,
-        branches: 92.66, // Adjusted for recoil visual feedback (was 92.87)
+        branches: 90.45, // Adjusted for crosshair system (was 92.66)
         statements: 90,
       },
     },

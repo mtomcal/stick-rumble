@@ -285,4 +285,26 @@ export class PlayerManager {
       );
     }
   }
+
+  /**
+   * Check if the local player is currently moving
+   * A player is considered moving if their velocity is above a threshold
+   */
+  isLocalPlayerMoving(): boolean {
+    if (!this.localPlayerId) {
+      return false;
+    }
+
+    const playerState = this.playerStates.get(this.localPlayerId);
+    if (!playerState) {
+      return false;
+    }
+
+    const MOVEMENT_THRESHOLD = 0.1; // Velocity threshold to consider as moving
+    const velocityMagnitude = Math.sqrt(
+      playerState.velocity.x ** 2 + playerState.velocity.y ** 2
+    );
+
+    return velocityMagnitude > MOVEMENT_THRESHOLD;
+  }
 }
