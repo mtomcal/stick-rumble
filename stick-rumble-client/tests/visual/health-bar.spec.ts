@@ -26,8 +26,10 @@ test.describe('Health Bar Visual Regression', () => {
     // Wait for rendering
     await page.waitForTimeout(100);
 
-    // Take screenshot and compare
-    await expect(page.locator('[data-testid="health-bar"]')).toHaveScreenshot('health-bar-100.png');
+    // Take screenshot of the canvas area where health bar is rendered
+    await expect(page.locator('canvas')).toHaveScreenshot('health-bar-100.png', {
+      clip: { x: 0, y: 0, width: 250, height: 70 }
+    });
   });
 
   test('should render health bar at 50% health', async ({ page }) => {
@@ -38,7 +40,9 @@ test.describe('Health Bar Visual Regression', () => {
 
     await page.waitForTimeout(100);
 
-    await expect(page.locator('[data-testid="health-bar"]')).toHaveScreenshot('health-bar-50.png');
+    await expect(page.locator('canvas')).toHaveScreenshot('health-bar-50.png', {
+      clip: { x: 0, y: 0, width: 250, height: 70 }
+    });
   });
 
   test('should render health bar at 10% health', async ({ page }) => {
@@ -49,7 +53,9 @@ test.describe('Health Bar Visual Regression', () => {
 
     await page.waitForTimeout(100);
 
-    await expect(page.locator('[data-testid="health-bar"]')).toHaveScreenshot('health-bar-10.png');
+    await expect(page.locator('canvas')).toHaveScreenshot('health-bar-10.png', {
+      clip: { x: 0, y: 0, width: 250, height: 70 }
+    });
   });
 
   test('should render health bar at 0% health', async ({ page }) => {
@@ -60,7 +66,9 @@ test.describe('Health Bar Visual Regression', () => {
 
     await page.waitForTimeout(100);
 
-    await expect(page.locator('[data-testid="health-bar"]')).toHaveScreenshot('health-bar-0.png');
+    await expect(page.locator('canvas')).toHaveScreenshot('health-bar-0.png', {
+      clip: { x: 0, y: 0, width: 250, height: 70 }
+    });
   });
 
   test('should render health bar with regeneration effect disabled', async ({ page }) => {
@@ -71,6 +79,8 @@ test.describe('Health Bar Visual Regression', () => {
 
     await page.waitForTimeout(100);
 
-    await expect(page.locator('[data-testid="health-bar"]')).toHaveScreenshot('health-bar-regenerating.png');
+    await expect(page.locator('canvas')).toHaveScreenshot('health-bar-regenerating.png', {
+      clip: { x: 0, y: 0, width: 250, height: 70 }
+    });
   });
 });

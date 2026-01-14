@@ -21,6 +21,8 @@ export class UITestScene extends Phaser.Scene {
 
     // Initialize Health Bar at top-left
     this.healthBar = new HealthBarUI(this, 20, 20);
+    // Initialize with 100% health to show the component
+    this.healthBar.updateHealth(100, 100, false);
 
     // Initialize Kill Feed at top-right
     this.killFeed = new KillFeedUI(this, 780, 20);

@@ -21,7 +21,10 @@ test.describe('Kill Feed Visual Regression', () => {
     // Kill feed starts empty
     await page.waitForTimeout(100);
 
-    await expect(page.locator('[data-testid="kill-feed"]')).toHaveScreenshot('kill-feed-empty.png');
+    // Screenshot top-right area where kill feed is rendered (x: 500, y: 0, 300x150)
+    await expect(page.locator('canvas')).toHaveScreenshot('kill-feed-empty.png', {
+      clip: { x: 500, y: 0, width: 300, height: 150 }
+    });
   });
 
   test('should render kill feed with single kill', async ({ page }) => {
@@ -32,7 +35,9 @@ test.describe('Kill Feed Visual Regression', () => {
 
     await page.waitForTimeout(100);
 
-    await expect(page.locator('[data-testid="kill-feed"]')).toHaveScreenshot('kill-feed-single.png');
+    await expect(page.locator('canvas')).toHaveScreenshot('kill-feed-single.png', {
+      clip: { x: 500, y: 0, width: 300, height: 150 }
+    });
   });
 
   test('should render kill feed with multiple kills', async ({ page }) => {
@@ -45,7 +50,9 @@ test.describe('Kill Feed Visual Regression', () => {
 
     await page.waitForTimeout(100);
 
-    await expect(page.locator('[data-testid="kill-feed"]')).toHaveScreenshot('kill-feed-multiple.png');
+    await expect(page.locator('canvas')).toHaveScreenshot('kill-feed-multiple.png', {
+      clip: { x: 500, y: 0, width: 300, height: 150 }
+    });
   });
 
   test('should render kill feed at max capacity (5 kills)', async ({ page }) => {
@@ -60,6 +67,8 @@ test.describe('Kill Feed Visual Regression', () => {
 
     await page.waitForTimeout(100);
 
-    await expect(page.locator('[data-testid="kill-feed"]')).toHaveScreenshot('kill-feed-max.png');
+    await expect(page.locator('canvas')).toHaveScreenshot('kill-feed-max.png', {
+      clip: { x: 500, y: 0, width: 300, height: 150 }
+    });
   });
 });
