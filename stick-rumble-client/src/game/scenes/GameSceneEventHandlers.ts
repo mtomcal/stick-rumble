@@ -9,6 +9,7 @@ import type { HealthBarUI } from '../ui/HealthBarUI';
 import type { KillFeedUI } from '../ui/KillFeedUI';
 import type { GameSceneUI } from './GameSceneUI';
 import type { GameSceneSpectator } from './GameSceneSpectator';
+import type { ScreenShake } from '../effects/ScreenShake';
 // Import generated schema types for server→client messages (replaces manual type assertions)
 import type {
   RoomJoinedData,
@@ -48,6 +49,8 @@ export class GameSceneEventHandlers {
   private localPlayerHealth: number = 100;
   private onCameraFollowNeeded: () => void;
   private handlerRefs: Map<string, (data: unknown) => void> = new Map();
+  private screenShake: ScreenShake | null = null;
+  private currentWeaponType: string = 'pistol'; // Default weapon
 
   constructor(
     wsClient: WebSocketClient,
@@ -85,6 +88,13 @@ export class GameSceneEventHandlers {
    */
   setShootingManager(shootingManager: ShootingManager): void {
     this.shootingManager = shootingManager;
+  }
+
+  /**
+   * Set screen shake instance for recoil feedback
+   */
+  setScreenShake(screenShake: ScreenShake): void {
+    this.screenShake = screenShake;
   }
 
   /**
@@ -180,6 +190,11 @@ export class GameSceneEventHandlers {
         messageData.position.x,
         messageData.position.y
       );
+
+      // Trigger screen shake for local player's weapon fire (Story 3.3 Polish)
+      if (this.screenShake && messageData.ownerId === this.playerManager.getLocalPlayerId()) {
+        this.screenShake.shakeOnWeaponFire(this.currentWeaponType);
+      }
     };
     this.handlerRefs.set('projectile:spawn', projectileSpawnHandler);
     this.wsClient.on('projectile:spawn', projectileSpawnHandler);
@@ -340,6 +355,11 @@ export class GameSceneEventHandlers {
       // Hide pickup prompt if it's the same crate
       if (this.pickupPromptUI.isVisible()) {
         this.pickupPromptUI.hide();
+      }
+
+      // Track weapon type for local player (Story 3.3 Polish - for recoil feedback)
+      if (messageData.playerId === this.playerManager.getLocalPlayerId()) {
+        this.currentWeaponType = messageData.weaponType;
       }
     };
     this.handlerRefs.set('weapon:pickup_confirmed', weaponPickupConfirmedHandler);
