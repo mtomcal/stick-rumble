@@ -87,6 +87,142 @@ describe('GameScene - Player Movement', () => {
       // Verify inputManager.update was called
       expect(updateSpy).toHaveBeenCalledTimes(1);
     });
+
+    it('should update spectator mode when spectator is active', async () => {
+      const mockSceneContext = createMockScene();
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      // Trigger the delayed callback to start connection
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Set readyState to OPEN and trigger onopen
+      mockWebSocketInstance.readyState = 1;
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen(new Event('open'));
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Mock spectator to be active
+      const mockSpectator = {
+        isActive: vi.fn().mockReturnValue(true),
+        updateSpectatorMode: vi.fn()
+      };
+      (scene as any).spectator = mockSpectator;
+
+      // Call scene.update which should call spectator.updateSpectatorMode
+      scene.update(0, 16.67);
+
+      // Verify spectator mode was updated
+      expect(mockSpectator.updateSpectatorMode).toHaveBeenCalled();
+    });
+  });
+
+  describe('weapon proximity', () => {
+    it('should return early if managers are not initialized', () => {
+      // Call checkWeaponProximity without initializing managers
+      expect(() => {
+        (scene as any).checkWeaponProximity();
+      }).not.toThrow();
+    });
+
+    it('should show pickup prompt when near a weapon crate', async () => {
+      const mockSceneContext = createMockScene();
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      // Trigger connection
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      mockWebSocketInstance.readyState = 1;
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen(new Event('open'));
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Mock weapon crate manager to return a nearby crate
+      const mockCrate = { id: 'crate-1', weaponType: 'shotgun' };
+      const mockWeaponCrateManager = {
+        checkProximity: vi.fn().mockReturnValue(mockCrate)
+      };
+      (scene as any).weaponCrateManager = mockWeaponCrateManager;
+
+      // Mock pickup prompt UI
+      const mockPickupPromptUI = {
+        show: vi.fn(),
+        hide: vi.fn()
+      };
+      (scene as any).pickupPromptUI = mockPickupPromptUI;
+
+      // Mock player manager to return local player position
+      const mockPlayerManager = {
+        getLocalPlayerPosition: vi.fn().mockReturnValue({ x: 100, y: 100 })
+      };
+      (scene as any).playerManager = mockPlayerManager;
+
+      // Call checkWeaponProximity
+      (scene as any).checkWeaponProximity();
+
+      // Verify pickup prompt was shown
+      expect(mockPickupPromptUI.show).toHaveBeenCalledWith('shotgun');
+      expect((scene as any).nearbyWeaponCrate).toEqual(mockCrate);
+    });
+
+    it('should hide pickup prompt when no weapon crate nearby', async () => {
+      const mockSceneContext = createMockScene();
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      // Trigger connection
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      mockWebSocketInstance.readyState = 1;
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen(new Event('open'));
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Mock weapon crate manager to return no nearby crate
+      const mockWeaponCrateManager = {
+        checkProximity: vi.fn().mockReturnValue(null)
+      };
+      (scene as any).weaponCrateManager = mockWeaponCrateManager;
+
+      // Mock pickup prompt UI
+      const mockPickupPromptUI = {
+        show: vi.fn(),
+        hide: vi.fn()
+      };
+      (scene as any).pickupPromptUI = mockPickupPromptUI;
+
+      // Mock player manager
+      const mockPlayerManager = {
+        getLocalPlayerPosition: vi.fn().mockReturnValue({ x: 100, y: 100 })
+      };
+      (scene as any).playerManager = mockPlayerManager;
+
+      // Set initial nearby crate
+      (scene as any).nearbyWeaponCrate = { id: 'crate-1', weaponType: 'shotgun' };
+
+      // Call checkWeaponProximity
+      (scene as any).checkWeaponProximity();
+
+      // Verify pickup prompt was hidden
+      expect(mockPickupPromptUI.hide).toHaveBeenCalled();
+      expect((scene as any).nearbyWeaponCrate).toBeNull();
+    });
   });
 
   describe('message handling', () => {
