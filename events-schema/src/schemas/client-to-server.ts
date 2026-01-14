@@ -74,3 +74,22 @@ export const WeaponPickupAttemptMessageSchema = createTypedMessageSchema(
   WeaponPickupAttemptDataSchema
 );
 export type WeaponPickupAttemptMessage = Static<typeof WeaponPickupAttemptMessageSchema>;
+
+/**
+ * Player melee attack data payload.
+ * Sent when player attempts a melee attack.
+ */
+export const PlayerMeleeAttackDataSchema = Type.Object(
+  {
+    aimAngle: Type.Number({ description: 'Aim angle in radians for melee swing direction' }),
+  },
+  { $id: 'PlayerMeleeAttackData', description: 'Player melee attack action payload' }
+);
+
+export type PlayerMeleeAttackData = Static<typeof PlayerMeleeAttackDataSchema>;
+
+/**
+ * Complete player:melee_attack message schema
+ */
+export const PlayerMeleeAttackMessageSchema = createTypedMessageSchema('player:melee_attack', PlayerMeleeAttackDataSchema);
+export type PlayerMeleeAttackMessage = Static<typeof PlayerMeleeAttackMessageSchema>;

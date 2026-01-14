@@ -15,6 +15,20 @@ export interface WeaponState {
 }
 
 /**
+ * Weapon type for tracking melee vs ranged behavior
+ */
+type WeaponType = 'Pistol' | 'Bat' | 'Katana';
+
+/**
+ * Weapon cooldown configuration (in milliseconds)
+ */
+const WEAPON_COOLDOWNS: Record<WeaponType, number> = {
+  Pistol: 1000 / WEAPON.PISTOL_FIRE_RATE, // 333ms
+  Bat: 500,    // 0.5s cooldown (2.0/s fire rate)
+  Katana: 800, // 0.8s cooldown (1.25/s fire rate)
+};
+
+/**
  * ShootingManager handles player shooting input and weapon state
  */
 export class ShootingManager {
@@ -23,9 +37,11 @@ export class ShootingManager {
 
   private weaponState: WeaponState;
   private lastShotTime: number;
+  private lastMeleeTime: number;
   private fireCooldownMs: number;
   private aimAngle: number = 0;
   private isEnabled: boolean = true;
+  private weaponType: WeaponType = 'Pistol';
 
   constructor(_scene: Phaser.Scene, wsClient: WebSocketClient, clock: Clock = new RealClock()) {
     this.wsClient = wsClient;
@@ -36,6 +52,9 @@ export class ShootingManager {
 
     // Initialize lastShotTime to allow immediate first shot
     this.lastShotTime = this.clock.now() - this.fireCooldownMs;
+
+    // Initialize lastMeleeTime to allow immediate first melee attack
+    this.lastMeleeTime = this.clock.now() - WEAPON_COOLDOWNS.Bat;
 
     // Initialize weapon state with full ammo
     this.weaponState = {
@@ -157,6 +176,51 @@ export class ShootingManager {
    */
   isReloading(): boolean {
     return this.weaponState.isReloading;
+  }
+
+  /**
+   * Set weapon type for cooldown tracking
+   */
+  setWeaponType(weaponType: WeaponType): void {
+    this.weaponType = weaponType;
+  }
+
+  /**
+   * Attempt a melee attack
+   * Returns true if attack was sent to server
+   */
+  meleeAttack(): boolean {
+    if (!this.isEnabled || !this.canMeleeAttack()) {
+      return false;
+    }
+
+    // Record attack time for cooldown
+    this.lastMeleeTime = this.clock.now();
+
+    // Send melee attack message to server
+    this.wsClient.send({
+      type: 'player:melee_attack',
+      timestamp: this.clock.now(),
+      data: {
+        aimAngle: this.aimAngle,
+      },
+    });
+
+    return true;
+  }
+
+  /**
+   * Check if player can perform melee attack
+   */
+  canMeleeAttack(): boolean {
+    const cooldown = WEAPON_COOLDOWNS[this.weaponType] || WEAPON_COOLDOWNS.Bat;
+    const now = this.clock.now();
+
+    if (now - this.lastMeleeTime < cooldown) {
+      return false;
+    }
+
+    return true;
   }
 
   /**

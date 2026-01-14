@@ -17,6 +17,8 @@ import {
   PlayerReloadMessageSchema,
   WeaponPickupAttemptDataSchema,
   WeaponPickupAttemptMessageSchema,
+  PlayerMeleeAttackDataSchema,
+  PlayerMeleeAttackMessageSchema,
 } from './schemas/client-to-server.js';
 import {
   RoomJoinedDataSchema,
@@ -53,6 +55,8 @@ import {
   WeaponPickupConfirmedMessageSchema,
   WeaponRespawnedDataSchema,
   WeaponRespawnedMessageSchema,
+  MeleeHitDataSchema,
+  MeleeHitMessageSchema,
 } from './schemas/server-to-client.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -108,6 +112,14 @@ const schemas: SchemaExport[] = [
   {
     schema: WeaponPickupAttemptMessageSchema,
     outputPath: 'schemas/client-to-server/weapon-pickup-attempt-message.json',
+  },
+  {
+    schema: PlayerMeleeAttackDataSchema,
+    outputPath: 'schemas/client-to-server/player-melee-attack-data.json',
+  },
+  {
+    schema: PlayerMeleeAttackMessageSchema,
+    outputPath: 'schemas/client-to-server/player-melee-attack-message.json',
   },
   // Server-to-client schemas
   {
@@ -245,6 +257,14 @@ const schemas: SchemaExport[] = [
   {
     schema: WeaponRespawnedMessageSchema,
     outputPath: 'schemas/server-to-client/weapon-respawned-message.json',
+  },
+  {
+    schema: MeleeHitDataSchema,
+    outputPath: 'schemas/server-to-client/melee-hit-data.json',
+  },
+  {
+    schema: MeleeHitMessageSchema,
+    outputPath: 'schemas/server-to-client/melee-hit-message.json',
   },
 ];
 

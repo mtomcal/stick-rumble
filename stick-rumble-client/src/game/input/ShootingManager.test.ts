@@ -390,6 +390,116 @@ describe('ShootingManager', () => {
     });
   });
 
+  describe('melee attack', () => {
+    it('should send player:melee_attack message when performing melee attack', () => {
+      const aimAngle = Math.PI / 4;
+      shootingManager.setAimAngle(aimAngle);
+      shootingManager.meleeAttack();
+
+      expect(mockWsClient.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'player:melee_attack',
+          data: expect.objectContaining({
+            aimAngle,
+          }),
+        })
+      );
+    });
+
+    it('should not melee attack when on cooldown (Bat)', () => {
+      shootingManager.setWeaponType('Bat');
+      shootingManager.meleeAttack();
+      vi.clearAllMocks();
+
+      // Try to attack immediately (should fail due to cooldown)
+      shootingManager.meleeAttack();
+      expect(mockWsClient.send).not.toHaveBeenCalled();
+    });
+
+    it('should allow melee attack after Bat cooldown expires (0.5s)', () => {
+      shootingManager.setWeaponType('Bat');
+      shootingManager.meleeAttack();
+      vi.clearAllMocks();
+
+      // Advance time past Bat cooldown (0.5s = 500ms)
+      clock.advance(600);
+
+      shootingManager.meleeAttack();
+      expect(mockWsClient.send).toHaveBeenCalled();
+    });
+
+    it('should allow melee attack after Katana cooldown expires (0.8s)', () => {
+      shootingManager.setWeaponType('Katana');
+      shootingManager.meleeAttack();
+      vi.clearAllMocks();
+
+      // Advance time past Katana cooldown (0.8s = 800ms)
+      clock.advance(900);
+
+      shootingManager.meleeAttack();
+      expect(mockWsClient.send).toHaveBeenCalled();
+    });
+
+    it('should enforce faster cooldown for Bat vs Katana', () => {
+      // Bat cooldown: 0.5s (500ms)
+      shootingManager.setWeaponType('Bat');
+      shootingManager.meleeAttack();
+      vi.clearAllMocks();
+
+      // Should be ready after 500ms
+      clock.advance(500);
+      shootingManager.meleeAttack();
+      expect(mockWsClient.send).toHaveBeenCalled();
+
+      // Reset for Katana
+      vi.clearAllMocks();
+      shootingManager.setWeaponType('Katana');
+      shootingManager.meleeAttack();
+      vi.clearAllMocks();
+
+      // Should NOT be ready after 500ms
+      clock.advance(500);
+      shootingManager.meleeAttack();
+      expect(mockWsClient.send).not.toHaveBeenCalled();
+
+      // Should be ready after 800ms total
+      clock.advance(300);
+      shootingManager.meleeAttack();
+      expect(mockWsClient.send).toHaveBeenCalled();
+    });
+
+    it('should not check ammo for melee weapons', () => {
+      shootingManager.setWeaponType('Bat');
+
+      // Even with 0 ammo, melee should work
+      shootingManager.updateWeaponState({
+        currentAmmo: 0,
+        maxAmmo: 0,
+        isReloading: false,
+        canShoot: true,
+      });
+
+      shootingManager.meleeAttack();
+      expect(mockWsClient.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'player:melee_attack',
+        })
+      );
+    });
+
+    it('should respect enabled/disabled state for melee', () => {
+      shootingManager.setWeaponType('Bat');
+      shootingManager.disable();
+
+      shootingManager.meleeAttack();
+      expect(mockWsClient.send).not.toHaveBeenCalled();
+
+      shootingManager.enable();
+      shootingManager.meleeAttack();
+      expect(mockWsClient.send).toHaveBeenCalled();
+    });
+  });
+
   describe('disable/enable', () => {
     it('should disable shooting when disable() is called', () => {
       // Shoot successfully first
