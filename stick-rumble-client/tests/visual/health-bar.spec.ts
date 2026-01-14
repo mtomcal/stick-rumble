@@ -10,8 +10,11 @@ test.describe('Health Bar Visual Regression', () => {
     // Navigate to test page
     await page.goto('/ui-test.html');
 
-    // Wait for Phaser to initialize
-    await page.waitForSelector('[data-testid="health-bar-ready"]', { timeout: 10000 });
+    // Wait for Phaser to initialize (check for data-ready attribute, not visibility)
+    await page.waitForSelector('[data-testid="health-bar-ready"][data-ready="true"]', {
+      timeout: 10000,
+      state: 'attached', // Wait for element to exist in DOM, not be visible
+    });
   });
 
   test('should render health bar at 100% health', async ({ page }) => {

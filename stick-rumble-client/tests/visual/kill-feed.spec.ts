@@ -10,8 +10,11 @@ test.describe('Kill Feed Visual Regression', () => {
     // Navigate to test page
     await page.goto('/ui-test.html');
 
-    // Wait for Phaser to initialize
-    await page.waitForSelector('[data-testid="kill-feed-ready"]', { timeout: 10000 });
+    // Wait for Phaser to initialize (check for data-ready attribute, not visibility)
+    await page.waitForSelector('[data-testid="kill-feed-ready"][data-ready="true"]', {
+      timeout: 10000,
+      state: 'attached', // Wait for element to exist in DOM, not be visible
+    });
   });
 
   test('should render empty kill feed', async ({ page }) => {
