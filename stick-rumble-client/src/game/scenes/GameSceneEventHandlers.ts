@@ -98,6 +98,13 @@ export class GameSceneEventHandlers {
   }
 
   /**
+   * Get the current weapon type
+   */
+  getCurrentWeaponType(): string {
+    return this.currentWeaponType;
+  }
+
+  /**
    * Cleanup all registered event handlers
    * Called before re-registering handlers to prevent accumulation
    */
