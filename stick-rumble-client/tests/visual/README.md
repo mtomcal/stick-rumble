@@ -10,13 +10,16 @@ Visual regression tests capture screenshots of UI components and compare them ag
 
 ### System Dependencies
 
-Playwright requires system libraries to run Chromium. Install them with:
+**⚠️ IMPORTANT**: Visual tests require system libraries that must be installed with sudo access.
 
 ```bash
 npx playwright install-deps chromium
 ```
 
-Note: This command requires sudo access. If you don't have sudo, visual tests will be skipped.
+**Status**: System dependencies are NOT currently installed. Baseline screenshots cannot be generated until dependencies are installed.
+
+For detailed installation instructions, troubleshooting, and alternatives (Docker, CI setup), see:
+📄 **[SYSTEM_DEPENDENCIES.md](./SYSTEM_DEPENDENCIES.md)**
 
 ### Project Dependencies
 

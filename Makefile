@@ -227,11 +227,19 @@ test-schema:
 # Run visual regression tests
 test-visual:
 	@echo "Running visual regression tests..."
-	@echo "Note: Requires Playwright system dependencies (run 'npx playwright install-deps chromium')"
+	@echo ""
+	@echo "⚠️  PREREQUISITE: System dependencies required (sudo access needed)"
+	@echo "Install with: cd stick-rumble-client && npx playwright install-deps chromium"
+	@echo "See: stick-rumble-client/tests/visual/SYSTEM_DEPENDENCIES.md"
+	@echo ""
 	cd stick-rumble-client && npm run test:visual
 
 # Update visual regression baselines
 test-visual-update:
 	@echo "Updating visual regression baselines..."
-	@echo "Note: Requires Playwright system dependencies (run 'npx playwright install-deps chromium')"
+	@echo ""
+	@echo "⚠️  PREREQUISITE: System dependencies required (sudo access needed)"
+	@echo "Install with: cd stick-rumble-client && npx playwright install-deps chromium"
+	@echo "See: stick-rumble-client/tests/visual/SYSTEM_DEPENDENCIES.md"
+	@echo ""
 	cd stick-rumble-client && npm run test:visual:update
