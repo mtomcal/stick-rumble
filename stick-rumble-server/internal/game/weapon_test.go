@@ -419,3 +419,203 @@ func TestWeaponIsMelee(t *testing.T) {
 		t.Error("Pistol should NOT be identified as melee weapon")
 	}
 }
+
+// Recoil pattern tests
+
+func TestUziRecoilPattern(t *testing.T) {
+	uzi := NewUzi()
+
+	if uzi.Recoil == nil {
+		t.Fatal("Uzi should have recoil pattern")
+	}
+
+	if uzi.Recoil.VerticalPerShot != 2.0 {
+		t.Errorf("expected Uzi vertical recoil 2.0°, got %f", uzi.Recoil.VerticalPerShot)
+	}
+
+	if uzi.Recoil.HorizontalPerShot != 0.0 {
+		t.Errorf("expected Uzi horizontal recoil 0.0°, got %f", uzi.Recoil.HorizontalPerShot)
+	}
+
+	if uzi.Recoil.RecoveryTime != 0.5 {
+		t.Errorf("expected Uzi recovery time 0.5s, got %f", uzi.Recoil.RecoveryTime)
+	}
+
+	if uzi.SpreadDegrees != 5.0 {
+		t.Errorf("expected Uzi spread 5.0°, got %f", uzi.SpreadDegrees)
+	}
+}
+
+func TestAK47RecoilPattern(t *testing.T) {
+	ak47 := NewAK47()
+
+	if ak47.Recoil == nil {
+		t.Fatal("AK47 should have recoil pattern")
+	}
+
+	if ak47.Recoil.VerticalPerShot != 1.5 {
+		t.Errorf("expected AK47 vertical recoil 1.5°, got %f", ak47.Recoil.VerticalPerShot)
+	}
+
+	if ak47.Recoil.HorizontalPerShot != 3.0 {
+		t.Errorf("expected AK47 horizontal recoil 3.0°, got %f", ak47.Recoil.HorizontalPerShot)
+	}
+
+	if ak47.Recoil.RecoveryTime != 0.6 {
+		t.Errorf("expected AK47 recovery time 0.6s, got %f", ak47.Recoil.RecoveryTime)
+	}
+
+	if ak47.SpreadDegrees != 3.0 {
+		t.Errorf("expected AK47 spread 3.0°, got %f", ak47.SpreadDegrees)
+	}
+}
+
+func TestShotgunNoRecoil(t *testing.T) {
+	shotgun := NewShotgun()
+
+	if shotgun.Recoil != nil {
+		t.Error("Shotgun should not have recoil pattern (slow fire rate)")
+	}
+
+	if shotgun.SpreadDegrees != 0.0 {
+		t.Errorf("expected Shotgun movement spread 0.0°, got %f", shotgun.SpreadDegrees)
+	}
+
+	// Shotgun uses ArcDegrees for pellet cone spread
+	if shotgun.ArcDegrees != 15.0 {
+		t.Errorf("expected Shotgun pellet spread 15.0°, got %f", shotgun.ArcDegrees)
+	}
+}
+
+func TestMeleeWeaponsNoRecoil(t *testing.T) {
+	bat := NewBat()
+	katana := NewKatana()
+
+	if bat.Recoil != nil {
+		t.Error("Bat should not have recoil")
+	}
+
+	if katana.Recoil != nil {
+		t.Error("Katana should not have recoil")
+	}
+
+	if bat.SpreadDegrees != 0 {
+		t.Error("Bat should not have spread")
+	}
+
+	if katana.SpreadDegrees != 0 {
+		t.Error("Katana should not have spread")
+	}
+}
+
+// Damage falloff tests
+
+func TestCalculateDamageFalloff_NoFalloffAtCloseRange(t *testing.T) {
+	ak47 := NewAK47() // 800px range, 20 damage
+
+	// At 200px (within first half of max range), no falloff
+	damage := CalculateDamageFalloff(ak47.Damage, 200, ak47.Range)
+	if damage != 20 {
+		t.Errorf("expected full damage 20 at close range, got %f", damage)
+	}
+
+	// At exactly half range (400px), no falloff
+	damage = CalculateDamageFalloff(ak47.Damage, 400, ak47.Range)
+	if damage != 20 {
+		t.Errorf("expected full damage 20 at half range, got %f", damage)
+	}
+}
+
+func TestCalculateDamageFalloff_LinearFalloffBeyondHalfRange(t *testing.T) {
+	ak47 := NewAK47() // 800px range, 20 damage
+
+	// At 600px (75% of max range):
+	// falloffStart = 400px
+	// falloffRange = 400px
+	// distance beyond falloffStart = 200px
+	// falloff = 1.0 - (200 / 400) = 0.5
+	// damage = 20 * 0.5 = 10
+	damage := CalculateDamageFalloff(ak47.Damage, 600, ak47.Range)
+	if damage != 10 {
+		t.Errorf("expected damage 10 at 600px, got %f", damage)
+	}
+
+	// At 700px (87.5% of max range):
+	// distance beyond falloffStart = 300px
+	// falloff = 1.0 - (300 / 400) = 0.25
+	// damage = 20 * 0.25 = 5
+	damage = CalculateDamageFalloff(ak47.Damage, 700, ak47.Range)
+	if damage != 5 {
+		t.Errorf("expected damage 5 at 700px, got %f", damage)
+	}
+
+	// At max range (800px), damage should be 0
+	damage = CalculateDamageFalloff(ak47.Damage, 800, ak47.Range)
+	if damage != 0 {
+		t.Errorf("expected damage 0 at max range, got %f", damage)
+	}
+}
+
+func TestCalculateDamageFalloff_BeyondMaxRange(t *testing.T) {
+	ak47 := NewAK47()
+
+	// Beyond max range should be 0 damage
+	damage := CalculateDamageFalloff(ak47.Damage, 900, ak47.Range)
+	if damage != 0 {
+		t.Errorf("expected damage 0 beyond max range, got %f", damage)
+	}
+}
+
+func TestCalculateDamageFalloff_UziRange(t *testing.T) {
+	uzi := NewUzi() // 600px range, 8 damage
+
+	// At 300px (half range), full damage
+	damage := CalculateDamageFalloff(uzi.Damage, 300, uzi.Range)
+	if damage != 8 {
+		t.Errorf("expected full damage 8 at half range, got %f", damage)
+	}
+
+	// At 450px (75% of max range):
+	// falloffStart = 300px
+	// falloffRange = 300px
+	// distance beyond falloffStart = 150px
+	// falloff = 1.0 - (150 / 300) = 0.5
+	// damage = 8 * 0.5 = 4
+	damage = CalculateDamageFalloff(uzi.Damage, 450, uzi.Range)
+	if damage != 4 {
+		t.Errorf("expected damage 4 at 450px, got %f", damage)
+	}
+
+	// At 600px (max range), 0 damage
+	damage = CalculateDamageFalloff(uzi.Damage, 600, uzi.Range)
+	if damage != 0 {
+		t.Errorf("expected damage 0 at max range, got %f", damage)
+	}
+}
+
+func TestCalculateDamageFalloff_ShotgunRange(t *testing.T) {
+	shotgun := NewShotgun() // 300px range, 60 damage
+
+	// At 150px (half range), full damage
+	damage := CalculateDamageFalloff(shotgun.Damage, 150, shotgun.Range)
+	if damage != 60 {
+		t.Errorf("expected full damage 60 at half range, got %f", damage)
+	}
+
+	// At 225px (75% of max range):
+	// falloffStart = 150px
+	// falloffRange = 150px
+	// distance beyond falloffStart = 75px
+	// falloff = 1.0 - (75 / 150) = 0.5
+	// damage = 60 * 0.5 = 30
+	damage = CalculateDamageFalloff(shotgun.Damage, 225, shotgun.Range)
+	if damage != 30 {
+		t.Errorf("expected damage 30 at 225px, got %f", damage)
+	}
+
+	// At 300px (max range), 0 damage
+	damage = CalculateDamageFalloff(shotgun.Damage, 300, shotgun.Range)
+	if damage != 0 {
+		t.Errorf("expected damage 0 at max range, got %f", damage)
+	}
+}
