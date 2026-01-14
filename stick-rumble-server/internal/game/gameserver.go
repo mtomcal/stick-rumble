@@ -255,13 +255,21 @@ func (gs *GameServer) GetWeaponState(playerID string) *WeaponState {
 }
 
 // SetWeaponState sets the weapon state for a player
+// If the player is currently reloading, the reload is cancelled
 func (gs *GameServer) SetWeaponState(playerID string, weaponState *WeaponState) {
 	gs.weaponMu.Lock()
 	defer gs.weaponMu.Unlock()
+
+	// Cancel any in-progress reload when switching weapons
+	if existingWeapon := gs.weaponStates[playerID]; existingWeapon != nil {
+		existingWeapon.CancelReload()
+	}
+
 	gs.weaponStates[playerID] = weaponState
 }
 
 // PlayerShoot attempts to fire a projectile for the given player
+// If the magazine is empty, automatically triggers a reload
 func (gs *GameServer) PlayerShoot(playerID string, aimAngle float64) ShootResult {
 	// Check if player exists
 	player, exists := gs.world.GetPlayer(playerID)
@@ -283,8 +291,10 @@ func (gs *GameServer) PlayerShoot(playerID string, aimAngle float64) ShootResult
 		return ShootResult{Success: false, Reason: ShootFailedReload}
 	}
 
-	// Check if magazine is empty
+	// Check if magazine is empty - trigger auto-reload
 	if ws.IsEmpty() {
+		// Auto-reload: start reload when attempting to shoot with empty magazine
+		ws.StartReload()
 		return ShootResult{Success: false, Reason: ShootFailedEmpty}
 	}
 

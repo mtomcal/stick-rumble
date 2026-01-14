@@ -171,6 +171,10 @@ export class GameScene extends Phaser.Scene {
           // Create ammo display
           this.ui.createAmmoDisplay(10, 50);
           this.ui.updateAmmoDisplay(this.shootingManager);
+
+          // Create reload UI elements
+          this.ui.createReloadProgressBar(10, 70, 200, 10);
+          this.ui.createReloadCircleIndicator();
         })
         .catch(err => {
           console.error('Failed to connect:', err);
@@ -204,6 +208,13 @@ export class GameScene extends Phaser.Scene {
     // Update projectiles
     if (this.projectileManager) {
       this.projectileManager.update(this.lastDeltaTime);
+    }
+
+    // Update reload UI progress
+    if (this.shootingManager && this.shootingManager.isReloading()) {
+      const progress = this.shootingManager.getReloadProgress();
+      this.ui.updateReloadProgress(progress, 10, 70, 200, 10);
+      this.ui.updateReloadCircle(progress);
     }
 
     // Update spectator mode

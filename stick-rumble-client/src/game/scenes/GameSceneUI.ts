@@ -11,6 +11,10 @@ export class GameSceneUI {
   private ammoText!: Phaser.GameObjects.Text;
   private matchTimerText: Phaser.GameObjects.Text | null = null;
   private damageFlashOverlay: Phaser.GameObjects.Rectangle | null = null;
+  private reloadProgressBar: Phaser.GameObjects.Graphics | null = null;
+  private reloadProgressBarBg: Phaser.GameObjects.Graphics | null = null;
+  private reloadIndicatorText: Phaser.GameObjects.Text | null = null;
+  private reloadCircle: Phaser.GameObjects.Graphics | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -62,8 +66,139 @@ export class GameSceneUI {
   updateAmmoDisplay(shootingManager: ShootingManager): void {
     if (this.ammoText && shootingManager) {
       const [current, max] = shootingManager.getAmmoInfo();
-      const reloading = shootingManager.isReloading() ? ' [RELOADING]' : '';
-      this.ammoText.setText(`${current}/${max}${reloading}`);
+      this.ammoText.setText(`${current}/${max}`);
+
+      // Show/hide reload UI elements based on state
+      const isReloading = shootingManager.isReloading();
+      const isEmpty = shootingManager.isEmpty();
+
+      // Update reload progress bar visibility
+      if (this.reloadProgressBar && this.reloadProgressBarBg) {
+        this.reloadProgressBar.setVisible(isReloading);
+        this.reloadProgressBarBg.setVisible(isReloading);
+      }
+
+      // Update circular reload indicator visibility
+      if (this.reloadCircle) {
+        this.reloadCircle.setVisible(isReloading);
+      }
+
+      // Show flashing "RELOAD!" indicator when empty
+      if (isEmpty && !isReloading) {
+        this.showEmptyMagazineIndicator();
+      } else {
+        this.hideEmptyMagazineIndicator();
+      }
+    }
+  }
+
+  /**
+   * Create reload progress bar HUD element
+   */
+  createReloadProgressBar(x: number, y: number, width: number, height: number): void {
+    // Background bar
+    this.reloadProgressBarBg = this.scene.add.graphics();
+    this.reloadProgressBarBg.fillStyle(0x333333, 0.8);
+    this.reloadProgressBarBg.fillRect(x, y, width, height);
+    this.reloadProgressBarBg.setScrollFactor(0);
+    this.reloadProgressBarBg.setDepth(1000);
+    this.reloadProgressBarBg.setVisible(false);
+
+    // Foreground progress bar
+    this.reloadProgressBar = this.scene.add.graphics();
+    this.reloadProgressBar.setScrollFactor(0);
+    this.reloadProgressBar.setDepth(1001);
+    this.reloadProgressBar.setVisible(false);
+  }
+
+  /**
+   * Update reload progress bar fill amount (0 to 1)
+   */
+  updateReloadProgress(progress: number, barX: number, barY: number, barWidth: number, barHeight: number): void {
+    if (!this.reloadProgressBar) {
+      return;
+    }
+
+    this.reloadProgressBar.clear();
+    this.reloadProgressBar.fillStyle(0x00ff00, 1.0);
+    this.reloadProgressBar.fillRect(barX, barY, barWidth * progress, barHeight);
+  }
+
+  /**
+   * Create circular reload indicator around crosshair
+   */
+  createReloadCircleIndicator(): void {
+    this.reloadCircle = this.scene.add.graphics();
+    this.reloadCircle.setScrollFactor(0);
+    this.reloadCircle.setDepth(1002);
+    this.reloadCircle.setVisible(false);
+  }
+
+  /**
+   * Update circular reload indicator (0 to 1 progress)
+   */
+  updateReloadCircle(progress: number): void {
+    if (!this.reloadCircle) {
+      return;
+    }
+
+    const camera = this.scene.cameras.main;
+    const centerX = camera.width / 2;
+    const centerY = camera.height / 2;
+    const radius = 20;
+
+    this.reloadCircle.clear();
+    this.reloadCircle.lineStyle(3, 0x00ff00, 1.0);
+
+    // Draw arc from top (270 degrees) clockwise based on progress
+    const startAngle = Phaser.Math.DegToRad(270);
+    const endAngle = startAngle + Phaser.Math.DegToRad(360 * progress);
+
+    this.reloadCircle.beginPath();
+    this.reloadCircle.arc(centerX, centerY, radius, startAngle, endAngle, false);
+    this.reloadCircle.strokePath();
+  }
+
+  /**
+   * Show flashing "RELOAD!" indicator when magazine is empty
+   */
+  private showEmptyMagazineIndicator(): void {
+    if (!this.reloadIndicatorText) {
+      const camera = this.scene.cameras.main;
+      this.reloadIndicatorText = this.scene.add.text(
+        camera.width / 2,
+        camera.height / 2 + 60,
+        'RELOAD!',
+        {
+          fontSize: '32px',
+          color: '#ff0000',
+          fontStyle: 'bold',
+          stroke: '#000000',
+          strokeThickness: 4,
+        }
+      );
+      this.reloadIndicatorText.setOrigin(0.5);
+      this.reloadIndicatorText.setScrollFactor(0);
+      this.reloadIndicatorText.setDepth(1003);
+
+      // Flashing animation
+      this.scene.tweens.add({
+        targets: this.reloadIndicatorText,
+        alpha: { from: 1, to: 0.3 },
+        duration: 500,
+        yoyo: true,
+        repeat: -1,
+      });
+    }
+    this.reloadIndicatorText.setVisible(true);
+  }
+
+  /**
+   * Hide "RELOAD!" indicator
+   */
+  private hideEmptyMagazineIndicator(): void {
+    if (this.reloadIndicatorText) {
+      this.reloadIndicatorText.setVisible(false);
     }
   }
 
@@ -222,6 +357,18 @@ export class GameSceneUI {
     }
     if (this.damageFlashOverlay) {
       this.damageFlashOverlay.destroy();
+    }
+    if (this.reloadProgressBar) {
+      this.reloadProgressBar.destroy();
+    }
+    if (this.reloadProgressBarBg) {
+      this.reloadProgressBarBg.destroy();
+    }
+    if (this.reloadIndicatorText) {
+      this.reloadIndicatorText.destroy();
+    }
+    if (this.reloadCircle) {
+      this.reloadCircle.destroy();
     }
   }
 }

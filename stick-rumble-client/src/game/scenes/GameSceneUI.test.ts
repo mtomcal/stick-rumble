@@ -13,6 +13,9 @@ vi.mock('phaser', () => ({
         this.scene.key = config.key;
       }
     },
+    Math: {
+      DegToRad: (degrees: number) => degrees * (Math.PI / 180),
+    },
   },
 }));
 
@@ -23,9 +26,11 @@ describe('GameSceneUI', () => {
   let mockDamageFlashOverlay: any;
   let mockLine: any;
   let createdTexts: any[];
+  let createdGraphics: any[];
 
   beforeEach(() => {
     createdTexts = [];
+    createdGraphics = [];
 
     // Create mock camera
     mockCamera = {
@@ -59,6 +64,8 @@ describe('GameSceneUI', () => {
             setScrollFactor: vi.fn().mockReturnThis(),
             setText: vi.fn().mockReturnThis(),
             setColor: vi.fn().mockReturnThis(),
+            setVisible: vi.fn().mockReturnThis(),
+            setDepth: vi.fn().mockReturnThis(),
             destroy: vi.fn(),
           };
           createdTexts.push(text);
@@ -66,6 +73,23 @@ describe('GameSceneUI', () => {
         }),
         rectangle: vi.fn().mockReturnValue(mockDamageFlashOverlay),
         line: vi.fn().mockReturnValue(mockLine),
+        graphics: vi.fn().mockImplementation(() => {
+          const graphics = {
+            fillStyle: vi.fn().mockReturnThis(),
+            fillRect: vi.fn().mockReturnThis(),
+            lineStyle: vi.fn().mockReturnThis(),
+            beginPath: vi.fn().mockReturnThis(),
+            arc: vi.fn().mockReturnThis(),
+            strokePath: vi.fn().mockReturnThis(),
+            clear: vi.fn().mockReturnThis(),
+            setScrollFactor: vi.fn().mockReturnThis(),
+            setDepth: vi.fn().mockReturnThis(),
+            setVisible: vi.fn().mockReturnThis(),
+            destroy: vi.fn(),
+          };
+          createdGraphics.push(graphics);
+          return graphics;
+        }),
       },
       cameras: {
         main: mockCamera,
@@ -125,6 +149,7 @@ describe('GameSceneUI', () => {
       const mockShootingManager = {
         getAmmoInfo: vi.fn().mockReturnValue([10, 15]),
         isReloading: vi.fn().mockReturnValue(false),
+        isEmpty: vi.fn().mockReturnValue(false),
       } as unknown as ShootingManager;
 
       ui.updateAmmoDisplay(mockShootingManager);
@@ -132,23 +157,26 @@ describe('GameSceneUI', () => {
       expect(createdTexts[0].setText).toHaveBeenCalledWith('10/15');
     });
 
-    it('should show RELOADING indicator when reloading', () => {
+    it('should update ammo text when reloading (no longer shows [RELOADING] text)', () => {
       ui.createAmmoDisplay(10, 50);
 
       const mockShootingManager = {
         getAmmoInfo: vi.fn().mockReturnValue([5, 15]),
         isReloading: vi.fn().mockReturnValue(true),
+        isEmpty: vi.fn().mockReturnValue(false),
       } as unknown as ShootingManager;
 
       ui.updateAmmoDisplay(mockShootingManager);
 
-      expect(createdTexts[0].setText).toHaveBeenCalledWith('5/15 [RELOADING]');
+      // No longer appends [RELOADING] text - reload UI uses progress bars instead
+      expect(createdTexts[0].setText).toHaveBeenCalledWith('5/15');
     });
 
     it('should not update if ammo text not created', () => {
       const mockShootingManager = {
         getAmmoInfo: vi.fn().mockReturnValue([10, 15]),
         isReloading: vi.fn().mockReturnValue(false),
+        isEmpty: vi.fn().mockReturnValue(false),
       } as unknown as ShootingManager;
 
       // Don't create ammo display first
@@ -391,6 +419,117 @@ describe('GameSceneUI', () => {
     });
   });
 
+  describe('reload UI elements', () => {
+    describe('createReloadProgressBar', () => {
+      it('should create reload progress bar graphics elements', () => {
+        ui.createReloadProgressBar(10, 70, 200, 10);
+
+        expect(mockScene.add.graphics).toHaveBeenCalledTimes(2); // Background + foreground
+      });
+    });
+
+    describe('updateReloadProgress', () => {
+      it('should update reload progress bar fill amount', () => {
+        ui.createReloadProgressBar(10, 70, 200, 10);
+        // createReloadProgressBar creates 2 graphics: background (index 0), foreground (index 1)
+        const progressBarGraphics = createdGraphics[1];
+
+        ui.updateReloadProgress(0.5, 10, 70, 200, 10);
+
+        // Graphics mock should be called to clear and fill
+        expect(progressBarGraphics.clear).toHaveBeenCalled();
+        expect(progressBarGraphics.fillStyle).toHaveBeenCalledWith(0x00ff00, 1.0);
+        expect(progressBarGraphics.fillRect).toHaveBeenCalledWith(10, 70, 100, 10); // 50% of 200 width
+      });
+
+      it('should handle updateReloadProgress when progress bar not created', () => {
+        expect(() => {
+          ui.updateReloadProgress(0.5, 10, 70, 200, 10);
+        }).not.toThrow();
+      });
+    });
+
+    describe('createReloadCircleIndicator', () => {
+      it('should create circular reload indicator', () => {
+        ui.createReloadCircleIndicator();
+
+        expect(mockScene.add.graphics).toHaveBeenCalled();
+      });
+    });
+
+    describe('updateReloadCircle', () => {
+      it('should update circular reload indicator progress', () => {
+        const graphicsCountBefore = createdGraphics.length;
+        ui.createReloadCircleIndicator();
+        // Get the graphics instance that was just created
+        const circleGraphics = createdGraphics[graphicsCountBefore];
+
+        ui.updateReloadCircle(0.75);
+
+        expect(circleGraphics.clear).toHaveBeenCalled();
+        expect(circleGraphics.lineStyle).toHaveBeenCalled();
+        expect(circleGraphics.arc).toHaveBeenCalled();
+      });
+
+      it('should handle updateReloadCircle when circle not created', () => {
+        expect(() => {
+          ui.updateReloadCircle(0.5);
+        }).not.toThrow();
+      });
+    });
+
+    describe('updateAmmoDisplay with reload UI', () => {
+      it('should show empty magazine indicator when empty and not reloading', () => {
+        ui.createAmmoDisplay(10, 50);
+
+        const mockShootingManager = {
+          getAmmoInfo: vi.fn().mockReturnValue([0, 15]),
+          isReloading: vi.fn().mockReturnValue(false),
+          isEmpty: vi.fn().mockReturnValue(true),
+        } as unknown as ShootingManager;
+
+        ui.updateAmmoDisplay(mockShootingManager);
+
+        // Text for RELOAD! indicator should be created
+        expect(mockScene.add.text).toHaveBeenCalledWith(
+          960, // camera.width / 2
+          600, // camera.height / 2 + 60
+          'RELOAD!',
+          expect.objectContaining({
+            fontSize: '32px',
+            color: '#ff0000',
+          })
+        );
+      });
+
+      it('should hide empty magazine indicator when not empty', () => {
+        ui.createAmmoDisplay(10, 50);
+
+        // First show the indicator
+        const emptyShootingManager = {
+          getAmmoInfo: vi.fn().mockReturnValue([0, 15]),
+          isReloading: vi.fn().mockReturnValue(false),
+          isEmpty: vi.fn().mockReturnValue(true),
+        } as unknown as ShootingManager;
+
+        ui.updateAmmoDisplay(emptyShootingManager);
+
+        // Then hide it by updating with non-empty state
+        const nonEmptyShootingManager = {
+          getAmmoInfo: vi.fn().mockReturnValue([5, 15]),
+          isReloading: vi.fn().mockReturnValue(false),
+          isEmpty: vi.fn().mockReturnValue(false),
+        } as unknown as ShootingManager;
+
+        ui.updateAmmoDisplay(nonEmptyShootingManager);
+
+        // Indicator should be set to invisible
+        const reloadText = createdTexts[createdTexts.length - 1];
+        expect(reloadText.setVisible).toHaveBeenCalledWith(false);
+      });
+    });
+  });
+
   describe('Cleanup', () => {
     it('should destroy ammo text when destroyed', () => {
       ui.createAmmoDisplay(10, 50);
@@ -416,6 +555,26 @@ describe('GameSceneUI', () => {
       ui.destroy();
 
       expect(mockDamageFlashOverlay.destroy).toHaveBeenCalled();
+    });
+
+    it('should destroy reload progress bar when destroyed', () => {
+      ui.createReloadProgressBar(10, 70, 200, 10);
+      const progressBarBg = createdGraphics[0];
+      const progressBar = createdGraphics[1];
+
+      ui.destroy();
+
+      expect(progressBarBg.destroy).toHaveBeenCalled();
+      expect(progressBar.destroy).toHaveBeenCalled();
+    });
+
+    it('should destroy reload circle indicator when destroyed', () => {
+      ui.createReloadCircleIndicator();
+      const circle = createdGraphics[0];
+
+      ui.destroy();
+
+      expect(circle.destroy).toHaveBeenCalled();
     });
 
     it('should handle destroy when UI elements are not created', () => {
