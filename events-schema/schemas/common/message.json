@@ -1,0 +1,23 @@
+{
+  "$id": "Message",
+  "description": "Base WebSocket message wrapper",
+  "type": "object",
+  "required": [
+    "type",
+    "timestamp"
+  ],
+  "properties": {
+    "type": {
+      "description": "Message type identifier",
+      "type": "string"
+    },
+    "timestamp": {
+      "description": "Unix timestamp in milliseconds",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "data": {
+      "description": "Message payload data"
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "$id": "player_reloadMessage",
+  "description": "player:reload WebSocket message",
+  "type": "object",
+  "required": [
+    "type",
+    "timestamp"
+  ],
+  "properties": {
+    "type": {
+      "description": "Message type identifier",
+      "const": "player:reload",
+      "type": "string"
+    },
+    "timestamp": {
+      "description": "Unix timestamp in milliseconds",
+      "minimum": 0,
+      "type": "integer"
+    }
+  }
+}

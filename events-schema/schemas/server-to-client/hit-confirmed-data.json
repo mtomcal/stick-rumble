@@ -1,0 +1,27 @@
+{
+  "$id": "HitConfirmedData",
+  "description": "Hit confirmed event payload",
+  "type": "object",
+  "required": [
+    "victimId",
+    "damage",
+    "projectileId"
+  ],
+  "properties": {
+    "victimId": {
+      "description": "Player who was hit",
+      "minLength": 1,
+      "type": "string"
+    },
+    "damage": {
+      "description": "Amount of damage dealt",
+      "minimum": 0,
+      "type": "number"
+    },
+    "projectileId": {
+      "description": "Projectile that hit",
+      "minLength": 1,
+      "type": "string"
+    }
+  }
+}

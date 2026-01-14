@@ -4,10 +4,8 @@ node_modules/
 # Build output
 dist/
 
-# Generated schemas (rebuild from TypeBox definitions)
-schemas/common/
-schemas/client-to-server/*.json
-schemas/server-to-client/*.json
+# Generated schemas - COMMITTED to git (Go server loads these at runtime)
+# Run `make schema-build` to regenerate from TypeBox definitions
 
 # Generated TypeScript types (inferred from TypeBox at runtime)
 generated/typescript/*.ts

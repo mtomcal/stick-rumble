@@ -1,0 +1,15 @@
+{
+  "$id": "RoomJoinedData",
+  "description": "Room joined event payload",
+  "type": "object",
+  "required": [
+    "playerId"
+  ],
+  "properties": {
+    "playerId": {
+      "description": "Unique identifier for the player",
+      "minLength": 1,
+      "type": "string"
+    }
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "$id": "match_endedMessage",
+  "description": "match:ended WebSocket message",
+  "type": "object",
+  "required": [
+    "type",
+    "timestamp",
+    "data"
+  ],
+  "properties": {
+    "type": {
+      "description": "Message type identifier",
+      "const": "match:ended",
+      "type": "string"
+    },
+    "timestamp": {
+      "description": "Unix timestamp in milliseconds",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "data": {
+      "$id": "MatchEndedData",
+      "description": "Match ended event payload",
+      "type": "object",
+      "required": [
+        "winners",
+        "finalScores",
+        "reason"
+      ],
+      "properties": {
+        "winners": {
+          "description": "Array of winner player IDs",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "finalScores": {
+          "description": "Map of player IDs to final scores",
+          "type": "object",
+          "patternProperties": {
+            "^(.*)$": {
+              "type": "number"
+            }
+          }
+        },
+        "reason": {
+          "description": "Reason the match ended",
+          "minLength": 1,
+          "type": "string"
+        }
+      }
+    }
+  }
+}

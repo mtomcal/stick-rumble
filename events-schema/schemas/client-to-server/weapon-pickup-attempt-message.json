@@ -1,0 +1,37 @@
+{
+  "$id": "weapon_pickup_attemptMessage",
+  "description": "weapon:pickup_attempt WebSocket message",
+  "type": "object",
+  "required": [
+    "type",
+    "timestamp",
+    "data"
+  ],
+  "properties": {
+    "type": {
+      "description": "Message type identifier",
+      "const": "weapon:pickup_attempt",
+      "type": "string"
+    },
+    "timestamp": {
+      "description": "Unix timestamp in milliseconds",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "data": {
+      "$id": "WeaponPickupAttemptData",
+      "description": "Weapon pickup attempt payload",
+      "type": "object",
+      "required": [
+        "crateId"
+      ],
+      "properties": {
+        "crateId": {
+          "description": "Unique identifier for the weapon crate",
+          "minLength": 1,
+          "type": "string"
+        }
+      }
+    }
+  }
+}

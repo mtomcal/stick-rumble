@@ -1,0 +1,55 @@
+{
+  "$id": "weapon_pickup_confirmedMessage",
+  "description": "weapon:pickup_confirmed WebSocket message",
+  "type": "object",
+  "required": [
+    "type",
+    "timestamp",
+    "data"
+  ],
+  "properties": {
+    "type": {
+      "description": "Message type identifier",
+      "const": "weapon:pickup_confirmed",
+      "type": "string"
+    },
+    "timestamp": {
+      "description": "Unix timestamp in milliseconds",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "data": {
+      "$id": "WeaponPickupConfirmedData",
+      "description": "Weapon pickup confirmed event payload",
+      "type": "object",
+      "required": [
+        "playerId",
+        "crateId",
+        "weaponType",
+        "nextRespawnTime"
+      ],
+      "properties": {
+        "playerId": {
+          "description": "Player who picked up the weapon",
+          "minLength": 1,
+          "type": "string"
+        },
+        "crateId": {
+          "description": "Crate that was picked up",
+          "minLength": 1,
+          "type": "string"
+        },
+        "weaponType": {
+          "description": "Type of weapon picked up",
+          "minLength": 1,
+          "type": "string"
+        },
+        "nextRespawnTime": {
+          "description": "Time until the crate respawns (milliseconds)",
+          "minimum": 0,
+          "type": "integer"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "$id": "shoot_failedMessage",
+  "description": "shoot:failed WebSocket message",
+  "type": "object",
+  "required": [
+    "type",
+    "timestamp",
+    "data"
+  ],
+  "properties": {
+    "type": {
+      "description": "Message type identifier",
+      "const": "shoot:failed",
+      "type": "string"
+    },
+    "timestamp": {
+      "description": "Unix timestamp in milliseconds",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "data": {
+      "$id": "ShootFailedData",
+      "description": "Shoot failed event payload",
+      "type": "object",
+      "required": [
+        "reason"
+      ],
+      "properties": {
+        "reason": {
+          "description": "Reason why the shot failed",
+          "minLength": 1,
+          "type": "string"
+        }
+      }
+    }
+  }
+}

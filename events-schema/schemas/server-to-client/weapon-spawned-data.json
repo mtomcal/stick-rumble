@@ -1,0 +1,60 @@
+{
+  "$id": "WeaponSpawnedData",
+  "description": "Weapon spawned event payload",
+  "type": "object",
+  "required": [
+    "crates"
+  ],
+  "properties": {
+    "crates": {
+      "description": "Array of weapon crates",
+      "type": "array",
+      "items": {
+        "$id": "WeaponCrate",
+        "description": "Weapon crate state",
+        "type": "object",
+        "required": [
+          "id",
+          "position",
+          "weaponType",
+          "isAvailable"
+        ],
+        "properties": {
+          "id": {
+            "description": "Unique crate identifier",
+            "minLength": 1,
+            "type": "string"
+          },
+          "position": {
+            "$id": "Position",
+            "description": "A 2D position coordinate",
+            "type": "object",
+            "required": [
+              "x",
+              "y"
+            ],
+            "properties": {
+              "x": {
+                "description": "X coordinate",
+                "type": "number"
+              },
+              "y": {
+                "description": "Y coordinate",
+                "type": "number"
+              }
+            }
+          },
+          "weaponType": {
+            "description": "Type of weapon in the crate",
+            "minLength": 1,
+            "type": "string"
+          },
+          "isAvailable": {
+            "description": "Whether the crate is available for pickup",
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  }
+}

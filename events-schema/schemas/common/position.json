@@ -1,0 +1,19 @@
+{
+  "$id": "Position",
+  "description": "A 2D position coordinate",
+  "type": "object",
+  "required": [
+    "x",
+    "y"
+  ],
+  "properties": {
+    "x": {
+      "description": "X coordinate",
+      "type": "number"
+    },
+    "y": {
+      "description": "Y coordinate",
+      "type": "number"
+    }
+  }
+}

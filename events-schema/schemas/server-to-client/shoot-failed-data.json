@@ -1,0 +1,15 @@
+{
+  "$id": "ShootFailedData",
+  "description": "Shoot failed event payload",
+  "type": "object",
+  "required": [
+    "reason"
+  ],
+  "properties": {
+    "reason": {
+      "description": "Reason why the shot failed",
+      "minLength": 1,
+      "type": "string"
+    }
+  }
+}

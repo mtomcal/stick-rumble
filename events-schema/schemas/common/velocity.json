@@ -1,0 +1,19 @@
+{
+  "$id": "Velocity",
+  "description": "A 2D velocity vector",
+  "type": "object",
+  "required": [
+    "x",
+    "y"
+  ],
+  "properties": {
+    "x": {
+      "description": "X velocity component",
+      "type": "number"
+    },
+    "y": {
+      "description": "Y velocity component",
+      "type": "number"
+    }
+  }
+}

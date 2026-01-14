@@ -1,0 +1,41 @@
+{
+  "$id": "WeaponRespawnedData",
+  "description": "Weapon respawned event payload",
+  "type": "object",
+  "required": [
+    "crateId",
+    "weaponType",
+    "position"
+  ],
+  "properties": {
+    "crateId": {
+      "description": "Crate that respawned",
+      "minLength": 1,
+      "type": "string"
+    },
+    "weaponType": {
+      "description": "Type of weapon in the crate",
+      "minLength": 1,
+      "type": "string"
+    },
+    "position": {
+      "$id": "Position",
+      "description": "A 2D position coordinate",
+      "type": "object",
+      "required": [
+        "x",
+        "y"
+      ],
+      "properties": {
+        "x": {
+          "description": "X coordinate",
+          "type": "number"
+        },
+        "y": {
+          "description": "Y coordinate",
+          "type": "number"
+        }
+      }
+    }
+  }
+}

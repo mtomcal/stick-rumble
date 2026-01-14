@@ -1,0 +1,14 @@
+{
+  "$id": "PlayerShootData",
+  "description": "Player shoot action payload",
+  "type": "object",
+  "required": [
+    "aimAngle"
+  ],
+  "properties": {
+    "aimAngle": {
+      "description": "Aim angle in radians",
+      "type": "number"
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "$id": "WeaponStateData",
+  "description": "Weapon state payload",
+  "type": "object",
+  "required": [
+    "currentAmmo",
+    "maxAmmo",
+    "isReloading",
+    "canShoot"
+  ],
+  "properties": {
+    "currentAmmo": {
+      "description": "Current ammunition count",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "maxAmmo": {
+      "description": "Maximum ammunition capacity",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "isReloading": {
+      "description": "Whether the weapon is currently reloading",
+      "type": "boolean"
+    },
+    "canShoot": {
+      "description": "Whether the weapon can currently shoot",
+      "type": "boolean"
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "$id": "PlayerDeathData",
+  "description": "Player death event payload",
+  "type": "object",
+  "required": [
+    "victimId",
+    "attackerId"
+  ],
+  "properties": {
+    "victimId": {
+      "description": "Player who died",
+      "minLength": 1,
+      "type": "string"
+    },
+    "attackerId": {
+      "description": "Player who got the kill",
+      "minLength": 1,
+      "type": "string"
+    }
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "$id": "input_stateMessage",
+  "description": "input:state WebSocket message",
+  "type": "object",
+  "required": [
+    "type",
+    "timestamp",
+    "data"
+  ],
+  "properties": {
+    "type": {
+      "description": "Message type identifier",
+      "const": "input:state",
+      "type": "string"
+    },
+    "timestamp": {
+      "description": "Unix timestamp in milliseconds",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "data": {
+      "$id": "InputStateData",
+      "description": "Player input state payload",
+      "type": "object",
+      "required": [
+        "up",
+        "down",
+        "left",
+        "right",
+        "aimAngle"
+      ],
+      "properties": {
+        "up": {
+          "description": "W key pressed",
+          "type": "boolean"
+        },
+        "down": {
+          "description": "S key pressed",
+          "type": "boolean"
+        },
+        "left": {
+          "description": "A key pressed",
+          "type": "boolean"
+        },
+        "right": {
+          "description": "D key pressed",
+          "type": "boolean"
+        },
+        "aimAngle": {
+          "description": "Aim angle in radians",
+          "type": "number"
+        }
+      }
+    }
+  }
+}

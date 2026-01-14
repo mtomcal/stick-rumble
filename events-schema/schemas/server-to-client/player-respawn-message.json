@@ -1,0 +1,63 @@
+{
+  "$id": "player_respawnMessage",
+  "description": "player:respawn WebSocket message",
+  "type": "object",
+  "required": [
+    "type",
+    "timestamp",
+    "data"
+  ],
+  "properties": {
+    "type": {
+      "description": "Message type identifier",
+      "const": "player:respawn",
+      "type": "string"
+    },
+    "timestamp": {
+      "description": "Unix timestamp in milliseconds",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "data": {
+      "$id": "PlayerRespawnData",
+      "description": "Player respawn event payload",
+      "type": "object",
+      "required": [
+        "playerId",
+        "position",
+        "health"
+      ],
+      "properties": {
+        "playerId": {
+          "description": "Player who respawned",
+          "minLength": 1,
+          "type": "string"
+        },
+        "position": {
+          "$id": "Position",
+          "description": "A 2D position coordinate",
+          "type": "object",
+          "required": [
+            "x",
+            "y"
+          ],
+          "properties": {
+            "x": {
+              "description": "X coordinate",
+              "type": "number"
+            },
+            "y": {
+              "description": "Y coordinate",
+              "type": "number"
+            }
+          }
+        },
+        "health": {
+          "description": "Respawn health",
+          "minimum": 0,
+          "type": "number"
+        }
+      }
+    }
+  }
+}

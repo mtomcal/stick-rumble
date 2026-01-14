@@ -1,0 +1,15 @@
+{
+  "$id": "MatchTimerData",
+  "description": "Match timer event payload",
+  "type": "object",
+  "required": [
+    "remainingSeconds"
+  ],
+  "properties": {
+    "remainingSeconds": {
+      "description": "Seconds remaining in the match",
+      "minimum": 0,
+      "type": "integer"
+    }
+  }
+}

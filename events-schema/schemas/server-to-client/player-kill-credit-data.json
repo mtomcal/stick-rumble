@@ -1,0 +1,33 @@
+{
+  "$id": "PlayerKillCreditData",
+  "description": "Player kill credit event payload",
+  "type": "object",
+  "required": [
+    "killerId",
+    "victimId",
+    "killerKills",
+    "killerXP"
+  ],
+  "properties": {
+    "killerId": {
+      "description": "Player who got the kill",
+      "minLength": 1,
+      "type": "string"
+    },
+    "victimId": {
+      "description": "Player who died",
+      "minLength": 1,
+      "type": "string"
+    },
+    "killerKills": {
+      "description": "Killer total kills",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "killerXP": {
+      "description": "Killer total XP",
+      "minimum": 0,
+      "type": "integer"
+    }
+  }
+}

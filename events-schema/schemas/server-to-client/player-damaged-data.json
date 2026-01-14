@@ -1,0 +1,39 @@
+{
+  "$id": "PlayerDamagedData",
+  "description": "Player damaged event payload",
+  "type": "object",
+  "required": [
+    "victimId",
+    "attackerId",
+    "damage",
+    "newHealth",
+    "projectileId"
+  ],
+  "properties": {
+    "victimId": {
+      "description": "Player who took damage",
+      "minLength": 1,
+      "type": "string"
+    },
+    "attackerId": {
+      "description": "Player who dealt damage",
+      "minLength": 1,
+      "type": "string"
+    },
+    "damage": {
+      "description": "Amount of damage dealt",
+      "minimum": 0,
+      "type": "number"
+    },
+    "newHealth": {
+      "description": "Victim health after damage",
+      "minimum": 0,
+      "type": "number"
+    },
+    "projectileId": {
+      "description": "Projectile that caused damage",
+      "minLength": 1,
+      "type": "string"
+    }
+  }
+}
