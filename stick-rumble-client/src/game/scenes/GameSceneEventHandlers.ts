@@ -135,7 +135,7 @@ export class GameSceneEventHandlers {
         // Update input manager with local player position for aim calculation
         if (this.inputManager && this.playerManager.getLocalPlayerId()) {
           const localPlayer = messageData.players.find(
-            p => p.id === this.playerManager.getLocalPlayerId()
+            (p: { id: string }) => p.id === this.playerManager.getLocalPlayerId()
           );
           if (localPlayer) {
             this.inputManager.setPlayerPosition(
