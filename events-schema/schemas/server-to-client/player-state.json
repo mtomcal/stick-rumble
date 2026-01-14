@@ -9,7 +9,8 @@
     "health",
     "maxHealth",
     "rotation",
-    "isDead"
+    "isDead",
+    "isSprinting"
   ],
   "properties": {
     "id": {
@@ -71,6 +72,10 @@
     },
     "isDead": {
       "description": "Whether the player is dead",
+      "type": "boolean"
+    },
+    "isSprinting": {
+      "description": "Whether the player is currently sprinting",
       "type": "boolean"
     }
   }

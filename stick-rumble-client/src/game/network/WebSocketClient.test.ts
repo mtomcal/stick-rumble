@@ -584,7 +584,7 @@ describe('WebSocketClient', () => {
       const callback = vi.fn();
       client.onInputRecorded(callback);
 
-      client.sendInputState({ up: false, down: false, left: false, right: true, aimAngle: 0 });
+      client.sendInputState({ up: false, down: false, left: false, right: true, aimAngle: 0, isSprinting: false });
 
       expect(callback).not.toHaveBeenCalled();
       expect(client.getFrameNumber()).toBe(0);
@@ -604,7 +604,7 @@ describe('WebSocketClient', () => {
       client.onInputRecorded(callback);
       client.setInputRecording(true);
 
-      const inputData = { up: false, down: false, left: false, right: true, aimAngle: 0 };
+      const inputData = { up: false, down: false, left: false, right: true, aimAngle: 0, isSprinting: false };
       client.sendInputState(inputData);
 
       expect(callback).toHaveBeenCalledOnce();
@@ -626,9 +626,9 @@ describe('WebSocketClient', () => {
       client.onInputRecorded(callback);
       client.setInputRecording(true);
 
-      client.sendInputState({ up: false, down: false, left: false, right: true, aimAngle: 0 });
-      client.sendInputState({ up: true, down: false, left: false, right: false, aimAngle: 1.5 });
-      client.sendInputState({ up: false, down: true, left: false, right: false, aimAngle: 3.0 });
+      client.sendInputState({ up: false, down: false, left: false, right: true, aimAngle: 0, isSprinting: false });
+      client.sendInputState({ up: true, down: false, left: false, right: false, aimAngle: 1.5, isSprinting: false });
+      client.sendInputState({ up: false, down: true, left: false, right: false, aimAngle: 3.0, isSprinting: false });
 
       expect(callback).toHaveBeenCalledTimes(3);
       expect(callback).toHaveBeenNthCalledWith(1, 0, expect.anything());
@@ -651,7 +651,7 @@ describe('WebSocketClient', () => {
       client.onInputRecorded(callback);
       client.setInputRecording(true);
 
-      client.sendInputState({ up: false, down: false, left: false, right: true, aimAngle: 0 });
+      client.sendInputState({ up: false, down: false, left: false, right: true, aimAngle: 0, isSprinting: false });
 
       expect(callback).toHaveBeenCalledOnce();
 
@@ -659,7 +659,7 @@ describe('WebSocketClient', () => {
       client.setInputRecording(false);
       callback.mockClear();
 
-      client.sendInputState({ up: true, down: false, left: false, right: false, aimAngle: 1.5 });
+      client.sendInputState({ up: true, down: false, left: false, right: false, aimAngle: 1.5, isSprinting: false });
 
       expect(callback).not.toHaveBeenCalled();
       expect(client.getFrameNumber()).toBe(1); // Should not increment when disabled
@@ -679,8 +679,8 @@ describe('WebSocketClient', () => {
       client.onInputRecorded(callback);
       client.setInputRecording(true);
 
-      client.sendInputState({ up: false, down: false, left: false, right: true, aimAngle: 0 });
-      client.sendInputState({ up: true, down: false, left: false, right: false, aimAngle: 1.5 });
+      client.sendInputState({ up: false, down: false, left: false, right: true, aimAngle: 0, isSprinting: false });
+      client.sendInputState({ up: true, down: false, left: false, right: false, aimAngle: 1.5, isSprinting: false });
 
       expect(client.getFrameNumber()).toBe(2);
 
@@ -688,7 +688,7 @@ describe('WebSocketClient', () => {
 
       expect(client.getFrameNumber()).toBe(0);
 
-      client.sendInputState({ up: false, down: true, left: false, right: false, aimAngle: 3.0 });
+      client.sendInputState({ up: false, down: true, left: false, right: false, aimAngle: 3.0, isSprinting: false });
 
       expect(callback).toHaveBeenLastCalledWith(0, expect.anything());
     });
@@ -707,7 +707,7 @@ describe('WebSocketClient', () => {
 
       // Should not throw without callback
       expect(() => {
-        client.sendInputState({ up: false, down: false, left: false, right: true, aimAngle: 0 });
+        client.sendInputState({ up: false, down: false, left: false, right: true, aimAngle: 0, isSprinting: false });
       }).not.toThrow();
 
       expect(client.getFrameNumber()).toBe(1);

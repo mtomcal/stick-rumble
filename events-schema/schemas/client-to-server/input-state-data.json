@@ -7,7 +7,8 @@
     "down",
     "left",
     "right",
-    "aimAngle"
+    "aimAngle",
+    "isSprinting"
   ],
   "properties": {
     "up": {
@@ -29,6 +30,10 @@
     "aimAngle": {
       "description": "Aim angle in radians",
       "type": "number"
+    },
+    "isSprinting": {
+      "description": "Shift key pressed for sprint",
+      "type": "boolean"
     }
   }
 }

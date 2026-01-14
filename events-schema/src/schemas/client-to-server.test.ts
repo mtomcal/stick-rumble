@@ -37,6 +37,7 @@ describe('Client-to-Server Schemas', () => {
         left: false,
         right: true,
         aimAngle: 1.57,
+        isSprinting: false,
       };
 
       expect(validate(validData)).toBe(true);
@@ -82,9 +83,9 @@ describe('Client-to-Server Schemas', () => {
 
     it('should accept all boolean combinations', () => {
       const testCases = [
-        { up: false, down: false, left: false, right: false, aimAngle: 0 },
-        { up: true, down: true, left: true, right: true, aimAngle: 3.14 },
-        { up: true, down: false, left: true, right: false, aimAngle: -1.57 },
+        { up: false, down: false, left: false, right: false, aimAngle: 0, isSprinting: false },
+        { up: true, down: true, left: true, right: true, aimAngle: 3.14, isSprinting: true },
+        { up: true, down: false, left: true, right: false, aimAngle: -1.57, isSprinting: false },
       ];
 
       testCases.forEach((testCase) => {
@@ -106,6 +107,7 @@ describe('Client-to-Server Schemas', () => {
           left: false,
           right: true,
           aimAngle: 1.57,
+          isSprinting: true,
         },
       };
 
@@ -123,6 +125,7 @@ describe('Client-to-Server Schemas', () => {
           left: false,
           right: true,
           aimAngle: 1.57,
+          isSprinting: false,
         },
       };
 
@@ -139,6 +142,7 @@ describe('Client-to-Server Schemas', () => {
           left: false,
           right: true,
           aimAngle: 1.57,
+          isSprinting: false,
         },
       };
 
@@ -156,6 +160,7 @@ describe('Client-to-Server Schemas', () => {
           left: false,
           right: true,
           aimAngle: 1.57,
+          isSprinting: false,
         },
       };
 

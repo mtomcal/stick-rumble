@@ -11,13 +11,14 @@ type Vector2 struct {
 	Y float64 `json:"y"`
 }
 
-// InputState represents the player's current input (WASD keys and aim)
+// InputState represents the player's current input (WASD keys, aim, and sprint)
 type InputState struct {
-	Up       bool    `json:"up"`       // W key
-	Down     bool    `json:"down"`     // S key
-	Left     bool    `json:"left"`     // A key
-	Right    bool    `json:"right"`    // D key
-	AimAngle float64 `json:"aimAngle"` // Aim angle in radians
+	Up          bool    `json:"up"`          // W key
+	Down        bool    `json:"down"`        // S key
+	Left        bool    `json:"left"`        // A key
+	Right       bool    `json:"right"`       // D key
+	AimAngle    float64 `json:"aimAngle"`    // Aim angle in radians
+	IsSprinting bool    `json:"isSprinting"` // Shift key for sprint
 }
 
 // PlayerState represents a player's physics state in the game world

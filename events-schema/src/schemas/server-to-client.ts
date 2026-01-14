@@ -44,6 +44,7 @@ export const PlayerStateSchema = Type.Object(
     maxHealth: Type.Number({ description: 'Maximum health', minimum: 0 }),
     rotation: Type.Number({ description: 'Player rotation in radians' }),
     isDead: Type.Boolean({ description: 'Whether the player is dead' }),
+    isSprinting: Type.Boolean({ description: 'Whether the player is currently sprinting' }),
   },
   { $id: 'PlayerState', description: 'Player state for movement updates' }
 );

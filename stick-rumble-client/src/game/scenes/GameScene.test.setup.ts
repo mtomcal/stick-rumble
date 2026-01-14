@@ -115,6 +115,7 @@ export const createMockScene = () => {
           A: { isDown: false },
           S: { isDown: false },
           D: { isDown: false },
+          SHIFT: { isDown: false },
         }),
         addKey: vi.fn().mockReturnValue({
           on: vi.fn(),
