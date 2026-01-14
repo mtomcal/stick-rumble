@@ -11,6 +11,8 @@ import {
   PlayerReloadMessageSchema,
   WeaponPickupAttemptDataSchema,
   WeaponPickupAttemptMessageSchema,
+  PlayerMeleeAttackDataSchema,
+  PlayerMeleeAttackMessageSchema,
   type InputStateData,
   type InputStateMessage,
   type PlayerShootData,
@@ -18,6 +20,8 @@ import {
   type PlayerReloadMessage,
   type WeaponPickupAttemptData,
   type WeaponPickupAttemptMessage,
+  type PlayerMeleeAttackData,
+  type PlayerMeleeAttackMessage,
 } from './client-to-server.js';
 
 const ajv = new Ajv();
@@ -336,6 +340,85 @@ describe('Client-to-Server Schemas', () => {
     });
   });
 
+  describe('PlayerMeleeAttackDataSchema', () => {
+    const validate = ajv.compile(PlayerMeleeAttackDataSchema);
+
+    it('should validate valid melee attack data', () => {
+      const validData: PlayerMeleeAttackData = {
+        aimAngle: 1.57,
+      };
+
+      expect(validate(validData)).toBe(true);
+      expect(validate.errors).toBeNull();
+    });
+
+    it('should reject data with missing aimAngle', () => {
+      const invalidData = {};
+
+      expect(validate(invalidData)).toBe(false);
+      expect(validate.errors).toBeDefined();
+    });
+
+    it('should reject data with non-numeric aimAngle', () => {
+      const invalidData = {
+        aimAngle: 'not-a-number',
+      };
+
+      expect(validate(invalidData)).toBe(false);
+      expect(validate.errors).toBeDefined();
+    });
+
+    it('should accept various numeric aimAngle values', () => {
+      const testCases = [0, 1.57, 3.14, -1.57, 6.28];
+
+      testCases.forEach((aimAngle) => {
+        expect(validate({ aimAngle })).toBe(true);
+      });
+    });
+  });
+
+  describe('PlayerMeleeAttackMessageSchema', () => {
+    const validate = ajv.compile(PlayerMeleeAttackMessageSchema);
+
+    it('should validate complete player:melee_attack message', () => {
+      const validMessage: PlayerMeleeAttackMessage = {
+        type: 'player:melee_attack',
+        timestamp: Date.now(),
+        data: {
+          aimAngle: 1.57,
+        },
+      };
+
+      expect(validate(validMessage)).toBe(true);
+      expect(validate.errors).toBeNull();
+    });
+
+    it('should reject message with wrong type', () => {
+      const invalidMessage = {
+        type: 'player:shoot',
+        timestamp: Date.now(),
+        data: {
+          aimAngle: 1.57,
+        },
+      };
+
+      expect(validate(invalidMessage)).toBe(false);
+      expect(validate.errors).toBeDefined();
+    });
+
+    it('should reject message with missing timestamp', () => {
+      const invalidMessage = {
+        type: 'player:melee_attack',
+        data: {
+          aimAngle: 1.57,
+        },
+      };
+
+      expect(validate(invalidMessage)).toBe(false);
+      expect(validate.errors).toBeDefined();
+    });
+  });
+
   describe('Schema IDs', () => {
     it('should have correct $id for all schemas', () => {
       expect(InputStateDataSchema.$id).toBe('InputStateData');
@@ -345,6 +428,8 @@ describe('Client-to-Server Schemas', () => {
       expect(PlayerReloadMessageSchema.$id).toBe('player_reloadMessage');
       expect(WeaponPickupAttemptDataSchema.$id).toBe('WeaponPickupAttemptData');
       expect(WeaponPickupAttemptMessageSchema.$id).toBe('weapon_pickup_attemptMessage');
+      expect(PlayerMeleeAttackDataSchema.$id).toBe('PlayerMeleeAttackData');
+      expect(PlayerMeleeAttackMessageSchema.$id).toBe('player_melee_attackMessage');
     });
   });
 });

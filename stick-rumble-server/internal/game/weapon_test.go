@@ -296,3 +296,126 @@ func TestPistolConstants(t *testing.T) {
 		t.Errorf("pistol projectile speed should be 800.0 px/s, got %f", PistolProjectileSpeed)
 	}
 }
+
+// Melee weapon state tests
+
+func TestWeaponState_MeleeCanShootInfinitely(t *testing.T) {
+	bat := NewBat()
+	clock := NewManualClock(time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC))
+	state := NewWeaponStateWithClock(bat, clock)
+
+	// Melee weapons should be able to "shoot" (swing) initially
+	if !state.CanShoot() {
+		t.Error("melee weapon should be able to swing initially")
+	}
+
+	// Record a swing
+	state.RecordShot()
+
+	// Ammo should not be decremented for melee weapons
+	if state.CurrentAmmo != 0 {
+		t.Errorf("melee weapon ammo should remain 0, got %d", state.CurrentAmmo)
+	}
+
+	// Should respect fire rate cooldown (don't advance clock yet)
+	// Need to advance time by a tiny amount to ensure we're after the shot time
+	clock.Advance(1 * time.Millisecond)
+	if state.CanShoot() {
+		t.Error("melee weapon should respect fire rate cooldown")
+	}
+
+	// After cooldown, should be able to swing again
+	clock.Advance(time.Duration(float64(time.Second)/bat.FireRate) + 10*time.Millisecond)
+	if !state.CanShoot() {
+		t.Error("melee weapon should be able to swing after cooldown")
+	}
+
+	// Swing many times to verify infinite usage
+	for i := 0; i < 100; i++ {
+		clock.Advance(time.Duration(float64(time.Second)/bat.FireRate) + 10*time.Millisecond)
+		if !state.CanShoot() {
+			t.Errorf("melee weapon should always be able to swing after cooldown (iteration %d)", i)
+		}
+		state.RecordShot()
+		if state.CurrentAmmo != 0 {
+			t.Errorf("melee weapon ammo should always be 0, got %d (iteration %d)", state.CurrentAmmo, i)
+		}
+	}
+}
+
+func TestWeaponState_MeleeDoesNotReload(t *testing.T) {
+	katana := NewKatana()
+	state := NewWeaponState(katana)
+
+	// Attempting to reload should do nothing
+	state.StartReload()
+
+	if state.IsReloading {
+		t.Error("melee weapons should not reload")
+	}
+
+	// Should still be able to swing
+	if !state.CanShoot() {
+		t.Error("melee weapon should always be able to swing (no reload needed)")
+	}
+}
+
+func TestWeaponState_BatCooldown(t *testing.T) {
+	bat := NewBat() // Fire rate 2.0/s = 0.5s cooldown
+	clock := NewManualClock(time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC))
+	state := NewWeaponStateWithClock(bat, clock)
+
+	// Record a swing
+	state.RecordShot()
+
+	// Should not be able to swing during cooldown (400ms < 500ms)
+	clock.Advance(400 * time.Millisecond)
+	if state.CanShoot() {
+		t.Error("bat should not be able to swing before 0.5s cooldown")
+	}
+
+	// Should be able to swing after cooldown (550ms > 500ms)
+	clock.Advance(150 * time.Millisecond)
+	if !state.CanShoot() {
+		t.Error("bat should be able to swing after 0.5s cooldown")
+	}
+}
+
+func TestWeaponState_KatanaCooldown(t *testing.T) {
+	katana := NewKatana() // Fire rate 1.25/s = 0.8s cooldown
+	clock := NewManualClock(time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC))
+	state := NewWeaponStateWithClock(katana, clock)
+
+	// Record a swing
+	state.RecordShot()
+
+	// Should not be able to swing during cooldown (700ms < 800ms)
+	clock.Advance(700 * time.Millisecond)
+	if state.CanShoot() {
+		t.Error("katana should not be able to swing before 0.8s cooldown")
+	}
+
+	// Should be able to swing after cooldown (850ms > 800ms)
+	clock.Advance(150 * time.Millisecond)
+	if !state.CanShoot() {
+		t.Error("katana should be able to swing after 0.8s cooldown")
+	}
+}
+
+func TestWeaponIsMelee(t *testing.T) {
+	bat := NewBat()
+	katana := NewKatana()
+	pistol := NewPistol()
+
+	if !bat.IsMelee() {
+		t.Error("Bat should be identified as melee weapon")
+	}
+
+	if !katana.IsMelee() {
+		t.Error("Katana should be identified as melee weapon")
+	}
+
+	if pistol.IsMelee() {
+		t.Error("Pistol should NOT be identified as melee weapon")
+	}
+}

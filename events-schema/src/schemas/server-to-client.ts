@@ -450,3 +450,28 @@ export const WeaponRespawnedMessageSchema = createTypedMessageSchema(
   WeaponRespawnedDataSchema
 );
 export type WeaponRespawnedMessage = Static<typeof WeaponRespawnedMessageSchema>;
+
+// ============================================================================
+// melee:hit
+// ============================================================================
+
+/**
+ * Melee hit data payload.
+ * Sent when a melee attack hits one or more players.
+ */
+export const MeleeHitDataSchema = Type.Object(
+  {
+    attackerId: Type.String({ description: 'Player who performed the melee attack', minLength: 1 }),
+    victims: Type.Array(Type.String({ minLength: 1 }), { description: 'Array of player IDs hit by the attack' }),
+    knockbackApplied: Type.Boolean({ description: 'Whether knockback was applied (Bat only)' }),
+  },
+  { $id: 'MeleeHitData', description: 'Melee hit event payload' }
+);
+
+export type MeleeHitData = Static<typeof MeleeHitDataSchema>;
+
+/**
+ * Complete melee:hit message schema
+ */
+export const MeleeHitMessageSchema = createTypedMessageSchema('melee:hit', MeleeHitDataSchema);
+export type MeleeHitMessage = Static<typeof MeleeHitMessageSchema>;

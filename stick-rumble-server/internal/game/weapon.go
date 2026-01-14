@@ -31,23 +31,34 @@ const (
 
 // Weapon defines a weapon type with its properties
 type Weapon struct {
-	Name            string
-	Damage          int
-	FireRate        float64       // Rounds per second
-	MagazineSize    int           // Rounds per magazine
-	ReloadTime      time.Duration // Time to reload
-	ProjectileSpeed float64       // Projectile speed in px/s
+	Name              string
+	Damage            int
+	FireRate          float64       // Rounds per second (or swings per second for melee)
+	MagazineSize      int           // Rounds per magazine (0 for melee)
+	ReloadTime        time.Duration // Time to reload (0 for melee)
+	ProjectileSpeed   float64       // Projectile speed in px/s (0 for melee)
+	Range             float64       // Maximum range in pixels (for melee and ranged)
+	ArcDegrees        float64       // Swing arc in degrees (for melee, 0 for ranged)
+	KnockbackDistance float64       // Knockback distance in pixels (Bat only)
+}
+
+// IsMelee returns true if this is a melee weapon
+func (w *Weapon) IsMelee() bool {
+	return w.MagazineSize == 0 && w.ProjectileSpeed == 0
 }
 
 // NewPistol creates a new Pistol weapon instance
 func NewPistol() *Weapon {
 	return &Weapon{
-		Name:            "Pistol",
-		Damage:          PistolDamage,
-		FireRate:        PistolFireRate,
-		MagazineSize:    PistolMagazineSize,
-		ReloadTime:      PistolReloadTime,
-		ProjectileSpeed: PistolProjectileSpeed,
+		Name:              "Pistol",
+		Damage:            PistolDamage,
+		FireRate:          PistolFireRate,
+		MagazineSize:      PistolMagazineSize,
+		ReloadTime:        PistolReloadTime,
+		ProjectileSpeed:   PistolProjectileSpeed,
+		Range:             ProjectileMaxRange,
+		ArcDegrees:        0,
+		KnockbackDistance: 0,
 	}
 }
 
@@ -76,19 +87,22 @@ func NewWeaponStateWithClock(weapon *Weapon, clock Clock) *WeaponState {
 	}
 }
 
-// CanShoot returns true if the weapon can fire
+// CanShoot returns true if the weapon can fire (or swing for melee)
 func (ws *WeaponState) CanShoot() bool {
-	// Cannot shoot while reloading
-	if ws.IsReloading {
+	// Melee weapons bypass ammo and reload checks
+	isMelee := ws.Weapon.IsMelee()
+
+	// Cannot shoot while reloading (ranged only)
+	if !isMelee && ws.IsReloading {
 		return false
 	}
 
-	// Cannot shoot with empty magazine
-	if ws.CurrentAmmo <= 0 {
+	// Cannot shoot with empty magazine (ranged only)
+	if !isMelee && ws.CurrentAmmo <= 0 {
 		return false
 	}
 
-	// Check fire rate cooldown
+	// Check fire rate cooldown (both melee and ranged)
 	if !ws.LastShotTime.IsZero() {
 		cooldown := time.Duration(float64(time.Second) / ws.Weapon.FireRate)
 		if ws.clock.Since(ws.LastShotTime) < cooldown {
@@ -99,9 +113,10 @@ func (ws *WeaponState) CanShoot() bool {
 	return true
 }
 
-// RecordShot records that a shot was fired, decrements ammo
+// RecordShot records that a shot was fired (or swing for melee), decrements ammo for ranged weapons
 func (ws *WeaponState) RecordShot() {
-	if ws.CurrentAmmo > 0 {
+	// Only decrement ammo for ranged weapons
+	if !ws.Weapon.IsMelee() && ws.CurrentAmmo > 0 {
 		ws.CurrentAmmo--
 	}
 	ws.LastShotTime = ws.clock.Now()
