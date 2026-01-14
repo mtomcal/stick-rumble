@@ -252,6 +252,143 @@ describe('GameSceneEventHandlers', () => {
     });
   });
 
+  describe('audio integration', () => {
+    let mockAudioManager: any;
+
+    beforeEach(() => {
+      mockAudioManager = {
+        playWeaponSound: vi.fn(),
+        playWeaponSoundPositional: vi.fn(),
+      };
+      eventHandlers.setAudioManager(mockAudioManager);
+      eventHandlers.setupEventHandlers();
+    });
+
+    it('should play local player weapon sound on projectile:spawn', () => {
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const projectileSpawnHandler = handlerRefs.get('projectile:spawn');
+
+      const data = {
+        id: 'proj-123',
+        ownerId: 'player-1', // Local player ID
+        position: { x: 100, y: 200 },
+        velocity: { x: 10, y: 0 },
+        damage: 25,
+      };
+
+      projectileSpawnHandler?.(data);
+
+      // Should play local player sound (not positional)
+      expect(mockAudioManager.playWeaponSound).toHaveBeenCalledWith('pistol'); // Default weapon type
+      expect(mockAudioManager.playWeaponSoundPositional).not.toHaveBeenCalled();
+    });
+
+    it('should play positional audio for remote player weapon sound on projectile:spawn', () => {
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const projectileSpawnHandler = handlerRefs.get('projectile:spawn');
+
+      // Mock local player position
+      mockPlayerManager.getLocalPlayerPosition = vi.fn().mockReturnValue({ x: 500, y: 500 });
+
+      const data = {
+        id: 'proj-456',
+        ownerId: 'other-player', // Remote player
+        position: { x: 100, y: 200 },
+        velocity: { x: 10, y: 0 },
+        damage: 25,
+      };
+
+      projectileSpawnHandler?.(data);
+
+      // Should play positional audio
+      expect(mockAudioManager.playWeaponSound).not.toHaveBeenCalled();
+      expect(mockAudioManager.playWeaponSoundPositional).toHaveBeenCalledWith(
+        'pistol', // Default weapon type
+        100, // soundX
+        200, // soundY
+        500, // listenerX
+        500  // listenerY
+      );
+    });
+
+    it('should not play positional audio when local player position is null', () => {
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const projectileSpawnHandler = handlerRefs.get('projectile:spawn');
+
+      // Mock local player position as null
+      mockPlayerManager.getLocalPlayerPosition = vi.fn().mockReturnValue(null);
+
+      const data = {
+        id: 'proj-789',
+        ownerId: 'other-player',
+        position: { x: 100, y: 200 },
+        velocity: { x: 10, y: 0 },
+        damage: 25,
+      };
+
+      projectileSpawnHandler?.(data);
+
+      // Should not play any audio
+      expect(mockAudioManager.playWeaponSound).not.toHaveBeenCalled();
+      expect(mockAudioManager.playWeaponSoundPositional).not.toHaveBeenCalled();
+    });
+
+    it('should not crash when audioManager is null on projectile:spawn', () => {
+      // Create event handlers without audio manager
+      const eventHandlersNoAudio = new GameSceneEventHandlers(
+        mockWsClient,
+        mockPlayerManager,
+        mockProjectileManager,
+        () => mockHealthBarUI,
+        mockKillFeedUI,
+        mockGameSceneUI,
+        mockGameSceneSpectator,
+        vi.fn(),
+        mockWeaponCrateManager,
+        mockPickupPromptUI
+      );
+
+      eventHandlersNoAudio.setupEventHandlers();
+
+      const handlerRefs = (eventHandlersNoAudio as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const projectileSpawnHandler = handlerRefs.get('projectile:spawn');
+
+      const data = {
+        id: 'proj-999',
+        ownerId: 'player-1',
+        position: { x: 100, y: 200 },
+        velocity: { x: 10, y: 0 },
+        damage: 25,
+      };
+
+      // Should not throw when audioManager is null
+      expect(() => {
+        projectileSpawnHandler?.(data);
+      }).not.toThrow();
+    });
+
+    it('should use currentWeaponType for audio playback', () => {
+      // Set a different weapon type
+      (eventHandlers as any).currentWeaponType = 'Uzi';
+
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const projectileSpawnHandler = handlerRefs.get('projectile:spawn');
+
+      const data = {
+        id: 'proj-111',
+        ownerId: 'player-1',
+        position: { x: 100, y: 200 },
+        velocity: { x: 10, y: 0 },
+        damage: 25,
+      };
+
+      projectileSpawnHandler?.(data);
+
+      // Should play Uzi sound
+      expect(mockAudioManager.playWeaponSound).toHaveBeenCalledWith('Uzi');
+    });
+  });
+
   describe('event handler branches', () => {
     beforeEach(() => {
       eventHandlers.setupEventHandlers();

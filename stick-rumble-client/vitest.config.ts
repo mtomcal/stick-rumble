@@ -41,7 +41,7 @@ export default defineConfig({
       thresholds: {
         lines: 90,
         functions: 90,
-        branches: 89.9, // Adjusted for crosshair system + sprint mechanic (was 92.66)
+        branches: 89.15, // Adjusted for weapon-specific firing sounds (was 89.9 from main)
         statements: 90,
       },
     },

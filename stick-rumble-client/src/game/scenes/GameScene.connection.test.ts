@@ -68,8 +68,15 @@ describe('GameScene - Connection & Initialization', () => {
       expect(scene.preload).toBeDefined();
       expect(typeof scene.preload).toBe('function');
 
-      // Should not throw (note: preload currently has no implementation)
+      // Should not throw and should load audio assets
+      const mockSceneContext = createMockScene();
+      Object.assign(scene, mockSceneContext);
+
       expect(() => scene.preload()).not.toThrow();
+      expect(mockSceneContext.load.audio).toHaveBeenCalledTimes(3);
+      expect(mockSceneContext.load.audio).toHaveBeenCalledWith('uzi-fire', 'assets/audio/uzi-fire.mp3');
+      expect(mockSceneContext.load.audio).toHaveBeenCalledWith('ak47-fire', 'assets/audio/ak47-fire.mp3');
+      expect(mockSceneContext.load.audio).toHaveBeenCalledWith('shotgun-fire', 'assets/audio/shotgun-fire.mp3');
     });
   });
 

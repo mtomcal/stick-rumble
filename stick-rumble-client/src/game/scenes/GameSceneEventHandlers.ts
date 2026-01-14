@@ -10,6 +10,7 @@ import type { KillFeedUI } from '../ui/KillFeedUI';
 import type { GameSceneUI } from './GameSceneUI';
 import type { GameSceneSpectator } from './GameSceneSpectator';
 import type { ScreenShake } from '../effects/ScreenShake';
+import type { AudioManager } from '../audio/AudioManager';
 // Import generated schema types for server→client messages (replaces manual type assertions)
 import type {
   RoomJoinedData,
@@ -50,6 +51,7 @@ export class GameSceneEventHandlers {
   private onCameraFollowNeeded: () => void;
   private handlerRefs: Map<string, (data: unknown) => void> = new Map();
   private screenShake: ScreenShake | null = null;
+  private audioManager: AudioManager | null = null;
   private currentWeaponType: string = 'pistol'; // Default weapon
 
   constructor(
@@ -95,6 +97,13 @@ export class GameSceneEventHandlers {
    */
   setScreenShake(screenShake: ScreenShake): void {
     this.screenShake = screenShake;
+  }
+
+  /**
+   * Set audio manager instance for weapon firing sounds
+   */
+  setAudioManager(audioManager: AudioManager): void {
+    this.audioManager = audioManager;
   }
 
   /**
@@ -198,9 +207,31 @@ export class GameSceneEventHandlers {
         messageData.position.y
       );
 
+      const isLocalPlayer = messageData.ownerId === this.playerManager.getLocalPlayerId();
+
       // Trigger screen shake for local player's weapon fire (Story 3.3 Polish)
-      if (this.screenShake && messageData.ownerId === this.playerManager.getLocalPlayerId()) {
+      if (this.screenShake && isLocalPlayer) {
         this.screenShake.shakeOnWeaponFire(this.currentWeaponType);
+      }
+
+      // Play weapon firing sound (Story 3.3 Polish: Weapon-Specific Firing Sounds)
+      if (this.audioManager) {
+        if (isLocalPlayer) {
+          // Local player: play normal sound using current weapon type
+          this.audioManager.playWeaponSound(this.currentWeaponType);
+        } else {
+          // Remote player: play positional audio
+          const localPlayerPosition = this.playerManager.getLocalPlayerPosition();
+          if (localPlayerPosition) {
+            this.audioManager.playWeaponSoundPositional(
+              this.currentWeaponType,
+              messageData.position.x,
+              messageData.position.y,
+              localPlayerPosition.x,
+              localPlayerPosition.y
+            );
+          }
+        }
       }
     };
     this.handlerRefs.set('projectile:spawn', projectileSpawnHandler);
