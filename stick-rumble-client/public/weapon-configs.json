@@ -1,0 +1,123 @@
+{
+  "version": "1.0.0",
+  "weapons": {
+    "Pistol": {
+      "name": "Pistol",
+      "damage": 25,
+      "fireRate": 3.0,
+      "magazineSize": 15,
+      "reloadTimeMs": 1500,
+      "projectileSpeed": 800.0,
+      "range": 800.0,
+      "arcDegrees": 0,
+      "knockbackDistance": 0,
+      "recoil": null,
+      "spreadDegrees": 0,
+      "visuals": {
+        "muzzleFlashColor": "0xffdd00",
+        "muzzleFlashSize": 8,
+        "muzzleFlashDuration": 50
+      }
+    },
+    "Bat": {
+      "name": "Bat",
+      "damage": 25,
+      "fireRate": 2.0,
+      "magazineSize": 0,
+      "reloadTimeMs": 0,
+      "projectileSpeed": 0,
+      "range": 64.0,
+      "arcDegrees": 90,
+      "knockbackDistance": 40,
+      "recoil": null,
+      "spreadDegrees": 0,
+      "visuals": {
+        "muzzleFlashColor": "0x000000",
+        "muzzleFlashSize": 0,
+        "muzzleFlashDuration": 0
+      }
+    },
+    "Katana": {
+      "name": "Katana",
+      "damage": 45,
+      "fireRate": 1.25,
+      "magazineSize": 0,
+      "reloadTimeMs": 0,
+      "projectileSpeed": 0,
+      "range": 80.0,
+      "arcDegrees": 90,
+      "knockbackDistance": 0,
+      "recoil": null,
+      "spreadDegrees": 0,
+      "visuals": {
+        "muzzleFlashColor": "0x000000",
+        "muzzleFlashSize": 0,
+        "muzzleFlashDuration": 0
+      }
+    },
+    "Uzi": {
+      "name": "Uzi",
+      "damage": 8,
+      "fireRate": 10.0,
+      "magazineSize": 30,
+      "reloadTimeMs": 1500,
+      "projectileSpeed": 800.0,
+      "range": 600.0,
+      "arcDegrees": 0,
+      "knockbackDistance": 0,
+      "recoil": {
+        "verticalPerShot": 2.0,
+        "horizontalPerShot": 0.0,
+        "recoveryTime": 0.5,
+        "maxAccumulation": 20.0
+      },
+      "spreadDegrees": 5.0,
+      "visuals": {
+        "muzzleFlashColor": "0xffaa00",
+        "muzzleFlashSize": 8,
+        "muzzleFlashDuration": 50
+      }
+    },
+    "AK47": {
+      "name": "AK47",
+      "damage": 20,
+      "fireRate": 6.0,
+      "magazineSize": 30,
+      "reloadTimeMs": 2000,
+      "projectileSpeed": 800.0,
+      "range": 800.0,
+      "arcDegrees": 0,
+      "knockbackDistance": 0,
+      "recoil": {
+        "verticalPerShot": 1.5,
+        "horizontalPerShot": 3.0,
+        "recoveryTime": 0.6,
+        "maxAccumulation": 15.0
+      },
+      "spreadDegrees": 3.0,
+      "visuals": {
+        "muzzleFlashColor": "0xffcc00",
+        "muzzleFlashSize": 12,
+        "muzzleFlashDuration": 80
+      }
+    },
+    "Shotgun": {
+      "name": "Shotgun",
+      "damage": 60,
+      "fireRate": 1.0,
+      "magazineSize": 6,
+      "reloadTimeMs": 2500,
+      "projectileSpeed": 800.0,
+      "range": 300.0,
+      "arcDegrees": 15.0,
+      "knockbackDistance": 0,
+      "recoil": null,
+      "spreadDegrees": 0,
+      "visuals": {
+        "muzzleFlashColor": "0xff8800",
+        "muzzleFlashSize": 16,
+        "muzzleFlashDuration": 100
+      }
+    }
+  }
+}
