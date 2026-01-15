@@ -26,7 +26,9 @@
         "currentAmmo",
         "maxAmmo",
         "isReloading",
-        "canShoot"
+        "canShoot",
+        "weaponType",
+        "isMelee"
       ],
       "properties": {
         "currentAmmo": {
@@ -45,6 +47,15 @@
         },
         "canShoot": {
           "description": "Whether the weapon can currently shoot",
+          "type": "boolean"
+        },
+        "weaponType": {
+          "description": "Name of the current weapon (e.g., \"Pistol\", \"Bat\", \"Katana\")",
+          "minLength": 1,
+          "type": "string"
+        },
+        "isMelee": {
+          "description": "Whether the current weapon is a melee weapon",
           "type": "boolean"
         }
       }

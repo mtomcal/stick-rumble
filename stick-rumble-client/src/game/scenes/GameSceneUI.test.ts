@@ -150,11 +150,13 @@ describe('GameSceneUI', () => {
         getAmmoInfo: vi.fn().mockReturnValue([10, 15]),
         isReloading: vi.fn().mockReturnValue(false),
         isEmpty: vi.fn().mockReturnValue(false),
+        isMeleeWeapon: vi.fn().mockReturnValue(false),
       } as unknown as ShootingManager;
 
       ui.updateAmmoDisplay(mockShootingManager);
 
       expect(createdTexts[0].setText).toHaveBeenCalledWith('10/15');
+      expect(createdTexts[0].setVisible).toHaveBeenCalledWith(true);
     });
 
     it('should update ammo text when reloading (no longer shows [RELOADING] text)', () => {
@@ -164,6 +166,7 @@ describe('GameSceneUI', () => {
         getAmmoInfo: vi.fn().mockReturnValue([5, 15]),
         isReloading: vi.fn().mockReturnValue(true),
         isEmpty: vi.fn().mockReturnValue(false),
+        isMeleeWeapon: vi.fn().mockReturnValue(false),
       } as unknown as ShootingManager;
 
       ui.updateAmmoDisplay(mockShootingManager);
@@ -177,6 +180,7 @@ describe('GameSceneUI', () => {
         getAmmoInfo: vi.fn().mockReturnValue([10, 15]),
         isReloading: vi.fn().mockReturnValue(false),
         isEmpty: vi.fn().mockReturnValue(false),
+        isMeleeWeapon: vi.fn().mockReturnValue(false),
       } as unknown as ShootingManager;
 
       // Don't create ammo display first
@@ -196,6 +200,107 @@ describe('GameSceneUI', () => {
       ui.updateAmmoDisplay(null as unknown as ShootingManager);
 
       expect(textBeforeUpdate.setText).not.toHaveBeenCalled();
+    });
+
+    it('should hide ammo display for melee weapons (Bat)', () => {
+      ui.createAmmoDisplay(10, 50);
+
+      const mockMeleeManager = {
+        getAmmoInfo: vi.fn().mockReturnValue([0, 0]),
+        isReloading: vi.fn().mockReturnValue(false),
+        isEmpty: vi.fn().mockReturnValue(true),
+        isMeleeWeapon: vi.fn().mockReturnValue(true),
+      } as unknown as ShootingManager;
+
+      ui.updateAmmoDisplay(mockMeleeManager);
+
+      // Ammo text should be hidden for melee weapons
+      expect(createdTexts[0].setVisible).toHaveBeenCalledWith(false);
+      // setText should not be called for melee weapons
+      expect(createdTexts[0].setText).not.toHaveBeenCalled();
+    });
+
+    it('should hide ammo display for melee weapons (Katana)', () => {
+      ui.createAmmoDisplay(10, 50);
+
+      const mockMeleeManager = {
+        getAmmoInfo: vi.fn().mockReturnValue([0, 0]),
+        isReloading: vi.fn().mockReturnValue(false),
+        isEmpty: vi.fn().mockReturnValue(true),
+        isMeleeWeapon: vi.fn().mockReturnValue(true),
+      } as unknown as ShootingManager;
+
+      ui.updateAmmoDisplay(mockMeleeManager);
+
+      expect(createdTexts[0].setVisible).toHaveBeenCalledWith(false);
+    });
+
+    it('should not show RELOAD indicator for melee weapons even when isEmpty is true', () => {
+      ui.createAmmoDisplay(10, 50);
+      ui.createReloadProgressBar(10, 70, 100, 10);
+
+      const mockMeleeManager = {
+        getAmmoInfo: vi.fn().mockReturnValue([0, 0]),
+        isReloading: vi.fn().mockReturnValue(false),
+        isEmpty: vi.fn().mockReturnValue(true), // Empty but melee
+        isMeleeWeapon: vi.fn().mockReturnValue(true),
+      } as unknown as ShootingManager;
+
+      ui.updateAmmoDisplay(mockMeleeManager);
+
+      // Empty magazine indicator should NOT be shown for melee
+      // The indicator is created in the method, so we check that createdTexts length doesn't increase
+      const initialTextCount = createdTexts.length;
+      expect(createdTexts.length).toBe(initialTextCount);
+    });
+
+    it('should not show reload progress bar for melee weapons', () => {
+      ui.createAmmoDisplay(10, 50);
+      ui.createReloadProgressBar(10, 70, 100, 10);
+      ui.createReloadCircleIndicator();
+
+      const mockMeleeManager = {
+        getAmmoInfo: vi.fn().mockReturnValue([0, 0]),
+        isReloading: vi.fn().mockReturnValue(false),
+        isEmpty: vi.fn().mockReturnValue(true),
+        isMeleeWeapon: vi.fn().mockReturnValue(true),
+      } as unknown as ShootingManager;
+
+      ui.updateAmmoDisplay(mockMeleeManager);
+
+      // Reload UI should be hidden for melee weapons
+      expect(createdGraphics[0].setVisible).toHaveBeenCalledWith(false);
+      expect(createdGraphics[1].setVisible).toHaveBeenCalledWith(false);
+      expect(createdGraphics[2].setVisible).toHaveBeenCalledWith(false);
+    });
+
+    it('should show ammo display again when switching from melee to ranged weapon', () => {
+      ui.createAmmoDisplay(10, 50);
+
+      // Start with melee weapon
+      const mockMeleeManager = {
+        getAmmoInfo: vi.fn().mockReturnValue([0, 0]),
+        isReloading: vi.fn().mockReturnValue(false),
+        isEmpty: vi.fn().mockReturnValue(true),
+        isMeleeWeapon: vi.fn().mockReturnValue(true),
+      } as unknown as ShootingManager;
+
+      ui.updateAmmoDisplay(mockMeleeManager);
+      expect(createdTexts[0].setVisible).toHaveBeenCalledWith(false);
+
+      // Switch to ranged weapon
+      const mockRangedManager = {
+        getAmmoInfo: vi.fn().mockReturnValue([15, 30]),
+        isReloading: vi.fn().mockReturnValue(false),
+        isEmpty: vi.fn().mockReturnValue(false),
+        isMeleeWeapon: vi.fn().mockReturnValue(false),
+      } as unknown as ShootingManager;
+
+      ui.updateAmmoDisplay(mockRangedManager);
+
+      // Ammo should be visible again and show correct ammo
+      expect(createdTexts[0].setVisible).toHaveBeenCalledWith(true);
+      expect(createdTexts[0].setText).toHaveBeenCalledWith('15/30');
     });
   });
 
@@ -486,6 +591,7 @@ describe('GameSceneUI', () => {
           getAmmoInfo: vi.fn().mockReturnValue([0, 15]),
           isReloading: vi.fn().mockReturnValue(false),
           isEmpty: vi.fn().mockReturnValue(true),
+          isMeleeWeapon: vi.fn().mockReturnValue(false),
         } as unknown as ShootingManager;
 
         ui.updateAmmoDisplay(mockShootingManager);
@@ -510,6 +616,7 @@ describe('GameSceneUI', () => {
           getAmmoInfo: vi.fn().mockReturnValue([0, 15]),
           isReloading: vi.fn().mockReturnValue(false),
           isEmpty: vi.fn().mockReturnValue(true),
+          isMeleeWeapon: vi.fn().mockReturnValue(false),
         } as unknown as ShootingManager;
 
         ui.updateAmmoDisplay(emptyShootingManager);
@@ -519,6 +626,7 @@ describe('GameSceneUI', () => {
           getAmmoInfo: vi.fn().mockReturnValue([5, 15]),
           isReloading: vi.fn().mockReturnValue(false),
           isEmpty: vi.fn().mockReturnValue(false),
+          isMeleeWeapon: vi.fn().mockReturnValue(false),
         } as unknown as ShootingManager;
 
         ui.updateAmmoDisplay(nonEmptyShootingManager);

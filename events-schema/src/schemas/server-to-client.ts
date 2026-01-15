@@ -139,6 +139,8 @@ export const WeaponStateDataSchema = Type.Object(
     maxAmmo: Type.Integer({ description: 'Maximum ammunition capacity', minimum: 0 }),
     isReloading: Type.Boolean({ description: 'Whether the weapon is currently reloading' }),
     canShoot: Type.Boolean({ description: 'Whether the weapon can currently shoot' }),
+    weaponType: Type.String({ description: 'Name of the current weapon (e.g., "Pistol", "Bat", "Katana")', minLength: 1 }),
+    isMelee: Type.Boolean({ description: 'Whether the current weapon is a melee weapon' }),
   },
   { $id: 'WeaponStateData', description: 'Weapon state payload' }
 );

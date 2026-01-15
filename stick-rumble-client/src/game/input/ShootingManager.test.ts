@@ -54,6 +54,16 @@ describe('ShootingManager', () => {
       const state = shootingManager.getWeaponState();
       expect(state.canShoot).toBe(true);
     });
+
+    it('should initialize with Pistol as default weapon', () => {
+      const state = shootingManager.getWeaponState();
+      expect(state.weaponType).toBe('Pistol');
+      expect(state.isMelee).toBe(false);
+    });
+
+    it('should initialize with isMeleeWeapon returning false', () => {
+      expect(shootingManager.isMeleeWeapon()).toBe(false);
+    });
   });
 
   describe('shoot', () => {
@@ -99,6 +109,8 @@ describe('ShootingManager', () => {
         maxAmmo: WEAPON.PISTOL_MAGAZINE_SIZE,
         isReloading: false,
         canShoot: false,
+        weaponType: 'Pistol',
+        isMelee: false,
       });
 
       shootingManager.shoot();
@@ -111,6 +123,8 @@ describe('ShootingManager', () => {
         maxAmmo: WEAPON.PISTOL_MAGAZINE_SIZE,
         isReloading: true,
         canShoot: false,
+        weaponType: 'Pistol',
+        isMelee: false,
       });
 
       shootingManager.shoot();
@@ -125,6 +139,8 @@ describe('ShootingManager', () => {
         maxAmmo: WEAPON.PISTOL_MAGAZINE_SIZE,
         isReloading: false,
         canShoot: true,
+        weaponType: 'Pistol',
+        isMelee: false,
       });
 
       shootingManager.reload();
@@ -146,6 +162,8 @@ describe('ShootingManager', () => {
         maxAmmo: WEAPON.PISTOL_MAGAZINE_SIZE,
         isReloading: true,
         canShoot: false,
+        weaponType: 'Pistol',
+        isMelee: false,
       });
 
       shootingManager.reload();
@@ -160,6 +178,8 @@ describe('ShootingManager', () => {
         maxAmmo: 15,
         isReloading: false,
         canShoot: true,
+        weaponType: 'Pistol',
+        isMelee: false,
       };
 
       shootingManager.updateWeaponState(newState);
@@ -203,6 +223,8 @@ describe('ShootingManager', () => {
         maxAmmo: 15,
         isReloading: false,
         canShoot: false,
+        weaponType: 'Pistol',
+        isMelee: false,
       });
       expect(shootingManager.canShoot()).toBe(false);
     });
@@ -213,6 +235,8 @@ describe('ShootingManager', () => {
         maxAmmo: 15,
         isReloading: true,
         canShoot: false,
+        weaponType: 'Pistol',
+        isMelee: false,
       });
       expect(shootingManager.canShoot()).toBe(false);
     });
@@ -231,6 +255,8 @@ describe('ShootingManager', () => {
         maxAmmo: 15,
         isReloading: false,
         canShoot: true,
+        weaponType: 'Pistol',
+        isMelee: false,
       });
 
       const [current, max] = shootingManager.getAmmoInfo();
@@ -330,6 +356,8 @@ describe('ShootingManager', () => {
         maxAmmo: WEAPON.PISTOL_MAGAZINE_SIZE,
         isReloading: false,
         canShoot: false,
+        weaponType: 'Pistol',
+        isMelee: false,
       });
 
       expect(shootingManager.isEmpty()).toBe(true);
@@ -345,6 +373,8 @@ describe('ShootingManager', () => {
         maxAmmo: WEAPON.PISTOL_MAGAZINE_SIZE,
         isReloading: false,
         canShoot: true,
+        weaponType: 'Pistol',
+        isMelee: false,
       });
 
       expect(shootingManager.isEmpty()).toBe(false);
@@ -358,6 +388,8 @@ describe('ShootingManager', () => {
         maxAmmo: WEAPON.PISTOL_MAGAZINE_SIZE,
         isReloading: true,
         canShoot: false,
+        weaponType: 'Pistol',
+        isMelee: false,
       });
 
       expect(shootingManager.isReloading()).toBe(true);
@@ -374,6 +406,8 @@ describe('ShootingManager', () => {
         maxAmmo: WEAPON.PISTOL_MAGAZINE_SIZE,
         isReloading: true,
         canShoot: false,
+        weaponType: 'Pistol',
+        isMelee: false,
       });
 
       expect(shootingManager.isReloading()).toBe(true);
@@ -384,6 +418,8 @@ describe('ShootingManager', () => {
         maxAmmo: WEAPON.PISTOL_MAGAZINE_SIZE,
         isReloading: false,
         canShoot: true,
+        weaponType: 'Pistol',
+        isMelee: false,
       });
 
       expect(shootingManager.isReloading()).toBe(false);
@@ -477,6 +513,8 @@ describe('ShootingManager', () => {
         maxAmmo: 0,
         isReloading: false,
         canShoot: true,
+        weaponType: 'Bat',
+        isMelee: true,
       });
 
       shootingManager.meleeAttack();
@@ -497,6 +535,90 @@ describe('ShootingManager', () => {
       shootingManager.enable();
       shootingManager.meleeAttack();
       expect(mockWsClient.send).toHaveBeenCalled();
+    });
+  });
+
+  describe('isMeleeWeapon', () => {
+    it('should return false for Pistol (ranged weapon)', () => {
+      shootingManager.updateWeaponState({
+        currentAmmo: 15,
+        maxAmmo: 15,
+        isReloading: false,
+        canShoot: true,
+        weaponType: 'Pistol',
+        isMelee: false,
+      });
+
+      expect(shootingManager.isMeleeWeapon()).toBe(false);
+    });
+
+    it('should return true for Bat (melee weapon)', () => {
+      shootingManager.updateWeaponState({
+        currentAmmo: 0,
+        maxAmmo: 0,
+        isReloading: false,
+        canShoot: true,
+        weaponType: 'Bat',
+        isMelee: true,
+      });
+
+      expect(shootingManager.isMeleeWeapon()).toBe(true);
+    });
+
+    it('should return true for Katana (melee weapon)', () => {
+      shootingManager.updateWeaponState({
+        currentAmmo: 0,
+        maxAmmo: 0,
+        isReloading: false,
+        canShoot: true,
+        weaponType: 'Katana',
+        isMelee: true,
+      });
+
+      expect(shootingManager.isMeleeWeapon()).toBe(true);
+    });
+
+    it('should update isMelee state when weapon changes from ranged to melee', () => {
+      // Start with ranged weapon
+      expect(shootingManager.isMeleeWeapon()).toBe(false);
+
+      // Switch to melee weapon
+      shootingManager.updateWeaponState({
+        currentAmmo: 0,
+        maxAmmo: 0,
+        isReloading: false,
+        canShoot: true,
+        weaponType: 'Bat',
+        isMelee: true,
+      });
+
+      expect(shootingManager.isMeleeWeapon()).toBe(true);
+    });
+
+    it('should update isMelee state when weapon changes from melee to ranged', () => {
+      // Start with melee weapon
+      shootingManager.updateWeaponState({
+        currentAmmo: 0,
+        maxAmmo: 0,
+        isReloading: false,
+        canShoot: true,
+        weaponType: 'Bat',
+        isMelee: true,
+      });
+
+      expect(shootingManager.isMeleeWeapon()).toBe(true);
+
+      // Switch to ranged weapon
+      shootingManager.updateWeaponState({
+        currentAmmo: 15,
+        maxAmmo: 15,
+        isReloading: false,
+        canShoot: true,
+        weaponType: 'Pistol',
+        isMelee: false,
+      });
+
+      expect(shootingManager.isMeleeWeapon()).toBe(false);
     });
   });
 

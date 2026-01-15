@@ -12,6 +12,8 @@ export interface WeaponState {
   maxAmmo: number;
   isReloading: boolean;
   canShoot: boolean;
+  weaponType: string;
+  isMelee: boolean;
 }
 
 /**
@@ -64,6 +66,8 @@ export class ShootingManager {
       maxAmmo: WEAPON.PISTOL_MAGAZINE_SIZE,
       isReloading: false,
       canShoot: true,
+      weaponType: 'Pistol',
+      isMelee: false,
     };
   }
 
@@ -203,6 +207,13 @@ export class ShootingManager {
    */
   setWeaponType(weaponType: WeaponType): void {
     this.weaponType = weaponType;
+  }
+
+  /**
+   * Check if current weapon is melee
+   */
+  isMeleeWeapon(): boolean {
+    return this.weaponState.isMelee;
   }
 
   /**

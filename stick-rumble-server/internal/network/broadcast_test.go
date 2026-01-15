@@ -238,6 +238,8 @@ func TestBroadcastWeaponState(t *testing.T) {
 	assert.NotNil(t, data["maxAmmo"])
 	assert.NotNil(t, data["isReloading"])
 	assert.NotNil(t, data["canShoot"])
+	assert.NotNil(t, data["weaponType"])
+	assert.NotNil(t, data["isMelee"])
 
 	currentAmmo, ok := data["currentAmmo"].(float64)
 	require.True(t, ok)
@@ -246,6 +248,15 @@ func TestBroadcastWeaponState(t *testing.T) {
 	maxAmmo, ok := data["maxAmmo"].(float64)
 	require.True(t, ok)
 	assert.Greater(t, maxAmmo, 0.0)
+
+	weaponType, ok := data["weaponType"].(string)
+	require.True(t, ok)
+	assert.NotEmpty(t, weaponType, "weaponType should not be empty")
+
+	isMelee, ok := data["isMelee"].(bool)
+	require.True(t, ok)
+	// Default weapon is Pistol which is not melee
+	assert.False(t, isMelee, "Default Pistol should not be melee")
 }
 
 func TestBroadcastShootFailed(t *testing.T) {
@@ -482,4 +493,41 @@ func TestMultipleSimultaneousBroadcasts(t *testing.T) {
 	}
 
 	assert.GreaterOrEqual(t, receivedCount, 8, "Should receive most messages")
+}
+
+// ==========================
+// Edge Case Coverage Tests
+// ==========================
+
+func TestBroadcastPlayerStatesWithEmptyArray(t *testing.T) {
+	handler := NewWebSocketHandler()
+
+	// Should not panic with empty player states
+	handler.broadcastPlayerStates([]game.PlayerState{})
+
+	// Test passes if no panic occurs
+	assert.True(t, true)
+}
+
+func TestSendWeaponSpawnsMessage(t *testing.T) {
+	ts := newTestServer()
+	defer ts.Close()
+
+	conn1, conn2 := ts.connectTwoClients(t)
+	defer conn1.Close()
+	defer conn2.Close()
+
+	player1ID := consumeRoomJoinedAndGetPlayerID(t, conn1)
+	_ = consumeRoomJoinedAndGetPlayerID(t, conn2)
+
+	// Send weapon spawns message
+	ts.handler.sendWeaponSpawns(player1ID)
+
+	// Should receive weapon:spawned message
+	msg, err := readMessageOfType(t, conn1, "weapon:spawned", 2*time.Second)
+	require.NoError(t, err, "Should receive weapon:spawned")
+
+	data, ok := msg.Data.(map[string]interface{})
+	require.True(t, ok)
+	assert.NotNil(t, data["crates"], "Should have crates field")
 }
