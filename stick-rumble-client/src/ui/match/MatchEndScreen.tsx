@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { calculateXP } from '../../game/utils/xpCalculator';
 import type { MatchEndData } from '../../shared/types';
 import './MatchEndScreen.css';
@@ -7,10 +7,12 @@ export interface MatchEndScreenProps {
   matchData: MatchEndData;
   localPlayerId: string;
   onClose: () => void;
+  onPlayAgain: () => void;
 }
 
-export function MatchEndScreen({ matchData, localPlayerId, onClose }: MatchEndScreenProps) {
+export function MatchEndScreen({ matchData, localPlayerId, onClose, onPlayAgain }: MatchEndScreenProps) {
   const [countdown, setCountdown] = useState(10);
+  const hasCalledPlayAgainRef = useRef(false);
 
   // Sort players by kills descending, then by deaths ascending
   const rankedPlayers = [...matchData.finalScores].sort((a, b) => {
@@ -44,7 +46,9 @@ export function MatchEndScreen({ matchData, localPlayerId, onClose }: MatchEndSc
 
   // Countdown timer
   useEffect(() => {
-    if (countdown <= 0) return;
+    if (countdown <= 0) {
+      return;
+    }
 
     const timer = setInterval(() => {
       setCountdown(prev => Math.max(0, prev - 1));
@@ -53,6 +57,14 @@ export function MatchEndScreen({ matchData, localPlayerId, onClose }: MatchEndSc
     return () => clearInterval(timer);
   }, [countdown]);
 
+  // Trigger onPlayAgain when countdown reaches 0
+  useEffect(() => {
+    if (countdown === 0 && !hasCalledPlayAgainRef.current) {
+      hasCalledPlayAgainRef.current = true;
+      onPlayAgain();
+    }
+  }, [countdown, onPlayAgain]);
+
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) {
       onClose();
@@ -60,7 +72,7 @@ export function MatchEndScreen({ matchData, localPlayerId, onClose }: MatchEndSc
   };
 
   const handlePlayAgain = () => {
-    alert('Lobby system coming in Epic 5');
+    onPlayAgain();
   };
 
   const renderWinners = () => {
