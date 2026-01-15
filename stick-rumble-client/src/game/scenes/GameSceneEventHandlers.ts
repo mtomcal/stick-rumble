@@ -365,7 +365,7 @@ export class GameSceneEventHandlers {
       const localPlayerId = this.playerManager.getLocalPlayerId();
       if (localPlayerId && window.onMatchEnd) {
         // Bridge between MatchEndedData schema and window.onMatchEnd type
-        // Schema uses { [key: string]: number } for finalScores, window expects PlayerScore[]
+        // Both schema and window.onMatchEnd now use PlayerScore[] for finalScores
         window.onMatchEnd(messageData as unknown as import('../../../src/shared/types.js').MatchEndData, localPlayerId);
       }
     };
