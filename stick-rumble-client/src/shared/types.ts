@@ -20,3 +20,13 @@ export interface MatchEndData {
   finalScores: PlayerScore[];
   reason: string;
 }
+
+/**
+ * Window object extensions for Phaser-React communication
+ */
+declare global {
+  interface Window {
+    onMatchEnd?: (data: MatchEndData, playerId: string) => void;
+    restartGame?: () => void;
+  }
+}
