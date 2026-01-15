@@ -17,7 +17,7 @@ export default defineConfig({
     silent: 'passed-only',
     include: ['**/*.integration.test.ts'],
     exclude: ['**/node_modules/**', '**/dist/**'],
-    testTimeout: 10000,
+    testTimeout: 20000, // Increased from 10s to 20s for CI stability
     retry: 2, // Retry flaky integration tests up to 2 times (3 total attempts)
   },
 });

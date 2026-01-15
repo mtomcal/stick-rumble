@@ -2,6 +2,7 @@ package game
 
 import (
 	"math"
+	"math/rand"
 	"testing"
 )
 
@@ -210,18 +211,26 @@ func TestShotgunPelletDamage(t *testing.T) {
 }
 
 func TestApplyRecoilToAngle_SprintSpreadMultiplier(t *testing.T) {
+	// Use a fixed seed for deterministic test results
+	// This prevents flaky test failures due to random variance
+	rand.Seed(12345)
+
 	uzi := NewUzi()
 	baseAngle := 0.0
 
+	// Use larger sample size (1000) for better statistical stability
+	sampleSize := 1000
+
 	// Fire multiple times while moving (not sprinting)
-	anglesMoving := make([]float64, 100)
-	for i := 0; i < 100; i++ {
+	anglesMoving := make([]float64, sampleSize)
+	for i := 0; i < sampleSize; i++ {
 		anglesMoving[i] = ApplyRecoilToAngle(baseAngle, uzi.Recoil, 1, true, false, uzi)
 	}
 
 	// Fire multiple times while sprinting (should have 1.5x spread)
-	anglesSprinting := make([]float64, 100)
-	for i := 0; i < 100; i++ {
+	// DO NOT reset seed - we want different random values from the same sequence
+	anglesSprinting := make([]float64, sampleSize)
+	for i := 0; i < sampleSize; i++ {
 		anglesSprinting[i] = ApplyRecoilToAngle(baseAngle, uzi.Recoil, 1, true, true, uzi)
 	}
 
@@ -239,10 +248,12 @@ func TestApplyRecoilToAngle_SprintSpreadMultiplier(t *testing.T) {
 	avgSprintingDeviation := sprintingDeviations / float64(len(anglesSprinting))
 
 	// Sprint spread should be approximately 1.5x the moving spread
-	// Allow for 20% tolerance due to randomness
+	// With fixed seed and large sample size, use reasonable tolerance (20%)
+	// The tolerance accounts for the fact that we're also getting horizontal recoil
+	// and vertical recoil in the mix, not just the movement spread
 	expectedRatio := SprintSpreadMultiplier
 	actualRatio := avgSprintingDeviation / avgMovingDeviation
-	tolerance := 0.2
+	tolerance := 0.20
 
 	if math.Abs(actualRatio-expectedRatio) > tolerance {
 		t.Errorf("Sprint spread multiplier should be ~%v, got %v (moving avg: %v, sprint avg: %v)",
