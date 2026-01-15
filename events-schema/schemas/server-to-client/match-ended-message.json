@@ -36,11 +36,39 @@
           }
         },
         "finalScores": {
-          "description": "Map of player IDs to final scores",
-          "type": "object",
-          "patternProperties": {
-            "^(.*)$": {
-              "type": "number"
+          "description": "Array of final player scores",
+          "type": "array",
+          "items": {
+            "$id": "PlayerScore",
+            "description": "Player final score data",
+            "type": "object",
+            "required": [
+              "playerId",
+              "kills",
+              "deaths",
+              "xp"
+            ],
+            "properties": {
+              "playerId": {
+                "description": "Player unique identifier",
+                "minLength": 1,
+                "type": "string"
+              },
+              "kills": {
+                "description": "Number of kills",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "deaths": {
+                "description": "Number of deaths",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "xp": {
+                "description": "Total XP earned",
+                "minimum": 0,
+                "type": "integer"
+              }
             }
           }
         },

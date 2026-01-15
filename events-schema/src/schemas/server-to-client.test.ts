@@ -28,6 +28,7 @@ import {
   PlayerRespawnMessageSchema,
   MatchTimerDataSchema,
   MatchTimerMessageSchema,
+  PlayerScoreSchema,
   MatchEndedDataSchema,
   MatchEndedMessageSchema,
   WeaponSpawnedDataSchema,
@@ -330,15 +331,96 @@ describe('Server-to-Client Schemas', () => {
     });
   });
 
+  describe('PlayerScoreSchema', () => {
+    it('should validate valid player score', () => {
+      const data = {
+        playerId: 'player-1',
+        kills: 10,
+        deaths: 2,
+        xp: 500,
+      };
+      expect(Value.Check(PlayerScoreSchema, data)).toBe(true);
+    });
+
+    it('should accept zero kills and deaths', () => {
+      const data = {
+        playerId: 'player-1',
+        kills: 0,
+        deaths: 0,
+        xp: 50,
+      };
+      expect(Value.Check(PlayerScoreSchema, data)).toBe(true);
+    });
+
+    it('should reject missing playerId', () => {
+      const data = {
+        kills: 5,
+        deaths: 2,
+        xp: 100,
+      };
+      expect(Value.Check(PlayerScoreSchema, data)).toBe(false);
+    });
+
+    it('should reject negative kills', () => {
+      const data = {
+        playerId: 'player-1',
+        kills: -1,
+        deaths: 0,
+        xp: 100,
+      };
+      expect(Value.Check(PlayerScoreSchema, data)).toBe(false);
+    });
+
+    it('should reject negative deaths', () => {
+      const data = {
+        playerId: 'player-1',
+        kills: 5,
+        deaths: -1,
+        xp: 100,
+      };
+      expect(Value.Check(PlayerScoreSchema, data)).toBe(false);
+    });
+
+    it('should reject negative xp', () => {
+      const data = {
+        playerId: 'player-1',
+        kills: 5,
+        deaths: 2,
+        xp: -50,
+      };
+      expect(Value.Check(PlayerScoreSchema, data)).toBe(false);
+    });
+
+    it('should reject non-integer kills', () => {
+      const data = {
+        playerId: 'player-1',
+        kills: 5.5,
+        deaths: 2,
+        xp: 100,
+      };
+      expect(Value.Check(PlayerScoreSchema, data)).toBe(false);
+    });
+
+    it('should reject empty playerId', () => {
+      const data = {
+        playerId: '',
+        kills: 5,
+        deaths: 2,
+        xp: 100,
+      };
+      expect(Value.Check(PlayerScoreSchema, data)).toBe(false);
+    });
+  });
+
   describe('MatchEndedDataSchema', () => {
     it('should validate valid match ended data with winners', () => {
       const data = {
         winners: ['player-1', 'player-2'],
-        finalScores: {
-          'player-1': 100,
-          'player-2': 90,
-          'player-3': 50,
-        },
+        finalScores: [
+          { playerId: 'player-1', kills: 10, deaths: 2, xp: 100 },
+          { playerId: 'player-2', kills: 8, deaths: 3, xp: 90 },
+          { playerId: 'player-3', kills: 5, deaths: 5, xp: 50 },
+        ],
         reason: 'time_limit',
       };
       expect(Value.Check(MatchEndedDataSchema, data)).toBe(true);
@@ -347,7 +429,7 @@ describe('Server-to-Client Schemas', () => {
     it('should accept empty winners array', () => {
       const data = {
         winners: [],
-        finalScores: {},
+        finalScores: [],
         reason: 'draw',
       };
       expect(Value.Check(MatchEndedDataSchema, data)).toBe(true);
@@ -356,8 +438,35 @@ describe('Server-to-Client Schemas', () => {
     it('should reject empty reason', () => {
       const data = {
         winners: ['player-1'],
-        finalScores: { 'player-1': 100 },
+        finalScores: [{ playerId: 'player-1', kills: 5, deaths: 0, xp: 100 }],
         reason: '',
+      };
+      expect(Value.Check(MatchEndedDataSchema, data)).toBe(false);
+    });
+
+    it('should reject negative kills', () => {
+      const data = {
+        winners: ['player-1'],
+        finalScores: [{ playerId: 'player-1', kills: -1, deaths: 0, xp: 100 }],
+        reason: 'elimination',
+      };
+      expect(Value.Check(MatchEndedDataSchema, data)).toBe(false);
+    });
+
+    it('should reject missing playerId in score', () => {
+      const data = {
+        winners: ['player-1'],
+        finalScores: [{ kills: 5, deaths: 0, xp: 100 }],
+        reason: 'elimination',
+      };
+      expect(Value.Check(MatchEndedDataSchema, data)).toBe(false);
+    });
+
+    it('should reject non-integer kills', () => {
+      const data = {
+        winners: ['player-1'],
+        finalScores: [{ playerId: 'player-1', kills: 5.5, deaths: 0, xp: 100 }],
+        reason: 'elimination',
       };
       expect(Value.Check(MatchEndedDataSchema, data)).toBe(false);
     });
@@ -639,7 +748,7 @@ describe('Server-to-Client Schemas', () => {
             timestamp,
             data: {
               winners: ['p1'],
-              finalScores: { p1: 100 },
+              finalScores: [{ playerId: 'p1', kills: 5, deaths: 0, xp: 100 }],
               reason: 'elimination',
             },
           },

@@ -332,14 +332,30 @@ export type MatchTimerMessage = Static<typeof MatchTimerMessageSchema>;
 // ============================================================================
 
 /**
+ * Player score schema for match end results.
+ * Contains individual player statistics from the match.
+ */
+export const PlayerScoreSchema = Type.Object(
+  {
+    playerId: Type.String({ description: 'Player unique identifier', minLength: 1 }),
+    kills: Type.Integer({ description: 'Number of kills', minimum: 0 }),
+    deaths: Type.Integer({ description: 'Number of deaths', minimum: 0 }),
+    xp: Type.Integer({ description: 'Total XP earned', minimum: 0 }),
+  },
+  { $id: 'PlayerScore', description: 'Player final score data' }
+);
+
+export type PlayerScore = Static<typeof PlayerScoreSchema>;
+
+/**
  * Match ended data payload.
  * Sent when the match concludes.
  */
 export const MatchEndedDataSchema = Type.Object(
   {
     winners: Type.Array(Type.String(), { description: 'Array of winner player IDs' }),
-    finalScores: Type.Record(Type.String(), Type.Number(), {
-      description: 'Map of player IDs to final scores',
+    finalScores: Type.Array(PlayerScoreSchema, {
+      description: 'Array of final player scores',
     }),
     reason: Type.String({ description: 'Reason the match ended', minLength: 1 }),
   },
