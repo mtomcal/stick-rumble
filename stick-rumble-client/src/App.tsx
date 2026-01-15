@@ -17,6 +17,18 @@ function App() {
     setMatchEndData(null)
   }
 
+  const handlePlayAgain = () => {
+    // Clear match end screen
+    setMatchEndData(null)
+
+    // Trigger scene restart via window.restartGame
+    if (window.restartGame) {
+      window.restartGame()
+    } else {
+      console.warn('App: window.restartGame is not available')
+    }
+  }
+
   return (
     <div className="app-container">
       <h1 style={{ textAlign: 'center', color: '#ffffff' }}>
@@ -28,6 +40,7 @@ function App() {
           matchData={matchEndData}
           localPlayerId={localPlayerId}
           onClose={handleCloseMatchEnd}
+          onPlayAgain={handlePlayAgain}
         />
       )}
     </div>

@@ -5,6 +5,7 @@ import type { MatchEndData } from '../../shared/types';
 
 describe('MatchEndScreen', () => {
   const mockOnClose = vi.fn();
+  const mockOnPlayAgain = vi.fn();
 
   const mockMatchData: MatchEndData = {
     winners: ['player-1'],
@@ -32,6 +33,7 @@ describe('MatchEndScreen', () => {
           matchData={mockMatchData}
           localPlayerId="player-2"
           onClose={mockOnClose}
+          onPlayAgain={mockOnPlayAgain}
         />
       );
 
@@ -50,6 +52,7 @@ describe('MatchEndScreen', () => {
           matchData={tieData}
           localPlayerId="player-3"
           onClose={mockOnClose}
+          onPlayAgain={mockOnPlayAgain}
         />
       );
 
@@ -63,6 +66,7 @@ describe('MatchEndScreen', () => {
           matchData={mockMatchData}
           localPlayerId="player-2"
           onClose={mockOnClose}
+          onPlayAgain={mockOnPlayAgain}
         />
       );
 
@@ -83,6 +87,7 @@ describe('MatchEndScreen', () => {
           matchData={mockMatchData}
           localPlayerId="player-2"
           onClose={mockOnClose}
+          onPlayAgain={mockOnPlayAgain}
         />
       );
 
@@ -116,6 +121,7 @@ describe('MatchEndScreen', () => {
           matchData={tiedData}
           localPlayerId="player-2"
           onClose={mockOnClose}
+          onPlayAgain={mockOnPlayAgain}
         />
       );
 
@@ -131,6 +137,7 @@ describe('MatchEndScreen', () => {
           matchData={mockMatchData}
           localPlayerId="player-2"
           onClose={mockOnClose}
+          onPlayAgain={mockOnPlayAgain}
         />
       );
 
@@ -144,6 +151,7 @@ describe('MatchEndScreen', () => {
           matchData={mockMatchData}
           localPlayerId="player-2"
           onClose={mockOnClose}
+          onPlayAgain={mockOnPlayAgain}
         />
       );
 
@@ -159,6 +167,7 @@ describe('MatchEndScreen', () => {
           matchData={mockMatchData}
           localPlayerId="player-1"
           onClose={mockOnClose}
+          onPlayAgain={mockOnPlayAgain}
         />
       );
 
@@ -172,6 +181,7 @@ describe('MatchEndScreen', () => {
           matchData={mockMatchData}
           localPlayerId="player-2"
           onClose={mockOnClose}
+          onPlayAgain={mockOnPlayAgain}
         />
       );
 
@@ -185,6 +195,7 @@ describe('MatchEndScreen', () => {
           matchData={mockMatchData}
           localPlayerId="player-2"
           onClose={mockOnClose}
+          onPlayAgain={mockOnPlayAgain}
         />
       );
 
@@ -198,6 +209,7 @@ describe('MatchEndScreen', () => {
           matchData={mockMatchData}
           localPlayerId="player-2"
           onClose={mockOnClose}
+          onPlayAgain={mockOnPlayAgain}
         />
       );
 
@@ -211,6 +223,7 @@ describe('MatchEndScreen', () => {
           matchData={mockMatchData}
           localPlayerId="player-2"
           onClose={mockOnClose}
+          onPlayAgain={mockOnPlayAgain}
         />
       );
 
@@ -223,6 +236,7 @@ describe('MatchEndScreen', () => {
           matchData={mockMatchData}
           localPlayerId="player-2"
           onClose={mockOnClose}
+          onPlayAgain={mockOnPlayAgain}
         />
       );
 
@@ -245,6 +259,7 @@ describe('MatchEndScreen', () => {
           matchData={mockMatchData}
           localPlayerId="player-2"
           onClose={mockOnClose}
+          onPlayAgain={mockOnPlayAgain}
         />
       );
 
@@ -267,6 +282,7 @@ describe('MatchEndScreen', () => {
           matchData={mockMatchData}
           localPlayerId="player-2"
           onClose={mockOnClose}
+          onPlayAgain={mockOnPlayAgain}
         />
       );
 
@@ -279,6 +295,7 @@ describe('MatchEndScreen', () => {
           matchData={mockMatchData}
           localPlayerId="player-2"
           onClose={mockOnClose}
+          onPlayAgain={mockOnPlayAgain}
         />
       );
 
@@ -291,6 +308,7 @@ describe('MatchEndScreen', () => {
           matchData={mockMatchData}
           localPlayerId="player-2"
           onClose={mockOnClose}
+          onPlayAgain={mockOnPlayAgain}
         />
       );
 
@@ -306,6 +324,7 @@ describe('MatchEndScreen', () => {
           matchData={mockMatchData}
           localPlayerId="player-2"
           onClose={mockOnClose}
+          onPlayAgain={mockOnPlayAgain}
         />
       );
 
@@ -319,6 +338,7 @@ describe('MatchEndScreen', () => {
           matchData={mockMatchData}
           localPlayerId="player-2"
           onClose={mockOnClose}
+          onPlayAgain={mockOnPlayAgain}
         />
       );
 
@@ -333,6 +353,7 @@ describe('MatchEndScreen', () => {
           matchData={mockMatchData}
           localPlayerId="player-2"
           onClose={mockOnClose}
+          onPlayAgain={mockOnPlayAgain}
         />
       );
 
@@ -349,6 +370,7 @@ describe('MatchEndScreen', () => {
           matchData={mockMatchData}
           localPlayerId="player-2"
           onClose={mockOnClose}
+          onPlayAgain={mockOnPlayAgain}
         />
       );
 
@@ -357,22 +379,80 @@ describe('MatchEndScreen', () => {
       expect(mockOnClose).not.toHaveBeenCalled();
     });
 
-    it('should show placeholder message when Play Again is clicked', () => {
-      const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
-
+    it('should call onPlayAgain when Play Again button is clicked', () => {
       render(
         <MatchEndScreen
           matchData={mockMatchData}
           localPlayerId="player-2"
           onClose={mockOnClose}
+          onPlayAgain={mockOnPlayAgain}
         />
       );
 
       const playAgainButton = screen.getByRole('button', { name: /Play Again/i });
       fireEvent.click(playAgainButton);
 
-      expect(alertSpy).toHaveBeenCalledWith('Lobby system coming in Epic 5');
-      alertSpy.mockRestore();
+      expect(mockOnPlayAgain).toHaveBeenCalledTimes(1);
+    });
+
+    it('should call onPlayAgain when countdown reaches 0', () => {
+      render(
+        <MatchEndScreen
+          matchData={mockMatchData}
+          localPlayerId="player-2"
+          onClose={mockOnClose}
+          onPlayAgain={mockOnPlayAgain}
+        />
+      );
+
+      expect(mockOnPlayAgain).not.toHaveBeenCalled();
+
+      act(() => {
+        vi.advanceTimersByTime(10000); // 10 seconds
+      });
+
+      expect(mockOnPlayAgain).toHaveBeenCalledTimes(1);
+    });
+
+    it('should only call onPlayAgain once when countdown reaches 0', () => {
+      render(
+        <MatchEndScreen
+          matchData={mockMatchData}
+          localPlayerId="player-2"
+          onClose={mockOnClose}
+          onPlayAgain={mockOnPlayAgain}
+        />
+      );
+
+      act(() => {
+        vi.advanceTimersByTime(10000); // countdown reaches 0
+      });
+
+      expect(mockOnPlayAgain).toHaveBeenCalledTimes(1);
+
+      act(() => {
+        vi.advanceTimersByTime(5000); // advance more time
+      });
+
+      // Should still only be called once
+      expect(mockOnPlayAgain).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not call onPlayAgain when countdown is active but not finished', () => {
+      render(
+        <MatchEndScreen
+          matchData={mockMatchData}
+          localPlayerId="player-2"
+          onClose={mockOnClose}
+          onPlayAgain={mockOnPlayAgain}
+        />
+      );
+
+      act(() => {
+        vi.advanceTimersByTime(5000); // only 5 seconds
+      });
+
+      expect(mockOnPlayAgain).not.toHaveBeenCalled();
     });
   });
 
@@ -388,6 +468,7 @@ describe('MatchEndScreen', () => {
           matchData={noWinnerData}
           localPlayerId="player-2"
           onClose={mockOnClose}
+          onPlayAgain={mockOnPlayAgain}
         />
       );
 
@@ -406,6 +487,7 @@ describe('MatchEndScreen', () => {
           matchData={singlePlayerData}
           localPlayerId="player-1"
           onClose={mockOnClose}
+          onPlayAgain={mockOnPlayAgain}
         />
       );
 
@@ -419,6 +501,7 @@ describe('MatchEndScreen', () => {
           matchData={mockMatchData}
           localPlayerId="unknown-player"
           onClose={mockOnClose}
+          onPlayAgain={mockOnPlayAgain}
         />
       );
 

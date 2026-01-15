@@ -19,6 +19,20 @@ export function PhaserGame({ onMatchEnd }: PhaserGameProps) {
       if (onMatchEnd) {
         window.onMatchEnd = onMatchEnd;
       }
+
+      // Expose restartGame function to allow React to trigger scene restart
+      window.restartGame = () => {
+        if (gameRef.current) {
+          const scene = gameRef.current.scene.getScene('GameScene');
+          if (scene) {
+            scene.scene.restart();
+          } else {
+            console.warn('PhaserGame: GameScene not found, cannot restart');
+          }
+        } else {
+          console.warn('PhaserGame: Game instance not available, cannot restart');
+        }
+      };
     }
 
     // Cleanup on unmount
@@ -28,10 +42,11 @@ export function PhaserGame({ onMatchEnd }: PhaserGameProps) {
         gameRef.current = null;
       }
 
-      // Cleanup global callback
+      // Cleanup global callbacks
       if (onMatchEnd) {
         delete window.onMatchEnd;
       }
+      delete window.restartGame;
     };
   }, [onMatchEnd]);
 

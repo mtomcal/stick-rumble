@@ -150,4 +150,68 @@ describe('PhaserGame', () => {
       expect(window.onMatchEnd).toBeUndefined();
     });
   });
+
+  describe('restartGame callback', () => {
+    it('should set window.restartGame on mount', () => {
+      render(<PhaserGame />);
+
+      expect(window.restartGame).toBeDefined();
+      expect(typeof window.restartGame).toBe('function');
+    });
+
+    it('should call scene.restart when window.restartGame is invoked', () => {
+      render(<PhaserGame />);
+
+      // Mock the scene.restart method
+      const mockRestart = vi.fn();
+      const mockScene = {
+        scene: {
+          restart: mockRestart,
+        },
+      };
+
+      // Mock game.scene.getScene to return our mock scene
+      if (mockGameInstances.length > 0) {
+        mockGameInstances[0].scene = {
+          getScene: vi.fn().mockReturnValue(mockScene),
+        };
+      }
+
+      // Call window.restartGame
+      window.restartGame?.();
+
+      expect(mockRestart).toHaveBeenCalledTimes(1);
+    });
+
+    it('should handle case where scene is not found', () => {
+      render(<PhaserGame />);
+
+      // Mock game.scene.getScene to return null
+      if (mockGameInstances.length > 0) {
+        mockGameInstances[0].scene = {
+          getScene: vi.fn().mockReturnValue(null),
+        };
+      }
+
+      // Should not throw when scene is null
+      expect(() => window.restartGame?.()).not.toThrow();
+    });
+
+    it('should clean up window.restartGame on unmount', () => {
+      const { unmount } = render(<PhaserGame />);
+
+      expect(window.restartGame).toBeDefined();
+
+      unmount();
+
+      expect(window.restartGame).toBeUndefined();
+    });
+
+    it('should always set window.restartGame even without onMatchEnd', () => {
+      render(<PhaserGame />);
+
+      expect(window.restartGame).toBeDefined();
+      expect(typeof window.restartGame).toBe('function');
+    });
+  });
 });
