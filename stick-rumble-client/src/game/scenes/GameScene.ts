@@ -5,6 +5,7 @@ import { ShootingManager } from '../input/ShootingManager';
 import { PlayerManager } from '../entities/PlayerManager';
 import { ProjectileManager } from '../entities/ProjectileManager';
 import { WeaponCrateManager } from '../entities/WeaponCrateManager';
+import { MeleeWeaponManager } from '../entities/MeleeWeaponManager';
 import { HealthBarUI } from '../ui/HealthBarUI';
 import { KillFeedUI } from '../ui/KillFeedUI';
 import { PickupPromptUI } from '../ui/PickupPromptUI';
@@ -22,6 +23,7 @@ export class GameScene extends Phaser.Scene {
   private playerManager!: PlayerManager;
   private projectileManager!: ProjectileManager;
   private weaponCrateManager!: WeaponCrateManager;
+  private meleeWeaponManager!: MeleeWeaponManager;
   private pickupPromptUI!: PickupPromptUI;
   private healthBarUI!: HealthBarUI;
   private killFeedUI!: KillFeedUI;
@@ -77,6 +79,9 @@ export class GameScene extends Phaser.Scene {
     // Initialize weapon crate manager
     this.weaponCrateManager = new WeaponCrateManager(this);
 
+    // Initialize melee weapon manager for swing animations
+    this.meleeWeaponManager = new MeleeWeaponManager(this);
+
     // Initialize pickup prompt UI
     this.pickupPromptUI = new PickupPromptUI(this);
 
@@ -116,7 +121,8 @@ export class GameScene extends Phaser.Scene {
       this.spectator,
       () => this.startCameraFollowIfNeeded(),
       this.weaponCrateManager,
-      this.pickupPromptUI
+      this.pickupPromptUI,
+      this.meleeWeaponManager
     );
 
     // Inject screen shake into event handlers for recoil feedback (Story 3.3 Polish)
@@ -236,6 +242,11 @@ export class GameScene extends Phaser.Scene {
       this.projectileManager.update(this.lastDeltaTime);
     }
 
+    // Update melee weapon animations and positions
+    if (this.meleeWeaponManager) {
+      this.meleeWeaponManager.update();
+    }
+
     // Update reload UI progress
     if (this.shootingManager && this.shootingManager.isReloading()) {
       const progress = this.shootingManager.getReloadProgress();
@@ -340,6 +351,9 @@ export class GameScene extends Phaser.Scene {
     }
     if (this.weaponCrateManager) {
       this.weaponCrateManager.destroy();
+    }
+    if (this.meleeWeaponManager) {
+      this.meleeWeaponManager.destroy();
     }
     if (this.pickupPromptUI) {
       this.pickupPromptUI.destroy();

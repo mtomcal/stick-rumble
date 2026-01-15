@@ -2,6 +2,7 @@ import type { WebSocketClient } from '../network/WebSocketClient';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { WeaponCrateManager } from '../entities/WeaponCrateManager';
+import type { MeleeWeaponManager } from '../entities/MeleeWeaponManager';
 import type { PickupPromptUI } from '../ui/PickupPromptUI';
 import type { InputManager } from '../input/InputManager';
 import type { ShootingManager } from '../input/ShootingManager';
@@ -29,6 +30,7 @@ import type {
   WeaponSpawnedData,
   WeaponPickupConfirmedData,
   WeaponRespawnedData,
+  MeleeHitData,
 } from '../../../../events-schema/src/index.js';
 
 /**
@@ -40,6 +42,7 @@ export class GameSceneEventHandlers {
   private playerManager: PlayerManager;
   private projectileManager: ProjectileManager;
   private weaponCrateManager: WeaponCrateManager;
+  private meleeWeaponManager: MeleeWeaponManager;
   private pickupPromptUI: PickupPromptUI;
   private inputManager: InputManager | null = null;
   private shootingManager: ShootingManager | null = null;
@@ -64,7 +67,8 @@ export class GameSceneEventHandlers {
     spectator: GameSceneSpectator,
     onCameraFollowNeeded: () => void,
     weaponCrateManager: WeaponCrateManager,
-    pickupPromptUI: PickupPromptUI
+    pickupPromptUI: PickupPromptUI,
+    meleeWeaponManager: MeleeWeaponManager
   ) {
     this.wsClient = wsClient;
     this.playerManager = playerManager;
@@ -76,6 +80,7 @@ export class GameSceneEventHandlers {
     this.onCameraFollowNeeded = onCameraFollowNeeded;
     this.weaponCrateManager = weaponCrateManager;
     this.pickupPromptUI = pickupPromptUI;
+    this.meleeWeaponManager = meleeWeaponManager;
   }
 
   /**
@@ -147,6 +152,11 @@ export class GameSceneEventHandlers {
       const messageData = data as PlayerMoveData;
       if (messageData.players) {
         this.playerManager.updatePlayers(messageData.players);
+
+        // Update melee weapon positions to follow players
+        for (const player of messageData.players) {
+          this.meleeWeaponManager.updatePosition(player.id, player.position);
+        }
 
         // Update input manager with local player position for aim calculation
         if (this.inputManager && this.playerManager.getLocalPlayerId()) {
@@ -403,6 +413,16 @@ export class GameSceneEventHandlers {
       if (messageData.playerId === this.playerManager.getLocalPlayerId()) {
         this.currentWeaponType = messageData.weaponType;
       }
+
+      // Create melee weapon visual if picking up Bat or Katana
+      const playerPos = this.playerManager.getPlayerPosition(messageData.playerId);
+      if (playerPos) {
+        this.meleeWeaponManager.createWeapon(
+          messageData.playerId,
+          messageData.weaponType,
+          playerPos
+        );
+      }
     };
     this.handlerRefs.set('weapon:pickup_confirmed', weaponPickupConfirmedHandler);
     this.wsClient.on('weapon:pickup_confirmed', weaponPickupConfirmedHandler);
@@ -415,5 +435,29 @@ export class GameSceneEventHandlers {
     };
     this.handlerRefs.set('weapon:respawned', weaponRespawnedHandler);
     this.wsClient.on('weapon:respawned', weaponRespawnedHandler);
+
+    // Store and register melee:hit handler (triggers swing animation)
+    const meleeHitHandler = (data: unknown) => {
+      const messageData = data as MeleeHitData;
+
+      // Get attacker's current aim angle and position
+      const attackerPos = this.playerManager.getPlayerPosition(messageData.attackerId);
+      if (!attackerPos) {
+        return;
+      }
+
+      // Get attacker's aim angle (from player state)
+      // We'll need to get this from the player manager
+      const aimAngle = this.playerManager.getPlayerAimAngle(messageData.attackerId);
+      if (aimAngle === null) {
+        return;
+      }
+
+      // Update weapon position and trigger swing animation
+      this.meleeWeaponManager.updatePosition(messageData.attackerId, attackerPos);
+      this.meleeWeaponManager.startSwing(messageData.attackerId, aimAngle);
+    };
+    this.handlerRefs.set('melee:hit', meleeHitHandler);
+    this.wsClient.on('melee:hit', meleeHitHandler);
   }
 }

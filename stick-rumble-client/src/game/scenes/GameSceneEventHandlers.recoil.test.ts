@@ -19,6 +19,7 @@ describe('GameSceneEventHandlers - Recoil Visual Feedback', () => {
   let mockProjectileManager: ProjectileManager;
   let mockWeaponCrateManager: any;
   let mockPickupPromptUI: any;
+  let mockMeleeWeaponManager: any;
   let mockHealthBarUI: HealthBarUI;
   let mockKillFeedUI: KillFeedUI;
   let mockGameSceneUI: GameSceneUI;
@@ -46,6 +47,8 @@ describe('GameSceneEventHandlers - Recoil Visual Feedback', () => {
       destroy: vi.fn(),
       setLocalPlayerId: vi.fn(),
       getLocalPlayerId: vi.fn().mockReturnValue('player-1'),
+      getPlayerPosition: vi.fn().mockReturnValue({ x: 100, y: 200 }),
+      getPlayerAimAngle: vi.fn().mockReturnValue(0),
     } as unknown as PlayerManager;
 
     mockProjectileManager = {
@@ -64,6 +67,14 @@ describe('GameSceneEventHandlers - Recoil Visual Feedback', () => {
       show: vi.fn(),
       hide: vi.fn(),
       isVisible: vi.fn().mockReturnValue(false),
+    } as any;
+
+    mockMeleeWeaponManager = {
+      createWeapon: vi.fn(),
+      updatePosition: vi.fn(),
+      startSwing: vi.fn(),
+      update: vi.fn(),
+      destroy: vi.fn(),
     } as any;
 
     mockHealthBarUI = {
@@ -104,7 +115,8 @@ describe('GameSceneEventHandlers - Recoil Visual Feedback', () => {
       mockGameSceneSpectator,
       vi.fn(), // onCameraFollowNeeded
       mockWeaponCrateManager,
-      mockPickupPromptUI
+      mockPickupPromptUI,
+      mockMeleeWeaponManager
     );
 
     // Setup event handlers to capture them
