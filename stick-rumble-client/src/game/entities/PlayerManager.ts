@@ -243,6 +243,15 @@ export class PlayerManager {
   }
 
   /**
+   * Get a player's aim angle
+   * Returns null if player doesn't exist or aim angle is not set
+   */
+  getPlayerAimAngle(playerId: string): number | null {
+    const playerState = this.playerStates.get(playerId);
+    return playerState?.aimAngle ?? null;
+  }
+
+  /**
    * Get the local player's sprite (for camera follow)
    * Returns null if local player doesn't exist yet
    */

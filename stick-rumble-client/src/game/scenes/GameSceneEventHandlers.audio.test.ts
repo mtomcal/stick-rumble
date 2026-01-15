@@ -19,6 +19,7 @@ describe('GameSceneEventHandlers - Audio Integration', () => {
   let mockProjectileManager: ProjectileManager;
   let mockWeaponCrateManager: any;
   let mockPickupPromptUI: any;
+  let mockMeleeWeaponManager: any;
   let mockHealthBarUI: HealthBarUI;
   let mockKillFeedUI: KillFeedUI;
   let mockGameSceneUI: GameSceneUI;
@@ -47,6 +48,8 @@ describe('GameSceneEventHandlers - Audio Integration', () => {
       setLocalPlayerId: vi.fn(),
       getLocalPlayerId: vi.fn().mockReturnValue('player-1'),
       getLocalPlayerPosition: vi.fn().mockReturnValue({ x: 100, y: 100 }),
+      getPlayerPosition: vi.fn().mockReturnValue({ x: 100, y: 200 }),
+      getPlayerAimAngle: vi.fn().mockReturnValue(0),
     } as unknown as PlayerManager;
 
     mockProjectileManager = {
@@ -65,6 +68,14 @@ describe('GameSceneEventHandlers - Audio Integration', () => {
       show: vi.fn(),
       hide: vi.fn(),
       isVisible: vi.fn().mockReturnValue(false),
+    } as any;
+
+    mockMeleeWeaponManager = {
+      createWeapon: vi.fn(),
+      updatePosition: vi.fn(),
+      startSwing: vi.fn(),
+      update: vi.fn(),
+      destroy: vi.fn(),
     } as any;
 
     mockHealthBarUI = {
@@ -109,7 +120,8 @@ describe('GameSceneEventHandlers - Audio Integration', () => {
       mockGameSceneSpectator,
       vi.fn(),
       mockWeaponCrateManager,
-      mockPickupPromptUI
+      mockPickupPromptUI,
+      mockMeleeWeaponManager
     );
 
     // Setup event handlers to register message handlers
