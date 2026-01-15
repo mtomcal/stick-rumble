@@ -67,26 +67,34 @@ export class GameSceneUI {
    */
   updateAmmoDisplay(shootingManager: ShootingManager): void {
     if (this.ammoText && shootingManager) {
-      const [current, max] = shootingManager.getAmmoInfo();
-      this.ammoText.setText(`${current}/${max}`);
+      const isMelee = shootingManager.isMeleeWeapon();
+
+      // Hide ammo display for melee weapons, show for ranged
+      if (isMelee) {
+        this.ammoText.setVisible(false);
+      } else {
+        this.ammoText.setVisible(true);
+        const [current, max] = shootingManager.getAmmoInfo();
+        this.ammoText.setText(`${current}/${max}`);
+      }
 
       // Show/hide reload UI elements based on state
       const isReloading = shootingManager.isReloading();
       const isEmpty = shootingManager.isEmpty();
 
-      // Update reload progress bar visibility
+      // Update reload progress bar visibility (hide for melee)
       if (this.reloadProgressBar && this.reloadProgressBarBg) {
-        this.reloadProgressBar.setVisible(isReloading);
-        this.reloadProgressBarBg.setVisible(isReloading);
+        this.reloadProgressBar.setVisible(!isMelee && isReloading);
+        this.reloadProgressBarBg.setVisible(!isMelee && isReloading);
       }
 
-      // Update circular reload indicator visibility
+      // Update circular reload indicator visibility (hide for melee)
       if (this.reloadCircle) {
-        this.reloadCircle.setVisible(isReloading);
+        this.reloadCircle.setVisible(!isMelee && isReloading);
       }
 
-      // Show flashing "RELOAD!" indicator when empty
-      if (isEmpty && !isReloading) {
+      // Show flashing "RELOAD!" indicator when empty (hide for melee)
+      if (!isMelee && isEmpty && !isReloading) {
         this.showEmptyMagazineIndicator();
       } else {
         this.hideEmptyMagazineIndicator();

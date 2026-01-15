@@ -145,12 +145,18 @@ export class GameScene extends Phaser.Scene {
           this.eventHandlers.setInputManager(this.inputManager);
           this.eventHandlers.setShootingManager(this.shootingManager);
 
-          // Setup mouse click for shooting
+          // Setup mouse click for shooting/melee
           this.input.on('pointerdown', () => {
             if (this.shootingManager && this.inputManager) {
               // Update shooting manager with current aim angle
               this.shootingManager.setAimAngle(this.inputManager.getAimAngle());
-              this.shootingManager.shoot();
+
+              // Route to correct attack type based on current weapon
+              if (this.shootingManager.isMeleeWeapon()) {
+                this.shootingManager.meleeAttack();
+              } else {
+                this.shootingManager.shoot();
+              }
             }
           });
 
