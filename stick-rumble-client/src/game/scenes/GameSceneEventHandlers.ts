@@ -250,6 +250,10 @@ export class GameSceneEventHandlers {
       const messageData = data as WeaponStateData;
       if (this.shootingManager) {
         this.shootingManager.updateWeaponState(messageData);
+        // Update weapon type for cooldown tracking if it's a melee weapon
+        if (messageData.weaponType === 'Bat' || messageData.weaponType === 'Katana') {
+          this.shootingManager.setWeaponType(messageData.weaponType as 'Bat' | 'Katana');
+        }
         this.ui.updateAmmoDisplay(this.shootingManager);
       }
     };

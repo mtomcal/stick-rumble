@@ -166,6 +166,8 @@ func (h *WebSocketHandler) sendWeaponState(playerID string) {
 		"maxAmmo":     max,
 		"isReloading": ws.IsReloading,
 		"canShoot":    ws.CanShoot(),
+		"weaponType":  ws.Weapon.Name,
+		"isMelee":     ws.Weapon.IsMelee(),
 	}
 
 	// Validate outgoing message schema (development mode only)

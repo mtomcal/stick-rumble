@@ -165,12 +165,26 @@ describe('Server-to-Client Schemas', () => {
   });
 
   describe('WeaponStateDataSchema', () => {
-    it('should validate valid weapon state data', () => {
+    it('should validate valid ranged weapon state data', () => {
       const data = {
         currentAmmo: 15,
         maxAmmo: 30,
         isReloading: false,
         canShoot: true,
+        weaponType: 'Pistol',
+        isMelee: false,
+      };
+      expect(Value.Check(WeaponStateDataSchema, data)).toBe(true);
+    });
+
+    it('should validate valid melee weapon state data', () => {
+      const data = {
+        currentAmmo: 0,
+        maxAmmo: 0,
+        isReloading: false,
+        canShoot: true,
+        weaponType: 'Bat',
+        isMelee: true,
       };
       expect(Value.Check(WeaponStateDataSchema, data)).toBe(true);
     });
@@ -181,18 +195,56 @@ describe('Server-to-Client Schemas', () => {
         maxAmmo: 30,
         isReloading: false,
         canShoot: true,
+        weaponType: 'Pistol',
+        isMelee: false,
       };
       expect(Value.Check(WeaponStateDataSchema, data)).toBe(false);
     });
 
-    it('should accept zero ammo', () => {
+    it('should accept zero ammo for ranged weapons (reloading)', () => {
       const data = {
         currentAmmo: 0,
         maxAmmo: 30,
         isReloading: true,
         canShoot: false,
+        weaponType: 'Pistol',
+        isMelee: false,
       };
       expect(Value.Check(WeaponStateDataSchema, data)).toBe(true);
+    });
+
+    it('should reject data without weaponType', () => {
+      const data = {
+        currentAmmo: 15,
+        maxAmmo: 30,
+        isReloading: false,
+        canShoot: true,
+        isMelee: false,
+      };
+      expect(Value.Check(WeaponStateDataSchema, data)).toBe(false);
+    });
+
+    it('should reject data without isMelee', () => {
+      const data = {
+        currentAmmo: 15,
+        maxAmmo: 30,
+        isReloading: false,
+        canShoot: true,
+        weaponType: 'Pistol',
+      };
+      expect(Value.Check(WeaponStateDataSchema, data)).toBe(false);
+    });
+
+    it('should reject empty weaponType', () => {
+      const data = {
+        currentAmmo: 15,
+        maxAmmo: 30,
+        isReloading: false,
+        canShoot: true,
+        weaponType: '',
+        isMelee: false,
+      };
+      expect(Value.Check(WeaponStateDataSchema, data)).toBe(false);
     });
   });
 
@@ -722,6 +774,8 @@ describe('Server-to-Client Schemas', () => {
               maxAmmo: 30,
               isReloading: false,
               canShoot: true,
+              weaponType: 'Pistol',
+              isMelee: false,
             },
           },
         },
