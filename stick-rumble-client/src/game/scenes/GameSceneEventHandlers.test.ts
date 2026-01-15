@@ -14,6 +14,7 @@ describe('GameSceneEventHandlers', () => {
   let mockProjectileManager: ProjectileManager;
   let mockWeaponCrateManager: any;
   let mockPickupPromptUI: any;
+  let mockMeleeWeaponManager: any;
   let mockHealthBarUI: HealthBarUI;
   let mockKillFeedUI: KillFeedUI;
   let mockGameSceneUI: GameSceneUI;
@@ -34,6 +35,8 @@ describe('GameSceneEventHandlers', () => {
       destroy: vi.fn(),
       setLocalPlayerId: vi.fn(),
       getLocalPlayerId: vi.fn().mockReturnValue('player-1'),
+      getPlayerPosition: vi.fn().mockReturnValue({ x: 100, y: 200 }),
+      getPlayerAimAngle: vi.fn().mockReturnValue(0),
     } as unknown as PlayerManager;
 
     mockProjectileManager = {
@@ -52,6 +55,14 @@ describe('GameSceneEventHandlers', () => {
       show: vi.fn(),
       hide: vi.fn(),
       isVisible: vi.fn().mockReturnValue(false),
+    } as any;
+
+    mockMeleeWeaponManager = {
+      createWeapon: vi.fn(),
+      updatePosition: vi.fn(),
+      startSwing: vi.fn(),
+      update: vi.fn(),
+      destroy: vi.fn(),
     } as any;
 
     mockHealthBarUI = {
@@ -86,7 +97,8 @@ describe('GameSceneEventHandlers', () => {
       mockGameSceneSpectator,
       vi.fn(), // onCameraFollowNeeded
       mockWeaponCrateManager,
-      mockPickupPromptUI
+      mockPickupPromptUI,
+      mockMeleeWeaponManager
     );
   });
 
@@ -111,6 +123,7 @@ describe('GameSceneEventHandlers', () => {
       expect(mockWsClient.on).toHaveBeenCalledWith('weapon:spawned', expect.any(Function));
       expect(mockWsClient.on).toHaveBeenCalledWith('weapon:pickup_confirmed', expect.any(Function));
       expect(mockWsClient.on).toHaveBeenCalledWith('weapon:respawned', expect.any(Function));
+      expect(mockWsClient.on).toHaveBeenCalledWith('melee:hit', expect.any(Function));
     });
 
     it('should not accumulate handlers when called multiple times', () => {
@@ -122,11 +135,11 @@ describe('GameSceneEventHandlers', () => {
       eventHandlers.setupEventHandlers();
       const secondCallCount = (mockWsClient.on as ReturnType<typeof vi.fn>).mock.calls.length;
 
-      // Should have registered handlers twice (16 event types × 2 calls)
+      // Should have registered handlers twice (17 event types × 2 calls)
       expect(secondCallCount).toBe(firstCallCount * 2);
 
       // But off() should have been called to remove previous handlers
-      expect(mockWsClient.off).toHaveBeenCalledTimes(16); // 16 event types cleaned up
+      expect(mockWsClient.off).toHaveBeenCalledTimes(17); // 17 event types cleaned up
     });
 
     it('should call cleanupHandlers before registering new handlers', () => {
@@ -151,8 +164,8 @@ describe('GameSceneEventHandlers', () => {
       // Call cleanup
       (eventHandlers as any).cleanupHandlers();
 
-      // Verify all handlers were removed (16 event types)
-      expect(mockWsClient.off).toHaveBeenCalledTimes(16);
+      // Verify all handlers were removed (17 event types)
+      expect(mockWsClient.off).toHaveBeenCalledTimes(17);
       expect(mockWsClient.off).toHaveBeenCalledWith('player:move', expect.any(Function));
       expect(mockWsClient.off).toHaveBeenCalledWith('room:joined', expect.any(Function));
       expect(mockWsClient.off).toHaveBeenCalledWith('projectile:spawn', expect.any(Function));
@@ -169,6 +182,7 @@ describe('GameSceneEventHandlers', () => {
       expect(mockWsClient.off).toHaveBeenCalledWith('weapon:spawned', expect.any(Function));
       expect(mockWsClient.off).toHaveBeenCalledWith('weapon:pickup_confirmed', expect.any(Function));
       expect(mockWsClient.off).toHaveBeenCalledWith('weapon:respawned', expect.any(Function));
+      expect(mockWsClient.off).toHaveBeenCalledWith('melee:hit', expect.any(Function));
     });
 
     it('should handle cleanup when no handlers are registered', () => {
@@ -214,7 +228,7 @@ describe('GameSceneEventHandlers', () => {
       eventHandlers.destroy();
 
       // Verify all handlers were removed (13 event types)
-      expect(mockWsClient.off).toHaveBeenCalledTimes(16);
+      expect(mockWsClient.off).toHaveBeenCalledTimes(17);
     });
   });
 
@@ -225,7 +239,7 @@ describe('GameSceneEventHandlers', () => {
       const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
 
       // Verify all 16 event types have stored references
-      expect(handlerRefs.size).toBe(16);
+      expect(handlerRefs.size).toBe(17);
       expect(handlerRefs.has('player:move')).toBe(true);
       expect(handlerRefs.has('room:joined')).toBe(true);
       expect(handlerRefs.has('projectile:spawn')).toBe(true);
@@ -345,7 +359,8 @@ describe('GameSceneEventHandlers', () => {
         mockGameSceneSpectator,
         vi.fn(),
         mockWeaponCrateManager,
-        mockPickupPromptUI
+        mockPickupPromptUI,
+      mockMeleeWeaponManager
       );
 
       eventHandlersNoAudio.setupEventHandlers();
@@ -468,6 +483,80 @@ describe('GameSceneEventHandlers', () => {
       expect(mockGameSceneUI.showDamageFlash).toHaveBeenCalled();
     });
 
+    it('should trigger swing animation when melee:hit received with valid data', () => {
+      eventHandlers.setupEventHandlers();
+
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const meleeHitHandler = handlerRefs.get('melee:hit');
+
+      const data = {
+        attackerId: 'player-2',
+        victimId: 'player-3',
+        damage: 50,
+        weaponType: 'Bat',
+      };
+
+      meleeHitHandler?.(data);
+
+      // Should update weapon position with attacker's position
+      expect(mockMeleeWeaponManager.updatePosition).toHaveBeenCalledWith('player-2', { x: 100, y: 200 });
+
+      // Should trigger swing with attacker's aim angle
+      expect(mockMeleeWeaponManager.startSwing).toHaveBeenCalledWith('player-2', 0);
+    });
+
+    it('should not crash when melee:hit attackerId has no position', () => {
+      eventHandlers.setupEventHandlers();
+
+      // Mock getPlayerPosition to return null
+      mockPlayerManager.getPlayerPosition = vi.fn().mockReturnValue(null);
+
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const meleeHitHandler = handlerRefs.get('melee:hit');
+
+      const data = {
+        attackerId: 'player-unknown',
+        victimId: 'player-3',
+        damage: 50,
+        weaponType: 'Bat',
+      };
+
+      // Should not throw when attackerPos is null
+      expect(() => {
+        meleeHitHandler?.(data);
+      }).not.toThrow();
+
+      // Should not call updatePosition or startSwing
+      expect(mockMeleeWeaponManager.updatePosition).not.toHaveBeenCalled();
+      expect(mockMeleeWeaponManager.startSwing).not.toHaveBeenCalled();
+    });
+
+    it('should not crash when melee:hit attackerId has no aim angle', () => {
+      eventHandlers.setupEventHandlers();
+
+      // Mock getPlayerAimAngle to return null
+      mockPlayerManager.getPlayerAimAngle = vi.fn().mockReturnValue(null);
+
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const meleeHitHandler = handlerRefs.get('melee:hit');
+
+      const data = {
+        attackerId: 'player-2',
+        victimId: 'player-3',
+        damage: 50,
+        weaponType: 'Bat',
+      };
+
+      // Should not throw when aimAngle is null
+      expect(() => {
+        meleeHitHandler?.(data);
+      }).not.toThrow();
+
+      // Should not call updatePosition or startSwing (early return)
+      expect(mockMeleeWeaponManager.updatePosition).not.toHaveBeenCalled();
+      expect(mockMeleeWeaponManager.startSwing).not.toHaveBeenCalled();
+    });
+
     it('should handle match:ended with null inputManager', () => {
       // Create event handlers without input manager
       const eventHandlersNoInput = new GameSceneEventHandlers(
@@ -480,7 +569,8 @@ describe('GameSceneEventHandlers', () => {
         mockGameSceneSpectator,
         vi.fn(),
         mockWeaponCrateManager,
-        mockPickupPromptUI
+        mockPickupPromptUI,
+      mockMeleeWeaponManager
       );
 
       // Setup shooting manager but not input manager
@@ -520,7 +610,8 @@ describe('GameSceneEventHandlers', () => {
         mockGameSceneSpectator,
         vi.fn(),
         mockWeaponCrateManager,
-        mockPickupPromptUI
+        mockPickupPromptUI,
+      mockMeleeWeaponManager
       );
 
       // Setup input manager but not shooting manager
@@ -560,7 +651,8 @@ describe('GameSceneEventHandlers', () => {
         mockGameSceneSpectator,
         vi.fn(),
         mockWeaponCrateManager,
-        mockPickupPromptUI
+        mockPickupPromptUI,
+      mockMeleeWeaponManager
       );
 
       eventHandlersNoManagers.setupEventHandlers();
@@ -611,7 +703,8 @@ describe('GameSceneEventHandlers', () => {
         mockGameSceneSpectator,
         vi.fn(),
         mockWeaponCrateManager,
-        mockPickupPromptUI
+        mockPickupPromptUI,
+      mockMeleeWeaponManager
       );
 
       eventHandlersNoInput.setupEventHandlers();
@@ -728,7 +821,8 @@ describe('GameSceneEventHandlers', () => {
         mockGameSceneSpectator,
         vi.fn(),
         mockWeaponCrateManager,
-        mockPickupPromptUI
+        mockPickupPromptUI,
+      mockMeleeWeaponManager
       );
 
       eventHandlersNoShooting.setupEventHandlers();
