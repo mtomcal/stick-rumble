@@ -173,6 +173,10 @@ func (rm *RoomManager) AddPlayer(player *Player) *Room {
 		room.AddPlayer(player1)
 		room.AddPlayer(player2)
 
+		// Register both players in the match
+		room.Match.RegisterPlayer(player1.ID)
+		room.Match.RegisterPlayer(player2.ID)
+
 		// Clear waiting list
 		rm.waitingPlayers = rm.waitingPlayers[2:]
 

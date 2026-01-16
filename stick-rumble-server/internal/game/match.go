@@ -30,12 +30,13 @@ type PlayerScore struct {
 
 // Match represents a game match with win conditions and state tracking
 type Match struct {
-	Config      MatchConfig
-	State       MatchState
-	StartTime   time.Time
-	EndReason   string         // "kill_target" or "time_limit"
-	PlayerKills map[string]int // Maps player ID to kill count
-	mu          sync.RWMutex
+	Config            MatchConfig
+	State             MatchState
+	StartTime         time.Time
+	EndReason         string          // "kill_target" or "time_limit"
+	PlayerKills       map[string]int  // Maps player ID to kill count
+	RegisteredPlayers map[string]bool // Tracks all players in the match
+	mu                sync.RWMutex
 }
 
 // NewMatch creates a new match with default configuration
@@ -45,8 +46,9 @@ func NewMatch() *Match {
 			KillTarget:       20,
 			TimeLimitSeconds: 420, // 7 minutes
 		},
-		State:       MatchStateWaiting,
-		PlayerKills: make(map[string]int),
+		State:             MatchStateWaiting,
+		PlayerKills:       make(map[string]int),
+		RegisteredPlayers: make(map[string]bool),
 	}
 }
 
@@ -92,6 +94,19 @@ func (m *Match) GetRemainingSeconds() int {
 	}
 
 	return remaining
+}
+
+// RegisterPlayer adds a player to the match participant list
+// This ensures all players appear in final scores, even with 0 kills
+func (m *Match) RegisterPlayer(playerID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.RegisteredPlayers[playerID] = true
+	// Initialize kill count to 0 if not already present
+	if _, exists := m.PlayerKills[playerID]; !exists {
+		m.PlayerKills[playerID] = 0
+	}
 }
 
 // AddKill increments the kill count for a player
