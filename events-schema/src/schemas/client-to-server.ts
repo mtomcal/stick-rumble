@@ -94,3 +94,10 @@ export type PlayerMeleeAttackData = Static<typeof PlayerMeleeAttackDataSchema>;
  */
 export const PlayerMeleeAttackMessageSchema = createTypedMessageSchema('player:melee_attack', PlayerMeleeAttackDataSchema);
 export type PlayerMeleeAttackMessage = Static<typeof PlayerMeleeAttackMessageSchema>;
+
+/**
+ * Complete player:dodge_roll message schema (no data payload)
+ * Client requests to initiate a dodge roll.
+ */
+export const PlayerDodgeRollMessageSchema = createTypedMessageSchemaNoData('player:dodge_roll');
+export type PlayerDodgeRollMessage = Static<typeof PlayerDodgeRollMessageSchema>;

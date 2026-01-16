@@ -27,6 +27,16 @@ const WEAPON_SOUNDS: Record<string, WeaponSoundConfig> = {
 };
 
 /**
+ * Game effect sounds
+ */
+const EFFECT_SOUNDS: Record<string, WeaponSoundConfig> = {
+  dodgeRoll: {
+    key: 'dodge-roll-whoosh',
+    path: 'assets/audio/whoosh.mp3',
+  },
+};
+
+/**
  * AudioManager handles all game audio including weapon sounds and positional audio
  */
 export class AudioManager {
@@ -48,6 +58,9 @@ export class AudioManager {
    */
   static preload(scene: Phaser.Scene): void {
     Object.values(WEAPON_SOUNDS).forEach(config => {
+      scene.load.audio(config.key, config.path);
+    });
+    Object.values(EFFECT_SOUNDS).forEach(config => {
       scene.load.audio(config.key, config.path);
     });
   }
@@ -163,6 +176,35 @@ export class AudioManager {
    */
   isMuted(): boolean {
     return this.muted;
+  }
+
+  /**
+   * Play dodge roll whoosh sound effect
+   */
+  playDodgeRollSound(): void {
+    if (this.muted) {
+      return;
+    }
+
+    const soundConfig = EFFECT_SOUNDS.dodgeRoll;
+    const sound = this.scene.sound.add(soundConfig.key);
+
+    if (sound && 'setVolume' in sound) {
+      sound.setVolume(this.volume);
+    }
+
+    if (sound && 'play' in sound) {
+      sound.play();
+      this.activeSounds.push(sound);
+
+      // Clean up when sound finishes
+      sound.once('complete', () => {
+        const index = this.activeSounds.indexOf(sound);
+        if (index > -1) {
+          this.activeSounds.splice(index, 1);
+        }
+      });
+    }
   }
 
   /**

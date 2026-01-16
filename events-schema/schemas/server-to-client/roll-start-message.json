@@ -1,0 +1,62 @@
+{
+  "$id": "roll_startMessage",
+  "description": "roll:start WebSocket message",
+  "type": "object",
+  "required": [
+    "type",
+    "timestamp",
+    "data"
+  ],
+  "properties": {
+    "type": {
+      "description": "Message type identifier",
+      "const": "roll:start",
+      "type": "string"
+    },
+    "timestamp": {
+      "description": "Unix timestamp in milliseconds",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "data": {
+      "$id": "RollStartData",
+      "description": "Roll start event payload",
+      "type": "object",
+      "required": [
+        "playerId",
+        "direction",
+        "rollStartTime"
+      ],
+      "properties": {
+        "playerId": {
+          "description": "Player who started rolling",
+          "minLength": 1,
+          "type": "string"
+        },
+        "direction": {
+          "description": "Roll direction vector",
+          "type": "object",
+          "required": [
+            "x",
+            "y"
+          ],
+          "properties": {
+            "x": {
+              "description": "Roll direction X component (normalized)",
+              "type": "number"
+            },
+            "y": {
+              "description": "Roll direction Y component (normalized)",
+              "type": "number"
+            }
+          }
+        },
+        "rollStartTime": {
+          "description": "Server timestamp when roll started (ms since epoch)",
+          "minimum": 0,
+          "type": "integer"
+        }
+      }
+    }
+  }
+}

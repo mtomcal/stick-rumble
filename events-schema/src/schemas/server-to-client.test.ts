@@ -92,6 +92,7 @@ describe('Server-to-Client Schemas', () => {
             rotation: 1.57,
             isDead: false,
             isSprinting: true,
+            isRolling: false,
           },
           {
             id: 'player-2',
@@ -102,6 +103,7 @@ describe('Server-to-Client Schemas', () => {
             rotation: 0,
             isDead: false,
             isSprinting: false,
+            isRolling: false,
           },
         ],
       };

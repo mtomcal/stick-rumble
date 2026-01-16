@@ -317,6 +317,26 @@ describe('AudioManager', () => {
     });
   });
 
+  describe('playDodgeRollSound', () => {
+    it('should play dodge roll whoosh sound', () => {
+      audioManager.playDodgeRollSound();
+      expect(scene.sound.add).toHaveBeenCalledWith('dodge-roll-whoosh');
+      expect(mockSound.play).toHaveBeenCalled();
+    });
+
+    it('should not play sound when muted', () => {
+      audioManager.setMuted(true);
+      audioManager.playDodgeRollSound();
+      expect(mockSound.play).not.toHaveBeenCalled();
+    });
+
+    it('should apply volume setting to dodge roll sound', () => {
+      audioManager.setVolume(0.5);
+      audioManager.playDodgeRollSound();
+      expect(mockSound.setVolume).toHaveBeenCalledWith(0.5);
+    });
+  });
+
   describe('preload', () => {
     it('should preload weapon sound assets', () => {
       const mockLoad = {
@@ -331,6 +351,19 @@ describe('AudioManager', () => {
       expect(mockLoad.audio).toHaveBeenCalledWith('uzi-fire', 'assets/audio/uzi-fire.mp3');
       expect(mockLoad.audio).toHaveBeenCalledWith('ak47-fire', 'assets/audio/ak47-fire.mp3');
       expect(mockLoad.audio).toHaveBeenCalledWith('shotgun-fire', 'assets/audio/shotgun-fire.mp3');
+    });
+
+    it('should preload effect sound assets', () => {
+      const mockLoad = {
+        audio: vi.fn(),
+      };
+      const mockScene = {
+        load: mockLoad,
+      } as any;
+
+      AudioManager.preload(mockScene);
+
+      expect(mockLoad.audio).toHaveBeenCalledWith('dodge-roll-whoosh', 'assets/audio/whoosh.mp3');
     });
   });
 });

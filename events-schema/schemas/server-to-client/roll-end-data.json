@@ -1,0 +1,21 @@
+{
+  "$id": "RollEndData",
+  "description": "Roll end event payload",
+  "type": "object",
+  "required": [
+    "playerId",
+    "reason"
+  ],
+  "properties": {
+    "playerId": {
+      "description": "Player who stopped rolling",
+      "minLength": 1,
+      "type": "string"
+    },
+    "reason": {
+      "description": "Reason roll ended (completed, wall_collision)",
+      "minLength": 1,
+      "type": "string"
+    }
+  }
+}

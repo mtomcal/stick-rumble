@@ -15,67 +15,93 @@ func NewPhysics() *Physics {
 
 // UpdatePlayer updates a player's physics state based on input and delta time
 // deltaTime is in seconds
-func (p *Physics) UpdatePlayer(player *PlayerState, deltaTime float64) {
-	input := player.GetInput()
-	currentVel := player.GetVelocity()
+// Returns true if a dodge roll was cancelled due to wall collision
+func (p *Physics) UpdatePlayer(player *PlayerState, deltaTime float64) bool {
+	rollCancelled := false
+	// Check if player is rolling - if so, use roll velocity instead of input
+	if player.IsRolling() {
+		rollState := player.GetRollState()
+		// Set velocity to roll direction * roll velocity
+		rollVel := Vector2{
+			X: rollState.RollDirection.X * DodgeRollVelocity,
+			Y: rollState.RollDirection.Y * DodgeRollVelocity,
+		}
+		rollVel = sanitizeVector2(rollVel, "UpdatePlayer roll velocity")
+		player.SetVelocity(rollVel)
+	} else {
+		// Normal movement (not rolling)
+		input := player.GetInput()
+		currentVel := player.GetVelocity()
 
-	// Calculate input direction vector
-	inputDir := Vector2{X: 0, Y: 0}
+		// Calculate input direction vector
+		inputDir := Vector2{X: 0, Y: 0}
 
-	if input.Left {
-		inputDir.X -= 1
-	}
-	if input.Right {
-		inputDir.X += 1
-	}
-	if input.Up {
-		inputDir.Y -= 1
-	}
-	if input.Down {
-		inputDir.Y += 1
-	}
-
-	// Normalize input direction for diagonal movement
-	inputDir = normalize(inputDir)
-
-	// Determine movement speed based on sprint state
-	moveSpeed := MovementSpeed
-	if input.IsSprinting {
-		moveSpeed = SprintSpeed
-	}
-
-	// Apply acceleration or deceleration
-	var newVel Vector2
-	if inputDir.X != 0 || inputDir.Y != 0 {
-		// Player is giving input - accelerate toward target velocity
-		targetVel := Vector2{
-			X: inputDir.X * moveSpeed,
-			Y: inputDir.Y * moveSpeed,
+		if input.Left {
+			inputDir.X -= 1
+		}
+		if input.Right {
+			inputDir.X += 1
+		}
+		if input.Up {
+			inputDir.Y -= 1
+		}
+		if input.Down {
+			inputDir.Y += 1
 		}
 
-		newVel = accelerateToward(currentVel, targetVel, Acceleration, deltaTime)
-	} else {
-		// No input - decelerate to zero
-		newVel = decelerateToZero(currentVel, Deceleration, deltaTime)
-	}
+		// Normalize input direction for diagonal movement
+		inputDir = normalize(inputDir)
 
-	// Sanitize velocity before setting it
-	newVel = sanitizeVector2(newVel, "UpdatePlayer velocity")
-	player.SetVelocity(newVel)
+		// Determine movement speed based on sprint state
+		moveSpeed := MovementSpeed
+		if input.IsSprinting {
+			moveSpeed = SprintSpeed
+		}
+
+		// Apply acceleration or deceleration
+		var newVel Vector2
+		if inputDir.X != 0 || inputDir.Y != 0 {
+			// Player is giving input - accelerate toward target velocity
+			targetVel := Vector2{
+				X: inputDir.X * moveSpeed,
+				Y: inputDir.Y * moveSpeed,
+			}
+
+			newVel = accelerateToward(currentVel, targetVel, Acceleration, deltaTime)
+		} else {
+			// No input - decelerate to zero
+			newVel = decelerateToZero(currentVel, Deceleration, deltaTime)
+		}
+
+		// Sanitize velocity before setting it
+		newVel = sanitizeVector2(newVel, "UpdatePlayer velocity")
+		player.SetVelocity(newVel)
+	}
 
 	// Update position based on velocity
 	currentPos := player.GetPosition()
+	currentVel := player.GetVelocity()
 	newPos := Vector2{
-		X: currentPos.X + newVel.X*deltaTime,
-		Y: currentPos.Y + newVel.Y*deltaTime,
+		X: currentPos.X + currentVel.X*deltaTime,
+		Y: currentPos.Y + currentVel.Y*deltaTime,
 	}
 
 	// Clamp position to arena bounds
-	newPos = clampToArena(newPos)
+	clampedPos := clampToArena(newPos)
+
+	// Check if position was clamped during a roll (wall collision)
+	isRolling := player.IsRolling()
+	if isRolling && (clampedPos.X != newPos.X || clampedPos.Y != newPos.Y) {
+		// Wall collision detected during roll - end the roll
+		player.EndDodgeRoll()
+		rollCancelled = true
+	}
 
 	// Sanitize position before setting it
-	newPos = sanitizeVector2(newPos, "UpdatePlayer position")
-	player.SetPosition(newPos)
+	clampedPos = sanitizeVector2(clampedPos, "UpdatePlayer position")
+	player.SetPosition(clampedPos)
+
+	return rollCancelled
 }
 
 // normalize returns a normalized vector (length = 1) or zero vector if input is zero
@@ -206,6 +232,11 @@ func (p *Physics) CheckProjectilePlayerCollision(proj *Projectile, player *Playe
 
 	// Don't check collision with invulnerable players (spawn protection)
 	if player.IsInvulnerable {
+		return false
+	}
+
+	// Don't check collision with rolling players during i-frames
+	if player.IsInvincibleFromRoll() {
 		return false
 	}
 

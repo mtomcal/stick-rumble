@@ -403,3 +403,68 @@ func (h *WebSocketHandler) sendWeaponSpawns(playerID string) {
 		h.roomManager.SendToWaitingPlayer(playerID, msgBytes)
 	}
 }
+
+// broadcastRollStart broadcasts roll start event to all players in the room
+func (h *WebSocketHandler) broadcastRollStart(playerID string, direction game.Vector2, rollStartTime time.Time) {
+	// Create roll:start message data
+	data := map[string]interface{}{
+		"playerId":      playerID,
+		"direction":     direction,
+		"rollStartTime": rollStartTime.UnixMilli(),
+	}
+
+	// Validate outgoing message schema (development mode only)
+	if err := h.validateOutgoingMessage("roll:start", data); err != nil {
+		log.Printf("Schema validation failed for roll:start: %v", err)
+	}
+
+	message := Message{
+		Type:      "roll:start",
+		Timestamp: time.Now().UnixMilli(),
+		Data:      data,
+	}
+
+	msgBytes, err := json.Marshal(message)
+	if err != nil {
+		log.Printf("Error marshaling roll:start message: %v", err)
+		return
+	}
+
+	// Broadcast to all players in the room
+	room := h.roomManager.GetRoomByPlayerID(playerID)
+	if room != nil {
+		room.Broadcast(msgBytes, "")
+	}
+}
+
+// broadcastRollEnd broadcasts roll end event to all players in the room
+func (h *WebSocketHandler) broadcastRollEnd(playerID string, reason string) {
+	// Create roll:end message data
+	data := map[string]interface{}{
+		"playerId": playerID,
+		"reason":   reason,
+	}
+
+	// Validate outgoing message schema (development mode only)
+	if err := h.validateOutgoingMessage("roll:end", data); err != nil {
+		log.Printf("Schema validation failed for roll:end: %v", err)
+	}
+
+	message := Message{
+		Type:      "roll:end",
+		Timestamp: time.Now().UnixMilli(),
+		Data:      data,
+	}
+
+	msgBytes, err := json.Marshal(message)
+	if err != nil {
+		log.Printf("Error marshaling roll:end message: %v", err)
+		return
+	}
+
+	// Broadcast to all players in the room
+	room := h.roomManager.GetRoomByPlayerID(playerID)
+	if room != nil {
+		room.Broadcast(msgBytes, "")
+	}
+}

@@ -41,7 +41,8 @@
               "maxHealth",
               "rotation",
               "isDead",
-              "isSprinting"
+              "isSprinting",
+              "isRolling"
             ],
             "properties": {
               "id": {
@@ -107,6 +108,10 @@
               },
               "isSprinting": {
                 "description": "Whether the player is currently sprinting",
+                "type": "boolean"
+              },
+              "isRolling": {
+                "description": "Whether the player is currently dodge rolling",
                 "type": "boolean"
               }
             }
