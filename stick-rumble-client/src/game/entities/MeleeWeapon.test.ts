@@ -28,6 +28,13 @@ describe('MeleeWeapon', () => {
       expect(weapon.getArcDegrees()).toBe(90);
     });
 
+    it('should create bat with lowercase type (server format)', () => {
+      const lowercaseWeapon = new MeleeWeapon(scene, 100, 100, 'bat');
+      expect(lowercaseWeapon.weaponType).toBe('bat');
+      expect(lowercaseWeapon.getRange()).toBe(64);
+      expect(lowercaseWeapon.getArcDegrees()).toBe(90);
+    });
+
     it('should render 90-degree swing arc for Bat', () => {
       const graphics = (weapon as any).graphics;
       weapon.showSwingAnimation(0); // 0 radians aim angle
@@ -109,6 +116,13 @@ describe('MeleeWeapon', () => {
       expect(weapon.weaponType).toBe('Katana');
       expect(weapon.getRange()).toBe(80);
       expect(weapon.getArcDegrees()).toBe(90);
+    });
+
+    it('should create katana with lowercase type (server format)', () => {
+      const lowercaseWeapon = new MeleeWeapon(scene, 100, 100, 'katana');
+      expect(lowercaseWeapon.weaponType).toBe('katana');
+      expect(lowercaseWeapon.getRange()).toBe(80);
+      expect(lowercaseWeapon.getArcDegrees()).toBe(90);
     });
 
     it('should render longer range than Bat', () => {

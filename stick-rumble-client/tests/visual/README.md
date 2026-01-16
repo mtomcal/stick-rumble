@@ -68,6 +68,18 @@ npm run test:visual:update
 - **Multiple kills**: 2-3 kill entries stacked
 - **Max capacity**: 5 kill entries (maximum)
 
+### Melee Weapon (`melee-weapon.spec.ts`)
+
+- **Bat stats validation**: Verifies lowercase 'bat' creates weapon with correct range (64) and arc (90 degrees)
+- **Katana stats validation**: Verifies lowercase 'katana' creates weapon with correct range (80) and arc (90 degrees)
+- **Bat swing animation**: Visual snapshot of bat swing (brown color)
+- **Katana swing animation**: Visual snapshot of katana swing (silver color)
+- **Idle state**: Both weapons visible but not swinging
+- **Both weapons swinging**: Visual distinction between bat and katana colors
+- **Swing completion**: Verifies swing animation completes after 200ms
+
+These tests specifically guard against the case-sensitivity bug where server sends lowercase weapon types ('katana', 'bat') but client code may check for capitalized names ('Katana', 'Bat').
+
 ## Test Architecture
 
 ### Test Page
