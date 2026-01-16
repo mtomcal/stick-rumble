@@ -13,7 +13,7 @@ import { test, expect } from '@playwright/test';
  * These tests verify the actual rendered colors match expected weapon configs.
  *
  * VISUAL TESTING APPROACH (Bug 83b):
- * - Projectiles are spawned with 10x scale for human visibility in snapshots
+ * - Projectiles are spawned with 30x scale for human visibility in snapshots
  * - 400x400px clip regions (instead of 100x100px) provide better context
  * - Target circles in background provide contrast and reference points
  * - This makes snapshots verifiable by human code reviewers
@@ -38,9 +38,9 @@ test.describe('Projectile Visuals Visual Regression', () => {
   });
 
   test('Uzi projectile should render orange (0xFFAA00), 3px diameter', async ({ page }) => {
-    // Spawn an Uzi projectile in the center with 10x scale for visibility
+    // Spawn an Uzi projectile in the center with 30x scale for visibility
     await page.evaluate(() => {
-      (window as any).spawnProjectile('Uzi', 400, 300, 10);
+      (window as any).spawnProjectile('Uzi', 400, 300, 30);
     });
 
     // Wait for render
@@ -65,9 +65,9 @@ test.describe('Projectile Visuals Visual Regression', () => {
   });
 
   test('AK47 projectile should render gold (0xFFCC00), 5px diameter', async ({ page }) => {
-    // Spawn an AK47 projectile in the center with 10x scale for visibility
+    // Spawn an AK47 projectile in the center with 30x scale for visibility
     await page.evaluate(() => {
-      (window as any).spawnProjectile('AK47', 400, 300, 10);
+      (window as any).spawnProjectile('AK47', 400, 300, 30);
     });
 
     // Wait for render
@@ -92,9 +92,9 @@ test.describe('Projectile Visuals Visual Regression', () => {
   });
 
   test('Pistol projectile should render yellow (0xFFFF00), 4px diameter', async ({ page }) => {
-    // Spawn a Pistol projectile in the center with 10x scale for visibility
+    // Spawn a Pistol projectile in the center with 30x scale for visibility
     await page.evaluate(() => {
-      (window as any).spawnProjectile('Pistol', 400, 300, 10);
+      (window as any).spawnProjectile('Pistol', 400, 300, 30);
     });
 
     // Wait for render
@@ -119,9 +119,9 @@ test.describe('Projectile Visuals Visual Regression', () => {
   });
 
   test('Shotgun projectile should render orange-red (0xFF8800), 6px diameter', async ({ page }) => {
-    // Spawn a Shotgun projectile in the center with 10x scale for visibility
+    // Spawn a Shotgun projectile in the center with 30x scale for visibility
     await page.evaluate(() => {
-      (window as any).spawnProjectile('Shotgun', 400, 300, 10);
+      (window as any).spawnProjectile('Shotgun', 400, 300, 30);
     });
 
     // Wait for render
@@ -146,12 +146,12 @@ test.describe('Projectile Visuals Visual Regression', () => {
   });
 
   test('multiple projectiles should render with different colors', async ({ page }) => {
-    // Spawn projectiles from different weapons in a row with 10x scale for visibility
+    // Spawn projectiles from different weapons in a row with 30x scale for visibility
     await page.evaluate(() => {
-      (window as any).spawnProjectile('Uzi', 200, 300, 10);      // Orange
-      (window as any).spawnProjectile('AK47', 300, 300, 10);     // Gold
-      (window as any).spawnProjectile('Pistol', 400, 300, 10);   // Yellow
-      (window as any).spawnProjectile('Shotgun', 500, 300, 10);  // Orange-red
+      (window as any).spawnProjectile('Uzi', 200, 300, 30);      // Orange
+      (window as any).spawnProjectile('AK47', 300, 300, 30);     // Gold
+      (window as any).spawnProjectile('Pistol', 400, 300, 30);   // Yellow
+      (window as any).spawnProjectile('Shotgun', 500, 300, 30);  // Orange-red
     });
 
     // Wait for render

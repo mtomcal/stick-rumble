@@ -170,23 +170,24 @@ export class EntityTestScene extends Phaser.Scene {
 
       // If scale is provided, manually scale the sprite for visual testing
       if (scale !== undefined && scale !== 1) {
-        // Get the spawned projectile and scale its sprite
-        const projectile = this.projectileManager.getProjectile(projectileId);
-        if (projectile) {
-          // Find and scale the sprite (this is a bit hacky but necessary for visual testing)
-          // The ProjectileManager creates a circle sprite, we need to access it via the scene
-          const sprites = this.children.getAll() as Phaser.GameObjects.Arc[];
-          const projectileSprite = sprites.find(
-            sprite =>
-              sprite instanceof Phaser.GameObjects.Arc &&
-              sprite.x === x &&
-              sprite.y === y
-          );
+        // CRITICAL FIX: Use a more reliable method to find and scale the projectile
+        // We need to wait for the next frame for the sprite to be fully created
+        this.time.delayedCall(0, () => {
+          // Find the most recently added Arc object (the projectile we just spawned)
+          const allChildren = this.children.getAll();
+          // Filter for Arc objects and find the one at our position
+          const projectileSprite = allChildren
+            .filter(child => child.type === 'Arc')
+            .reverse() // Start from most recent
+            .find(sprite => {
+              const arc = sprite as Phaser.GameObjects.Arc;
+              return Math.abs(arc.x - x) < 1 && Math.abs(arc.y - y) < 1;
+            }) as Phaser.GameObjects.Arc | undefined;
 
           if (projectileSprite) {
             projectileSprite.setScale(scale);
           }
-        }
+        });
       }
 
       return projectileId;
