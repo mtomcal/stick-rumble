@@ -1,7 +1,10 @@
 /**
  * Tests for MeleeWeapon entity
+ *
+ * Phase 3 Critical Tests: Rendering validation to catch bugs that slip through mocks
+ * These tests verify that graphics methods are actually called, not just mocked
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import Phaser from 'phaser';
 import { MeleeWeapon } from './MeleeWeapon';
 
@@ -10,29 +13,8 @@ describe('MeleeWeapon', () => {
   let weapon: MeleeWeapon;
 
   beforeEach(() => {
-    // Create a minimal scene mock
-    scene = {
-      add: {
-        graphics: vi.fn().mockReturnValue({
-          clear: vi.fn().mockReturnThis(),
-          lineStyle: vi.fn().mockReturnThis(),
-          fillStyle: vi.fn().mockReturnThis(),
-          beginPath: vi.fn().mockReturnThis(),
-          moveTo: vi.fn().mockReturnThis(),
-          lineTo: vi.fn().mockReturnThis(),
-          arc: vi.fn().mockReturnThis(),
-          closePath: vi.fn().mockReturnThis(),
-          strokePath: vi.fn().mockReturnThis(),
-          fillPath: vi.fn().mockReturnThis(),
-          destroy: vi.fn(),
-          setVisible: vi.fn().mockReturnThis(),
-          setDepth: vi.fn().mockReturnThis(),
-        }),
-      },
-      time: {
-        now: 0,
-      },
-    } as unknown as Phaser.Scene;
+    // Use enhanced Phaser mock with real state tracking
+    scene = new Phaser.Scene({ key: 'TestScene' });
   });
 
   describe('Bat', () => {
@@ -47,7 +29,7 @@ describe('MeleeWeapon', () => {
     });
 
     it('should render 90-degree swing arc for Bat', () => {
-      const graphics = scene.add.graphics();
+      const graphics = (weapon as any).graphics;
       weapon.showSwingAnimation(0); // 0 radians aim angle
 
       expect(graphics.arc).toHaveBeenCalled();
@@ -102,7 +84,7 @@ describe('MeleeWeapon', () => {
     });
 
     it('should render visual arc based on aim angle', () => {
-      const graphics = scene.add.graphics();
+      const graphics = (weapon as any).graphics;
 
       // Swing right (0 radians)
       weapon.showSwingAnimation(0);
@@ -137,7 +119,7 @@ describe('MeleeWeapon', () => {
     });
 
     it('should have different visual appearance from Bat', () => {
-      const graphics = scene.add.graphics();
+      const graphics = (weapon as any).graphics;
 
       weapon.showSwingAnimation(0);
 
@@ -177,14 +159,14 @@ describe('MeleeWeapon', () => {
     });
 
     it('should hide swing animation when not swinging', () => {
-      const graphics = scene.add.graphics();
+      const graphics = (weapon as any).graphics;
 
       weapon.startSwing(0);
-      expect(graphics.setVisible).toHaveBeenCalledWith(true);
+      expect(graphics.visible).toBe(true);
 
       scene.time.now = 200;
       weapon.update();
-      expect(graphics.setVisible).toHaveBeenCalledWith(false);
+      expect(graphics.visible).toBe(false);
     });
   });
 
@@ -196,9 +178,9 @@ describe('MeleeWeapon', () => {
     it('should update position when setPosition is called', () => {
       weapon.setPosition(200, 300);
 
-      // Position update should be reflected in rendering
-      weapon.showSwingAnimation(0);
-      expect(scene.add.graphics).toHaveBeenCalled();
+      // Position update should be reflected in internal state
+      expect((weapon as any).x).toBe(200);
+      expect((weapon as any).y).toBe(300);
     });
 
     it('should follow player position during swing', () => {
@@ -211,8 +193,9 @@ describe('MeleeWeapon', () => {
       weapon.setPosition(200, 200);
       weapon.update();
 
-      // Swing animation should render at new position
-      expect(scene.add.graphics).toHaveBeenCalled();
+      // Position should be updated in internal state
+      expect((weapon as any).x).toBe(200);
+      expect((weapon as any).y).toBe(200);
     });
   });
 
@@ -222,10 +205,10 @@ describe('MeleeWeapon', () => {
     });
 
     it('should destroy graphics on destroy', () => {
-      const graphics = scene.add.graphics();
+      const graphics = (weapon as any).graphics;
       weapon.destroy();
 
-      expect(graphics.destroy).toHaveBeenCalled();
+      expect(graphics.destroyed).toBe(true);
     });
 
     it('should clear swing state on destroy', () => {
@@ -234,6 +217,155 @@ describe('MeleeWeapon', () => {
 
       // Should not throw when updating after destroy
       expect(() => weapon.update()).not.toThrow();
+    });
+  });
+
+  describe('Phase 3 Critical: Rendering Validation', () => {
+    describe('Graphics visibility tracking', () => {
+      beforeEach(() => {
+        weapon = new MeleeWeapon(scene, 100, 100, 'Bat');
+      });
+
+      it('should create graphics object that is initially invisible', () => {
+        const graphics = (weapon as any).graphics;
+        expect(graphics.visible).toBe(false);
+      });
+
+      it('should make graphics visible during swing', () => {
+        const graphics = (weapon as any).graphics;
+        weapon.startSwing(0);
+        expect(graphics.visible).toBe(true);
+      });
+
+      it('should hide graphics after swing completes', () => {
+        const graphics = (weapon as any).graphics;
+        weapon.startSwing(0);
+
+        scene.time.now = 250; // Beyond 200ms duration
+        weapon.update();
+
+        expect(graphics.visible).toBe(false);
+        expect(graphics.clear).toHaveBeenCalled();
+      });
+
+      it('should set graphics depth to 100 (render above players)', () => {
+        const graphics = (weapon as any).graphics;
+        expect(graphics.depth).toBe(100);
+      });
+    });
+
+    describe('Bat rendering validation', () => {
+      beforeEach(() => {
+        weapon = new MeleeWeapon(scene, 100, 100, 'Bat');
+      });
+
+      it('should call graphics.arc() when rendering Bat swing', () => {
+        const graphics = (weapon as any).graphics;
+        weapon.showSwingAnimation(0);
+        expect(graphics.arc).toHaveBeenCalled();
+      });
+
+      it('should use brown color (0x8B4513) for Bat', () => {
+        const graphics = (weapon as any).graphics;
+        weapon.showSwingAnimation(0);
+        expect(graphics.lineStyle).toHaveBeenCalledWith(3, 0x8B4513, 0.8);
+      });
+
+      it('should render 90-degree arc at correct position', () => {
+        const graphics = (weapon as any).graphics;
+        weapon.showSwingAnimation(0);
+
+        expect(graphics.arc).toHaveBeenCalledWith(
+          100, // x position
+          100, // y position
+          64,  // Bat range
+          expect.any(Number), // startAngle
+          expect.any(Number), // endAngle
+          false
+        );
+
+        // Verify arc span is 90 degrees (PI/2 radians)
+        const arcCall = graphics.arc.mock.calls[0];
+        const startAngle = arcCall[3];
+        const endAngle = arcCall[4];
+        const arcSpan = endAngle - startAngle;
+        expect(arcSpan).toBeCloseTo(Math.PI / 2, 5);
+      });
+
+      it('should render both stroke and fill', () => {
+        const graphics = (weapon as any).graphics;
+        weapon.showSwingAnimation(0);
+
+        expect(graphics.strokePath).toHaveBeenCalled();
+        expect(graphics.fillPath).toHaveBeenCalled();
+        expect(graphics.fillStyle).toHaveBeenCalledWith(0x8B4513, 0.2);
+      });
+
+      it('should clear graphics before each frame', () => {
+        const graphics = (weapon as any).graphics;
+        weapon.showSwingAnimation(0);
+        expect(graphics.clear).toHaveBeenCalledTimes(1);
+
+        weapon.showSwingAnimation(Math.PI / 2);
+        expect(graphics.clear).toHaveBeenCalledTimes(2);
+      });
+    });
+
+    describe('Katana rendering validation', () => {
+      beforeEach(() => {
+        weapon = new MeleeWeapon(scene, 100, 100, 'Katana');
+      });
+
+      it('should call graphics.arc() when rendering Katana swing', () => {
+        const graphics = (weapon as any).graphics;
+        weapon.showSwingAnimation(0);
+        expect(graphics.arc).toHaveBeenCalled();
+      });
+
+      it('should use silver color (0xC0C0C0) for Katana', () => {
+        const graphics = (weapon as any).graphics;
+        weapon.showSwingAnimation(0);
+        expect(graphics.lineStyle).toHaveBeenCalledWith(3, 0xC0C0C0, 0.8);
+      });
+
+      it('should render 90-degree arc with longer range (80px)', () => {
+        const graphics = (weapon as any).graphics;
+        weapon.showSwingAnimation(Math.PI / 4); // 45 degrees
+
+        expect(graphics.arc).toHaveBeenCalledWith(
+          100, // x position
+          100, // y position
+          80,  // Katana range (longer than Bat)
+          expect.any(Number),
+          expect.any(Number),
+          false
+        );
+
+        const arcCall = graphics.arc.mock.calls[0];
+        const startAngle = arcCall[3];
+        const endAngle = arcCall[4];
+        const arcSpan = endAngle - startAngle;
+        expect(arcSpan).toBeCloseTo(Math.PI / 2, 5);
+      });
+    });
+
+    describe('Graphics destruction validation', () => {
+      beforeEach(() => {
+        weapon = new MeleeWeapon(scene, 100, 100, 'Bat');
+      });
+
+      it('should mark graphics as destroyed when weapon is destroyed', () => {
+        const graphics = (weapon as any).graphics;
+        expect(graphics.destroyed).toBe(false);
+
+        weapon.destroy();
+        expect(graphics.destroyed).toBe(true);
+      });
+
+      it('should not error if graphics is null during destroy', () => {
+        (weapon as any).graphics = null;
+        expect(() => weapon.destroy()).not.toThrow();
+      });
     });
   });
 });
