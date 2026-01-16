@@ -30,12 +30,13 @@ type PlayerScore struct {
 
 // Match represents a game match with win conditions and state tracking
 type Match struct {
-	Config      MatchConfig
-	State       MatchState
-	StartTime   time.Time
-	EndReason   string         // "kill_target" or "time_limit"
-	PlayerKills map[string]int // Maps player ID to kill count
-	mu          sync.RWMutex
+	Config            MatchConfig
+	State             MatchState
+	StartTime         time.Time
+	EndReason         string          // "kill_target" or "time_limit"
+	PlayerKills       map[string]int  // Maps player ID to kill count
+	RegisteredPlayers map[string]bool // Tracks all players in the match (including those with 0 kills)
+	mu                sync.RWMutex
 }
 
 // NewMatch creates a new match with default configuration
@@ -45,8 +46,9 @@ func NewMatch() *Match {
 			KillTarget:       20,
 			TimeLimitSeconds: 420, // 7 minutes
 		},
-		State:       MatchStateWaiting,
-		PlayerKills: make(map[string]int),
+		State:             MatchStateWaiting,
+		PlayerKills:       make(map[string]int),
+		RegisteredPlayers: make(map[string]bool),
 	}
 }
 
@@ -92,6 +94,19 @@ func (m *Match) GetRemainingSeconds() int {
 	}
 
 	return remaining
+}
+
+// RegisterPlayer registers a player in the match and initializes their kill count to 0
+// This ensures all players appear in final scores, even if they never get kills
+func (m *Match) RegisterPlayer(playerID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.RegisteredPlayers[playerID] = true
+	// Initialize PlayerKills to 0 if not already set
+	if _, exists := m.PlayerKills[playerID]; !exists {
+		m.PlayerKills[playerID] = 0
+	}
 }
 
 // AddKill increments the kill count for a player
@@ -183,6 +198,7 @@ func (m *Match) DetermineWinners() []string {
 }
 
 // GetFinalScores collects final scores for all players in the match
+// Iterates over RegisteredPlayers to include players with 0 kills
 func (m *Match) GetFinalScores(world *World) []PlayerScore {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -193,7 +209,8 @@ func (m *Match) GetFinalScores(world *World) []PlayerScore {
 	world.mu.RLock()
 	defer world.mu.RUnlock()
 
-	for playerID := range m.PlayerKills {
+	// Iterate over all registered players, not just those with kills
+	for playerID := range m.RegisteredPlayers {
 		player, exists := world.players[playerID]
 		if !exists {
 			continue
