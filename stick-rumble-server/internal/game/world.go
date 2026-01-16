@@ -29,14 +29,72 @@ func NewWorldWithClock(clock Clock) *World {
 	}
 }
 
-// AddPlayer adds a new player to the world
+// AddPlayer adds a new player to the world with balanced spawn positioning
 func (w *World) AddPlayer(playerID string) *PlayerState {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
 	player := NewPlayerStateWithClock(playerID, w.clock)
+
+	// Get a balanced spawn point away from other players
+	// Note: We can't call GetBalancedSpawnPoint here (would deadlock due to mutex)
+	// Instead, inline the spawn logic
+	spawnPos := w.getBalancedSpawnPointLocked(playerID)
+	player.Position = spawnPos
+
 	w.players[playerID] = player
 	return player
+}
+
+// getBalancedSpawnPointLocked finds a spawn point furthest from all living enemy players
+// MUST be called with w.mu already held (locked)
+func (w *World) getBalancedSpawnPointLocked(excludePlayerID string) Vector2 {
+	// Collect positions of all living enemy players
+	enemyPositions := make([]Vector2, 0)
+	for id, player := range w.players {
+		if id != excludePlayerID && !player.IsDead() {
+			enemyPositions = append(enemyPositions, player.GetPosition())
+		}
+	}
+
+	// If no enemies, spawn at center
+	if len(enemyPositions) == 0 {
+		return Vector2{X: ArenaWidth / 2, Y: ArenaHeight / 2}
+	}
+
+	// Try 10 random spawn candidates and pick the one furthest from enemies
+	bestSpawn := Vector2{X: ArenaWidth / 2, Y: ArenaHeight / 2}
+	bestMinDistance := 0.0
+
+	for i := 0; i < 10; i++ {
+		// Generate random spawn point with margin from edges
+		margin := 100.0
+
+		// Protect rand.Rand access (not thread-safe)
+		w.rngMu.Lock()
+		candidate := Vector2{
+			X: margin + w.rng.Float64()*(ArenaWidth-2*margin),
+			Y: margin + w.rng.Float64()*(ArenaHeight-2*margin),
+		}
+		w.rngMu.Unlock()
+
+		// Find minimum distance to any enemy
+		minDistance := 1e18 // Use large value instead of math.MaxFloat64 to avoid import
+		for _, enemyPos := range enemyPositions {
+			dist := distance(candidate, enemyPos)
+			if dist < minDistance {
+				minDistance = dist
+			}
+		}
+
+		// Keep the spawn point with the largest minimum distance
+		if minDistance > bestMinDistance {
+			bestMinDistance = minDistance
+			bestSpawn = candidate
+		}
+	}
+
+	return bestSpawn
 }
 
 // RemovePlayer removes a player from the world

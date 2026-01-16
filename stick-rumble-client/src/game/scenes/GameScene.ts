@@ -468,7 +468,8 @@ export class GameScene extends Phaser.Scene {
       this.shootingManager.destroy();
     }
 
-    // Disconnect WebSocket
+    // Disconnect WebSocket on scene restart
+    // This triggers a fresh connection with new player ID
     if (this.wsClient) {
       this.wsClient.disconnect();
     }

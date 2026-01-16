@@ -55,8 +55,6 @@ describe('GameScene - Events', () => {
       const mockSceneContext = createMockScene();
       Object.assign(scene, mockSceneContext);
 
-      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-
       scene.create();
 
       // Trigger the delayed callback to create WebSocket
@@ -80,9 +78,8 @@ describe('GameScene - Events', () => {
         mockWebSocketInstance.onmessage(roomJoinedMessage as MessageEvent);
       }
 
-      expect(consoleSpy).toHaveBeenCalledWith('Joined room as player:', 'my-player-id');
-
-      consoleSpy.mockRestore();
+      // Verify local player ID was set in PlayerManager
+      expect(scene['playerManager'].getLocalPlayerId()).toBe('my-player-id');
     });
 
     it('should handle weapon:state messages and update shooting manager', async () => {

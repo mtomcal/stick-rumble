@@ -252,6 +252,18 @@ describe('GameScene - Player Movement', () => {
       // Spy on InputManager.setPlayerPosition to verify aim calculation setup
       const setPlayerPositionSpy = vi.spyOn(scene['inputManager'], 'setPlayerPosition');
 
+      // First send room:joined to set local player ID (required before player:move is processed)
+      const roomJoinedMessage = {
+        data: JSON.stringify({
+          type: 'room:joined',
+          timestamp: Date.now(),
+          data: { playerId: 'local-player', roomId: 'room-1' }
+        })
+      };
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(roomJoinedMessage as MessageEvent);
+      }
+
       // Simulate player:move message with aim angle
       const playerMoveMessage = {
         data: JSON.stringify({

@@ -81,6 +81,9 @@ export const createMockScene = () => {
   };
 
   const mockContext = {
+    sys: {
+      isActive: vi.fn().mockReturnValue(true),
+    },
     add: {
       text: vi.fn().mockReturnValue(mockText),
       rectangle: vi.fn().mockReturnValue(mockRectangle),

@@ -57,6 +57,9 @@ describe('GameSceneUI', () => {
 
     // Create mock scene
     mockScene = {
+      sys: {
+        isActive: vi.fn().mockReturnValue(true),
+      },
       add: {
         text: vi.fn().mockImplementation(() => {
           const text = {
