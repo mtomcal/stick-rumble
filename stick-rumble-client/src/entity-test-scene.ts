@@ -17,7 +17,7 @@ interface WindowWithTestControls extends Window {
   triggerMeleeSwing: (weaponType: string, angle: number) => void;
   restartScene: () => void;
   clearAllSprites: () => void;
-  spawnProjectile: (weaponType: string, x: number, y: number) => string;
+  spawnProjectile: (weaponType: string, x: number, y: number, scale?: number) => string;
   getProjectileCount: () => number;
   showMatchEndScreen: (matchData: MatchEndData, localPlayerId: string) => void;
   pauseGameLoop: () => void;
@@ -32,6 +32,7 @@ export class EntityTestScene extends Phaser.Scene {
   private meleeWeapon: MeleeWeapon | null = null;
   private projectileManager!: ProjectileManager;
   private projectileIdCounter = 0;
+  private projectileTargetGraphics!: Phaser.GameObjects.Graphics;
 
   constructor() {
     super({ key: 'EntityTestScene' });
@@ -40,6 +41,10 @@ export class EntityTestScene extends Phaser.Scene {
   create(): void {
     // Create a dark background for contrast
     this.add.rectangle(400, 300, 800, 600, 0x1a1a1a);
+
+    // Create a target area for projectile testing (lighter background circle for contrast)
+    this.projectileTargetGraphics = this.add.graphics();
+    this.drawProjectileTarget(400, 300);
 
     // Initialize PlayerManager
     this.playerManager = new PlayerManager(this);
@@ -121,6 +126,9 @@ export class EntityTestScene extends Phaser.Scene {
       // Destroy all projectiles
       this.projectileManager.destroy();
 
+      // Redraw target
+      this.drawProjectileTarget(400, 300);
+
       // Recreate managers
       this.playerManager = new PlayerManager(this);
       this.projectileManager = new ProjectileManager(this);
@@ -139,9 +147,12 @@ export class EntityTestScene extends Phaser.Scene {
 
       // Destroy all projectiles
       this.projectileManager.destroy();
+
+      // Redraw target
+      this.drawProjectileTarget(400, 300);
     };
 
-    win.spawnProjectile = (weaponType: string, x: number, y: number): string => {
+    win.spawnProjectile = (weaponType: string, x: number, y: number, scale?: number): string => {
       // Generate unique projectile ID
       const projectileId = `proj-${this.projectileIdCounter++}`;
 
@@ -154,8 +165,29 @@ export class EntityTestScene extends Phaser.Scene {
         velocity: { x: 0, y: 0 }, // Static for visual test
       };
 
-      // Spawn projectile
+      // Spawn projectile using ProjectileManager
       this.projectileManager.spawnProjectile(projectileData);
+
+      // If scale is provided, manually scale the sprite for visual testing
+      if (scale !== undefined && scale !== 1) {
+        // Get the spawned projectile and scale its sprite
+        const projectile = this.projectileManager.getProjectile(projectileId);
+        if (projectile) {
+          // Find and scale the sprite (this is a bit hacky but necessary for visual testing)
+          // The ProjectileManager creates a circle sprite, we need to access it via the scene
+          const sprites = this.children.getAll() as Phaser.GameObjects.Arc[];
+          const projectileSprite = sprites.find(
+            sprite =>
+              sprite instanceof Phaser.GameObjects.Arc &&
+              sprite.x === x &&
+              sprite.y === y
+          );
+
+          if (projectileSprite) {
+            projectileSprite.setScale(scale);
+          }
+        }
+      }
 
       return projectileId;
     };
@@ -212,5 +244,33 @@ export class EntityTestScene extends Phaser.Scene {
     if (readyMarker) {
       readyMarker.setAttribute('data-ready', 'true');
     }
+  }
+
+  /**
+   * Draw a target circle for projectile visual testing
+   * Provides a contrasting background to make tiny projectiles visible
+   */
+  private drawProjectileTarget(x: number, y: number): void {
+    this.projectileTargetGraphics.clear();
+
+    // Draw concentric circles for visual reference
+    // Outer circle (150px radius) - subtle gray
+    this.projectileTargetGraphics.lineStyle(2, 0x444444, 1);
+    this.projectileTargetGraphics.strokeCircle(x, y, 150);
+
+    // Middle circle (100px radius) - medium gray
+    this.projectileTargetGraphics.lineStyle(2, 0x666666, 1);
+    this.projectileTargetGraphics.strokeCircle(x, y, 100);
+
+    // Inner circle (50px radius) - lighter gray, filled
+    this.projectileTargetGraphics.fillStyle(0x333333, 0.5);
+    this.projectileTargetGraphics.fillCircle(x, y, 50);
+    this.projectileTargetGraphics.lineStyle(2, 0x888888, 1);
+    this.projectileTargetGraphics.strokeCircle(x, y, 50);
+
+    // Center crosshair
+    this.projectileTargetGraphics.lineStyle(1, 0x999999, 1);
+    this.projectileTargetGraphics.lineBetween(x - 10, y, x + 10, y);
+    this.projectileTargetGraphics.lineBetween(x, y - 10, x, y + 10);
   }
 }
