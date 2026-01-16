@@ -549,7 +549,6 @@ func (h *WebSocketHandler) broadcastPlayerDamaged(attackerID, victimID string, d
 
 // processMeleeKill handles death processing for melee kills
 func (h *WebSocketHandler) processMeleeKill(attackerID, victimID string) {
-	log.Printf("[DEBUG] Player %s killed by %s (melee)", victimID, attackerID)
 	// Mark player as dead
 	h.gameServer.MarkPlayerDead(victimID)
 
@@ -558,13 +557,11 @@ func (h *WebSocketHandler) processMeleeKill(attackerID, victimID string) {
 	if attackerExists && attacker != nil {
 		attacker.IncrementKills()
 		attacker.AddXP(game.KillXPReward)
-		log.Printf("[DEBUG] Attacker %s kills incremented to %d", attackerID, attacker.Kills)
 	}
 
 	victim, victimExists := h.gameServer.GetWorld().GetPlayer(victimID)
 	if victimExists && victim != nil {
 		victim.IncrementDeaths()
-		log.Printf("[DEBUG] Victim %s deaths incremented to %d", victimID, victim.Deaths)
 	}
 
 	// Create player:death message data

@@ -1,7 +1,6 @@
 package game
 
 import (
-	"log"
 	"sync"
 	"time"
 )
@@ -45,7 +44,7 @@ func NewMatch() *Match {
 	return &Match{
 		Config: MatchConfig{
 			KillTarget:       20,
-			TimeLimitSeconds: 60, // 1 minute (for testing)
+			TimeLimitSeconds: 420, // 7 minutes
 		},
 		State:             MatchStateWaiting,
 		PlayerKills:       make(map[string]int),
@@ -210,17 +209,12 @@ func (m *Match) GetFinalScores(world *World) []PlayerScore {
 	world.mu.RLock()
 	defer world.mu.RUnlock()
 
-	log.Printf("[DEBUG] GetFinalScores: RegisteredPlayers=%v", m.RegisteredPlayers)
-
 	// Iterate over all registered players, not just those with kills
 	for playerID := range m.RegisteredPlayers {
 		player, exists := world.players[playerID]
 		if !exists {
-			log.Printf("[DEBUG] GetFinalScores: player %s not found in world", playerID)
 			continue
 		}
-
-		log.Printf("[DEBUG] GetFinalScores: player %s has Kills=%d Deaths=%d XP=%d", playerID, player.Kills, player.Deaths, player.XP)
 
 		// Create score entry with player stats
 		score := PlayerScore{

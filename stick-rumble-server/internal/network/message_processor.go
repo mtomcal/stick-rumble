@@ -162,7 +162,6 @@ func (h *WebSocketHandler) onHit(hit game.HitEvent) {
 
 	// If victim died, mark as dead and broadcast player:death
 	if !victimState.IsAlive() {
-		log.Printf("[DEBUG] Player %s killed by %s (ranged)", hit.VictimID, hit.AttackerID)
 		// Mark player as dead
 		h.gameServer.MarkPlayerDead(hit.VictimID)
 
@@ -172,13 +171,11 @@ func (h *WebSocketHandler) onHit(hit game.HitEvent) {
 		if attackerExists && attacker != nil {
 			attacker.IncrementKills()
 			attacker.AddXP(game.KillXPReward)
-			log.Printf("[DEBUG] Attacker %s kills incremented to %d", hit.AttackerID, attacker.Kills)
 		}
 		// victimState is already a pointer from earlier in this function
 		victim, victimExists := h.gameServer.GetWorld().GetPlayer(hit.VictimID)
 		if victimExists && victim != nil {
 			victim.IncrementDeaths()
-			log.Printf("[DEBUG] Victim %s deaths incremented to %d", hit.VictimID, victim.Deaths)
 		}
 
 		// Create player:death message data

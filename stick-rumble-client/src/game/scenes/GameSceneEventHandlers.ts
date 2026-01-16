@@ -36,20 +36,6 @@ import type {
   RollEndData,
 } from '../../../../events-schema/src/index.js';
 
-// Module-level storage for player ID that persists across scene restarts
-// This is needed because the server doesn't re-send room:joined after match restart
-// NOTE: This is ONLY for in-page scene restarts where WebSocket stays connected.
-// When WebSocket reconnects, server sends new room:joined with new player ID.
-let persistentLocalPlayerId: string | null = null;
-
-/**
- * Clear the persistent player ID (call when WebSocket reconnects)
- * This prevents stale IDs from being used after reconnection
- */
-export function clearPersistentLocalPlayerId(): void {
-  persistentLocalPlayerId = null;
-}
-
 /**
  * GameSceneEventHandlers - Manages all WebSocket event handlers
  * Responsibility: Network message handling and routing
@@ -186,9 +172,8 @@ export class GameSceneEventHandlers {
       if (this.matchEnded) {
         return;
       }
-      // If no local player ID set, ALWAYS queue and wait for room:joined
-      // The persistentLocalPlayerId is unreliable after WebSocket reconnects because
-      // the server assigns a NEW player ID on each connection.
+      // If no local player ID set, queue and wait for room:joined
+      // The server assigns a NEW player ID on each connection.
       if (!this.playerManager.getLocalPlayerId()) {
         // Queue player:move until room:joined has set the local player ID
         // This prevents creating duplicate sprites when player:move arrives before room:joined
@@ -250,8 +235,6 @@ export class GameSceneEventHandlers {
       // Set local player ID so we can highlight our player
       if (messageData.playerId) {
         this.playerManager.setLocalPlayerId(messageData.playerId);
-        // Store for reuse after match restart (server may not send room:joined again)
-        persistentLocalPlayerId = messageData.playerId;
         // Initialize health bar to full health on join
         this.localPlayerHealth = 100;
         this.getHealthBarUI().updateHealth(this.localPlayerHealth, 100, false);
@@ -471,6 +454,10 @@ export class GameSceneEventHandlers {
     const weaponSpawnedHandler = (data: unknown) => {
       // Queue until room:joined has set local player ID (scene not ready)
       if (!this.playerManager.getLocalPlayerId()) {
+        // Limit queue size to prevent memory issues (keep only latest 10)
+        if (this.pendingWeaponSpawns.length >= 10) {
+          this.pendingWeaponSpawns.shift();
+        }
         this.pendingWeaponSpawns.push(data);
         return;
       }

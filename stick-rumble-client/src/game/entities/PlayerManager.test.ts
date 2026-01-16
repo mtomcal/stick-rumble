@@ -30,6 +30,9 @@ const createMockScene = () => {
   }> = [];
 
   return {
+    sys: {
+      isActive: vi.fn().mockReturnValue(true),
+    },
     add: {
       rectangle: vi.fn((x: number, y: number) => {
         const rect = {
@@ -108,20 +111,17 @@ describe('PlayerManager', () => {
   });
 
   describe('updatePlayers', () => {
-    it('should handle null scene.add gracefully', () => {
-      const sceneWithoutAdd = {} as Phaser.Scene;
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    it('should handle invalid scene gracefully', () => {
+      // Scene without sys.isActive() returns early from isSceneValid() guard
+      const sceneWithoutSys = {} as Phaser.Scene;
 
-      const manager = new PlayerManager(sceneWithoutAdd);
+      const manager = new PlayerManager(sceneWithoutSys);
       const playerStates: PlayerState[] = [
         { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
       ];
 
-      // Should not throw, just log error and skip player creation
+      // Should not throw, just skip player creation due to scene validation
       expect(() => manager.updatePlayers(playerStates)).not.toThrow();
-      expect(consoleSpy).toHaveBeenCalledWith('Scene add system not available');
-
-      consoleSpy.mockRestore();
     });
 
     it('should create player sprites for new players', () => {
