@@ -22,6 +22,18 @@ test.describe('Player Sprites Visual Regression', () => {
       const game = (window as any).game;
       return game && game.loop && game.loop.frame > 0;
     });
+
+    // CRITICAL FIX for AT3: Clear any residual graphics from other tests
+    // The projectile-visuals tests create target circles that persist across test files
+    await page.evaluate(() => {
+      (window as any).clearAllSprites();
+    });
+
+    // Wait for cleanup to complete
+    await page.waitForFunction(() => {
+      const game = (window as any).game;
+      return game.loop.frame > 2;
+    });
   });
 
   test('should render single player sprite correctly', async ({ page }) => {

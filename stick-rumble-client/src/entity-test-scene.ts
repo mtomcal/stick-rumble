@@ -126,8 +126,8 @@ export class EntityTestScene extends Phaser.Scene {
       // Destroy all projectiles
       this.projectileManager.destroy();
 
-      // Redraw target
-      this.drawProjectileTarget(400, 300);
+      // Clear target graphics (don't redraw - only needed for projectile tests)
+      this.projectileTargetGraphics.clear();
 
       // Recreate managers
       this.playerManager = new PlayerManager(this);
@@ -148,8 +148,9 @@ export class EntityTestScene extends Phaser.Scene {
       // Destroy all projectiles
       this.projectileManager.destroy();
 
-      // Redraw target
-      this.drawProjectileTarget(400, 300);
+      // Clear the projectile target graphics completely
+      // (Don't redraw - that's only needed for projectile tests)
+      this.projectileTargetGraphics.clear();
     };
 
     win.spawnProjectile = (weaponType: string, x: number, y: number, scale?: number): string => {
