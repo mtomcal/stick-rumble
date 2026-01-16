@@ -6,6 +6,7 @@ import type { MeleeWeaponManager } from '../entities/MeleeWeaponManager';
 import type { PickupPromptUI } from '../ui/PickupPromptUI';
 import type { InputManager } from '../input/InputManager';
 import type { ShootingManager } from '../input/ShootingManager';
+import type { DodgeRollManager } from '../input/DodgeRollManager';
 import type { HealthBarUI } from '../ui/HealthBarUI';
 import type { KillFeedUI } from '../ui/KillFeedUI';
 import type { GameSceneUI } from './GameSceneUI';
@@ -31,6 +32,8 @@ import type {
   WeaponPickupConfirmedData,
   WeaponRespawnedData,
   MeleeHitData,
+  RollStartData,
+  RollEndData,
 } from '../../../../events-schema/src/index.js';
 
 /**
@@ -46,6 +49,7 @@ export class GameSceneEventHandlers {
   private pickupPromptUI: PickupPromptUI;
   private inputManager: InputManager | null = null;
   private shootingManager: ShootingManager | null = null;
+  private dodgeRollManager: DodgeRollManager | null = null;
   private getHealthBarUI: () => HealthBarUI;
   private killFeedUI: KillFeedUI;
   private ui: GameSceneUI;
@@ -109,6 +113,13 @@ export class GameSceneEventHandlers {
    */
   setAudioManager(audioManager: AudioManager): void {
     this.audioManager = audioManager;
+  }
+
+  /**
+   * Set dodge roll manager (called after connection)
+   */
+  setDodgeRollManager(dodgeRollManager: DodgeRollManager): void {
+    this.dodgeRollManager = dodgeRollManager;
   }
 
   /**
@@ -459,5 +470,40 @@ export class GameSceneEventHandlers {
     };
     this.handlerRefs.set('melee:hit', meleeHitHandler);
     this.wsClient.on('melee:hit', meleeHitHandler);
+
+    // Store and register roll:start handler
+    const rollStartHandler = (data: unknown) => {
+      const messageData = data as RollStartData;
+      console.log(`Player ${messageData.playerId} started dodge roll`);
+
+      // Update dodge roll manager state
+      if (this.dodgeRollManager && messageData.playerId === this.playerManager.getLocalPlayerId()) {
+        this.dodgeRollManager.startRoll();
+      }
+
+      // Play whoosh sound effect
+      if (this.audioManager) {
+        this.audioManager.playDodgeRollSound();
+      }
+
+      // Roll animation with transparency is handled by PlayerManager
+    };
+    this.handlerRefs.set('roll:start', rollStartHandler);
+    this.wsClient.on('roll:start', rollStartHandler);
+
+    // Store and register roll:end handler
+    const rollEndHandler = (data: unknown) => {
+      const messageData = data as RollEndData;
+      console.log(`Player ${messageData.playerId} ended dodge roll (reason: ${messageData.reason})`);
+
+      // Update dodge roll manager state
+      if (this.dodgeRollManager && messageData.playerId === this.playerManager.getLocalPlayerId()) {
+        this.dodgeRollManager.endRoll();
+      }
+
+      // Roll animation reset is handled by PlayerManager
+    };
+    this.handlerRefs.set('roll:end', rollEndHandler);
+    this.wsClient.on('roll:end', rollEndHandler);
   }
 }

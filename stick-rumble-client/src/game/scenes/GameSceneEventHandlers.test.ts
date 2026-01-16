@@ -124,6 +124,8 @@ describe('GameSceneEventHandlers', () => {
       expect(mockWsClient.on).toHaveBeenCalledWith('weapon:pickup_confirmed', expect.any(Function));
       expect(mockWsClient.on).toHaveBeenCalledWith('weapon:respawned', expect.any(Function));
       expect(mockWsClient.on).toHaveBeenCalledWith('melee:hit', expect.any(Function));
+      expect(mockWsClient.on).toHaveBeenCalledWith('roll:start', expect.any(Function));
+      expect(mockWsClient.on).toHaveBeenCalledWith('roll:end', expect.any(Function));
     });
 
     it('should not accumulate handlers when called multiple times', () => {
@@ -139,7 +141,7 @@ describe('GameSceneEventHandlers', () => {
       expect(secondCallCount).toBe(firstCallCount * 2);
 
       // But off() should have been called to remove previous handlers
-      expect(mockWsClient.off).toHaveBeenCalledTimes(17); // 17 event types cleaned up
+      expect(mockWsClient.off).toHaveBeenCalledTimes(19); // 19 event types cleaned up (16 base + melee:hit + roll:start + roll:end)
     });
 
     it('should call cleanupHandlers before registering new handlers', () => {
@@ -164,8 +166,8 @@ describe('GameSceneEventHandlers', () => {
       // Call cleanup
       (eventHandlers as any).cleanupHandlers();
 
-      // Verify all handlers were removed (17 event types)
-      expect(mockWsClient.off).toHaveBeenCalledTimes(17);
+      // Verify all handlers were removed (19 event types including roll:start and roll:end)
+      expect(mockWsClient.off).toHaveBeenCalledTimes(19);
       expect(mockWsClient.off).toHaveBeenCalledWith('player:move', expect.any(Function));
       expect(mockWsClient.off).toHaveBeenCalledWith('room:joined', expect.any(Function));
       expect(mockWsClient.off).toHaveBeenCalledWith('projectile:spawn', expect.any(Function));
@@ -227,8 +229,8 @@ describe('GameSceneEventHandlers', () => {
       // Destroy
       eventHandlers.destroy();
 
-      // Verify all handlers were removed (13 event types)
-      expect(mockWsClient.off).toHaveBeenCalledTimes(17);
+      // Verify all handlers were removed (19 event types including roll:start and roll:end)
+      expect(mockWsClient.off).toHaveBeenCalledTimes(19);
     });
   });
 
@@ -238,8 +240,8 @@ describe('GameSceneEventHandlers', () => {
 
       const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
 
-      // Verify all 16 event types have stored references
-      expect(handlerRefs.size).toBe(17);
+      // Verify all 19 event types have stored references (including roll:start and roll:end)
+      expect(handlerRefs.size).toBe(19);
       expect(handlerRefs.has('player:move')).toBe(true);
       expect(handlerRefs.has('room:joined')).toBe(true);
       expect(handlerRefs.has('projectile:spawn')).toBe(true);

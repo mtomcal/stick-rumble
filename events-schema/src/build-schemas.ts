@@ -19,6 +19,7 @@ import {
   WeaponPickupAttemptMessageSchema,
   PlayerMeleeAttackDataSchema,
   PlayerMeleeAttackMessageSchema,
+  PlayerDodgeRollMessageSchema,
 } from './schemas/client-to-server.js';
 import {
   RoomJoinedDataSchema,
@@ -57,6 +58,10 @@ import {
   WeaponRespawnedMessageSchema,
   MeleeHitDataSchema,
   MeleeHitMessageSchema,
+  RollStartDataSchema,
+  RollStartMessageSchema,
+  RollEndDataSchema,
+  RollEndMessageSchema,
 } from './schemas/server-to-client.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -120,6 +125,10 @@ const schemas: SchemaExport[] = [
   {
     schema: PlayerMeleeAttackMessageSchema,
     outputPath: 'schemas/client-to-server/player-melee-attack-message.json',
+  },
+  {
+    schema: PlayerDodgeRollMessageSchema,
+    outputPath: 'schemas/client-to-server/player-dodge-roll-message.json',
   },
   // Server-to-client schemas
   {
@@ -265,6 +274,22 @@ const schemas: SchemaExport[] = [
   {
     schema: MeleeHitMessageSchema,
     outputPath: 'schemas/server-to-client/melee-hit-message.json',
+  },
+  {
+    schema: RollStartDataSchema,
+    outputPath: 'schemas/server-to-client/roll-start-data.json',
+  },
+  {
+    schema: RollStartMessageSchema,
+    outputPath: 'schemas/server-to-client/roll-start-message.json',
+  },
+  {
+    schema: RollEndDataSchema,
+    outputPath: 'schemas/server-to-client/roll-end-data.json',
+  },
+  {
+    schema: RollEndMessageSchema,
+    outputPath: 'schemas/server-to-client/roll-end-message.json',
   },
 ];
 

@@ -76,6 +76,9 @@ func NewWebSocketHandlerWithConfig(timerInterval time.Duration) *WebSocketHandle
 	// Register callback for weapon respawn events
 	handler.gameServer.SetOnWeaponRespawn(handler.onWeaponRespawn)
 
+	// Register callback for dodge roll end events
+	handler.gameServer.SetOnRollEnd(handler.broadcastRollEnd)
+
 	return handler
 }
 
@@ -258,6 +261,10 @@ func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Reques
 		case "weapon:pickup_attempt":
 			// Handle weapon pickup
 			h.handleWeaponPickup(playerID, msg.Data)
+
+		case "player:dodge_roll":
+			// Handle player dodge roll
+			h.handlePlayerDodgeRoll(playerID)
 
 		default:
 			// Broadcast other messages to room (for backward compatibility with tests)

@@ -3,6 +3,7 @@ package network
 import (
 	"encoding/json"
 	"log"
+	"math"
 
 	"github.com/mtomcal/stick-rumble-server/internal/game"
 )
@@ -357,4 +358,66 @@ func (h *WebSocketHandler) handleWeaponPickup(playerID string, data any) {
 func (h *WebSocketHandler) onWeaponRespawn(crate *game.WeaponCrate) {
 	h.broadcastWeaponRespawn(crate)
 	log.Printf("Weapon crate %s respawned (%s)", crate.ID, crate.WeaponType)
+}
+
+// handlePlayerDodgeRoll processes player dodge roll requests
+func (h *WebSocketHandler) handlePlayerDodgeRoll(playerID string) {
+	// Get player state from world
+	playerState, exists := h.gameServer.GetWorld().GetPlayer(playerID)
+	if !exists {
+		log.Printf("Player %s not found for dodge roll", playerID)
+		return
+	}
+
+	// Check if player can dodge roll (cooldown, alive, not already rolling)
+	if !playerState.CanDodgeRoll() {
+		log.Printf("Player %s cannot dodge roll (cooldown or dead)", playerID)
+		return
+	}
+
+	// Determine roll direction based on input
+	input := playerState.GetInput()
+	direction := game.Vector2{X: 0, Y: 0}
+
+	// Use WASD keys if any are pressed
+	if input.Up || input.Down || input.Left || input.Right {
+		if input.Up {
+			direction.Y -= 1
+		}
+		if input.Down {
+			direction.Y += 1
+		}
+		if input.Left {
+			direction.X -= 1
+		}
+		if input.Right {
+			direction.X += 1
+		}
+	} else {
+		// If stationary, roll in aim direction
+		direction.X = 1.0 // Will be rotated by aim angle
+		direction.Y = 0.0
+	}
+
+	// Normalize direction
+	length := math.Sqrt(direction.X*direction.X + direction.Y*direction.Y)
+	if length > 0 {
+		direction.X /= length
+		direction.Y /= length
+	}
+
+	// If using aim angle and stationary, apply rotation
+	if !input.Up && !input.Down && !input.Left && !input.Right {
+		aimAngle := input.AimAngle
+		direction.X = math.Cos(aimAngle)
+		direction.Y = math.Sin(aimAngle)
+	}
+
+	// Start the dodge roll
+	playerState.StartDodgeRoll(direction)
+
+	// Broadcast roll:start to all players in the room
+	h.broadcastRollStart(playerID, direction, playerState.GetRollState().RollStartTime)
+
+	log.Printf("Player %s started dodge roll", playerID)
 }
