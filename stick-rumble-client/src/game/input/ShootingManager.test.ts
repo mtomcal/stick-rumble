@@ -699,4 +699,108 @@ describe('ShootingManager', () => {
       expect(mockWsClient.send).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('isAutomatic', () => {
+    it('should return true for Uzi (automatic weapon)', () => {
+      shootingManager.updateWeaponState({
+        currentAmmo: 30,
+        maxAmmo: 30,
+        isReloading: false,
+        canShoot: true,
+        weaponType: 'Uzi',
+        isMelee: false,
+      });
+
+      expect(shootingManager.isAutomatic()).toBe(true);
+    });
+
+    it('should return true for AK47 (automatic weapon)', () => {
+      shootingManager.updateWeaponState({
+        currentAmmo: 30,
+        maxAmmo: 30,
+        isReloading: false,
+        canShoot: true,
+        weaponType: 'AK47',
+        isMelee: false,
+      });
+
+      expect(shootingManager.isAutomatic()).toBe(true);
+    });
+
+    it('should return false for Pistol (semi-automatic weapon)', () => {
+      shootingManager.updateWeaponState({
+        currentAmmo: 15,
+        maxAmmo: 15,
+        isReloading: false,
+        canShoot: true,
+        weaponType: 'Pistol',
+        isMelee: false,
+      });
+
+      expect(shootingManager.isAutomatic()).toBe(false);
+    });
+
+    it('should return false for Shotgun (pump action weapon)', () => {
+      shootingManager.updateWeaponState({
+        currentAmmo: 8,
+        maxAmmo: 8,
+        isReloading: false,
+        canShoot: true,
+        weaponType: 'Shotgun',
+        isMelee: false,
+      });
+
+      expect(shootingManager.isAutomatic()).toBe(false);
+    });
+
+    it('should return false for melee weapons (Bat)', () => {
+      shootingManager.updateWeaponState({
+        currentAmmo: 0,
+        maxAmmo: 0,
+        isReloading: false,
+        canShoot: true,
+        weaponType: 'Bat',
+        isMelee: true,
+      });
+
+      expect(shootingManager.isAutomatic()).toBe(false);
+    });
+
+    it('should return false for melee weapons (Katana)', () => {
+      shootingManager.updateWeaponState({
+        currentAmmo: 0,
+        maxAmmo: 0,
+        isReloading: false,
+        canShoot: true,
+        weaponType: 'Katana',
+        isMelee: true,
+      });
+
+      expect(shootingManager.isAutomatic()).toBe(false);
+    });
+
+    it('should handle case-insensitive weapon type matching', () => {
+      // Test lowercase
+      shootingManager.updateWeaponState({
+        currentAmmo: 30,
+        maxAmmo: 30,
+        isReloading: false,
+        canShoot: true,
+        weaponType: 'uzi',
+        isMelee: false,
+      });
+      expect(shootingManager.isAutomatic()).toBe(true);
+
+      // Test mixed case
+      shootingManager.updateWeaponState({
+        currentAmmo: 30,
+        maxAmmo: 30,
+        isReloading: false,
+        canShoot: true,
+        weaponType: 'ak47',
+        isMelee: false,
+      });
+      expect(shootingManager.isAutomatic()).toBe(true);
+    });
+  });
 });

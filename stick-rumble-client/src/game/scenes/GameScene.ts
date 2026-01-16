@@ -35,6 +35,7 @@ export class GameScene extends Phaser.Scene {
   private lastDeltaTime: number = 0;
   private isCameraFollowing: boolean = false;
   private nearbyWeaponCrate: { id: string; weaponType: string } | null = null;
+  private isPointerHeld: boolean = false;
 
   constructor() {
     super({ key: 'GameScene' });
@@ -154,6 +155,9 @@ export class GameScene extends Phaser.Scene {
           // Setup mouse click for shooting/melee
           this.input.on('pointerdown', () => {
             if (this.shootingManager && this.inputManager) {
+              // Track pointer held state for automatic weapons
+              this.isPointerHeld = true;
+
               // Update shooting manager with current aim angle
               this.shootingManager.setAimAngle(this.inputManager.getAimAngle());
 
@@ -164,6 +168,11 @@ export class GameScene extends Phaser.Scene {
                 this.shootingManager.shoot();
               }
             }
+          });
+
+          // Setup mouse release to stop automatic fire
+          this.input.on('pointerup', () => {
+            this.isPointerHeld = false;
           });
 
           // Setup R key for reload
@@ -232,6 +241,12 @@ export class GameScene extends Phaser.Scene {
       // This provides client-side prediction without waiting for server echo
       const currentAimAngle = this.inputManager.getAimAngle();
       this.playerManager.updateLocalPlayerAim(currentAimAngle);
+
+      // Handle automatic fire for automatic weapons when pointer held
+      if (this.isPointerHeld && this.shootingManager && !this.shootingManager.isMeleeWeapon() && this.shootingManager.isAutomatic()) {
+        this.shootingManager.setAimAngle(currentAimAngle);
+        this.shootingManager.shoot();
+      }
 
       // Check for nearby weapon crates
       this.checkWeaponProximity();

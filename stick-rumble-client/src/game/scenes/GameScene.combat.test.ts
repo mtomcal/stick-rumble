@@ -486,4 +486,266 @@ describe('GameScene - Combat', () => {
       consoleSpy.mockRestore();
     });
   });
+
+  describe('automatic weapon hold-to-fire', () => {
+    it('should setup pointerup handler after connection', async () => {
+      const mockSceneContext = createMockScene();
+      const inputOnMock = vi.fn();
+      mockSceneContext.input = {
+        ...mockSceneContext.input,
+        on: inputOnMock,
+        keyboard: {
+          addKey: vi.fn().mockReturnValue({
+            on: vi.fn(),
+          }),
+          addKeys: mockSceneContext.input.keyboard.addKeys,
+        },
+      };
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      // Trigger the delayed callback to start connection
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Set readyState to OPEN and trigger onopen
+      mockWebSocketInstance.readyState = 1;
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen(new Event('open'));
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Verify input.on was called for both pointerdown and pointerup
+      expect(inputOnMock).toHaveBeenCalledWith('pointerdown', expect.any(Function));
+      expect(inputOnMock).toHaveBeenCalledWith('pointerup', expect.any(Function));
+    });
+
+    it('should continuously fire automatic weapon (Uzi) when pointer held', async () => {
+      const mockSceneContext = createMockScene();
+      let pointerdownHandler: (() => void) | null = null;
+      let pointerupHandler: (() => void) | null = null;
+
+      const inputOnMock = vi.fn((event: string, handler: () => void) => {
+        if (event === 'pointerdown') {
+          pointerdownHandler = handler;
+        } else if (event === 'pointerup') {
+          pointerupHandler = handler;
+        }
+      });
+
+      mockSceneContext.input = {
+        ...mockSceneContext.input,
+        on: inputOnMock,
+        keyboard: {
+          addKey: vi.fn().mockReturnValue({
+            on: vi.fn(),
+          }),
+          addKeys: mockSceneContext.input.keyboard.addKeys,
+        },
+      };
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      // Trigger the delayed callback to start connection
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Set readyState to OPEN and trigger onopen
+      mockWebSocketInstance.readyState = 1;
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen(new Event('open'));
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Set weapon to Uzi (automatic)
+      vi.spyOn(scene['shootingManager'], 'isAutomatic').mockReturnValue(true);
+      vi.spyOn(scene['shootingManager'], 'isMeleeWeapon').mockReturnValue(false);
+      vi.spyOn(scene['inputManager'], 'getAimAngle').mockReturnValue(0);
+
+      const shootSpy = vi.spyOn(scene['shootingManager'], 'shoot').mockReturnValue(true);
+
+      // Trigger pointerdown
+      expect(pointerdownHandler).not.toBeNull();
+      pointerdownHandler!();
+
+      // First shot from pointerdown
+      expect(shootSpy).toHaveBeenCalledTimes(1);
+      shootSpy.mockClear();
+
+      // Call update() while pointer held (simulate automatic fire)
+      scene.update(0, 16);
+      expect(shootSpy).toHaveBeenCalled();
+
+      // Release pointer
+      expect(pointerupHandler).not.toBeNull();
+      pointerupHandler!();
+      shootSpy.mockClear();
+
+      // Update should not fire after pointer released
+      scene.update(0, 16);
+      expect(shootSpy).not.toHaveBeenCalled();
+    });
+
+    it('should NOT continuously fire semi-automatic weapon (Pistol) when pointer held', async () => {
+      const mockSceneContext = createMockScene();
+      let pointerdownHandler: (() => void) | null = null;
+
+      const inputOnMock = vi.fn((event: string, handler: () => void) => {
+        if (event === 'pointerdown') {
+          pointerdownHandler = handler;
+        }
+      });
+
+      mockSceneContext.input = {
+        ...mockSceneContext.input,
+        on: inputOnMock,
+        keyboard: {
+          addKey: vi.fn().mockReturnValue({
+            on: vi.fn(),
+          }),
+          addKeys: mockSceneContext.input.keyboard.addKeys,
+        },
+      };
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      // Trigger the delayed callback to start connection
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Set readyState to OPEN and trigger onopen
+      mockWebSocketInstance.readyState = 1;
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen(new Event('open'));
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Set weapon to Pistol (semi-automatic)
+      vi.spyOn(scene['shootingManager'], 'isAutomatic').mockReturnValue(false);
+      vi.spyOn(scene['shootingManager'], 'isMeleeWeapon').mockReturnValue(false);
+      vi.spyOn(scene['inputManager'], 'getAimAngle').mockReturnValue(0);
+
+      const shootSpy = vi.spyOn(scene['shootingManager'], 'shoot').mockReturnValue(true);
+
+      // Trigger pointerdown
+      expect(pointerdownHandler).not.toBeNull();
+      pointerdownHandler!();
+
+      // First shot from pointerdown
+      expect(shootSpy).toHaveBeenCalledTimes(1);
+      shootSpy.mockClear();
+
+      // Call update() while pointer held - should NOT fire for semi-auto
+      scene.update(0, 16);
+      expect(shootSpy).not.toHaveBeenCalled();
+    });
+
+    it('should NOT fire automatic weapon when pointer not held', async () => {
+      const mockSceneContext = createMockScene();
+      mockSceneContext.input = {
+        ...mockSceneContext.input,
+        on: vi.fn(),
+        keyboard: {
+          addKey: vi.fn().mockReturnValue({
+            on: vi.fn(),
+          }),
+          addKeys: mockSceneContext.input.keyboard.addKeys,
+        },
+      };
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      // Trigger the delayed callback to start connection
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Set readyState to OPEN and trigger onopen
+      mockWebSocketInstance.readyState = 1;
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen(new Event('open'));
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Set weapon to Uzi (automatic)
+      vi.spyOn(scene['shootingManager'], 'isAutomatic').mockReturnValue(true);
+      vi.spyOn(scene['shootingManager'], 'isMeleeWeapon').mockReturnValue(false);
+
+      const shootSpy = vi.spyOn(scene['shootingManager'], 'shoot');
+
+      // Call update() without pressing pointer - should NOT fire
+      scene.update(0, 16);
+      expect(shootSpy).not.toHaveBeenCalled();
+    });
+
+    it('should continue melee weapon behavior (no auto-attack)', async () => {
+      const mockSceneContext = createMockScene();
+      let pointerdownHandler: (() => void) | null = null;
+
+      const inputOnMock = vi.fn((event: string, handler: () => void) => {
+        if (event === 'pointerdown') {
+          pointerdownHandler = handler;
+        }
+      });
+
+      mockSceneContext.input = {
+        ...mockSceneContext.input,
+        on: inputOnMock,
+        keyboard: {
+          addKey: vi.fn().mockReturnValue({
+            on: vi.fn(),
+          }),
+          addKeys: mockSceneContext.input.keyboard.addKeys,
+        },
+      };
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      // Trigger the delayed callback to start connection
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Set readyState to OPEN and trigger onopen
+      mockWebSocketInstance.readyState = 1;
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen(new Event('open'));
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Set weapon to Bat (melee)
+      vi.spyOn(scene['shootingManager'], 'isAutomatic').mockReturnValue(false);
+      vi.spyOn(scene['shootingManager'], 'isMeleeWeapon').mockReturnValue(true);
+      vi.spyOn(scene['inputManager'], 'getAimAngle').mockReturnValue(0);
+
+      const meleeAttackSpy = vi.spyOn(scene['shootingManager'], 'meleeAttack').mockReturnValue(true);
+      const shootSpy = vi.spyOn(scene['shootingManager'], 'shoot');
+
+      // Trigger pointerdown - should call meleeAttack, not shoot
+      expect(pointerdownHandler).not.toBeNull();
+      pointerdownHandler!();
+
+      expect(meleeAttackSpy).toHaveBeenCalledTimes(1);
+      expect(shootSpy).not.toHaveBeenCalled();
+      meleeAttackSpy.mockClear();
+
+      // Call update() while pointer held - should NOT auto-repeat melee
+      scene.update(0, 16);
+      expect(meleeAttackSpy).not.toHaveBeenCalled();
+      expect(shootSpy).not.toHaveBeenCalled();
+    });
+  });
 });
