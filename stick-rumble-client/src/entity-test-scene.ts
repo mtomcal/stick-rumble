@@ -24,6 +24,7 @@ interface WindowWithTestControls extends Window {
   resumeGameLoop: () => void;
   stepFrame: (n?: number) => void;
   getFrameCount: () => number;
+  getMeleeWeapon: () => MeleeWeapon | null;
 }
 
 export class EntityTestScene extends Phaser.Scene {
@@ -105,6 +106,9 @@ export class EntityTestScene extends Phaser.Scene {
 
       // Create melee weapon at center of screen
       this.meleeWeapon = new MeleeWeapon(this, 400, 300, weaponType);
+
+      // Set manual time to 0 for deterministic testing
+      this.meleeWeapon.setManualTime(0);
 
       // Start swing animation
       this.meleeWeapon.startSwing(angle);
@@ -217,11 +221,20 @@ export class EntityTestScene extends Phaser.Scene {
       // Manually advance N frames
       for (let i = 0; i < n; i++) {
         this.game.loop.tick();
+
+        // Advance melee weapon time if it exists (at 60 FPS, each frame is ~16.67ms)
+        if (this.meleeWeapon) {
+          this.meleeWeapon.advanceTime(16.67);
+        }
       }
     };
 
     win.getFrameCount = () => {
       return this.game.loop.frame;
+    };
+
+    win.getMeleeWeapon = () => {
+      return this.meleeWeapon;
     };
 
     // Mark scene as ready for testing

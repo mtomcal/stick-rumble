@@ -37,6 +37,7 @@ export class MeleeWeapon {
   private swingStartTime: number = 0;
   private swingAimAngle: number = 0;
   private currentFrame: number = 0;
+  private manualTime: number | null = null; // For deterministic testing
 
   private static readonly SWING_DURATION = 200; // 0.2s = 200ms
   private static readonly FRAME_COUNT = 4;
@@ -65,7 +66,8 @@ export class MeleeWeapon {
     }
 
     this.swinging = true;
-    this.swingStartTime = this.scene.time.now;
+    // Use manual time if set, otherwise use scene time
+    this.swingStartTime = this.manualTime !== null ? this.manualTime : this.scene.time.now;
     this.swingAimAngle = aimAngle;
     this.currentFrame = 0;
     this.graphics.setVisible(true);
@@ -81,7 +83,9 @@ export class MeleeWeapon {
       return;
     }
 
-    const elapsed = this.scene.time.now - this.swingStartTime;
+    // Use manual time for deterministic testing, otherwise use scene time
+    const currentTime = this.manualTime !== null ? this.manualTime : this.scene.time.now;
+    const elapsed = currentTime - this.swingStartTime;
 
     // Check if swing is complete
     if (elapsed >= MeleeWeapon.SWING_DURATION) {
@@ -168,6 +172,32 @@ export class MeleeWeapon {
    */
   getArcDegrees(): number {
     return this.stats.arcDegrees;
+  }
+
+  /**
+   * Set manual time for deterministic testing
+   * When set, overrides scene.time.now for animation calculations
+   */
+  setManualTime(time: number): void {
+    this.manualTime = time;
+  }
+
+  /**
+   * Advance manual time by delta milliseconds
+   * Used for frame-stepping in tests
+   */
+  advanceTime(deltaMs: number): void {
+    if (this.manualTime === null) {
+      this.manualTime = 0;
+    }
+    this.manualTime += deltaMs;
+  }
+
+  /**
+   * Clear manual time, return to using scene.time.now
+   */
+  clearManualTime(): void {
+    this.manualTime = null;
   }
 
   /**

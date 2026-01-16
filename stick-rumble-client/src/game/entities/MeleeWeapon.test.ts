@@ -368,4 +368,110 @@ describe('MeleeWeapon', () => {
       });
     });
   });
+
+  describe('Manual time control for deterministic testing', () => {
+    beforeEach(() => {
+      weapon = new MeleeWeapon(scene, 100, 100, 'Bat');
+    });
+
+    it('should use scene time by default', () => {
+      scene.time.now = 1000;
+      weapon.startSwing(0);
+      expect(weapon.isSwinging()).toBe(true);
+
+      scene.time.now = 1100;
+      weapon.update();
+      expect(weapon.isSwinging()).toBe(true);
+
+      scene.time.now = 1200;
+      weapon.update();
+      expect(weapon.isSwinging()).toBe(false);
+    });
+
+    it('should use manual time when set', () => {
+      weapon.setManualTime(0);
+      weapon.startSwing(0);
+      expect(weapon.isSwinging()).toBe(true);
+
+      // Advance manual time
+      weapon.setManualTime(100);
+      weapon.update();
+      expect(weapon.isSwinging()).toBe(true);
+      expect(weapon.getCurrentFrame()).toBe(2); // Frame 2 at 100ms
+
+      weapon.setManualTime(200);
+      weapon.update();
+      expect(weapon.isSwinging()).toBe(false);
+    });
+
+    it('should advance time incrementally with advanceTime', () => {
+      weapon.setManualTime(0);
+      weapon.startSwing(0);
+      expect(weapon.getCurrentFrame()).toBe(0);
+
+      // Advance by 50ms (1 frame at 50ms/frame)
+      weapon.advanceTime(50);
+      weapon.update();
+      expect(weapon.getCurrentFrame()).toBe(1);
+
+      // Advance another 50ms (total 100ms)
+      weapon.advanceTime(50);
+      weapon.update();
+      expect(weapon.getCurrentFrame()).toBe(2);
+
+      // Advance to completion
+      weapon.advanceTime(100);
+      weapon.update();
+      expect(weapon.isSwinging()).toBe(false);
+    });
+
+    it('should initialize manual time to 0 if advanceTime called without setManualTime', () => {
+      weapon.advanceTime(50);
+      weapon.startSwing(0);
+      // At this point, swing starts at manual time 50, so elapsed is 0
+      expect(weapon.getCurrentFrame()).toBe(0);
+
+      weapon.advanceTime(50);
+      weapon.update();
+      // Now manual time is 100, swing started at 50, so elapsed = 50ms = frame 1
+      expect(weapon.getCurrentFrame()).toBe(1);
+    });
+
+    it('should return to scene time when clearManualTime is called', () => {
+      weapon.setManualTime(0);
+      weapon.startSwing(0);
+
+      weapon.setManualTime(100);
+      weapon.update();
+      expect(weapon.getCurrentFrame()).toBe(2);
+
+      // Clear manual time
+      weapon.clearManualTime();
+
+      // Should now use scene time
+      scene.time.now = 1000;
+      const result = weapon.startSwing(0); // Previous swing should be complete
+      expect(result).toBe(false); // Still swinging from manual time
+
+      // Complete the swing with scene time
+      scene.time.now = 1200;
+      weapon.update();
+      expect(weapon.isSwinging()).toBe(false);
+    });
+
+    it('should support frame-stepping for visual regression tests', () => {
+      weapon.setManualTime(0);
+      weapon.startSwing(0);
+
+      // Simulate 3 frames at 60 FPS (~16.67ms per frame)
+      for (let i = 0; i < 3; i++) {
+        weapon.advanceTime(16.67);
+      }
+
+      weapon.update();
+      // After ~50ms, should be at frame 1
+      expect(weapon.getCurrentFrame()).toBe(1);
+      expect(weapon.isSwinging()).toBe(true);
+    });
+  });
 });
