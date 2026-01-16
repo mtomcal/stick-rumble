@@ -360,6 +360,55 @@ func (h *WebSocketHandler) onWeaponRespawn(crate *game.WeaponCrate) {
 	log.Printf("Weapon crate %s respawned (%s)", crate.ID, crate.WeaponType)
 }
 
+// handlePlayerMeleeAttack processes player melee attack messages
+func (h *WebSocketHandler) handlePlayerMeleeAttack(playerID string, data any) {
+	// Validate data against JSON schema
+	if err := h.validator.Validate("player-melee-attack-data", data); err != nil {
+		log.Printf("Schema validation failed for player:melee_attack from %s: %v", playerID, err)
+		return
+	}
+
+	// After validation, we can safely type assert
+	dataMap := data.(map[string]interface{})
+	aimAngle := dataMap["aimAngle"].(float64)
+
+	// Attempt melee attack
+	result := h.gameServer.PlayerMeleeAttack(playerID, aimAngle)
+
+	if !result.Success {
+		log.Printf("Melee attack failed for player %s: %s", playerID, result.Reason)
+		return
+	}
+
+	// Collect victim IDs
+	victimIDs := make([]string, len(result.HitPlayers))
+	for i, victim := range result.HitPlayers {
+		victimIDs[i] = victim.ID
+	}
+
+	// Broadcast melee:hit to all players (even if no victims - for swing animation)
+	h.broadcastMeleeHit(playerID, victimIDs, result.KnockbackApplied)
+
+	// Process damage events for each victim
+	for _, victim := range result.HitPlayers {
+		// Get weapon to determine damage
+		ws := h.gameServer.GetWeaponState(playerID)
+		if ws == nil {
+			continue
+		}
+
+		damage := ws.Weapon.Damage
+
+		// Broadcast player:damaged
+		h.broadcastPlayerDamaged(playerID, victim.ID, damage, victim.Health)
+
+		// Check if victim died
+		if !victim.IsAlive() {
+			h.processMeleeKill(playerID, victim.ID)
+		}
+	}
+}
+
 // handlePlayerDodgeRoll processes player dodge roll requests
 func (h *WebSocketHandler) handlePlayerDodgeRoll(playerID string) {
 	// Get player state from world

@@ -266,6 +266,10 @@ func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Reques
 			// Handle player dodge roll
 			h.handlePlayerDodgeRoll(playerID)
 
+		case "player:melee_attack":
+			// Handle player melee attack
+			h.handlePlayerMeleeAttack(playerID, msg.Data)
+
 		default:
 			// Broadcast other messages to room (for backward compatibility with tests)
 			room := h.roomManager.GetRoomByPlayerID(playerID)

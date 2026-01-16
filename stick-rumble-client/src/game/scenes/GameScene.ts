@@ -170,11 +170,23 @@ export class GameScene extends Phaser.Scene {
               this.isPointerHeld = true;
 
               // Update shooting manager with current aim angle
-              this.shootingManager.setAimAngle(this.inputManager.getAimAngle());
+              const aimAngle = this.inputManager.getAimAngle();
+              this.shootingManager.setAimAngle(aimAngle);
 
               // Route to correct attack type based on current weapon
               if (this.shootingManager.isMeleeWeapon()) {
-                this.shootingManager.meleeAttack();
+                const didAttack = this.shootingManager.meleeAttack();
+                // Trigger local swing animation immediately for visual feedback
+                if (didAttack) {
+                  const localPlayerId = this.playerManager.getLocalPlayerId();
+                  if (localPlayerId) {
+                    const localPos = this.playerManager.getPlayerPosition(localPlayerId);
+                    if (localPos) {
+                      this.meleeWeaponManager.updatePosition(localPlayerId, localPos);
+                      this.meleeWeaponManager.startSwing(localPlayerId, aimAngle);
+                    }
+                  }
+                }
               } else {
                 this.shootingManager.shoot();
               }

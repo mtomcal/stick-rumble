@@ -10,12 +10,12 @@ interface WeaponStats {
 }
 
 const WEAPON_STATS: Record<string, WeaponStats> = {
-  Bat: {
+  bat: {
     range: 64,
     arcDegrees: 90,
     color: 0x8B4513, // Brown
   },
-  Katana: {
+  katana: {
     range: 80,
     arcDegrees: 90,
     color: 0xC0C0C0, // Silver
@@ -47,7 +47,7 @@ export class MeleeWeapon {
     this.x = x;
     this.y = y;
     this.weaponType = weaponType;
-    this.stats = WEAPON_STATS[weaponType] || WEAPON_STATS.Bat;
+    this.stats = WEAPON_STATS[weaponType.toLowerCase()] || WEAPON_STATS.bat;
 
     // Create graphics object for rendering swing arc
     this.graphics = scene.add.graphics();
