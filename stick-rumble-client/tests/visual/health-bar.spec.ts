@@ -29,9 +29,13 @@ test.describe('Health Bar Visual Regression', () => {
       return game && game.loop && game.loop.frame > 0;
     });
 
-    // Take screenshot of the canvas area where health bar is rendered
+    // Get canvas position and clip to health bar area
+    const canvas = page.locator('canvas').first();
+    const box = await canvas.boundingBox();
+    if (!box) throw new Error('Canvas not found');
+
     await expect(page).toHaveScreenshot('health-bar-100.png', {
-      clip: { x: 0, y: 0, width: 250, height: 70 }
+      clip: { x: box.x, y: box.y, width: 250, height: 70 }
     });
   });
 
@@ -47,8 +51,13 @@ test.describe('Health Bar Visual Regression', () => {
       return game && game.loop && game.loop.frame > 0;
     });
 
+    // Get canvas position and clip to health bar area
+    const canvas = page.locator('canvas').first();
+    const box = await canvas.boundingBox();
+    if (!box) throw new Error('Canvas not found');
+
     await expect(page).toHaveScreenshot('health-bar-50.png', {
-      clip: { x: 0, y: 0, width: 250, height: 70 }
+      clip: { x: box.x, y: box.y, width: 250, height: 70 }
     });
   });
 
@@ -64,8 +73,13 @@ test.describe('Health Bar Visual Regression', () => {
       return game && game.loop && game.loop.frame > 0;
     });
 
+    // Get canvas position and clip to health bar area
+    const canvas = page.locator('canvas').first();
+    const box = await canvas.boundingBox();
+    if (!box) throw new Error('Canvas not found');
+
     await expect(page).toHaveScreenshot('health-bar-10.png', {
-      clip: { x: 0, y: 0, width: 250, height: 70 }
+      clip: { x: box.x, y: box.y, width: 250, height: 70 }
     });
   });
 
@@ -81,8 +95,13 @@ test.describe('Health Bar Visual Regression', () => {
       return game && game.loop && game.loop.frame > 0;
     });
 
+    // Get canvas position and clip to health bar area
+    const canvas = page.locator('canvas').first();
+    const box = await canvas.boundingBox();
+    if (!box) throw new Error('Canvas not found');
+
     await expect(page).toHaveScreenshot('health-bar-0.png', {
-      clip: { x: 0, y: 0, width: 250, height: 70 }
+      clip: { x: box.x, y: box.y, width: 250, height: 70 }
     });
   });
 
@@ -98,8 +117,13 @@ test.describe('Health Bar Visual Regression', () => {
       return game && game.loop && game.loop.frame > 0;
     });
 
+    // Get canvas position and clip to health bar area
+    const canvas = page.locator('canvas').first();
+    const box = await canvas.boundingBox();
+    if (!box) throw new Error('Canvas not found');
+
     await expect(page).toHaveScreenshot('health-bar-regenerating.png', {
-      clip: { x: 0, y: 0, width: 250, height: 70 }
+      clip: { x: box.x, y: box.y, width: 250, height: 70 }
     });
   });
 });
