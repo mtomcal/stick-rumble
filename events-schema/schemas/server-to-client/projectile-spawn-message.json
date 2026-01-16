@@ -25,6 +25,7 @@
       "required": [
         "id",
         "ownerId",
+        "weaponType",
         "position",
         "velocity"
       ],
@@ -36,6 +37,11 @@
         },
         "ownerId": {
           "description": "Player who fired the projectile",
+          "minLength": 1,
+          "type": "string"
+        },
+        "weaponType": {
+          "description": "Type of weapon that fired the projectile",
           "minLength": 1,
           "type": "string"
         },

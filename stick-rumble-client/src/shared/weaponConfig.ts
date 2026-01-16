@@ -3,10 +3,18 @@
  * Loads weapon stats from shared weapon-configs.json file
  */
 
+export interface ProjectileVisuals {
+  color: string;
+  diameter: number;
+  tracerColor: string;
+  tracerWidth: number;
+}
+
 export interface WeaponVisuals {
   muzzleFlashColor: string;
   muzzleFlashSize: number;
   muzzleFlashDuration: number;
+  projectile: ProjectileVisuals;
 }
 
 export interface RecoilConfig {
@@ -113,6 +121,12 @@ function getHardcodedWeaponConfigs(): Record<string, WeaponConfig> {
         muzzleFlashColor: '0xffdd00',
         muzzleFlashSize: 8,
         muzzleFlashDuration: 50,
+        projectile: {
+          color: '0xffff00', // Yellow
+          diameter: 4,
+          tracerColor: '0xffff00',
+          tracerWidth: 2,
+        },
       },
     },
     Bat: {
@@ -131,6 +145,12 @@ function getHardcodedWeaponConfigs(): Record<string, WeaponConfig> {
         muzzleFlashColor: '0x000000',
         muzzleFlashSize: 0,
         muzzleFlashDuration: 0,
+        projectile: {
+          color: '0x000000', // Not used for melee
+          diameter: 0,
+          tracerColor: '0x000000',
+          tracerWidth: 0,
+        },
       },
     },
     Katana: {
@@ -149,6 +169,12 @@ function getHardcodedWeaponConfigs(): Record<string, WeaponConfig> {
         muzzleFlashColor: '0x000000',
         muzzleFlashSize: 0,
         muzzleFlashDuration: 0,
+        projectile: {
+          color: '0x000000', // Not used for melee
+          diameter: 0,
+          tracerColor: '0x000000',
+          tracerWidth: 0,
+        },
       },
     },
     Uzi: {
@@ -170,8 +196,14 @@ function getHardcodedWeaponConfigs(): Record<string, WeaponConfig> {
       spreadDegrees: 5.0,
       visuals: {
         muzzleFlashColor: '0xffaa00',
-        muzzleFlashSize: 8,
-        muzzleFlashDuration: 50,
+        muzzleFlashSize: 6,
+        muzzleFlashDuration: 30,
+        projectile: {
+          color: '0xffaa00', // Orange
+          diameter: 3,
+          tracerColor: '0xffaa00',
+          tracerWidth: 1.5,
+        },
       },
     },
     AK47: {
@@ -195,6 +227,12 @@ function getHardcodedWeaponConfigs(): Record<string, WeaponConfig> {
         muzzleFlashColor: '0xffcc00',
         muzzleFlashSize: 12,
         muzzleFlashDuration: 80,
+        projectile: {
+          color: '0xffcc00', // Gold
+          diameter: 5,
+          tracerColor: '0xffcc00',
+          tracerWidth: 2.5,
+        },
       },
     },
     Shotgun: {
@@ -213,6 +251,12 @@ function getHardcodedWeaponConfigs(): Record<string, WeaponConfig> {
         muzzleFlashColor: '0xff8800',
         muzzleFlashSize: 16,
         muzzleFlashDuration: 100,
+        projectile: {
+          color: '0xff8800', // Orange-red
+          diameter: 6,
+          tracerColor: '0xff8800',
+          tracerWidth: 3,
+        },
       },
     },
   };

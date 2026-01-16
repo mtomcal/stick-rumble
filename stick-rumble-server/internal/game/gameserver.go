@@ -317,6 +317,7 @@ func (gs *GameServer) PlayerShoot(playerID string, aimAngle float64) ShootResult
 	pos := player.GetPosition()
 	proj := gs.projectileManager.CreateProjectile(
 		playerID,
+		ws.Weapon.Name,
 		pos,
 		aimAngle,
 		ws.Weapon.ProjectileSpeed,
