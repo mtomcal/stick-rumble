@@ -213,6 +213,162 @@ stick-rumble/
     └── (go.mod, go.sum)           # Go module definition
 ```
 
+## 👁️ Visual Regression Testing - CLAUDE HAS EYES NOW
+
+**THIS IS CRITICAL**: Unit tests with 90%+ coverage have repeatedly failed to catch rendering bugs. PRs claiming to "fix" bugs pass all tests but the bug still exists in the browser. Visual regression tests give Claude the ability to actually SEE the game and verify fixes work.
+
+### Why Visual Tests Matter
+
+**The Pattern That Kept Happening:**
+1. Agent submits PR saying "fixed sprite duplication"
+2. Unit tests pass (90%+ coverage) ✅
+3. PR merged ✅
+4. Bug STILL EXISTS in browser ❌
+5. Human playtesting catches the bug days later
+
+**Why Unit Tests Failed:**
+- Unit tests mock Phaser - they verify method calls, not actual rendering
+- `expect(graphics.arc).toHaveBeenCalled()` passes even if nothing draws on screen
+- Scene lifecycle (restart, cleanup) isn't tested in isolation
+- Tests verify CODE runs, not that PIXELS appear
+
+**Visual Tests Fix This:**
+- Playwright runs a REAL browser with REAL Phaser rendering
+- Screenshots capture ACTUAL pixels on screen
+- If the arc doesn't render, the screenshot shows empty frame
+- If sprites duplicate, the screenshot shows two sprites
+
+### Visual Test Commands
+
+```bash
+# Run ALL visual tests
+cd stick-rumble-client && npx playwright test tests/visual/
+
+# Run specific visual test file
+npx playwright test tests/visual/player-sprites.spec.ts
+npx playwright test tests/visual/melee-animation.spec.ts
+npx playwright test tests/visual/projectile-visuals.spec.ts
+npx playwright test tests/visual/scene-lifecycle.spec.ts
+
+# Update baseline snapshots after fixing a bug
+npx playwright test tests/visual/player-sprites.spec.ts --update-snapshots
+```
+
+### How to Verify Your Fix Actually Works
+
+**MANDATORY FOR ALL RENDERING BUG FIXES:**
+
+1. **Run the relevant visual tests:**
+   ```bash
+   npx playwright test tests/visual/{relevant-test}.spec.ts
+   ```
+
+2. **Use the Read tool to VIEW the screenshots:**
+   ```
+   Read: stick-rumble-client/tests/screenshots/{test-name}/{screenshot}.png
+   ```
+
+3. **Verify with your own eyes (Claude's eyes):**
+   - Is the sprite/arc/projectile actually visible?
+   - Is it the correct color?
+   - Is there only ONE sprite (not duplicates)?
+   - Does the animation appear/disappear correctly?
+
+4. **If you fixed the bug, update snapshots:**
+   ```bash
+   npx playwright test tests/visual/{test}.spec.ts --update-snapshots
+   ```
+
+5. **READ the new snapshots to confirm the fix:**
+   - The new baseline should show the CORRECT rendering
+   - Commit the updated snapshots with your fix
+
+### Visual Test File Locations
+
+```
+stick-rumble-client/
+├── tests/
+│   └── visual/                          # Playwright visual test specs
+│       ├── player-sprites.spec.ts       # Player rendering, duplication bugs
+│       ├── melee-animation.spec.ts      # Bat/Katana swing arcs
+│       ├── projectile-visuals.spec.ts   # Projectile colors
+│       ├── scene-lifecycle.spec.ts      # Zombie sprites, cleanup
+│       ├── health-bar.spec.ts           # Health bar UI
+│       └── kill-feed.spec.ts            # Kill feed UI
+│   └── screenshots/                     # Baseline snapshots (COMMITTED TO REPO)
+│       ├── player-sprites.spec.ts/
+│       │   ├── player-single.png        # Single player rendering
+│       │   ├── player-multiple.png      # Multiple players
+│       │   └── player-after-restart.png # After scene restart (catches AT3)
+│       ├── melee-animation.spec.ts/
+│       │   ├── melee-bat-swing.png      # Brown arc visible
+│       │   ├── melee-katana-swing.png   # Silver arc visible
+│       │   └── melee-after-swing.png    # Arc gone after animation
+│       └── ...
+├── public/
+│   └── ui-test-entities.html            # Test harness page
+└── src/
+    └── entity-test-scene.ts             # Test scene with window.* functions
+```
+
+### Entity Test Harness
+
+The test harness (`ui-test-entities.html`) exposes window functions for Playwright:
+
+```typescript
+// Spawn a player at position
+window.spawnPlayer(id: string, x: number, y: number, color: string)
+
+// Remove a player
+window.removePlayer(id: string)
+
+// Get active sprite count (for verifying no duplicates)
+window.getActiveSprites(): Array<{id, x, y}>
+window.getPlayerCount(): number
+
+// Trigger melee animation
+window.triggerMeleeSwing(weaponType: 'Bat' | 'Katana', angle: number)
+
+// Scene lifecycle
+window.restartScene()      // Simulates match restart
+window.clearAllSprites()   // Clean slate
+
+// Projectiles
+window.spawnProjectile(weaponType: string, x: number, y: number): string
+
+// Frame-stepping for deterministic animation capture
+window.pauseGameLoop()
+window.resumeGameLoop()
+window.stepFrame(n: number)  // Advance exactly N frames
+window.getFrameCount(): number
+```
+
+### CRITICAL Tests That Catch Known Bugs
+
+| Bug | Test File | Test Name | What It Catches |
+|-----|-----------|-----------|-----------------|
+| AT3 (sprite duplication) | `player-sprites.spec.ts:137` | "should not duplicate sprites after scene restart" | Spawns player, restarts scene, spawns again, verifies count=1 |
+| o5y (melee not rendering) | `melee-animation.spec.ts:132` | "arc should be visible during animation" | Screenshots mid-animation, verifies arc pixels exist |
+| wzq (wrong projectile colors) | `projectile-visuals.spec.ts` | Color-specific tests | Verifies Uzi=orange, AK47=gold, not all yellow |
+
+### DO NOT CLAIM A BUG IS FIXED UNLESS:
+
+1. ✅ You ran the visual tests
+2. ✅ You READ the screenshot files with the Read tool
+3. ✅ You VISUALLY CONFIRMED the fix (saw the sprite/arc/color)
+4. ✅ You updated and committed the new baseline snapshots
+5. ✅ The screenshot shows the EXPECTED result, not an empty frame
+
+**Example verification workflow:**
+```
+1. Fix the sprite duplication bug in PlayerManager.ts
+2. Run: npx playwright test tests/visual/player-sprites.spec.ts
+3. Read: tests/screenshots/player-sprites.spec.ts/player-after-restart.png
+4. LOOK AT IT - is there ONE player or TWO?
+5. If ONE player → fix worked, update snapshots, commit
+6. If TWO players → fix didn't work, keep debugging
+```
+
 ## Quality Standards
 
 Based on completed Epic 1 stories, all code must meet these standards:
@@ -221,6 +377,7 @@ Based on completed Epic 1 stories, all code must meet these standards:
 - **Minimum 90% statement coverage** for all business logic
 - Integration tests for end-to-end workflows
 - Unit tests for critical functions and edge cases
+- **Visual regression tests for ALL rendering-related changes**
 - All tests must pass before merging
 
 ### Code Quality Gates
