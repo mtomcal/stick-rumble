@@ -18,15 +18,21 @@ test.describe('Kill Feed Visual Regression', () => {
   });
 
   test('should render empty kill feed', async ({ page }) => {
-    // Kill feed starts empty, wait for Phaser to complete a render cycle
+    // Kill feed starts empty, wait for Phaser to complete multiple render cycles
     await page.waitForFunction(() => {
       const game = (window as any).game;
-      return game && game.loop && game.loop.frame > 0;
+      return game && game.loop && game.loop.frame > 5;
     });
 
-    // Screenshot top-right area where kill feed is rendered (x: 500, y: 0, 300x150)
+    // Additional wait to ensure rendering is complete
+    await page.waitForTimeout(100);
+
+    // Screenshot top-right area where kill feed is rendered
+    // Canvas is at viewport (240, 60), kill feed at canvas (780, 20)
+    // So viewport coordinates are (1020, 80) for kill feed anchor
+    // Capture 300px wide region to the left of the right edge (viewport x: 740-1040)
     await expect(page).toHaveScreenshot('kill-feed-empty.png', {
-      clip: { x: 500, y: 0, width: 300, height: 150 }
+      clip: { x: 740, y: 60, width: 300, height: 150 }
     });
   });
 
@@ -36,14 +42,17 @@ test.describe('Kill Feed Visual Regression', () => {
       (window as any).addKillFeedEntry('Player1', 'Player2');
     });
 
-    // Wait for Phaser to complete a render cycle
+    // Wait for Phaser to complete multiple render cycles to ensure text is rendered
     await page.waitForFunction(() => {
       const game = (window as any).game;
-      return game && game.loop && game.loop.frame > 0;
+      return game && game.loop && game.loop.frame > 5;
     });
 
+    // Additional wait to ensure all text objects are fully rendered
+    await page.waitForTimeout(100);
+
     await expect(page).toHaveScreenshot('kill-feed-single.png', {
-      clip: { x: 500, y: 0, width: 300, height: 150 }
+      clip: { x: 740, y: 60, width: 300, height: 150 }
     });
   });
 
@@ -55,14 +64,17 @@ test.describe('Kill Feed Visual Regression', () => {
       (window as any).addKillFeedEntry('Player2', 'Player3');
     });
 
-    // Wait for Phaser to complete a render cycle
+    // Wait for Phaser to complete multiple render cycles to ensure text is rendered
     await page.waitForFunction(() => {
       const game = (window as any).game;
-      return game && game.loop && game.loop.frame > 0;
+      return game && game.loop && game.loop.frame > 5;
     });
 
+    // Additional wait to ensure all text objects are fully rendered
+    await page.waitForTimeout(100);
+
     await expect(page).toHaveScreenshot('kill-feed-multiple.png', {
-      clip: { x: 500, y: 0, width: 300, height: 150 }
+      clip: { x: 740, y: 60, width: 300, height: 150 }
     });
   });
 
@@ -76,14 +88,17 @@ test.describe('Kill Feed Visual Regression', () => {
       (window as any).addKillFeedEntry('Player5', 'Player1');
     });
 
-    // Wait for Phaser to complete a render cycle
+    // Wait for Phaser to complete multiple render cycles to ensure text is rendered
     await page.waitForFunction(() => {
       const game = (window as any).game;
-      return game && game.loop && game.loop.frame > 0;
+      return game && game.loop && game.loop.frame > 5;
     });
 
+    // Additional wait to ensure all text objects are fully rendered
+    await page.waitForTimeout(100);
+
     await expect(page).toHaveScreenshot('kill-feed-max.png', {
-      clip: { x: 500, y: 0, width: 300, height: 150 }
+      clip: { x: 740, y: 60, width: 300, height: 150 }
     });
   });
 });

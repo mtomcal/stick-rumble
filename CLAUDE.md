@@ -213,6 +213,69 @@ stick-rumble/
     └── (go.mod, go.sum)           # Go module definition
 ```
 
+## 👁️ Visual Regression Testing - CLAUDE HAS EYES
+
+**CRITICAL PRINCIPLE**: Unit tests verify code execution, not visual output. A test like `expect(graphics.arc).toHaveBeenCalled()` passes even if nothing renders on screen. Visual regression tests with Playwright give Claude the ability to actually SEE the game.
+
+### The Problem Visual Tests Solve
+
+Unit tests mock the rendering engine. They verify functions were called, not that pixels appeared. This means:
+- Code coverage can be 90%+ while rendering is completely broken
+- PRs pass all tests but bugs persist in the actual browser
+- Only human playtesting catches visual bugs - days later
+
+Visual tests run a real browser with real Phaser rendering. Screenshots capture actual pixels. If something doesn't render, the screenshot proves it.
+
+### Visual Test Infrastructure
+
+```
+stick-rumble-client/
+├── tests/visual/              # Playwright test specs
+├── tests/screenshots/         # Baseline snapshots (COMMITTED TO REPO)
+├── public/ui-test-entities.html   # Test harness page
+└── src/entity-test-scene.ts   # Exposes window.* functions for tests
+```
+
+### Commands
+
+```bash
+# Run visual tests
+cd stick-rumble-client && npx playwright test tests/visual/
+
+# Update baselines after fixing a bug
+npx playwright test tests/visual/{test}.spec.ts --update-snapshots
+```
+
+### MANDATORY: Verify Rendering Fixes With Your Eyes
+
+**For ANY bug involving rendering, sprites, animations, or UI:**
+
+1. **Run the relevant visual test**
+2. **Use the Read tool to VIEW the screenshot PNG files**
+3. **Actually LOOK at the image** - Is the expected element visible? Correct color? No duplicates?
+4. **Update snapshots** if your fix changed the expected output
+5. **Read the NEW snapshots** to confirm they show the correct result
+
+```bash
+# Example workflow
+npx playwright test tests/visual/player-sprites.spec.ts --update-snapshots
+```
+Then use Read tool on the screenshot files to visually verify.
+
+### The Entity Test Harness
+
+The test harness (`entity-test-scene.ts`) exposes `window.*` functions that Playwright calls to control the game state. Explore the file to see available functions like:
+- Spawning/removing entities
+- Triggering animations
+- Scene lifecycle (restart, clear)
+- Frame-stepping for deterministic animation capture
+
+### Golden Rule
+
+**DO NOT claim a rendering bug is fixed unless you have READ the screenshot with the Read tool and SEEN the correct output with your own eyes.**
+
+Passing tests mean nothing if you haven't visually verified the result. The screenshots ARE the proof.
+
 ## Quality Standards
 
 Based on completed Epic 1 stories, all code must meet these standards:
@@ -221,6 +284,7 @@ Based on completed Epic 1 stories, all code must meet these standards:
 - **Minimum 90% statement coverage** for all business logic
 - Integration tests for end-to-end workflows
 - Unit tests for critical functions and edge cases
+- **Visual regression tests for ALL rendering-related changes**
 - All tests must pass before merging
 
 ### Code Quality Gates
