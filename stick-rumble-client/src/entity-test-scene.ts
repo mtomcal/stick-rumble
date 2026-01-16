@@ -24,6 +24,8 @@ interface WindowWithTestControls extends Window {
   resumeGameLoop: () => void;
   stepFrame: (n?: number) => void;
   getFrameCount: () => number;
+  showProjectileTarget: () => void;
+  hideProjectileTarget: () => void;
 }
 
 export class EntityTestScene extends Phaser.Scene {
@@ -43,8 +45,8 @@ export class EntityTestScene extends Phaser.Scene {
     this.add.rectangle(400, 300, 800, 600, 0x1a1a1a);
 
     // Create a target area for projectile testing (lighter background circle for contrast)
+    // NOTE: Target is hidden by default, use window.showProjectileTarget() to make visible
     this.projectileTargetGraphics = this.add.graphics();
-    this.drawProjectileTarget(400, 300);
 
     // Initialize PlayerManager
     this.playerManager = new PlayerManager(this);
@@ -126,8 +128,8 @@ export class EntityTestScene extends Phaser.Scene {
       // Destroy all projectiles
       this.projectileManager.destroy();
 
-      // Redraw target
-      this.drawProjectileTarget(400, 300);
+      // Hide target (returns to blank state)
+      this.projectileTargetGraphics.clear();
 
       // Recreate managers
       this.playerManager = new PlayerManager(this);
@@ -148,8 +150,8 @@ export class EntityTestScene extends Phaser.Scene {
       // Destroy all projectiles
       this.projectileManager.destroy();
 
-      // Redraw target
-      this.drawProjectileTarget(400, 300);
+      // Hide target (returns to blank state)
+      this.projectileTargetGraphics.clear();
     };
 
     win.spawnProjectile = (weaponType: string, x: number, y: number, scale?: number): string => {
@@ -222,6 +224,14 @@ export class EntityTestScene extends Phaser.Scene {
 
     win.getFrameCount = () => {
       return this.game.loop.frame;
+    };
+
+    win.showProjectileTarget = () => {
+      this.drawProjectileTarget(400, 300);
+    };
+
+    win.hideProjectileTarget = () => {
+      this.projectileTargetGraphics.clear();
     };
 
     // Mark scene as ready for testing
