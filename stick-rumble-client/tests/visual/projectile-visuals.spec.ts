@@ -35,6 +35,11 @@ test.describe('Projectile Visuals Visual Regression', () => {
       const game = (window as any).game;
       return game && game.loop && game.loop.frame > 0;
     });
+
+    // Show projectile target for visual contrast (projectile-specific tests only)
+    await page.evaluate(() => {
+      (window as any).showProjectileTarget();
+    });
   });
 
   test('Uzi projectile should render orange (0xFFAA00), 3px diameter', async ({ page }) => {
