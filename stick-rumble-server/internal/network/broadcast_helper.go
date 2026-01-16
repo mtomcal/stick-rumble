@@ -437,6 +437,164 @@ func (h *WebSocketHandler) broadcastRollStart(playerID string, direction game.Ve
 	}
 }
 
+// broadcastMeleeHit broadcasts melee hit event to all players in the room
+func (h *WebSocketHandler) broadcastMeleeHit(attackerID string, victimIDs []string, knockbackApplied bool) {
+	// Create melee:hit message data
+	data := map[string]interface{}{
+		"attackerId":       attackerID,
+		"victims":          victimIDs,
+		"knockbackApplied": knockbackApplied,
+	}
+
+	// Validate outgoing message schema (development mode only)
+	if err := h.validateOutgoingMessage("melee:hit", data); err != nil {
+		log.Printf("Schema validation failed for melee:hit: %v", err)
+	}
+
+	message := Message{
+		Type:      "melee:hit",
+		Timestamp: time.Now().UnixMilli(),
+		Data:      data,
+	}
+
+	msgBytes, err := json.Marshal(message)
+	if err != nil {
+		log.Printf("Error marshaling melee:hit message: %v", err)
+		return
+	}
+
+	// Broadcast to all players in the room
+	room := h.roomManager.GetRoomByPlayerID(attackerID)
+	if room != nil {
+		room.Broadcast(msgBytes, "")
+	}
+}
+
+// broadcastPlayerDamaged broadcasts player damage event (used by melee attacks)
+func (h *WebSocketHandler) broadcastPlayerDamaged(attackerID, victimID string, damage, newHealth int) {
+	// Create player:damaged message data
+	data := map[string]interface{}{
+		"victimId":   victimID,
+		"attackerId": attackerID,
+		"damage":     damage,
+		"newHealth":  newHealth,
+	}
+
+	// Validate outgoing message schema (development mode only)
+	if err := h.validateOutgoingMessage("player:damaged", data); err != nil {
+		log.Printf("Schema validation failed for player:damaged: %v", err)
+	}
+
+	message := Message{
+		Type:      "player:damaged",
+		Timestamp: time.Now().UnixMilli(),
+		Data:      data,
+	}
+
+	msgBytes, err := json.Marshal(message)
+	if err != nil {
+		log.Printf("Error marshaling player:damaged message: %v", err)
+		return
+	}
+
+	// Broadcast to all players in the room
+	room := h.roomManager.GetRoomByPlayerID(victimID)
+	if room != nil {
+		room.Broadcast(msgBytes, "")
+	}
+}
+
+// processMeleeKill handles death processing for melee kills
+func (h *WebSocketHandler) processMeleeKill(attackerID, victimID string) {
+	// Mark player as dead
+	h.gameServer.MarkPlayerDead(victimID)
+
+	// Get the actual player pointers to update stats
+	attacker, attackerExists := h.gameServer.GetWorld().GetPlayer(attackerID)
+	if attackerExists && attacker != nil {
+		attacker.IncrementKills()
+		attacker.AddXP(game.KillXPReward)
+	}
+
+	victim, victimExists := h.gameServer.GetWorld().GetPlayer(victimID)
+	if victimExists && victim != nil {
+		victim.IncrementDeaths()
+	}
+
+	// Create player:death message data
+	deathData := map[string]interface{}{
+		"victimId":   victimID,
+		"attackerId": attackerID,
+	}
+
+	// Validate outgoing message schema (development mode only)
+	if err := h.validateOutgoingMessage("player:death", deathData); err != nil {
+		log.Printf("Schema validation failed for player:death: %v", err)
+	}
+
+	deathMessage := Message{
+		Type:      "player:death",
+		Timestamp: time.Now().UnixMilli(),
+		Data:      deathData,
+	}
+
+	deathBytes, err := json.Marshal(deathMessage)
+	if err != nil {
+		log.Printf("Error marshaling player:death message: %v", err)
+		return
+	}
+
+	room := h.roomManager.GetRoomByPlayerID(victimID)
+	if room != nil {
+		room.Broadcast(deathBytes, "")
+	}
+
+	// Create player:kill_credit message data
+	killCreditData := map[string]interface{}{
+		"killerId":    attackerID,
+		"victimId":    victimID,
+		"killerKills": 0,
+		"killerXP":    0,
+	}
+
+	if attackerExists && attacker != nil {
+		killCreditData["killerKills"] = attacker.Kills
+		killCreditData["killerXP"] = attacker.XP
+	}
+
+	// Validate outgoing message schema (development mode only)
+	if err := h.validateOutgoingMessage("player:kill_credit", killCreditData); err != nil {
+		log.Printf("Schema validation failed for player:kill_credit: %v", err)
+	}
+
+	// Broadcast kill credit
+	killCreditMessage := Message{
+		Type:      "player:kill_credit",
+		Timestamp: time.Now().UnixMilli(),
+		Data:      killCreditData,
+	}
+
+	creditBytes, err := json.Marshal(killCreditMessage)
+	if err != nil {
+		log.Printf("Error marshaling player:kill_credit message: %v", err)
+		return
+	}
+
+	if room != nil {
+		room.Broadcast(creditBytes, "")
+
+		// Track kill in match and check win conditions
+		room.Match.AddKill(attackerID)
+
+		// Check if kill target reached
+		if room.Match.CheckKillTarget() {
+			room.Match.EndMatch("kill_target")
+			log.Printf("Match ended in room %s: kill target reached (melee)", room.ID)
+			h.broadcastMatchEnded(room, h.gameServer.GetWorld())
+		}
+	}
+}
+
 // broadcastRollEnd broadcasts roll end event to all players in the room
 func (h *WebSocketHandler) broadcastRollEnd(playerID string, reason string) {
 	// Create roll:end message data

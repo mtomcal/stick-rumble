@@ -332,6 +332,70 @@ func (gs *GameServer) PlayerShoot(playerID string, aimAngle float64) ShootResult
 	}
 }
 
+// MeleeAttackResult contains the result of a melee attack attempt
+type MeleeResult struct {
+	Success          bool
+	Reason           string
+	HitPlayers       []*PlayerState
+	KnockbackApplied bool
+}
+
+// Melee attack failure reasons
+const (
+	MeleeFailedNoPlayer   = "no_player"
+	MeleeFailedNoWeapon   = "no_weapon"
+	MeleeFailedNotMelee   = "not_melee"
+	MeleeFailedPlayerDead = "player_dead"
+)
+
+// PlayerMeleeAttack attempts a melee attack for the given player
+func (gs *GameServer) PlayerMeleeAttack(playerID string, aimAngle float64) MeleeResult {
+	// Check if player exists
+	player, exists := gs.world.GetPlayer(playerID)
+	if !exists {
+		return MeleeResult{Success: false, Reason: MeleeFailedNoPlayer}
+	}
+
+	// Check if player is alive
+	if !player.IsAlive() {
+		return MeleeResult{Success: false, Reason: MeleeFailedPlayerDead}
+	}
+
+	// Get weapon state
+	gs.weaponMu.RLock()
+	ws := gs.weaponStates[playerID]
+	gs.weaponMu.RUnlock()
+
+	if ws == nil {
+		return MeleeResult{Success: false, Reason: MeleeFailedNoWeapon}
+	}
+
+	// Check if weapon is melee
+	if !ws.Weapon.IsMelee() {
+		return MeleeResult{Success: false, Reason: MeleeFailedNotMelee}
+	}
+
+	// Update player's aim angle for the attack
+	player.SetAimAngle(aimAngle)
+
+	// Get all players for hit detection
+	gs.world.mu.RLock()
+	allPlayers := make([]*PlayerState, 0, len(gs.world.players))
+	for _, p := range gs.world.players {
+		allPlayers = append(allPlayers, p)
+	}
+	gs.world.mu.RUnlock()
+
+	// Perform the melee attack
+	result := PerformMeleeAttack(player, allPlayers, ws.Weapon)
+
+	return MeleeResult{
+		Success:          true,
+		HitPlayers:       result.HitPlayers,
+		KnockbackApplied: result.KnockbackApplied,
+	}
+}
+
 // PlayerReload starts the reload process for a player
 func (gs *GameServer) PlayerReload(playerID string) bool {
 	gs.weaponMu.RLock()

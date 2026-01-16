@@ -31,8 +31,9 @@ export class MeleeWeaponManager {
       this.removeWeapon(playerId);
     }
 
-    // Only create for melee weapons
-    if (weaponType !== 'Bat' && weaponType !== 'Katana') {
+    // Only create for melee weapons (case-insensitive check)
+    const normalizedType = weaponType.toLowerCase();
+    if (normalizedType !== 'bat' && normalizedType !== 'katana') {
       return;
     }
 

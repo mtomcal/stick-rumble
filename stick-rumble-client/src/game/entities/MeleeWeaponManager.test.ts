@@ -67,6 +67,29 @@ describe('MeleeWeaponManager', () => {
       expect(manager.hasWeapon(playerId)).toBe(false);
     });
 
+    it('should create weapon with lowercase weapon type (server format)', () => {
+      const playerId = 'player-4';
+      const position = { x: 100, y: 200 };
+
+      // Server sends lowercase weapon types
+      manager.createWeapon(playerId, 'bat', position);
+      expect(manager.hasWeapon(playerId)).toBe(true);
+
+      manager.createWeapon(playerId, 'katana', position);
+      expect(manager.hasWeapon(playerId)).toBe(true);
+    });
+
+    it('should handle mixed case weapon types', () => {
+      const playerId = 'player-5';
+      const position = { x: 100, y: 200 };
+
+      manager.createWeapon(playerId, 'BAT', position);
+      expect(manager.hasWeapon(playerId)).toBe(true);
+
+      manager.createWeapon(playerId, 'KaTaNa', position);
+      expect(manager.hasWeapon(playerId)).toBe(true);
+    });
+
     it('should replace existing weapon when player picks up new one', () => {
       const playerId = 'player-1';
       const position = { x: 100, y: 200 };
