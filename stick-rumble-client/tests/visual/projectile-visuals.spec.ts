@@ -55,11 +55,21 @@ test.describe('Projectile Visuals Visual Regression', () => {
     });
     expect(projectileCount).toBe(1);
 
+    // Get canvas bounding box to calculate correct clip coordinates
+    const canvas = page.locator('canvas');
+    const canvasBox = await canvas.boundingBox();
+    expect(canvasBox).not.toBeNull();
+
     // Take screenshot to verify orange color and 3px diameter
     // Expected: Orange circle (0xFFAA00) with 3px diameter
-    // Using 400x400 clip for human-verifiable snapshots (was 100x100)
+    // Clip centered on projectile at (400, 300) within canvas coordinates
     await expect(page).toHaveScreenshot('projectile-uzi.png', {
-      clip: { x: 200, y: 100, width: 400, height: 400 },
+      clip: {
+        x: canvasBox!.x + 200,
+        y: canvasBox!.y + 100,
+        width: 400,
+        height: 400,
+      },
       threshold: 0.01,
     });
   });
@@ -82,11 +92,21 @@ test.describe('Projectile Visuals Visual Regression', () => {
     });
     expect(projectileCount).toBe(1);
 
+    // Get canvas bounding box to calculate correct clip coordinates
+    const canvas = page.locator('canvas');
+    const canvasBox = await canvas.boundingBox();
+    expect(canvasBox).not.toBeNull();
+
     // Take screenshot to verify gold color and 5px diameter
     // Expected: Gold circle (0xFFCC00) with 5px diameter
-    // Using 400x400 clip for human-verifiable snapshots (was 100x100)
+    // Clip centered on projectile at (400, 300) within canvas coordinates
     await expect(page).toHaveScreenshot('projectile-ak47.png', {
-      clip: { x: 200, y: 100, width: 400, height: 400 },
+      clip: {
+        x: canvasBox!.x + 200,
+        y: canvasBox!.y + 100,
+        width: 400,
+        height: 400,
+      },
       threshold: 0.01,
     });
   });
@@ -109,11 +129,21 @@ test.describe('Projectile Visuals Visual Regression', () => {
     });
     expect(projectileCount).toBe(1);
 
+    // Get canvas bounding box to calculate correct clip coordinates
+    const canvas = page.locator('canvas');
+    const canvasBox = await canvas.boundingBox();
+    expect(canvasBox).not.toBeNull();
+
     // Take screenshot to verify yellow color and 4px diameter
     // Expected: Yellow circle (0xFFFF00) with 4px diameter
-    // Using 400x400 clip for human-verifiable snapshots (was 100x100)
+    // Clip centered on projectile at (400, 300) within canvas coordinates
     await expect(page).toHaveScreenshot('projectile-pistol.png', {
-      clip: { x: 200, y: 100, width: 400, height: 400 },
+      clip: {
+        x: canvasBox!.x + 200,
+        y: canvasBox!.y + 100,
+        width: 400,
+        height: 400,
+      },
       threshold: 0.01,
     });
   });
@@ -136,11 +166,21 @@ test.describe('Projectile Visuals Visual Regression', () => {
     });
     expect(projectileCount).toBe(1);
 
+    // Get canvas bounding box to calculate correct clip coordinates
+    const canvas = page.locator('canvas');
+    const canvasBox = await canvas.boundingBox();
+    expect(canvasBox).not.toBeNull();
+
     // Take screenshot to verify orange-red color and 6px diameter
     // Expected: Orange-red circle (0xFF8800) with 6px diameter
-    // Using 400x400 clip for human-verifiable snapshots (was 100x100)
+    // Clip centered on projectile at (400, 300) within canvas coordinates
     await expect(page).toHaveScreenshot('projectile-shotgun.png', {
-      clip: { x: 200, y: 100, width: 400, height: 400 },
+      clip: {
+        x: canvasBox!.x + 200,
+        y: canvasBox!.y + 100,
+        width: 400,
+        height: 400,
+      },
       threshold: 0.01,
     });
   });
@@ -166,10 +206,21 @@ test.describe('Projectile Visuals Visual Regression', () => {
     });
     expect(projectileCount).toBe(4);
 
+    // Get canvas bounding box to calculate correct clip coordinates
+    const canvas = page.locator('canvas');
+    const canvasBox = await canvas.boundingBox();
+    expect(canvasBox).not.toBeNull();
+
     // Take screenshot to verify all colors are different
     // CRITICAL: This test would FAIL if bug wzq exists (all would be yellow)
+    // Wider clip to capture all 4 projectiles spread across x: 200, 300, 400, 500
     await expect(page).toHaveScreenshot('projectiles-multiple-colors.png', {
-      clip: { x: 150, y: 250, width: 400, height: 100 },
+      clip: {
+        x: canvasBox!.x + 50,
+        y: canvasBox!.y + 100,
+        width: 600,
+        height: 400,
+      },
       threshold: 0.01,
     });
   });
