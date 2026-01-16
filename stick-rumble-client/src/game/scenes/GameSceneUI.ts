@@ -11,6 +11,13 @@ export class GameSceneUI {
   private scene: Phaser.Scene;
   private ammoText!: Phaser.GameObjects.Text;
   private matchTimerText: Phaser.GameObjects.Text | null = null;
+
+  /**
+   * Check if scene is valid and active for rendering
+   */
+  private isSceneValid(): boolean {
+    return this.scene && this.scene.sys && this.scene.sys.isActive();
+  }
   private damageFlashOverlay: Phaser.GameObjects.Rectangle | null = null;
   private reloadProgressBar: Phaser.GameObjects.Graphics | null = null;
   private reloadProgressBarBg: Phaser.GameObjects.Graphics | null = null;
@@ -251,7 +258,8 @@ export class GameSceneUI {
    * Update the match timer display with formatted time (MM:SS)
    */
   updateMatchTimer(remainingSeconds: number): void {
-    if (!this.matchTimerText) {
+    // Skip if scene is not active (destroyed or transitioning)
+    if (!this.isSceneValid() || !this.matchTimerText) {
       return;
     }
 

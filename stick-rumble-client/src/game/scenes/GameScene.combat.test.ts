@@ -267,6 +267,18 @@ describe('GameScene - Combat', () => {
         mockSceneContext.delayedCallCallbacks[0]();
       }
 
+      // First send room:joined to set local player ID (required before projectile:spawn is processed)
+      const roomJoinedMessage = {
+        data: JSON.stringify({
+          type: 'room:joined',
+          timestamp: Date.now(),
+          data: { playerId: 'local-player', roomId: 'room-1' }
+        })
+      };
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(roomJoinedMessage as MessageEvent);
+      }
+
       // Mock projectileManager methods to avoid scene.add issues
       const spawnSpy = vi.spyOn(scene['projectileManager'], 'spawnProjectile').mockImplementation(() => {});
       const muzzleFlashSpy = vi.spyOn(scene['projectileManager'], 'createMuzzleFlash').mockImplementation(() => {});

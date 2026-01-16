@@ -154,11 +154,35 @@ func NewRoomManager() *RoomManager {
 }
 
 // AddPlayer adds a player and creates a room if we have 2 waiting players
+// If there's an active room that needs a second player (only 1 player), join that room directly
+// This handles the "tab reload" scenario where one player is waiting in a room
 func (rm *RoomManager) AddPlayer(player *Player) *Room {
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
 
-	// Add to waiting list
+	// First, check if there's an existing room with exactly 1 player waiting
+	// This handles the "tab reload" scenario where one player is already waiting
+	// We only join if room has 1 player (needs a second to start/continue match)
+	// Don't join rooms that already have 2+ players (that would create 3+ player games)
+	for _, room := range rm.rooms {
+		if room.PlayerCount() == 1 && !room.Match.IsEnded() {
+			// Join existing room that needs a second player
+			room.AddPlayer(player)
+			rm.playerToRoom[player.ID] = room.ID
+
+			// Register player in the match
+			room.Match.RegisterPlayer(player.ID)
+
+			log.Printf("Player %s joined existing room %s (now %d players)", player.ID, room.ID, room.PlayerCount())
+
+			// Send room:joined message to the new player
+			rm.sendRoomJoinedMessage(player, room)
+
+			return room
+		}
+	}
+
+	// No existing room with space - add to waiting list
 	rm.waitingPlayers = append(rm.waitingPlayers, player)
 
 	// If we have 2 players, create a room

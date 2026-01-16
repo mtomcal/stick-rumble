@@ -166,12 +166,17 @@ func (h *WebSocketHandler) onHit(hit game.HitEvent) {
 		h.gameServer.MarkPlayerDead(hit.VictimID)
 
 		// Update stats: increment attacker kills and victim deaths
-		attackerState, attackerExists := h.gameServer.GetPlayerState(hit.AttackerID)
-		if attackerExists {
-			attackerState.IncrementKills()
-			attackerState.AddXP(game.KillXPReward)
+		// NOTE: Must use GetWorld().GetPlayer() to get pointer, not GetPlayerState() which returns a copy!
+		attacker, attackerExists := h.gameServer.GetWorld().GetPlayer(hit.AttackerID)
+		if attackerExists && attacker != nil {
+			attacker.IncrementKills()
+			attacker.AddXP(game.KillXPReward)
 		}
-		victimState.IncrementDeaths()
+		// victimState is already a pointer from earlier in this function
+		victim, victimExists := h.gameServer.GetWorld().GetPlayer(hit.VictimID)
+		if victimExists && victim != nil {
+			victim.IncrementDeaths()
+		}
 
 		// Create player:death message data
 		deathData := map[string]interface{}{
@@ -201,11 +206,17 @@ func (h *WebSocketHandler) onHit(hit game.HitEvent) {
 		}
 
 		// Create player:kill_credit message data
+		killerKills := 0
+		killerXP := 0
+		if attacker != nil {
+			killerKills = attacker.Kills
+			killerXP = attacker.XP
+		}
 		killCreditData := map[string]interface{}{
 			"killerId":    hit.AttackerID,
 			"victimId":    hit.VictimID,
-			"killerKills": attackerState.Kills,
-			"killerXP":    attackerState.XP,
+			"killerKills": killerKills,
+			"killerXP":    killerXP,
 		}
 
 		// Validate outgoing message schema (development mode only)
