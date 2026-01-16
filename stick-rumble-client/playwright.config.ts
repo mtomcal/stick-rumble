@@ -13,7 +13,6 @@ export default defineConfig({
   // Fail on visual regression >1% pixel diff
   expect: {
     toHaveScreenshot: {
-      maxDiffPixels: 0,
       maxDiffPixelRatio: 0.01, // 1% threshold
     },
   },
