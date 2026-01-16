@@ -139,6 +139,7 @@ describe('Server-to-Client Schemas', () => {
       const data = {
         id: 'proj-123',
         ownerId: 'player-456',
+        weaponType: 'Pistol',
         position: { x: 150, y: 250 },
         velocity: { x: 10, y: 0 },
       };

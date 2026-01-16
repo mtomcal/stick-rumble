@@ -95,6 +95,7 @@ describe('ProjectileManager', () => {
       const projectileData: ProjectileData = {
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'Pistol',
         position: { x: 100, y: 100 },
         velocity: { x: 100, y: 0 },
       };
@@ -124,6 +125,7 @@ describe('ProjectileManager', () => {
       const projectileData: ProjectileData = {
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'Pistol',
         position: { x: 100, y: 200 },
         velocity: { x: 800, y: 0 },
       };
@@ -138,6 +140,7 @@ describe('ProjectileManager', () => {
       const projectileData: ProjectileData = {
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'Pistol',
         position: { x: 100, y: 200 },
         velocity: { x: 800, y: 0 },
       };
@@ -156,6 +159,7 @@ describe('ProjectileManager', () => {
       const projectileData: ProjectileData = {
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'Pistol',
         position: { x: 100, y: 200 },
         velocity: { x: 800, y: 0 },
       };
@@ -170,6 +174,7 @@ describe('ProjectileManager', () => {
       const projectileData: ProjectileData = {
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'Pistol',
         position: { x: 100, y: 200 },
         velocity: { x: 800, y: 0 },
       };
@@ -185,6 +190,7 @@ describe('ProjectileManager', () => {
       const projectileData: ProjectileData = {
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'Pistol',
         position: { x: 100, y: 100 },
         velocity: { x: 800, y: 0 }, // Moving right
       };
@@ -203,6 +209,7 @@ describe('ProjectileManager', () => {
       const projectileData: ProjectileData = {
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'Pistol',
         position: { x: 100, y: 100 },
         velocity: { x: 400, y: 0 },
       };
@@ -219,6 +226,7 @@ describe('ProjectileManager', () => {
       const projectileData: ProjectileData = {
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'Pistol',
         position: { x: 1900, y: 100 },
         velocity: { x: 800, y: 0 }, // Moving right, will exit bounds
       };
@@ -236,6 +244,7 @@ describe('ProjectileManager', () => {
       const projectileData: ProjectileData = {
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'Pistol',
         position: { x: 100, y: 100 },
         velocity: { x: 100, y: 0 }, // Moving slowly
       };
@@ -255,6 +264,7 @@ describe('ProjectileManager', () => {
       const projectileData: ProjectileData = {
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'Pistol',
         position: { x: 100, y: 200 },
         velocity: { x: 800, y: 0 },
       };
@@ -270,6 +280,7 @@ describe('ProjectileManager', () => {
       const projectileData: ProjectileData = {
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'Pistol',
         position: { x: 100, y: 200 },
         velocity: { x: 800, y: 0 },
       };
@@ -289,6 +300,7 @@ describe('ProjectileManager', () => {
       const projectileData: ProjectileData = {
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'Pistol',
         position: { x: 100, y: 200 },
         velocity: { x: 800, y: 0 },
       };
@@ -309,6 +321,7 @@ describe('ProjectileManager', () => {
       const projectileData: ProjectileData = {
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'Pistol',
         position: { x: 100, y: 200 },
         velocity: { x: 800, y: 0 },
       };
@@ -331,6 +344,7 @@ describe('ProjectileManager', () => {
       const projectileData: ProjectileData = {
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'Pistol',
         position: { x: 100, y: 200 },
         velocity: { x: 800, y: 0 },
       };
@@ -353,6 +367,7 @@ describe('ProjectileManager', () => {
       projectileManager.spawnProjectile({
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'Pistol',
         position: { x: 100, y: 200 },
         velocity: { x: 800, y: 0 },
       });
@@ -360,6 +375,7 @@ describe('ProjectileManager', () => {
       projectileManager.spawnProjectile({
         id: 'proj-2',
         ownerId: 'player-2',
+        weaponType: 'Uzi',
         position: { x: 200, y: 300 },
         velocity: { x: 400, y: 400 },
       });
@@ -432,6 +448,143 @@ describe('ProjectileManager', () => {
 
       // Verify flash was destroyed
       expect(mockFlash.destroy).toHaveBeenCalled();
+    });
+  });
+
+  describe('weapon-specific projectile visuals', () => {
+    it('should create Pistol projectile with correct visuals (yellow, 4px diameter, 2px tracer)', () => {
+      const projectileData: ProjectileData = {
+        id: 'proj-pistol',
+        ownerId: 'player-1',
+        weaponType: 'Pistol',
+        position: { x: 100, y: 100 },
+        velocity: { x: 800, y: 0 },
+      };
+
+      projectileManager.spawnProjectile(projectileData);
+
+      // Verify projectile circle created with Pistol specs: diameter 4, yellow color (0xffff00)
+      expect(scene.add.circle).toHaveBeenCalledWith(100, 100, 2, 0xffff00);
+
+      // Verify tracer line created
+      expect(scene.add.line).toHaveBeenCalled();
+
+      // Get the created line and verify it has Pistol tracer properties
+      const lines = Array.from(scene.mockLines.values());
+      const tracerLine = lines[0];
+      expect(tracerLine).toBeDefined();
+
+      // Verify tracer styling (width 2, yellow color)
+      const lineObject = tracerLine as unknown as { setStrokeStyle: ReturnType<typeof vi.fn> };
+      expect(lineObject.setStrokeStyle).toHaveBeenCalledWith(2, 0xffff00);
+    });
+
+    it('should create Uzi projectile with correct visuals (orange, 3px diameter, 1.5px tracer)', () => {
+      const projectileData: ProjectileData = {
+        id: 'proj-uzi',
+        ownerId: 'player-1',
+        weaponType: 'Uzi',
+        position: { x: 200, y: 150 },
+        velocity: { x: 800, y: 0 },
+      };
+
+      projectileManager.spawnProjectile(projectileData);
+
+      // Verify projectile circle created with Uzi specs: diameter 3, orange color (0xffaa00)
+      expect(scene.add.circle).toHaveBeenCalledWith(200, 150, 1.5, 0xffaa00);
+
+      // Verify tracer line created
+      expect(scene.add.line).toHaveBeenCalled();
+
+      // Get the created line and verify it has Uzi tracer properties
+      const lines = Array.from(scene.mockLines.values());
+      const tracerLine = lines[0];
+      expect(tracerLine).toBeDefined();
+
+      // Verify tracer styling (width 1.5, orange color)
+      const lineObject = tracerLine as unknown as { setStrokeStyle: ReturnType<typeof vi.fn> };
+      expect(lineObject.setStrokeStyle).toHaveBeenCalledWith(1.5, 0xffaa00);
+    });
+
+    it('should create AK47 projectile with correct visuals (gold, 5px diameter, 2.5px tracer)', () => {
+      const projectileData: ProjectileData = {
+        id: 'proj-ak47',
+        ownerId: 'player-1',
+        weaponType: 'AK47',
+        position: { x: 300, y: 200 },
+        velocity: { x: 800, y: 0 },
+      };
+
+      projectileManager.spawnProjectile(projectileData);
+
+      // Verify projectile circle created with AK47 specs: diameter 5, gold color (0xffcc00)
+      expect(scene.add.circle).toHaveBeenCalledWith(300, 200, 2.5, 0xffcc00);
+
+      // Verify tracer line created
+      expect(scene.add.line).toHaveBeenCalled();
+
+      // Get the created line and verify it has AK47 tracer properties
+      const lines = Array.from(scene.mockLines.values());
+      const tracerLine = lines[0];
+      expect(tracerLine).toBeDefined();
+
+      // Verify tracer styling (width 2.5, gold color)
+      const lineObject = tracerLine as unknown as { setStrokeStyle: ReturnType<typeof vi.fn> };
+      expect(lineObject.setStrokeStyle).toHaveBeenCalledWith(2.5, 0xffcc00);
+    });
+
+    it('should create Shotgun projectile with correct visuals (orange-red, 6px diameter, 3px tracer)', () => {
+      const projectileData: ProjectileData = {
+        id: 'proj-shotgun',
+        ownerId: 'player-1',
+        weaponType: 'Shotgun',
+        position: { x: 400, y: 250 },
+        velocity: { x: 800, y: 0 },
+      };
+
+      projectileManager.spawnProjectile(projectileData);
+
+      // Verify projectile circle created with Shotgun specs: diameter 6, orange-red color (0xff8800)
+      expect(scene.add.circle).toHaveBeenCalledWith(400, 250, 3, 0xff8800);
+
+      // Verify tracer line created
+      expect(scene.add.line).toHaveBeenCalled();
+
+      // Get the created line and verify it has Shotgun tracer properties
+      const lines = Array.from(scene.mockLines.values());
+      const tracerLine = lines[0];
+      expect(tracerLine).toBeDefined();
+
+      // Verify tracer styling (width 3, orange-red color)
+      const lineObject = tracerLine as unknown as { setStrokeStyle: ReturnType<typeof vi.fn> };
+      expect(lineObject.setStrokeStyle).toHaveBeenCalledWith(3, 0xff8800);
+    });
+
+    it('should create multiple projectiles with different weapon types and correct visuals', () => {
+      const pistolData: ProjectileData = {
+        id: 'proj-pistol',
+        ownerId: 'player-1',
+        weaponType: 'Pistol',
+        position: { x: 100, y: 100 },
+        velocity: { x: 800, y: 0 },
+      };
+
+      const shotgunData: ProjectileData = {
+        id: 'proj-shotgun',
+        ownerId: 'player-2',
+        weaponType: 'Shotgun',
+        position: { x: 500, y: 500 },
+        velocity: { x: -800, y: 0 },
+      };
+
+      projectileManager.spawnProjectile(pistolData);
+      projectileManager.spawnProjectile(shotgunData);
+
+      expect(projectileManager.getProjectileCount()).toBe(2);
+
+      // Verify both projectiles created with correct specs
+      expect(scene.add.circle).toHaveBeenCalledWith(100, 100, 2, 0xffff00); // Pistol
+      expect(scene.add.circle).toHaveBeenCalledWith(500, 500, 3, 0xff8800); // Shotgun
     });
   });
 });

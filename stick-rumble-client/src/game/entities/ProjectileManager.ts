@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { ARENA, EFFECTS, WEAPON } from '../../shared/constants';
 import type { Clock } from '../utils/Clock';
 import { RealClock } from '../utils/Clock';
+import { getWeaponConfigSync, parseHexColor } from '../../shared/weaponConfig';
 
 /**
  * Projectile data received from server
@@ -9,6 +10,7 @@ import { RealClock } from '../utils/Clock';
 export interface ProjectileData {
   id: string;
   ownerId: string;
+  weaponType: string;
   position: { x: number; y: number };
   velocity: { x: number; y: number };
 }
@@ -19,6 +21,7 @@ export interface ProjectileData {
 interface Projectile {
   id: string;
   ownerId: string;
+  weaponType: string;
   position: { x: number; y: number };
   velocity: { x: number; y: number };
   sprite: Phaser.GameObjects.Arc;
@@ -48,25 +51,42 @@ export class ProjectileManager {
       return;
     }
 
-    // Create projectile sprite
+    // Get weapon config for visual settings
+    const weaponConfig = getWeaponConfigSync(data.weaponType);
+    const projectileVisuals = weaponConfig?.visuals.projectile;
+
+    // Use weapon-specific visuals or fallback to defaults
+    const projectileColor = projectileVisuals
+      ? parseHexColor(projectileVisuals.color)
+      : 0xffff00;
+    const projectileDiameter = projectileVisuals?.diameter ?? EFFECTS.PROJECTILE_DIAMETER;
+    const tracerColor = projectileVisuals
+      ? parseHexColor(projectileVisuals.tracerColor)
+      : 0xffff00;
+    const tracerWidth = projectileVisuals?.tracerWidth ?? EFFECTS.TRACER_WIDTH;
+
+    // Create projectile sprite with weapon-specific color and size
     const sprite = this.scene.add.circle(
       data.position.x,
       data.position.y,
-      EFFECTS.PROJECTILE_DIAMETER / 2,
-      0xffff00 // Yellow bullet
+      projectileDiameter / 2,
+      projectileColor
     );
 
-    // Create bullet tracer (line from origin)
+    // Create bullet tracer with weapon-specific color and width
     const tracer = this.createTracer(
       data.position.x,
       data.position.y,
       data.position.x,
-      data.position.y
+      data.position.y,
+      tracerColor,
+      tracerWidth
     );
 
     const projectile: Projectile = {
       id: data.id,
       ownerId: data.ownerId,
+      weaponType: data.weaponType,
       position: { ...data.position },
       velocity: { ...data.velocity },
       sprite,
@@ -84,7 +104,9 @@ export class ProjectileManager {
     startX: number,
     startY: number,
     endX: number,
-    endY: number
+    endY: number,
+    color: number = 0xffff00,
+    width: number = EFFECTS.TRACER_WIDTH
   ): Phaser.GameObjects.Line {
     const line = this.scene.add.line(
       0,
@@ -93,9 +115,9 @@ export class ProjectileManager {
       startY,
       endX,
       endY,
-      0xffff00 // Yellow tracer
+      color
     );
-    line.setStrokeStyle(EFFECTS.TRACER_WIDTH, 0xffff00);
+    line.setStrokeStyle(width, color);
 
     // Fade out the tracer
     this.scene.tweens.add({
@@ -187,6 +209,7 @@ export class ProjectileManager {
     return {
       id: projectile.id,
       ownerId: projectile.ownerId,
+      weaponType: projectile.weaponType,
       position: { ...projectile.position },
       velocity: { ...projectile.velocity },
     };
@@ -202,20 +225,26 @@ export class ProjectileManager {
   /**
    * Create a muzzle flash effect at the given position
    */
-  createMuzzleFlash(x: number, y: number): void {
-    const flash = this.scene.add.circle(
-      x,
-      y,
-      EFFECTS.MUZZLE_FLASH_RADIUS,
-      0xffffff // White flash
-    );
+  createMuzzleFlash(x: number, y: number, weaponType?: string): void {
+    // Get weapon config for visual settings
+    const weaponConfig = weaponType ? getWeaponConfigSync(weaponType) : null;
+    const muzzleFlashVisuals = weaponConfig?.visuals;
+
+    // Use weapon-specific visuals or fallback to defaults
+    const flashColor = muzzleFlashVisuals
+      ? parseHexColor(muzzleFlashVisuals.muzzleFlashColor)
+      : 0xffffff;
+    const flashSize = muzzleFlashVisuals?.muzzleFlashSize ?? EFFECTS.MUZZLE_FLASH_RADIUS;
+    const flashDuration = muzzleFlashVisuals?.muzzleFlashDuration ?? EFFECTS.MUZZLE_FLASH_DURATION;
+
+    const flash = this.scene.add.circle(x, y, flashSize, flashColor);
 
     // Fade and remove the flash
     this.scene.tweens.add({
       targets: flash,
       alpha: 0,
       scale: 1.5,
-      duration: EFFECTS.MUZZLE_FLASH_DURATION,
+      duration: flashDuration,
       onComplete: () => {
         flash.destroy();
       },

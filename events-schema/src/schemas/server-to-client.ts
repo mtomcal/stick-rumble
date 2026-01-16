@@ -83,6 +83,7 @@ export const ProjectileSpawnDataSchema = Type.Object(
   {
     id: Type.String({ description: 'Unique projectile identifier', minLength: 1 }),
     ownerId: Type.String({ description: 'Player who fired the projectile', minLength: 1 }),
+    weaponType: Type.String({ description: 'Type of weapon that fired the projectile', minLength: 1 }),
     position: PositionSchema,
     velocity: VelocitySchema,
   },

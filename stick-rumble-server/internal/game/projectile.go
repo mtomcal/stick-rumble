@@ -12,6 +12,7 @@ import (
 type Projectile struct {
 	ID            string    `json:"id"`
 	OwnerID       string    `json:"ownerId"`
+	WeaponType    string    `json:"weaponType"`
 	Position      Vector2   `json:"position"`
 	Velocity      Vector2   `json:"velocity"`
 	SpawnPosition Vector2   `json:"-"` // Initial position for range validation
@@ -21,17 +22,19 @@ type Projectile struct {
 
 // ProjectileSnapshot is the network-transmittable version of Projectile
 type ProjectileSnapshot struct {
-	ID       string  `json:"id"`
-	OwnerID  string  `json:"ownerId"`
-	Position Vector2 `json:"position"`
-	Velocity Vector2 `json:"velocity"`
+	ID         string  `json:"id"`
+	OwnerID    string  `json:"ownerId"`
+	WeaponType string  `json:"weaponType"`
+	Position   Vector2 `json:"position"`
+	Velocity   Vector2 `json:"velocity"`
 }
 
 // NewProjectile creates a new projectile with calculated velocity from angle
-func NewProjectile(ownerID string, startPos Vector2, aimAngle float64, speed float64) *Projectile {
+func NewProjectile(ownerID string, weaponType string, startPos Vector2, aimAngle float64, speed float64) *Projectile {
 	return &Projectile{
 		ID:            uuid.New().String(),
 		OwnerID:       ownerID,
+		WeaponType:    weaponType,
 		Position:      startPos,
 		SpawnPosition: startPos, // Store spawn position for range validation
 		Velocity: Vector2{
@@ -68,10 +71,11 @@ func (p *Projectile) Deactivate() {
 // Snapshot returns a copy of the projectile state for network transmission
 func (p *Projectile) Snapshot() ProjectileSnapshot {
 	return ProjectileSnapshot{
-		ID:       p.ID,
-		OwnerID:  p.OwnerID,
-		Position: p.Position,
-		Velocity: p.Velocity,
+		ID:         p.ID,
+		OwnerID:    p.OwnerID,
+		WeaponType: p.WeaponType,
+		Position:   p.Position,
+		Velocity:   p.Velocity,
 	}
 }
 
@@ -89,11 +93,11 @@ func NewProjectileManager() *ProjectileManager {
 }
 
 // CreateProjectile creates and adds a new projectile
-func (pm *ProjectileManager) CreateProjectile(ownerID string, startPos Vector2, aimAngle float64, speed float64) *Projectile {
+func (pm *ProjectileManager) CreateProjectile(ownerID string, weaponType string, startPos Vector2, aimAngle float64, speed float64) *Projectile {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
-	proj := NewProjectile(ownerID, startPos, aimAngle, speed)
+	proj := NewProjectile(ownerID, weaponType, startPos, aimAngle, speed)
 	pm.projectiles[proj.ID] = proj
 	return proj
 }
