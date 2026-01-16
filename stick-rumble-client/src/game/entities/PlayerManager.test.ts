@@ -845,6 +845,154 @@ describe('PlayerManager', () => {
     });
   });
 
+  describe('getPlayerAimAngle', () => {
+    it('should return aim angle when player exists', () => {
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: Math.PI / 2 },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      const aimAngle = playerManager.getPlayerAimAngle('player-1');
+      expect(aimAngle).toBe(Math.PI / 2);
+    });
+
+    it('should return null when player does not exist', () => {
+      const aimAngle = playerManager.getPlayerAimAngle('non-existent');
+      expect(aimAngle).toBeNull();
+    });
+
+    it('should return null when player exists but aimAngle is not set', () => {
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      const aimAngle = playerManager.getPlayerAimAngle('player-1');
+      expect(aimAngle).toBeNull();
+    });
+  });
+
+  describe('getLocalPlayerPosition', () => {
+    it('should return position when local player exists', () => {
+      playerManager.setLocalPlayerId('local-player');
+
+      const playerStates: PlayerState[] = [
+        { id: 'local-player', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      const position = playerManager.getLocalPlayerPosition();
+      expect(position).toEqual({ x: 100, y: 200 });
+    });
+
+    it('should return undefined when no local player ID is set', () => {
+      const position = playerManager.getLocalPlayerPosition();
+      expect(position).toBeUndefined();
+    });
+
+    it('should return undefined when local player does not exist', () => {
+      playerManager.setLocalPlayerId('non-existent');
+
+      const position = playerManager.getLocalPlayerPosition();
+      expect(position).toBeUndefined();
+    });
+  });
+
+  describe('isLocalPlayerMoving', () => {
+    it('should return true when player is moving', () => {
+      playerManager.setLocalPlayerId('local-player');
+
+      const playerStates: PlayerState[] = [
+        { id: 'local-player', position: { x: 100, y: 200 }, velocity: { x: 5, y: 3 } },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      expect(playerManager.isLocalPlayerMoving()).toBe(true);
+    });
+
+    it('should return false when player is stationary', () => {
+      playerManager.setLocalPlayerId('local-player');
+
+      const playerStates: PlayerState[] = [
+        { id: 'local-player', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      expect(playerManager.isLocalPlayerMoving()).toBe(false);
+    });
+
+    it('should return false when velocity is below threshold', () => {
+      playerManager.setLocalPlayerId('local-player');
+
+      const playerStates: PlayerState[] = [
+        { id: 'local-player', position: { x: 100, y: 200 }, velocity: { x: 0.05, y: 0.05 } },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      expect(playerManager.isLocalPlayerMoving()).toBe(false);
+    });
+
+    it('should return false when no local player ID is set', () => {
+      expect(playerManager.isLocalPlayerMoving()).toBe(false);
+    });
+
+    it('should return false when local player does not exist', () => {
+      playerManager.setLocalPlayerId('non-existent');
+
+      expect(playerManager.isLocalPlayerMoving()).toBe(false);
+    });
+  });
+
+  describe('dodge roll and death state combination', () => {
+    it('should maintain color while rolling for alive player', () => {
+      playerManager.setLocalPlayerId('player-1');
+
+      // Alive player rolling
+      const rollingState: PlayerState[] = [
+        {
+          id: 'player-1',
+          position: { x: 100, y: 200 },
+          velocity: { x: 0, y: 0 },
+          isRolling: true
+        },
+      ];
+
+      playerManager.updatePlayers(rollingState);
+
+      const sprite = mockScene.rectangles[0];
+      // Color should be maintained during roll (green for local player)
+      expect(sprite.setFillStyle).toHaveBeenCalledWith(0x00ff00);
+    });
+
+    it('should apply death effects even when rolling flag is set', () => {
+      playerManager.setLocalPlayerId('player-1');
+
+      // Dead player with rolling flag (edge case)
+      const deadAndRollingState: PlayerState[] = [
+        {
+          id: 'player-1',
+          position: { x: 100, y: 200 },
+          velocity: { x: 0, y: 0 },
+          deathTime: clock.now(),
+          isRolling: true
+        },
+      ];
+
+      playerManager.updatePlayers(deadAndRollingState);
+
+      const sprite = mockScene.rectangles[0];
+      // Death effect takes precedence
+      expect(sprite.setAlpha).toHaveBeenCalledWith(0.5);
+      expect(sprite.setFillStyle).toHaveBeenCalledWith(0x888888);
+    });
+  });
+
   describe('edge cases - missing label/aim indicator', () => {
     it('should handle missing label during player removal', () => {
       const playerStates: PlayerState[] = [
@@ -920,6 +1068,244 @@ describe('PlayerManager', () => {
       expect(() => {
         playerManager.updatePlayers(updatedStates);
       }).not.toThrow();
+    });
+  });
+
+  describe('Phase 2 Critical: Scene Lifecycle Tests', () => {
+    describe('Destroy and recreation cycle', () => {
+      it('should properly cleanup all sprites on destroy', () => {
+        const playerStates: PlayerState[] = [
+          { id: 'player-1', position: { x: 100, y: 100 }, velocity: { x: 0, y: 0 } },
+          { id: 'player-2', position: { x: 200, y: 200 }, velocity: { x: 0, y: 0 } },
+        ];
+
+        playerManager.updatePlayers(playerStates);
+
+        // Verify sprites were created
+        expect(mockScene.rectangles.length).toBe(2);
+        expect(mockScene.texts.length).toBe(2);
+        expect(mockScene.lines.length).toBe(2);
+
+        // Destroy PlayerManager
+        playerManager.destroy();
+
+        // Verify all sprites were destroyed
+        expect(mockScene.rectangles[0].destroy).toHaveBeenCalled();
+        expect(mockScene.rectangles[1].destroy).toHaveBeenCalled();
+        expect(mockScene.texts[0].destroy).toHaveBeenCalled();
+        expect(mockScene.texts[1].destroy).toHaveBeenCalled();
+        expect(mockScene.lines[0].destroy).toHaveBeenCalled();
+        expect(mockScene.lines[1].destroy).toHaveBeenCalled();
+      });
+
+      it('should allow recreation after destroy', () => {
+        const playerStates: PlayerState[] = [
+          { id: 'player-1', position: { x: 100, y: 100 }, velocity: { x: 0, y: 0 } },
+        ];
+
+        // First lifecycle: create and destroy
+        playerManager.updatePlayers(playerStates);
+        playerManager.destroy();
+
+        // Second lifecycle: create new manager and add players
+        const newMockScene = createMockScene();
+        const newPlayerManager = new PlayerManager(newMockScene as unknown as Phaser.Scene);
+
+        newPlayerManager.updatePlayers(playerStates);
+
+        // Verify new sprites were created
+        expect(newMockScene.rectangles.length).toBe(1);
+        expect(newMockScene.texts.length).toBe(1);
+        expect(newMockScene.lines.length).toBe(1);
+      });
+
+      it('should track sprite count matches player count', () => {
+        const playerStates: PlayerState[] = [
+          { id: 'player-1', position: { x: 100, y: 100 }, velocity: { x: 0, y: 0 } },
+          { id: 'player-2', position: { x: 200, y: 200 }, velocity: { x: 0, y: 0 } },
+          { id: 'player-3', position: { x: 300, y: 300 }, velocity: { x: 0, y: 0 } },
+        ];
+
+        playerManager.updatePlayers(playerStates);
+        expect(mockScene.rectangles.length).toBe(3);
+
+        // Remove one player
+        const updatedStates: PlayerState[] = [
+          { id: 'player-1', position: { x: 100, y: 100 }, velocity: { x: 0, y: 0 } },
+          { id: 'player-2', position: { x: 200, y: 200 }, velocity: { x: 0, y: 0 } },
+        ];
+
+        playerManager.updatePlayers(updatedStates);
+
+        // Verify removed player's sprite was destroyed
+        expect(mockScene.rectangles[2].destroy).toHaveBeenCalled();
+      });
+
+      it('should have no zombie sprites after multiple updates and destroy', () => {
+        // Create players
+        const playerStates1: PlayerState[] = [
+          { id: 'player-1', position: { x: 100, y: 100 }, velocity: { x: 0, y: 0 } },
+        ];
+        playerManager.updatePlayers(playerStates1);
+
+        // Add more players
+        const playerStates2: PlayerState[] = [
+          { id: 'player-1', position: { x: 100, y: 100 }, velocity: { x: 0, y: 0 } },
+          { id: 'player-2', position: { x: 200, y: 200 }, velocity: { x: 0, y: 0 } },
+        ];
+        playerManager.updatePlayers(playerStates2);
+
+        // Remove all players
+        playerManager.updatePlayers([]);
+
+        // All sprites should be destroyed
+        mockScene.rectangles.forEach(sprite => {
+          expect(sprite.destroy).toHaveBeenCalled();
+        });
+        mockScene.texts.forEach(text => {
+          expect(text.destroy).toHaveBeenCalled();
+        });
+        mockScene.lines.forEach(line => {
+          expect(line.destroy).toHaveBeenCalled();
+        });
+
+        // Final destroy should not error
+        expect(() => playerManager.destroy()).not.toThrow();
+      });
+    });
+
+    describe('Scene restart simulation', () => {
+      it('should handle complete scene restart cycle', () => {
+        // Scene lifecycle 1: Create players
+        const playerStates: PlayerState[] = [
+          { id: 'player-1', position: { x: 100, y: 100 }, velocity: { x: 0, y: 0 } },
+          { id: 'player-2', position: { x: 200, y: 200 }, velocity: { x: 0, y: 0 } },
+        ];
+        playerManager.updatePlayers(playerStates);
+        expect(mockScene.rectangles.length).toBe(2);
+
+        // Scene lifecycle 1: Destroy
+        playerManager.destroy();
+
+        // Simulate scene restart: new scene and manager
+        const newMockScene = createMockScene();
+        const newPlayerManager = new PlayerManager(newMockScene as unknown as Phaser.Scene);
+
+        // Scene lifecycle 2: Create same players again
+        newPlayerManager.updatePlayers(playerStates);
+
+        // Should create new sprites (not reuse old ones)
+        expect(newMockScene.rectangles.length).toBe(2);
+        expect(newMockScene.rectangles[0]).not.toBe(mockScene.rectangles[0]);
+      });
+
+      it('should handle multiple consecutive restarts without leaks', () => {
+        for (let i = 0; i < 3; i++) {
+          const tempMockScene = createMockScene();
+          const tempManager = new PlayerManager(tempMockScene as unknown as Phaser.Scene);
+
+          const playerStates: PlayerState[] = [
+            { id: 'player-1', position: { x: 100, y: 100 }, velocity: { x: 0, y: 0 } },
+          ];
+
+          tempManager.updatePlayers(playerStates);
+          tempManager.destroy();
+
+          // Verify all sprites were destroyed in each cycle
+          expect(tempMockScene.rectangles.length).toBe(1);
+          expect(tempMockScene.rectangles[0].destroy).toHaveBeenCalled();
+        }
+      });
+
+      it('should clear all internal maps on destroy', () => {
+        const playerStates: PlayerState[] = [
+          { id: 'player-1', position: { x: 100, y: 100 }, velocity: { x: 0, y: 0 } },
+        ];
+
+        playerManager.setLocalPlayerId('player-1');
+        playerManager.updatePlayers(playerStates);
+
+        // Verify maps have data
+        const players = (playerManager as any).players as Map<string, any>;
+        const playerLabels = (playerManager as any).playerLabels as Map<string, any>;
+        const aimIndicators = (playerManager as any).aimIndicators as Map<string, any>;
+        const playerStatesMap = (playerManager as any).playerStates as Map<string, any>;
+
+        expect(players.size).toBe(1);
+        expect(playerLabels.size).toBe(1);
+        expect(aimIndicators.size).toBe(1);
+        expect(playerStatesMap.size).toBe(1);
+
+        // Destroy
+        playerManager.destroy();
+
+        // All maps should be cleared
+        expect(players.size).toBe(0);
+        expect(playerLabels.size).toBe(0);
+        expect(aimIndicators.size).toBe(0);
+        expect(playerStatesMap.size).toBe(0);
+      });
+
+      it('should return null for local player sprite after destroy', () => {
+        const playerStates: PlayerState[] = [
+          { id: 'player-1', position: { x: 100, y: 100 }, velocity: { x: 0, y: 0 } },
+        ];
+
+        playerManager.setLocalPlayerId('player-1');
+        playerManager.updatePlayers(playerStates);
+
+        expect(playerManager.getLocalPlayerSprite()).not.toBeNull();
+
+        playerManager.destroy();
+
+        expect(playerManager.getLocalPlayerSprite()).toBeNull();
+      });
+    });
+
+    describe('Sprite count validation', () => {
+      it('should maintain sprite count = player count at all times', () => {
+        // Start with 2 players
+        let playerStates: PlayerState[] = [
+          { id: 'player-1', position: { x: 100, y: 100 }, velocity: { x: 0, y: 0 } },
+          { id: 'player-2', position: { x: 200, y: 200 }, velocity: { x: 0, y: 0 } },
+        ];
+        playerManager.updatePlayers(playerStates);
+        expect(mockScene.rectangles.length).toBe(2);
+
+        // Add player
+        playerStates = [
+          { id: 'player-1', position: { x: 100, y: 100 }, velocity: { x: 0, y: 0 } },
+          { id: 'player-2', position: { x: 200, y: 200 }, velocity: { x: 0, y: 0 } },
+          { id: 'player-3', position: { x: 300, y: 300 }, velocity: { x: 0, y: 0 } },
+        ];
+        playerManager.updatePlayers(playerStates);
+        expect(mockScene.rectangles.length).toBe(3);
+
+        // Remove 2 players
+        playerStates = [
+          { id: 'player-1', position: { x: 100, y: 100 }, velocity: { x: 0, y: 0 } },
+        ];
+        playerManager.updatePlayers(playerStates);
+        // Only 1 active sprite remains (others destroyed)
+        const activeSpriteCount = mockScene.rectangles.filter(
+          s => !s.destroy.mock.calls.length
+        ).length;
+        expect(activeSpriteCount).toBe(1);
+      });
+
+      it('should never duplicate sprites for same player ID', () => {
+        const playerStates: PlayerState[] = [
+          { id: 'player-1', position: { x: 100, y: 100 }, velocity: { x: 0, y: 0 } },
+        ];
+
+        // Update same player multiple times
+        playerManager.updatePlayers(playerStates);
+        playerManager.updatePlayers(playerStates);
+        playerManager.updatePlayers(playerStates);
+
+        // Should only create one sprite, not three
+        expect(mockScene.rectangles.length).toBe(1);
+      });
     });
   });
 });
