@@ -67,9 +67,21 @@ export class PlayerManager {
   }
 
   /**
+   * Check if scene is valid and active for rendering
+   */
+  private isSceneValid(): boolean {
+    return this.scene && this.scene.sys && this.scene.sys.isActive();
+  }
+
+  /**
    * Update all players from server state
    */
   updatePlayers(playerStates: PlayerState[]): void {
+    // Skip if scene is not active (destroyed or transitioning)
+    if (!this.isSceneValid()) {
+      return;
+    }
+
     const currentPlayerIds = new Set(playerStates.map(p => p.id));
 
     // Store player states for death tracking
@@ -229,6 +241,9 @@ export class PlayerManager {
     this.aimIndicators.clear();
 
     this.playerStates.clear();
+
+    // Reset localPlayerId so new room:joined can set it fresh
+    this.localPlayerId = null;
   }
 
   /**

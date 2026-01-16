@@ -33,42 +33,85 @@ func (h *WebSocketHandler) broadcastPlayerStates(playerStates []game.PlayerState
 		}
 	}
 
-	// Create player:move message data
-	data := map[string]interface{}{
-		"players": playerStates,
-	}
+	// Group player state indices by room to avoid broadcasting cross-room player data
+	// This prevents the bug where players from different rooms appear in each other's games
+	// Using indices to avoid copying PlayerState which contains a mutex
+	roomPlayerIndices := make(map[string][]int)
+	waitingPlayerIndices := make([]int, 0)
 
-	// Validate outgoing message schema (development mode only)
-	if err := h.validateOutgoingMessage("player:move", data); err != nil {
-		log.Printf("Schema validation failed for player:move: %v", err)
-		// Continue anyway - validation is for development debugging only
-	}
-
-	// Create player:move message
-	message := Message{
-		Type:      "player:move",
-		Timestamp: 0, // Will be set by each client
-		Data:      data,
-	}
-
-	msgBytes, err := json.Marshal(message)
-	if err != nil {
-		log.Printf("Error marshaling player:move message: %v", err)
-		log.Printf("Player states that failed to marshal: %+v", playerStates)
-		return
-	}
-
-	// Broadcast to all players (both in rooms and waiting)
-	// This ensures all connected clients receive game state updates
 	for i := range playerStates {
 		room := h.roomManager.GetRoomByPlayerID(playerStates[i].ID)
 		if room != nil {
-			// Player is in a room - broadcast to room
-			room.Broadcast(msgBytes, "")
+			roomPlayerIndices[room.ID] = append(roomPlayerIndices[room.ID], i)
 		} else {
-			// Player is not in a room yet (waiting) - send directly to their channel
-			h.roomManager.SendToWaitingPlayer(playerStates[i].ID, msgBytes)
+			// Player is waiting (not in a room yet)
+			waitingPlayerIndices = append(waitingPlayerIndices, i)
 		}
+	}
+
+	// Broadcast to each room with only that room's players
+	for roomID, indices := range roomPlayerIndices {
+		// Build player slice for this room only
+		roomPlayers := make([]game.PlayerState, len(indices))
+		for j, idx := range indices {
+			roomPlayers[j] = playerStates[idx]
+		}
+
+		// Create player:move message data for this room only
+		data := map[string]interface{}{
+			"players": roomPlayers,
+		}
+
+		// Validate outgoing message schema (development mode only)
+		if err := h.validateOutgoingMessage("player:move", data); err != nil {
+			log.Printf("Schema validation failed for player:move: %v", err)
+			// Continue anyway - validation is for development debugging only
+		}
+
+		// Create player:move message
+		message := Message{
+			Type:      "player:move",
+			Timestamp: 0, // Will be set by each client
+			Data:      data,
+		}
+
+		msgBytes, err := json.Marshal(message)
+		if err != nil {
+			log.Printf("Error marshaling player:move message: %v", err)
+			log.Printf("Player states that failed to marshal: %+v", roomPlayers)
+			continue
+		}
+
+		// Get room and broadcast
+		rooms := h.roomManager.GetAllRooms()
+		for _, room := range rooms {
+			if room.ID == roomID {
+				room.Broadcast(msgBytes, "")
+				break
+			}
+		}
+	}
+
+	// Send to waiting players (each waiting player only sees their own state)
+	for _, idx := range waitingPlayerIndices {
+		state := playerStates[idx]
+		data := map[string]interface{}{
+			"players": []game.PlayerState{state},
+		}
+
+		message := Message{
+			Type:      "player:move",
+			Timestamp: 0,
+			Data:      data,
+		}
+
+		msgBytes, err := json.Marshal(message)
+		if err != nil {
+			log.Printf("Error marshaling player:move message for waiting player: %v", err)
+			continue
+		}
+
+		h.roomManager.SendToWaitingPlayer(state.ID, msgBytes)
 	}
 }
 
@@ -506,6 +549,7 @@ func (h *WebSocketHandler) broadcastPlayerDamaged(attackerID, victimID string, d
 
 // processMeleeKill handles death processing for melee kills
 func (h *WebSocketHandler) processMeleeKill(attackerID, victimID string) {
+	log.Printf("[DEBUG] Player %s killed by %s (melee)", victimID, attackerID)
 	// Mark player as dead
 	h.gameServer.MarkPlayerDead(victimID)
 
@@ -514,11 +558,13 @@ func (h *WebSocketHandler) processMeleeKill(attackerID, victimID string) {
 	if attackerExists && attacker != nil {
 		attacker.IncrementKills()
 		attacker.AddXP(game.KillXPReward)
+		log.Printf("[DEBUG] Attacker %s kills incremented to %d", attackerID, attacker.Kills)
 	}
 
 	victim, victimExists := h.gameServer.GetWorld().GetPlayer(victimID)
 	if victimExists && victim != nil {
 		victim.IncrementDeaths()
+		log.Printf("[DEBUG] Victim %s deaths incremented to %d", victimID, victim.Deaths)
 	}
 
 	// Create player:death message data

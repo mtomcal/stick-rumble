@@ -36,6 +36,20 @@ import type {
   RollEndData,
 } from '../../../../events-schema/src/index.js';
 
+// Module-level storage for player ID that persists across scene restarts
+// This is needed because the server doesn't re-send room:joined after match restart
+// NOTE: This is ONLY for in-page scene restarts where WebSocket stays connected.
+// When WebSocket reconnects, server sends new room:joined with new player ID.
+let persistentLocalPlayerId: string | null = null;
+
+/**
+ * Clear the persistent player ID (call when WebSocket reconnects)
+ * This prevents stale IDs from being used after reconnection
+ */
+export function clearPersistentLocalPlayerId(): void {
+  persistentLocalPlayerId = null;
+}
+
 /**
  * GameSceneEventHandlers - Manages all WebSocket event handlers
  * Responsibility: Network message handling and routing
@@ -60,6 +74,9 @@ export class GameSceneEventHandlers {
   private screenShake: ScreenShake | null = null;
   private audioManager: AudioManager | null = null;
   private currentWeaponType: string = 'pistol'; // Default weapon
+  private matchEnded: boolean = false; // Flag to stop processing player:move after match ends
+  private pendingPlayerMoves: unknown[] = []; // Queue for player:move messages before room:joined
+  private pendingWeaponSpawns: unknown[] = []; // Queue for weapon:spawned messages before room:joined
 
   constructor(
     wsClient: WebSocketClient,
@@ -140,6 +157,11 @@ export class GameSceneEventHandlers {
     }
     // Clear the handler references map
     this.handlerRefs.clear();
+    // Reset match ended flag for potential future matches
+    this.matchEnded = false;
+    // Clear any pending message queues
+    this.pendingPlayerMoves = [];
+    this.pendingWeaponSpawns = [];
   }
 
   /**
@@ -160,6 +182,23 @@ export class GameSceneEventHandlers {
 
     // Store and register player:move handler
     const playerMoveHandler = (data: unknown) => {
+      // Skip processing player:move after match has ended to prevent null reference errors
+      if (this.matchEnded) {
+        return;
+      }
+      // If no local player ID set, ALWAYS queue and wait for room:joined
+      // The persistentLocalPlayerId is unreliable after WebSocket reconnects because
+      // the server assigns a NEW player ID on each connection.
+      if (!this.playerManager.getLocalPlayerId()) {
+        // Queue player:move until room:joined has set the local player ID
+        // This prevents creating duplicate sprites when player:move arrives before room:joined
+        // Limit queue size to prevent memory issues while waiting for room (keep only latest 10)
+        if (this.pendingPlayerMoves.length >= 10) {
+          this.pendingPlayerMoves.shift();
+        }
+        this.pendingPlayerMoves.push(data);
+        return;
+      }
       const messageData = data as PlayerMoveData;
       if (messageData.players) {
         this.playerManager.updatePlayers(messageData.players);
@@ -200,7 +239,9 @@ export class GameSceneEventHandlers {
     // Store and register room:joined handler
     const roomJoinedHandler = (data: unknown) => {
       const messageData = data as RoomJoinedData;
-      console.log('Joined room as player:', messageData.playerId);
+
+      // Reset match ended flag for new match
+      this.matchEnded = false;
 
       // Clear existing players to prevent duplication if room:joined fires multiple times
       // This handles reconnect scenarios and future match restart functionality
@@ -209,9 +250,26 @@ export class GameSceneEventHandlers {
       // Set local player ID so we can highlight our player
       if (messageData.playerId) {
         this.playerManager.setLocalPlayerId(messageData.playerId);
+        // Store for reuse after match restart (server may not send room:joined again)
+        persistentLocalPlayerId = messageData.playerId;
         // Initialize health bar to full health on join
         this.localPlayerHealth = 100;
         this.getHealthBarUI().updateHealth(this.localPlayerHealth, 100, false);
+
+        // Clear any queued player:move messages - they are stale (captured before room was created)
+        // The next player:move from the server will have the correct player list
+        this.pendingPlayerMoves = [];
+
+        // Process any queued weapon:spawned messages
+        for (const pendingData of this.pendingWeaponSpawns) {
+          const weaponData = pendingData as WeaponSpawnedData;
+          if (weaponData.crates) {
+            for (const crateData of weaponData.crates) {
+              this.weaponCrateManager.spawnCrate(crateData);
+            }
+          }
+        }
+        this.pendingWeaponSpawns = [];
       }
     };
     this.handlerRefs.set('room:joined', roomJoinedHandler);
@@ -219,6 +277,10 @@ export class GameSceneEventHandlers {
 
     // Store and register projectile:spawn handler
     const projectileSpawnHandler = (data: unknown) => {
+      // Skip until room:joined has set local player ID (scene not ready)
+      if (!this.playerManager.getLocalPlayerId()) {
+        return;
+      }
       const messageData = data as ProjectileSpawnData;
       this.projectileManager.spawnProjectile(messageData);
 
@@ -367,6 +429,10 @@ export class GameSceneEventHandlers {
 
     // Store and register match:timer handler
     const matchTimerHandler = (data: unknown) => {
+      // Skip if match has ended
+      if (this.matchEnded) {
+        return;
+      }
       const messageData = data as MatchTimerData;
       this.ui.updateMatchTimer(messageData.remainingSeconds);
     };
@@ -378,6 +444,9 @@ export class GameSceneEventHandlers {
       const messageData = data as MatchEndedData;
       console.log(`Match ended! Reason: ${messageData.reason}, Winners:`, messageData.winners);
       console.log('Final scores:', messageData.finalScores);
+
+      // Set match ended flag to stop processing player:move messages
+      this.matchEnded = true;
 
       // Freeze gameplay by disabling input handlers
       if (this.inputManager) {
@@ -400,6 +469,11 @@ export class GameSceneEventHandlers {
 
     // Store and register weapon:spawned handler (initial weapon crate spawns)
     const weaponSpawnedHandler = (data: unknown) => {
+      // Queue until room:joined has set local player ID (scene not ready)
+      if (!this.playerManager.getLocalPlayerId()) {
+        this.pendingWeaponSpawns.push(data);
+        return;
+      }
       const messageData = data as WeaponSpawnedData;
       if (messageData.crates) {
         for (const crateData of messageData.crates) {
