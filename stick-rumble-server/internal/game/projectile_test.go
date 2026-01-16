@@ -12,7 +12,7 @@ func TestNewProjectile(t *testing.T) {
 	aimAngle := math.Pi / 4 // 45 degrees
 	speed := 800.0
 
-	proj := NewProjectile(ownerID, startPos, aimAngle, speed)
+	proj := NewProjectile(ownerID, "Pistol", startPos, aimAngle, speed)
 
 	if proj.ID == "" {
 		t.Error("projectile should have an ID")
@@ -20,6 +20,10 @@ func TestNewProjectile(t *testing.T) {
 
 	if proj.OwnerID != ownerID {
 		t.Errorf("expected owner ID '%s', got '%s'", ownerID, proj.OwnerID)
+	}
+
+	if proj.WeaponType != "Pistol" {
+		t.Errorf("expected weapon type 'Pistol', got '%s'", proj.WeaponType)
 	}
 
 	if proj.Position.X != startPos.X || proj.Position.Y != startPos.Y {
@@ -50,7 +54,7 @@ func TestNewProjectile(t *testing.T) {
 
 func TestProjectile_Update(t *testing.T) {
 	startPos := Vector2{X: 100, Y: 100}
-	proj := NewProjectile("player-1", startPos, 0, 800.0) // Moving right at 800 px/s
+	proj := NewProjectile("player-1", "Pistol", startPos, 0, 800.0) // Moving right at 800 px/s
 
 	// Update for 0.5 seconds
 	deltaTime := 0.5
@@ -73,7 +77,7 @@ func TestProjectile_Update_DiagonalMovement(t *testing.T) {
 	startPos := Vector2{X: 0, Y: 0}
 	aimAngle := math.Pi / 4 // 45 degrees
 	speed := 800.0
-	proj := NewProjectile("player-1", startPos, aimAngle, speed)
+	proj := NewProjectile("player-1", "Pistol", startPos, aimAngle, speed)
 
 	deltaTime := 1.0
 	proj.Update(deltaTime)
@@ -92,7 +96,7 @@ func TestProjectile_Update_DiagonalMovement(t *testing.T) {
 }
 
 func TestProjectile_IsExpired(t *testing.T) {
-	proj := NewProjectile("player-1", Vector2{X: 0, Y: 0}, 0, 800.0)
+	proj := NewProjectile("player-1", "Pistol", Vector2{X: 0, Y: 0}, 0, 800.0)
 
 	// Should not be expired initially
 	if proj.IsExpired() {
@@ -127,7 +131,7 @@ func TestProjectile_IsOutOfBounds(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			proj := NewProjectile("player-1", tc.position, 0, 800.0)
+			proj := NewProjectile("player-1", "Pistol", tc.position, 0, 800.0)
 			if proj.IsOutOfBounds() != tc.outOfBounds {
 				t.Errorf("expected IsOutOfBounds=%v for position %v", tc.outOfBounds, tc.position)
 			}
@@ -136,7 +140,7 @@ func TestProjectile_IsOutOfBounds(t *testing.T) {
 }
 
 func TestProjectile_Deactivate(t *testing.T) {
-	proj := NewProjectile("player-1", Vector2{X: 0, Y: 0}, 0, 800.0)
+	proj := NewProjectile("player-1", "Pistol", Vector2{X: 0, Y: 0}, 0, 800.0)
 
 	if !proj.Active {
 		t.Error("projectile should be active initially")
@@ -164,7 +168,7 @@ func TestNewProjectileManager(t *testing.T) {
 func TestProjectileManager_CreateProjectile(t *testing.T) {
 	pm := NewProjectileManager()
 
-	proj := pm.CreateProjectile("player-1", Vector2{X: 100, Y: 100}, 0, 800.0)
+	proj := pm.CreateProjectile("player-1", "Pistol", Vector2{X: 100, Y: 100}, 0, 800.0)
 
 	if proj == nil {
 		t.Fatal("created projectile should not be nil")
@@ -185,7 +189,7 @@ func TestProjectileManager_Update(t *testing.T) {
 
 	// Create a projectile moving right
 	startPos := Vector2{X: 100, Y: 100}
-	pm.CreateProjectile("player-1", startPos, 0, 800.0)
+	pm.CreateProjectile("player-1", "Pistol", startPos, 0, 800.0)
 
 	// Update for 0.5 seconds
 	pm.Update(0.5)
@@ -206,7 +210,7 @@ func TestProjectileManager_Update(t *testing.T) {
 func TestProjectileManager_RemovesExpiredProjectiles(t *testing.T) {
 	pm := NewProjectileManager()
 
-	proj := pm.CreateProjectile("player-1", Vector2{X: 100, Y: 100}, 0, 800.0)
+	proj := pm.CreateProjectile("player-1", "Pistol", Vector2{X: 100, Y: 100}, 0, 800.0)
 
 	// Simulate expiration by setting creation time in the past
 	proj.CreatedAt = time.Now().Add(-ProjectileMaxLifetime - 10*time.Millisecond)
@@ -224,7 +228,7 @@ func TestProjectileManager_RemovesOutOfBoundsProjectiles(t *testing.T) {
 	pm := NewProjectileManager()
 
 	// Create projectile at edge moving out of bounds
-	pm.CreateProjectile("player-1", Vector2{X: ArenaWidth - 10, Y: 100}, 0, 800.0)
+	pm.CreateProjectile("player-1", "Pistol", Vector2{X: ArenaWidth - 10, Y: 100}, 0, 800.0)
 
 	// Update enough time to move out of bounds (10 pixels at 800 px/s = 0.0125s)
 	pm.Update(0.5) // Half second should definitely be out of bounds
@@ -238,7 +242,7 @@ func TestProjectileManager_RemovesOutOfBoundsProjectiles(t *testing.T) {
 func TestProjectileManager_RemovesDeactivatedProjectiles(t *testing.T) {
 	pm := NewProjectileManager()
 
-	proj := pm.CreateProjectile("player-1", Vector2{X: 100, Y: 100}, 0, 800.0)
+	proj := pm.CreateProjectile("player-1", "Pistol", Vector2{X: 100, Y: 100}, 0, 800.0)
 	proj.Deactivate()
 
 	pm.Update(0.016)
@@ -254,7 +258,7 @@ func TestProjectileManager_MultipleProjectiles(t *testing.T) {
 
 	// Create 5 projectiles
 	for i := 0; i < 5; i++ {
-		pm.CreateProjectile("player-1", Vector2{X: float64(100 + i*50), Y: 100}, 0, 800.0)
+		pm.CreateProjectile("player-1", "Pistol", Vector2{X: float64(100 + i*50), Y: 100}, 0, 800.0)
 	}
 
 	projectiles := pm.GetActiveProjectiles()
@@ -275,7 +279,7 @@ func TestProjectileManager_MultipleProjectiles(t *testing.T) {
 func TestProjectileManager_GetProjectileByID(t *testing.T) {
 	pm := NewProjectileManager()
 
-	proj := pm.CreateProjectile("player-1", Vector2{X: 100, Y: 100}, 0, 800.0)
+	proj := pm.CreateProjectile("player-1", "Pistol", Vector2{X: 100, Y: 100}, 0, 800.0)
 
 	found := pm.GetProjectileByID(proj.ID)
 	if found == nil {
@@ -296,7 +300,7 @@ func TestProjectileManager_GetProjectileByID(t *testing.T) {
 func TestProjectileManager_RemoveProjectile(t *testing.T) {
 	pm := NewProjectileManager()
 
-	proj := pm.CreateProjectile("player-1", Vector2{X: 100, Y: 100}, 0, 800.0)
+	proj := pm.CreateProjectile("player-1", "Pistol", Vector2{X: 100, Y: 100}, 0, 800.0)
 
 	pm.RemoveProjectile(proj.ID)
 
@@ -310,9 +314,9 @@ func TestProjectileManager_GetProjectilesByOwner(t *testing.T) {
 	pm := NewProjectileManager()
 
 	// Create projectiles for different players
-	pm.CreateProjectile("player-1", Vector2{X: 100, Y: 100}, 0, 800.0)
-	pm.CreateProjectile("player-1", Vector2{X: 200, Y: 100}, 0, 800.0)
-	pm.CreateProjectile("player-2", Vector2{X: 300, Y: 100}, 0, 800.0)
+	pm.CreateProjectile("player-1", "Pistol", Vector2{X: 100, Y: 100}, 0, 800.0)
+	pm.CreateProjectile("player-1", "Pistol", Vector2{X: 200, Y: 100}, 0, 800.0)
+	pm.CreateProjectile("player-2", "Pistol", Vector2{X: 300, Y: 100}, 0, 800.0)
 
 	player1Projs := pm.GetProjectilesByOwner("player-1")
 	if len(player1Projs) != 2 {
@@ -331,7 +335,7 @@ func TestProjectileManager_GetProjectilesByOwner(t *testing.T) {
 }
 
 func TestProjectile_Snapshot(t *testing.T) {
-	proj := NewProjectile("player-1", Vector2{X: 100, Y: 200}, math.Pi/4, 800.0)
+	proj := NewProjectile("player-1", "Pistol", Vector2{X: 100, Y: 200}, math.Pi/4, 800.0)
 
 	snapshot := proj.Snapshot()
 
@@ -341,6 +345,10 @@ func TestProjectile_Snapshot(t *testing.T) {
 
 	if snapshot.OwnerID != proj.OwnerID {
 		t.Errorf("snapshot OwnerID mismatch: expected %s, got %s", proj.OwnerID, snapshot.OwnerID)
+	}
+
+	if snapshot.WeaponType != proj.WeaponType {
+		t.Errorf("snapshot WeaponType mismatch: expected %s, got %s", proj.WeaponType, snapshot.WeaponType)
 	}
 
 	if snapshot.Position.X != proj.Position.X || snapshot.Position.Y != proj.Position.Y {
@@ -353,7 +361,7 @@ func TestProjectile_Snapshot(t *testing.T) {
 }
 
 func TestProjectileSnapshot_ForNetworkTransmission(t *testing.T) {
-	proj := NewProjectile("player-1", Vector2{X: 100, Y: 200}, 0, 800.0)
+	proj := NewProjectile("player-1", "Pistol", Vector2{X: 100, Y: 200}, 0, 800.0)
 
 	snapshot := proj.Snapshot()
 

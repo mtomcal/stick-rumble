@@ -211,10 +211,11 @@ export class GameSceneEventHandlers {
       const messageData = data as ProjectileSpawnData;
       this.projectileManager.spawnProjectile(messageData);
 
-      // Create muzzle flash at projectile origin
+      // Create muzzle flash at projectile origin with weapon-specific visuals
       this.projectileManager.createMuzzleFlash(
         messageData.position.x,
-        messageData.position.y
+        messageData.position.y,
+        messageData.weaponType
       );
 
       const isLocalPlayer = messageData.ownerId === this.playerManager.getLocalPlayerId();

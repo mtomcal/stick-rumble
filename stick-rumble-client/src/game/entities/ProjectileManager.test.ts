@@ -95,6 +95,7 @@ describe('ProjectileManager', () => {
       const projectileData: ProjectileData = {
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'Pistol',
         position: { x: 100, y: 100 },
         velocity: { x: 100, y: 0 },
       };
@@ -124,6 +125,7 @@ describe('ProjectileManager', () => {
       const projectileData: ProjectileData = {
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'Pistol',
         position: { x: 100, y: 200 },
         velocity: { x: 800, y: 0 },
       };
@@ -138,6 +140,7 @@ describe('ProjectileManager', () => {
       const projectileData: ProjectileData = {
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'Pistol',
         position: { x: 100, y: 200 },
         velocity: { x: 800, y: 0 },
       };
@@ -156,6 +159,7 @@ describe('ProjectileManager', () => {
       const projectileData: ProjectileData = {
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'Pistol',
         position: { x: 100, y: 200 },
         velocity: { x: 800, y: 0 },
       };
@@ -170,6 +174,7 @@ describe('ProjectileManager', () => {
       const projectileData: ProjectileData = {
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'Pistol',
         position: { x: 100, y: 200 },
         velocity: { x: 800, y: 0 },
       };
@@ -185,6 +190,7 @@ describe('ProjectileManager', () => {
       const projectileData: ProjectileData = {
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'Pistol',
         position: { x: 100, y: 100 },
         velocity: { x: 800, y: 0 }, // Moving right
       };
@@ -203,6 +209,7 @@ describe('ProjectileManager', () => {
       const projectileData: ProjectileData = {
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'Pistol',
         position: { x: 100, y: 100 },
         velocity: { x: 400, y: 0 },
       };
@@ -219,6 +226,7 @@ describe('ProjectileManager', () => {
       const projectileData: ProjectileData = {
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'Pistol',
         position: { x: 1900, y: 100 },
         velocity: { x: 800, y: 0 }, // Moving right, will exit bounds
       };
@@ -236,6 +244,7 @@ describe('ProjectileManager', () => {
       const projectileData: ProjectileData = {
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'Pistol',
         position: { x: 100, y: 100 },
         velocity: { x: 100, y: 0 }, // Moving slowly
       };
@@ -255,6 +264,7 @@ describe('ProjectileManager', () => {
       const projectileData: ProjectileData = {
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'Pistol',
         position: { x: 100, y: 200 },
         velocity: { x: 800, y: 0 },
       };
@@ -270,6 +280,7 @@ describe('ProjectileManager', () => {
       const projectileData: ProjectileData = {
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'Pistol',
         position: { x: 100, y: 200 },
         velocity: { x: 800, y: 0 },
       };
@@ -289,6 +300,7 @@ describe('ProjectileManager', () => {
       const projectileData: ProjectileData = {
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'Pistol',
         position: { x: 100, y: 200 },
         velocity: { x: 800, y: 0 },
       };
@@ -309,6 +321,7 @@ describe('ProjectileManager', () => {
       const projectileData: ProjectileData = {
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'Pistol',
         position: { x: 100, y: 200 },
         velocity: { x: 800, y: 0 },
       };
@@ -331,6 +344,7 @@ describe('ProjectileManager', () => {
       const projectileData: ProjectileData = {
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'Pistol',
         position: { x: 100, y: 200 },
         velocity: { x: 800, y: 0 },
       };
@@ -353,6 +367,7 @@ describe('ProjectileManager', () => {
       projectileManager.spawnProjectile({
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'Pistol',
         position: { x: 100, y: 200 },
         velocity: { x: 800, y: 0 },
       });
@@ -360,6 +375,7 @@ describe('ProjectileManager', () => {
       projectileManager.spawnProjectile({
         id: 'proj-2',
         ownerId: 'player-2',
+        weaponType: 'Uzi',
         position: { x: 200, y: 300 },
         velocity: { x: 400, y: 400 },
       });

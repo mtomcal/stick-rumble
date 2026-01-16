@@ -279,6 +279,7 @@ describe('GameScene - Combat', () => {
           data: {
             id: 'proj-1',
             ownerId: 'player-1',
+            weaponType: 'Pistol',
             position: { x: 100, y: 200 },
             velocity: { x: 800, y: 0 }
           }
@@ -292,11 +293,12 @@ describe('GameScene - Combat', () => {
       expect(spawnSpy).toHaveBeenCalledWith({
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'Pistol',
         position: { x: 100, y: 200 },
         velocity: { x: 800, y: 0 }
       });
 
-      expect(muzzleFlashSpy).toHaveBeenCalledWith(100, 200);
+      expect(muzzleFlashSpy).toHaveBeenCalledWith(100, 200, 'Pistol');
     });
 
     it('should handle projectile:destroy messages and remove projectiles', async () => {

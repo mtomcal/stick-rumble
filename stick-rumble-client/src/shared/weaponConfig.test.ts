@@ -41,6 +41,12 @@ describe('weaponConfig', () => {
           muzzleFlashColor: '0xffdd00',
           muzzleFlashSize: 8,
           muzzleFlashDuration: 50,
+          projectile: {
+            color: '0xffff00',
+            diameter: 4,
+            tracerColor: '0xffff00',
+            tracerWidth: 2,
+          },
         },
       };
 
@@ -65,6 +71,12 @@ describe('weaponConfig', () => {
           muzzleFlashColor: '0xffdd00',
           muzzleFlashSize: 8,
           muzzleFlashDuration: 50,
+          projectile: {
+            color: '0xffff00',
+            diameter: 4,
+            tracerColor: '0xffff00',
+            tracerWidth: 2,
+          },
         },
       };
 
@@ -89,6 +101,12 @@ describe('weaponConfig', () => {
           muzzleFlashColor: '0xffdd00',
           muzzleFlashSize: 8,
           muzzleFlashDuration: 50,
+          projectile: {
+            color: '0xffff00',
+            diameter: 4,
+            tracerColor: '0xffff00',
+            tracerWidth: 2,
+          },
         },
       };
 
@@ -113,6 +131,12 @@ describe('weaponConfig', () => {
           muzzleFlashColor: '0xffdd00',
           muzzleFlashSize: 8,
           muzzleFlashDuration: 50,
+          projectile: {
+            color: '0xffff00',
+            diameter: 4,
+            tracerColor: '0xffff00',
+            tracerWidth: 2,
+          },
         },
       };
 
@@ -137,6 +161,12 @@ describe('weaponConfig', () => {
           muzzleFlashColor: '0xffdd00',
           muzzleFlashSize: 8,
           muzzleFlashDuration: 50,
+          projectile: {
+            color: '0xffff00',
+            diameter: 4,
+            tracerColor: '0xffff00',
+            tracerWidth: 2,
+          },
         },
       };
 
@@ -161,6 +191,12 @@ describe('weaponConfig', () => {
           muzzleFlashColor: '0xffdd00',
           muzzleFlashSize: 8,
           muzzleFlashDuration: 50,
+          projectile: {
+            color: '0xffff00',
+            diameter: 4,
+            tracerColor: '0xffff00',
+            tracerWidth: 2,
+          },
         },
       };
 
@@ -190,6 +226,12 @@ describe('weaponConfig', () => {
           muzzleFlashColor: '0xffdd00',
           muzzleFlashSize: 8,
           muzzleFlashDuration: 50,
+          projectile: {
+            color: '0xffff00',
+            diameter: 4,
+            tracerColor: '0xffff00',
+            tracerWidth: 2,
+          },
         },
       };
 
