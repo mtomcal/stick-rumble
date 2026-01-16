@@ -372,8 +372,13 @@ func TestGetFinalScores(t *testing.T) {
 		player3.IncrementDeaths()
 		player3.AddXP(50)
 
-		// Create match and track kills
+		// Create match and register all players
 		match := NewMatch()
+		match.RegisterPlayer("player-1")
+		match.RegisterPlayer("player-2")
+		match.RegisterPlayer("player-3")
+
+		// Track kills
 		match.AddKill("player-1")
 		match.AddKill("player-1")
 		match.AddKill("player-1")
@@ -417,6 +422,66 @@ func TestGetFinalScores(t *testing.T) {
 		scores := match.GetFinalScores(world)
 
 		assert.Empty(t, scores)
+	})
+
+	t.Run("includes players with 0 kills in final scores", func(t *testing.T) {
+		// Create a world with 3 players
+		world := NewWorld()
+		player1 := world.AddPlayer("player-1")
+		player2 := world.AddPlayer("player-2")
+		player3 := world.AddPlayer("player-3")
+
+		// Player 1 gets 2 kills
+		player1.IncrementKills()
+		player1.IncrementKills()
+		player1.AddXP(100)
+
+		// Player 2 gets 1 kill
+		player2.IncrementKills()
+		player2.AddXP(50)
+		player2.IncrementDeaths()
+
+		// Player 3 gets NO kills, only dies
+		player3.IncrementDeaths()
+		player3.IncrementDeaths()
+
+		// Create match and register all players
+		match := NewMatch()
+		match.RegisterPlayer("player-1")
+		match.RegisterPlayer("player-2")
+		match.RegisterPlayer("player-3")
+
+		// Only player-1 and player-2 get kills tracked in match
+		match.AddKill("player-1")
+		match.AddKill("player-1")
+		match.AddKill("player-2")
+
+		// Get final scores
+		scores := match.GetFinalScores(world)
+
+		// Should include ALL 3 players, even player-3 with 0 kills
+		assert.Len(t, scores, 3)
+
+		// Verify player-1 score
+		score1 := findPlayerScore(scores, "player-1")
+		assert.NotNil(t, score1, "player-1 should be in final scores")
+		assert.Equal(t, 2, score1.Kills)
+		assert.Equal(t, 0, score1.Deaths)
+		assert.Equal(t, 100, score1.XP)
+
+		// Verify player-2 score
+		score2 := findPlayerScore(scores, "player-2")
+		assert.NotNil(t, score2, "player-2 should be in final scores")
+		assert.Equal(t, 1, score2.Kills)
+		assert.Equal(t, 1, score2.Deaths)
+		assert.Equal(t, 50, score2.XP)
+
+		// Verify player-3 score (the key test - player with 0 kills)
+		score3 := findPlayerScore(scores, "player-3")
+		assert.NotNil(t, score3, "player-3 should be in final scores even with 0 kills")
+		assert.Equal(t, 0, score3.Kills)
+		assert.Equal(t, 2, score3.Deaths)
+		assert.Equal(t, 0, score3.XP)
 	})
 }
 
