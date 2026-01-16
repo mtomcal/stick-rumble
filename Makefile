@@ -1,4 +1,4 @@
-.PHONY: help install dev-client dev-server dev test test-client test-server test-server-verbose test-integration test-coverage test-visual test-visual-update lint build clean check-zombies kill-dev schema-generate schema-validate test-schema weapon-config-validate
+.PHONY: help install dev-client dev-server dev test test-client test-server test-server-verbose test-integration test-coverage test-visual test-visual-update test-visual-install lint build clean check-zombies kill-dev schema-generate schema-validate test-schema weapon-config-validate
 
 # Default target - show help
 help:
@@ -23,6 +23,7 @@ help:
 	@echo "  make test-coverage    Run tests with coverage reports"
 	@echo "  make test-visual      Run visual regression tests (requires Playwright deps)"
 	@echo "  make test-visual-update   Update visual regression baselines"
+	@echo "  make test-visual-install  Install Playwright browsers and system deps"
 	@echo ""
 	@echo "Code Quality:"
 	@echo "  make lint             Run linters for both client and server"
@@ -286,7 +287,7 @@ test-visual:
 	@echo "Running visual regression tests..."
 	@echo ""
 	@echo "⚠️  PREREQUISITE: System dependencies required (sudo access needed)"
-	@echo "Install with: cd stick-rumble-client && npx playwright install-deps chromium"
+	@echo "Install with: make test-visual-install"
 	@echo "See: stick-rumble-client/tests/visual/SYSTEM_DEPENDENCIES.md"
 	@echo ""
 	cd stick-rumble-client && npm run test:visual
@@ -296,7 +297,18 @@ test-visual-update:
 	@echo "Updating visual regression baselines..."
 	@echo ""
 	@echo "⚠️  PREREQUISITE: System dependencies required (sudo access needed)"
-	@echo "Install with: cd stick-rumble-client && npx playwright install-deps chromium"
+	@echo "Install with: make test-visual-install"
 	@echo "See: stick-rumble-client/tests/visual/SYSTEM_DEPENDENCIES.md"
 	@echo ""
 	cd stick-rumble-client && npm run test:visual:update
+
+# Install Playwright browsers and system dependencies
+test-visual-install:
+	@echo "Installing Playwright browsers and dependencies..."
+	@echo ""
+	cd stick-rumble-client && npx playwright install chromium
+	@echo ""
+	@echo "Installing system dependencies (may require sudo)..."
+	cd stick-rumble-client && npx playwright install-deps chromium
+	@echo ""
+	@echo "✓ Playwright installation complete"

@@ -34,6 +34,9 @@ make test-server          # Run server tests only
 make test-server-verbose  # Run server tests with verbose output (debugging)
 make test-integration     # Run integration tests (auto-starts server)
 make test-coverage        # Generate coverage reports for both
+make test-visual          # Run visual regression tests
+make test-visual-update   # Update visual regression baselines
+make test-visual-install  # Install Playwright browsers and system deps
 
 # Code Quality
 make lint                 # Run all linters (ESLint + go vet + gofmt)
@@ -48,8 +51,6 @@ make help                 # Show all available commands
 ```
 
 **REQUIRED workflow for agents:**
-- **ALWAYS check your current directory with `pwd` before running commands**
-- **Project root is `/home/mtomcal/code/stick-rumble`** - most commands should run from here
 - **ALWAYS run commands from the project root directory** unless explicitly working on a single package
 - **DO NOT cd into stick-rumble-client/ or stick-rumble-server/ directories** for most operations
 - Starting work: `make dev-server` (for backend work) or `make dev` (for full stack)
@@ -58,13 +59,6 @@ make help                 # Show all available commands
 - Running client tests: `make test-client` (NOT `cd stick-rumble-client && npm test`)
 - Integration tests: `make test-integration` (handles server startup/shutdown automatically)
 - Pre-commit checks: `make lint && make typecheck && make test`
-
-**Directory awareness best practices:**
-- Before running any command, verify you're in the correct directory with `pwd`
-- The Bash tool does not automatically change directories between commands
-- If you run `cd stick-rumble-client`, all subsequent commands will run from that directory until you `cd` back
-- Use absolute paths or `cd /home/mtomcal/code/stick-rumble` to return to project root
-- Prefer using the Makefile from root rather than navigating into subdirectories
 
 ### Frontend (stick-rumble-client/)
 
@@ -239,11 +233,14 @@ stick-rumble-client/
 ### Commands
 
 ```bash
+# Install Playwright (first time only)
+make test-visual-install
+
 # Run visual tests
-cd stick-rumble-client && npx playwright test tests/visual/
+make test-visual
 
 # Update baselines after fixing a bug
-npx playwright test tests/visual/{test}.spec.ts --update-snapshots
+make test-visual-update
 ```
 
 ### MANDATORY: Verify Rendering Fixes With Your Eyes
@@ -258,9 +255,9 @@ npx playwright test tests/visual/{test}.spec.ts --update-snapshots
 
 ```bash
 # Example workflow
-npx playwright test tests/visual/player-sprites.spec.ts --update-snapshots
+make test-visual-update
 ```
-Then use Read tool on the screenshot files to visually verify.
+Then use Read tool on the screenshot files in `stick-rumble-client/tests/screenshots/` to visually verify.
 
 ### The Entity Test Harness
 
@@ -399,13 +396,9 @@ The project uses a shared schema system (`events-schema/`) for type-safe WebSock
 **Schema Commands:**
 ```bash
 # From project root
-make schema-build         # Generate JSON schemas from TypeBox
+make schema-generate      # Generate JSON schemas from TypeBox
 make schema-validate      # Check schemas are up-to-date (CI uses this)
-
-# From events-schema/
-npm run build:schemas     # Generate schemas
-npm run check:schemas     # Verify no drift
-npm test                  # Run schema unit tests
+make test-schema          # Run schema unit tests
 ```
 
 **Adding a New WebSocket Message Type (Schema-First Approach):**
@@ -434,7 +427,7 @@ npm test                  # Run schema unit tests
 
 4. **Generate JSON schemas**:
    ```bash
-   make schema-build
+   make schema-generate
    ```
 
 5. **Update client handlers** (`stick-rumble-client/src/game/scenes/GameSceneEventHandlers.ts`):
@@ -476,7 +469,7 @@ Server→Client (16 types):
 
 ## Technology Versions
 
-- **Go**: 1.24.1
+- **Go**: 1.25
 - **Node.js**: Latest LTS recommended
 - **Phaser**: 3.90.0
 - **React**: 19.2.0
@@ -484,6 +477,7 @@ Server→Client (16 types):
 - **Vite**: 7.2.4
 - **gorilla/websocket**: v1.5.3
 - **Vitest**: 4.0.13
+- **Playwright**: 1.57.0
 
 ## Important Notes
 
