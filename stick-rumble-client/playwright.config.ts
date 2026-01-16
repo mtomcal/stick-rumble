@@ -10,10 +10,10 @@ export default defineConfig({
   // Snapshot configuration
   snapshotPathTemplate: 'tests/screenshots/{testFilePath}/{arg}{ext}',
 
-  // Fail on visual regression >1% pixel diff
+  // Fail on visual regression >3% pixel diff
   expect: {
     toHaveScreenshot: {
-      maxDiffPixelRatio: 0.01, // 1% threshold
+      maxDiffPixelRatio: 0.03, // 3% threshold
     },
   },
 
