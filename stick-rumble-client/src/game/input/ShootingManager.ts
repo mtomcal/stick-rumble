@@ -217,6 +217,16 @@ export class ShootingManager {
   }
 
   /**
+   * Check if current weapon is automatic (hold-to-fire)
+   * Automatic weapons: Uzi, AK47
+   * Semi-automatic/pump: Pistol, Shotgun, melee weapons
+   */
+  isAutomatic(): boolean {
+    const weaponType = this.weaponState.weaponType.toLowerCase();
+    return weaponType === 'uzi' || weaponType === 'ak47';
+  }
+
+  /**
    * Attempt a melee attack
    * Returns true if attack was sent to server
    */
