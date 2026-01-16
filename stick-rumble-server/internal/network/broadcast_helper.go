@@ -51,10 +51,10 @@ func (h *WebSocketHandler) broadcastPlayerStates(playerStates []game.PlayerState
 
 	// Broadcast to each room with only that room's players
 	for roomID, indices := range roomPlayerIndices {
-		// Build player slice for this room only
-		roomPlayers := make([]game.PlayerState, len(indices))
+		// Build player slice for this room only (use pointers to avoid copying mutex)
+		roomPlayers := make([]*game.PlayerState, len(indices))
 		for j, idx := range indices {
-			roomPlayers[j] = playerStates[idx]
+			roomPlayers[j] = &playerStates[idx]
 		}
 
 		// Create player:move message data for this room only
@@ -94,9 +94,10 @@ func (h *WebSocketHandler) broadcastPlayerStates(playerStates []game.PlayerState
 
 	// Send to waiting players (each waiting player only sees their own state)
 	for _, idx := range waitingPlayerIndices {
-		state := playerStates[idx]
+		// Use pointer to avoid copying mutex
+		state := &playerStates[idx]
 		data := map[string]interface{}{
-			"players": []game.PlayerState{state},
+			"players": []*game.PlayerState{state},
 		}
 
 		message := Message{
