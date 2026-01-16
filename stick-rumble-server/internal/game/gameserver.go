@@ -58,6 +58,9 @@ type GameServer struct {
 	// Callback for when a weapon crate respawns
 	onWeaponRespawn func(crate *WeaponCrate)
 
+	// Callback for when a player's dodge roll ends
+	onRollEnd func(playerID string, reason string)
+
 	running bool
 	mu      sync.RWMutex
 	wg      sync.WaitGroup
@@ -142,6 +145,9 @@ func (gs *GameServer) tickLoop(ctx context.Context) {
 			// Check for respawns
 			gs.checkRespawns()
 
+			// Check for dodge roll duration completion
+			gs.checkRollDuration()
+
 			// Update invulnerability status
 			gs.updateInvulnerability()
 
@@ -190,7 +196,11 @@ func (gs *GameServer) updateAllPlayers(deltaTime float64) {
 
 	// Update each player's physics
 	for _, player := range players {
-		gs.physics.UpdatePlayer(player, deltaTime)
+		rollCancelled := gs.physics.UpdatePlayer(player, deltaTime)
+		// If roll was cancelled due to wall collision, notify via callback
+		if rollCancelled && gs.onRollEnd != nil {
+			gs.onRollEnd(player.ID, "wall_collision")
+		}
 	}
 }
 
@@ -380,6 +390,11 @@ func (gs *GameServer) SetOnWeaponRespawn(callback func(crate *WeaponCrate)) {
 	gs.onWeaponRespawn = callback
 }
 
+// SetOnRollEnd sets the callback for when a player's dodge roll ends
+func (gs *GameServer) SetOnRollEnd(callback func(playerID string, reason string)) {
+	gs.onRollEnd = callback
+}
+
 // GetWeaponCrateManager returns the weapon crate manager
 func (gs *GameServer) GetWeaponCrateManager() *WeaponCrateManager {
 	return gs.weaponCrateManager
@@ -456,6 +471,36 @@ func (gs *GameServer) checkHitDetection() {
 }
 
 // checkRespawns checks all dead players and respawns them if ready
+// checkRollDuration checks if any player's dodge roll should end
+func (gs *GameServer) checkRollDuration() {
+	// Get all players
+	gs.world.mu.RLock()
+	players := make([]*PlayerState, 0, len(gs.world.players))
+	for _, player := range gs.world.players {
+		players = append(players, player)
+	}
+	gs.world.mu.RUnlock()
+
+	// Check each player for roll completion
+	now := gs.clock.Now()
+	for _, player := range players {
+		if player.IsRolling() {
+			rollState := player.GetRollState()
+			timeSinceRollStart := now.Sub(rollState.RollStartTime).Seconds()
+
+			// End roll if duration exceeded (0.4 seconds)
+			if timeSinceRollStart >= DodgeRollDuration {
+				player.EndDodgeRoll()
+
+				// Notify via callback
+				if gs.onRollEnd != nil {
+					gs.onRollEnd(player.ID, "completed")
+				}
+			}
+		}
+	}
+}
+
 func (gs *GameServer) checkRespawns() {
 	// Get all players
 	gs.world.mu.RLock()

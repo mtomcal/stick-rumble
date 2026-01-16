@@ -1,0 +1,21 @@
+{
+  "$id": "player_dodge_rollMessage",
+  "description": "player:dodge_roll WebSocket message",
+  "type": "object",
+  "required": [
+    "type",
+    "timestamp"
+  ],
+  "properties": {
+    "type": {
+      "description": "Message type identifier",
+      "const": "player:dodge_roll",
+      "type": "string"
+    },
+    "timestamp": {
+      "description": "Unix timestamp in milliseconds",
+      "minimum": 0,
+      "type": "integer"
+    }
+  }
+}

@@ -66,9 +66,12 @@ export const createMockScene = () => {
   const mockGraphics = {
     fillStyle: vi.fn().mockReturnThis(),
     fillRect: vi.fn().mockReturnThis(),
+    fillCircle: vi.fn().mockReturnThis(),
     lineStyle: vi.fn().mockReturnThis(),
     beginPath: vi.fn().mockReturnThis(),
     arc: vi.fn().mockReturnThis(),
+    closePath: vi.fn().mockReturnThis(),
+    fillPath: vi.fn().mockReturnThis(),
     strokePath: vi.fn().mockReturnThis(),
     clear: vi.fn().mockReturnThis(),
     setScrollFactor: vi.fn().mockReturnThis(),

@@ -45,6 +45,7 @@ export const PlayerStateSchema = Type.Object(
     rotation: Type.Number({ description: 'Player rotation in radians' }),
     isDead: Type.Boolean({ description: 'Whether the player is dead' }),
     isSprinting: Type.Boolean({ description: 'Whether the player is currently sprinting' }),
+    isRolling: Type.Boolean({ description: 'Whether the player is currently dodge rolling' }),
   },
   { $id: 'PlayerState', description: 'Player state for movement updates' }
 );
@@ -494,3 +495,58 @@ export type MeleeHitData = Static<typeof MeleeHitDataSchema>;
  */
 export const MeleeHitMessageSchema = createTypedMessageSchema('melee:hit', MeleeHitDataSchema);
 export type MeleeHitMessage = Static<typeof MeleeHitMessageSchema>;
+
+// ============================================================================
+// roll:start
+// ============================================================================
+
+/**
+ * Roll start data payload.
+ * Sent when a player starts a dodge roll.
+ */
+export const RollStartDataSchema = Type.Object(
+  {
+    playerId: Type.String({ description: 'Player who started rolling', minLength: 1 }),
+    direction: Type.Object(
+      {
+        x: Type.Number({ description: 'Roll direction X component (normalized)' }),
+        y: Type.Number({ description: 'Roll direction Y component (normalized)' }),
+      },
+      { description: 'Roll direction vector' }
+    ),
+    rollStartTime: Type.Integer({ description: 'Server timestamp when roll started (ms since epoch)', minimum: 0 }),
+  },
+  { $id: 'RollStartData', description: 'Roll start event payload' }
+);
+
+export type RollStartData = Static<typeof RollStartDataSchema>;
+
+/**
+ * Complete roll:start message schema
+ */
+export const RollStartMessageSchema = createTypedMessageSchema('roll:start', RollStartDataSchema);
+export type RollStartMessage = Static<typeof RollStartMessageSchema>;
+
+// ============================================================================
+// roll:end
+// ============================================================================
+
+/**
+ * Roll end data payload.
+ * Sent when a player's dodge roll completes or is cancelled.
+ */
+export const RollEndDataSchema = Type.Object(
+  {
+    playerId: Type.String({ description: 'Player who stopped rolling', minLength: 1 }),
+    reason: Type.String({ description: 'Reason roll ended (completed, wall_collision)', minLength: 1 }),
+  },
+  { $id: 'RollEndData', description: 'Roll end event payload' }
+);
+
+export type RollEndData = Static<typeof RollEndDataSchema>;
+
+/**
+ * Complete roll:end message schema
+ */
+export const RollEndMessageSchema = createTypedMessageSchema('roll:end', RollEndDataSchema);
+export type RollEndMessage = Static<typeof RollEndMessageSchema>;

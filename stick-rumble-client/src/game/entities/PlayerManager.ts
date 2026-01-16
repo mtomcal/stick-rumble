@@ -20,6 +20,7 @@ export interface PlayerState {
   deathTime?: number; // Timestamp when player died (ms since epoch), undefined if alive
   health?: number; // Current health (0-100)
   isRegenerating?: boolean; // Whether health is currently regenerating
+  isRolling?: boolean; // Whether player is currently dodge rolling
 }
 
 // Length of the aim indicator line in pixels
@@ -151,14 +152,35 @@ export class PlayerManager {
       // Update position
       sprite.setPosition(state.position.x, state.position.y);
 
+      // Apply dodge roll visual effects (rotation and transparency during i-frames)
+      if (state.isRolling) {
+        // Apply 360° rotation animation (simulated with angle update)
+        // In a full implementation, this would be a tween, but for now we'll use a fixed rotation
+        // The angle will be continuously updated during the roll duration
+        const rollAngle = (this._clock.now() % 400) / 400 * 360; // 360° rotation over 0.4s
+        sprite.setAngle(rollAngle);
+
+        // Apply transparency during invincibility frames (first 0.2s)
+        // Note: Server tracks actual i-frame timing, this is visual only
+        sprite.setAlpha(0.5);
+      } else {
+        // Clear rotation when not rolling
+        sprite.setAngle(0);
+      }
+
       // Apply death visual effects
       if (state.deathTime !== undefined) {
         // Dead player: fade to 50% opacity and gray color
         sprite.setAlpha(0.5);
         sprite.setFillStyle(0x888888);
-      } else {
-        // Alive player: full opacity and restore original color
+      } else if (!state.isRolling) {
+        // Alive player (not rolling): full opacity and restore original color
         sprite.setAlpha(1.0);
+        const isLocal = state.id === this.localPlayerId;
+        const color = isLocal ? 0x00ff00 : 0xff0000;
+        sprite.setFillStyle(color);
+      } else {
+        // Alive player (rolling): keep transparency but update color
         const isLocal = state.id === this.localPlayerId;
         const color = isLocal ? 0x00ff00 : 0xff0000;
         sprite.setFillStyle(color);

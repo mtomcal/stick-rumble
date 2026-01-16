@@ -21,6 +21,14 @@ type InputState struct {
 	IsSprinting bool    `json:"isSprinting"` // Shift key for sprint
 }
 
+// RollState represents a player's dodge roll state
+type RollState struct {
+	IsRolling     bool      `json:"isRolling"`     // Whether player is currently rolling
+	RollStartTime time.Time `json:"rollStartTime"` // When the current roll started
+	LastRollTime  time.Time `json:"lastRollTime"`  // When the last roll finished
+	RollDirection Vector2   `json:"rollDirection"` // Direction vector of the roll (normalized)
+}
+
 // PlayerState represents a player's physics state in the game world
 type PlayerState struct {
 	ID                     string     `json:"id"`
@@ -35,9 +43,11 @@ type PlayerState struct {
 	Deaths                 int        `json:"deaths"`              // Number of deaths
 	XP                     int        `json:"xp"`                  // Experience points
 	IsRegeneratingHealth   bool       `json:"isRegenerating"`      // Whether health is currently regenerating
+	Rolling                bool       `json:"isRolling"`           // Whether player is currently dodge rolling (exported for JSON)
 	lastDamageTime         time.Time  // Private field: when player last took damage
 	regenAccumulator       float64    // Private field: accumulated fractional HP for regeneration
 	input                  InputState // Private field, accessed via methods
+	rollState              RollState  // Private field: dodge roll state
 	clock                  Clock      // Private field: clock for time operations (injectable for testing)
 	mu                     sync.RWMutex
 }
@@ -330,4 +340,78 @@ func (p *PlayerState) IsRegenerating() bool {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.IsRegeneratingHealth
+}
+
+// CanDodgeRoll checks if the player can initiate a dodge roll (thread-safe)
+// Returns false if on cooldown, already rolling, or dead
+func (p *PlayerState) CanDodgeRoll() bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	// Cannot roll if dead
+	if p.DeathTime != nil {
+		return false
+	}
+
+	// Cannot roll if already rolling
+	if p.rollState.IsRolling {
+		return false
+	}
+
+	// Check cooldown
+	now := p.clock.Now()
+	timeSinceLastRoll := now.Sub(p.rollState.LastRollTime).Seconds()
+	return timeSinceLastRoll >= DodgeRollCooldown
+}
+
+// StartDodgeRoll initiates a dodge roll in the given direction (thread-safe)
+// Direction should be normalized before calling
+func (p *PlayerState) StartDodgeRoll(direction Vector2) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	now := p.clock.Now()
+	p.rollState.IsRolling = true
+	p.rollState.RollStartTime = now
+	p.rollState.RollDirection = direction
+	p.Rolling = true // Update public field for JSON export
+}
+
+// EndDodgeRoll ends the current dodge roll (thread-safe)
+func (p *PlayerState) EndDodgeRoll() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	p.rollState.IsRolling = false
+	p.rollState.LastRollTime = p.clock.Now()
+	p.Rolling = false // Update public field for JSON export
+}
+
+// IsRolling returns whether the player is currently dodge rolling (thread-safe)
+// This method exists for compatibility with existing code
+func (p *PlayerState) IsRolling() bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.rollState.IsRolling
+}
+
+// GetRollState returns a copy of the roll state (thread-safe)
+func (p *PlayerState) GetRollState() RollState {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.rollState
+}
+
+// IsInvincibleFromRoll checks if the player is currently invincible due to dodge roll i-frames (thread-safe)
+// Returns true if rolling and within the first 0.2 seconds
+func (p *PlayerState) IsInvincibleFromRoll() bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	if !p.rollState.IsRolling {
+		return false
+	}
+
+	timeSinceRollStart := p.clock.Since(p.rollState.RollStartTime).Seconds()
+	return timeSinceRollStart < DodgeRollInvincibilityDuration
 }

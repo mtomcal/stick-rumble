@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { WebSocketClient } from '../network/WebSocketClient';
 import { InputManager } from '../input/InputManager';
 import { ShootingManager } from '../input/ShootingManager';
+import { DodgeRollManager } from '../input/DodgeRollManager';
 import { PlayerManager } from '../entities/PlayerManager';
 import { ProjectileManager } from '../entities/ProjectileManager';
 import { WeaponCrateManager } from '../entities/WeaponCrateManager';
@@ -9,6 +10,7 @@ import { MeleeWeaponManager } from '../entities/MeleeWeaponManager';
 import { HealthBarUI } from '../ui/HealthBarUI';
 import { KillFeedUI } from '../ui/KillFeedUI';
 import { PickupPromptUI } from '../ui/PickupPromptUI';
+import { DodgeRollCooldownUI } from '../ui/DodgeRollCooldownUI';
 import { GameSceneUI } from './GameSceneUI';
 import { GameSceneSpectator } from './GameSceneSpectator';
 import { GameSceneEventHandlers } from './GameSceneEventHandlers';
@@ -20,6 +22,7 @@ export class GameScene extends Phaser.Scene {
   private wsClient!: WebSocketClient;
   private inputManager!: InputManager;
   private shootingManager!: ShootingManager;
+  private dodgeRollManager!: DodgeRollManager;
   private playerManager!: PlayerManager;
   private projectileManager!: ProjectileManager;
   private weaponCrateManager!: WeaponCrateManager;
@@ -27,6 +30,7 @@ export class GameScene extends Phaser.Scene {
   private pickupPromptUI!: PickupPromptUI;
   private healthBarUI!: HealthBarUI;
   private killFeedUI!: KillFeedUI;
+  private dodgeRollCooldownUI!: DodgeRollCooldownUI;
   private ui!: GameSceneUI;
   private spectator!: GameSceneSpectator;
   private eventHandlers!: GameSceneEventHandlers;
@@ -96,6 +100,9 @@ export class GameScene extends Phaser.Scene {
     this.ui = new GameSceneUI(this);
     const camera = this.cameras.main;
     this.ui.createMatchTimer(camera.width / 2, 10);
+
+    // Initialize dodge roll cooldown UI (bottom-right corner, fixed to screen)
+    this.dodgeRollCooldownUI = new DodgeRollCooldownUI(this, camera.width - 50, camera.height - 50);
     this.ui.createDamageFlashOverlay(ARENA.WIDTH, ARENA.HEIGHT);
 
     // Initialize spectator module
@@ -148,9 +155,13 @@ export class GameScene extends Phaser.Scene {
           // Initialize shooting manager
           this.shootingManager = new ShootingManager(this, this.wsClient);
 
+          // Initialize dodge roll manager
+          this.dodgeRollManager = new DodgeRollManager();
+
           // Pass managers to event handlers
           this.eventHandlers.setInputManager(this.inputManager);
           this.eventHandlers.setShootingManager(this.shootingManager);
+          this.eventHandlers.setDodgeRollManager(this.dodgeRollManager);
 
           // Setup mouse click for shooting/melee
           this.input.on('pointerdown', () => {
@@ -199,8 +210,47 @@ export class GameScene extends Phaser.Scene {
             });
           }
 
+          // Setup SPACE key for dodge roll
+          const dodgeKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+          if (dodgeKey) {
+            dodgeKey.on('down', () => {
+              if (this.dodgeRollManager && this.dodgeRollManager.canDodgeRoll()) {
+                // Calculate roll direction from WASD input or aim angle
+                const inputState = this.inputManager.getState();
+                const rollDirection = { x: 0, y: 0 };
+
+                // Use WASD input if any direction keys are pressed
+                if (inputState.up || inputState.down || inputState.left || inputState.right) {
+                  if (inputState.right) rollDirection.x += 1;
+                  if (inputState.left) rollDirection.x -= 1;
+                  if (inputState.down) rollDirection.y += 1;
+                  if (inputState.up) rollDirection.y -= 1;
+
+                  // Normalize direction vector
+                  const magnitude = Math.sqrt(rollDirection.x ** 2 + rollDirection.y ** 2);
+                  if (magnitude > 0) {
+                    rollDirection.x /= magnitude;
+                    rollDirection.y /= magnitude;
+                  }
+                } else {
+                  // Use aim angle if stationary
+                  const aimAngle = this.inputManager.getAimAngle();
+                  rollDirection.x = Math.cos(aimAngle);
+                  rollDirection.y = Math.sin(aimAngle);
+                }
+
+                // Send dodge roll request to server
+                this.wsClient.send({
+                  type: 'player:dodge_roll',
+                  timestamp: Date.now(),
+                  data: { direction: rollDirection }
+                });
+              }
+            });
+          }
+
           // Add connection status (fixed to screen)
-          const connectionText = this.add.text(10, 30, 'Connected! WASD=move, Click=shoot, R=reload, E=pickup', {
+          const connectionText = this.add.text(10, 30, 'Connected! WASD=move, Click=shoot, R=reload, E=pickup, SPACE=dodge', {
             fontSize: '14px',
             color: '#00ff00'
           });
@@ -250,6 +300,17 @@ export class GameScene extends Phaser.Scene {
 
       // Check for nearby weapon crates
       this.checkWeaponProximity();
+    }
+
+    // Update dodge roll manager
+    if (this.dodgeRollManager) {
+      this.dodgeRollManager.update();
+
+      // Update dodge roll cooldown UI
+      if (this.dodgeRollCooldownUI) {
+        const cooldownProgress = this.dodgeRollManager.getCooldownProgress();
+        this.dodgeRollCooldownUI.updateProgress(cooldownProgress);
+      }
     }
 
     // Update projectiles

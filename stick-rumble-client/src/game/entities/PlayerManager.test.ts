@@ -9,6 +9,7 @@ const createMockScene = () => {
     y: number;
     setPosition: ReturnType<typeof vi.fn>;
     setAlpha: ReturnType<typeof vi.fn>;
+    setAngle: ReturnType<typeof vi.fn>;
     setTint: ReturnType<typeof vi.fn>;
     clearTint: ReturnType<typeof vi.fn>;
     setFillStyle: ReturnType<typeof vi.fn>;
@@ -36,6 +37,7 @@ const createMockScene = () => {
           y,
           setPosition: vi.fn(),
           setAlpha: vi.fn().mockReturnThis(),
+          setAngle: vi.fn().mockReturnThis(),
           setTint: vi.fn().mockReturnThis(),
           clearTint: vi.fn().mockReturnThis(),
           setFillStyle: vi.fn().mockReturnThis(),
@@ -722,6 +724,124 @@ describe('PlayerManager', () => {
       const position = playerManager.getPlayerPosition('any-id');
 
       expect(position).toBeNull();
+    });
+  });
+
+  describe('dodge roll visual effects', () => {
+    it('should apply 360° rotation animation when player is rolling', () => {
+      playerManager.setLocalPlayerId('player-1');
+
+      const rollingState: PlayerState[] = [
+        {
+          id: 'player-1',
+          position: { x: 100, y: 200 },
+          velocity: { x: 0, y: 0 },
+          isRolling: true
+        },
+      ];
+
+      playerManager.updatePlayers(rollingState);
+
+      const sprite = mockScene.rectangles[0];
+      expect(sprite.setAngle).toHaveBeenCalled();
+    });
+
+    it('should apply transparency (alpha 0.5) during invincibility frames when rolling', () => {
+      playerManager.setLocalPlayerId('player-1');
+
+      // Player rolling (first 0.2s = i-frames)
+      const rollingState: PlayerState[] = [
+        {
+          id: 'player-1',
+          position: { x: 100, y: 200 },
+          velocity: { x: 0, y: 0 },
+          isRolling: true
+        },
+      ];
+
+      playerManager.updatePlayers(rollingState);
+
+      const sprite = mockScene.rectangles[0];
+      // During i-frames, alpha should be 0.5
+      expect(sprite.setAlpha).toHaveBeenCalledWith(0.5);
+    });
+
+    it('should restore alpha to 1.0 when roll ends', () => {
+      playerManager.setLocalPlayerId('player-1');
+
+      // Start rolling
+      const rollingState: PlayerState[] = [
+        {
+          id: 'player-1',
+          position: { x: 100, y: 200 },
+          velocity: { x: 0, y: 0 },
+          isRolling: true
+        },
+      ];
+
+      playerManager.updatePlayers(rollingState);
+
+      const sprite = mockScene.rectangles[0];
+      const setAlphaSpy = vi.fn();
+      sprite.setAlpha = setAlphaSpy;
+
+      // End rolling
+      const notRollingState: PlayerState[] = [
+        {
+          id: 'player-1',
+          position: { x: 100, y: 200 },
+          velocity: { x: 0, y: 0 },
+          isRolling: false
+        },
+      ];
+
+      playerManager.updatePlayers(notRollingState);
+
+      // Alpha should be restored to 1.0
+      expect(setAlphaSpy).toHaveBeenCalledWith(1.0);
+    });
+
+    it('should clear rotation when roll ends', () => {
+      playerManager.setLocalPlayerId('player-1');
+
+      // Start rolling
+      const rollingState: PlayerState[] = [
+        {
+          id: 'player-1',
+          position: { x: 100, y: 200 },
+          velocity: { x: 0, y: 0 },
+          isRolling: true
+        },
+      ];
+
+      playerManager.updatePlayers(rollingState);
+
+      const sprite = mockScene.rectangles[0];
+      const setAngleSpy = vi.fn();
+      sprite.setAngle = setAngleSpy;
+
+      // End rolling
+      const notRollingState: PlayerState[] = [
+        {
+          id: 'player-1',
+          position: { x: 100, y: 200 },
+          velocity: { x: 0, y: 0 },
+          isRolling: false
+        },
+      ];
+
+      playerManager.updatePlayers(notRollingState);
+
+      // Rotation should be cleared (angle = 0)
+      expect(setAngleSpy).toHaveBeenCalledWith(0);
+    });
+
+    it('should handle players with undefined isRolling (backward compatibility)', () => {
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+
+      expect(() => playerManager.updatePlayers(playerStates)).not.toThrow();
     });
   });
 

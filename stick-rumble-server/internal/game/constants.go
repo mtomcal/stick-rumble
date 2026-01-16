@@ -89,3 +89,21 @@ const (
 	// WeaponPickupRadius is the distance in pixels for weapon pickup detection
 	WeaponPickupRadius = 32.0
 )
+
+// Dodge roll system
+const (
+	// DodgeRollDuration is the total duration of a dodge roll in seconds
+	DodgeRollDuration = 0.4
+
+	// DodgeRollDistance is the total distance covered during a roll in pixels
+	DodgeRollDistance = 100.0
+
+	// DodgeRollVelocity is the velocity during a roll (distance / duration)
+	DodgeRollVelocity = DodgeRollDistance / DodgeRollDuration // 250 px/s
+
+	// DodgeRollCooldown is the time in seconds between rolls
+	DodgeRollCooldown = 3.0
+
+	// DodgeRollInvincibilityDuration is the duration of invincibility frames in seconds
+	DodgeRollInvincibilityDuration = 0.2
+)

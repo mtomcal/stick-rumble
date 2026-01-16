@@ -35,6 +35,7 @@ export {
   WeaponPickupAttemptMessageSchema,
   PlayerMeleeAttackDataSchema,
   PlayerMeleeAttackMessageSchema,
+  PlayerDodgeRollMessageSchema,
   type InputStateData,
   type InputStateMessage,
   type PlayerShootData,
@@ -44,6 +45,7 @@ export {
   type WeaponPickupAttemptMessage,
   type PlayerMeleeAttackData,
   type PlayerMeleeAttackMessage,
+  type PlayerDodgeRollMessage,
 } from './schemas/client-to-server.js';
 
 // Export server-to-client schemas and types
@@ -85,6 +87,10 @@ export {
   WeaponRespawnedMessageSchema,
   MeleeHitDataSchema,
   MeleeHitMessageSchema,
+  RollStartDataSchema,
+  RollStartMessageSchema,
+  RollEndDataSchema,
+  RollEndMessageSchema,
   type RoomJoinedData,
   type RoomJoinedMessage,
   type PlayerState,
@@ -122,4 +128,8 @@ export {
   type WeaponRespawnedMessage,
   type MeleeHitData,
   type MeleeHitMessage,
+  type RollStartData,
+  type RollStartMessage,
+  type RollEndData,
+  type RollEndMessage,
 } from './schemas/server-to-client.js';
