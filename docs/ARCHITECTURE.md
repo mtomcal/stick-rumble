@@ -7,26 +7,26 @@ This document describes the system architecture of Stick Rumble, a real-time mul
 ```mermaid
 flowchart TB
     subgraph Client["Client (Browser)"]
-        Phaser["PhaserJS 3\nGame Engine"]
-        React["React 19\nUI Layer"]
-        WS_Client["WebSocket\nClient"]
-        Prediction["Client-Side\nPrediction"]
+        Phaser["PhaserJS 3 Game Engine"]
+        React["React 19 UI Layer"]
+        WS_Client["WebSocket Client"]
+        Prediction["Client-Side Prediction"]
     end
 
     subgraph Server["Server (Go)"]
-        WS_Handler["WebSocket\nHandler"]
-        GameServer["Game Server\n(60Hz tick)"]
-        Physics["Physics\nEngine"]
-        RoomManager["Room\nManager"]
-        Broadcast["Broadcast\nHelper"]
+        WS_Handler["WebSocket Handler"]
+        GameServer["Game Server 60Hz"]
+        Physics["Physics Engine"]
+        RoomManager["Room Manager"]
+        Broadcast["Broadcast Helper"]
     end
 
     subgraph Shared["Shared"]
-        Schema["TypeBox\nSchemas"]
-        JSON["Generated\nJSON Schema"]
+        Schema["TypeBox Schemas"]
+        JSON["Generated JSON Schema"]
     end
 
-    Client <-->|"WebSocket\nJSON Messages"| Server
+    Client <-->|"WebSocket JSON"| Server
     Schema --> WS_Client
     Schema --> JSON
     JSON --> WS_Handler
@@ -71,15 +71,15 @@ The server runs a 60Hz physics tick loop and broadcasts player state at 20Hz:
 ```mermaid
 flowchart LR
     subgraph Tick["Every 16.67ms (60Hz)"]
-        Input["Process\nInputs"]
-        Physics["Update\nPhysics"]
-        Collision["Check\nCollisions"]
-        Projectiles["Update\nProjectiles"]
+        Input["Process Inputs"]
+        Physics["Update Physics"]
+        Collision["Check Collisions"]
+        Projectiles["Update Projectiles"]
     end
 
     subgraph Broadcast["Every 50ms (20Hz)"]
-        Gather["Gather\nPlayer States"]
-        Send["Broadcast\nto Clients"]
+        Gather["Gather Player States"]
+        Send["Broadcast to Clients"]
     end
 
     Input --> Physics --> Collision --> Projectiles
@@ -90,14 +90,14 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    subgraph "Client → Server"
-        IS["input:state\n(WASD + mouse)"]
+    subgraph "Client to Server"
+        IS["input:state"]
         PS["player:shoot"]
         PR["player:reload"]
         WP["weapon:pickup_attempt"]
     end
 
-    subgraph "Server → Client"
+    subgraph "Server to Client"
         RJ["room:joined"]
         PM["player:move"]
         PSp["projectile:spawn"]
@@ -125,11 +125,11 @@ flowchart TD
 flowchart TB
     subgraph GameScene["GameScene (Phaser)"]
         direction TB
-        PlayerManager["PlayerManager\n- Local player\n- Remote players"]
-        ProjectileManager["ProjectileManager\n- Spawn/destroy\n- Visual only"]
-        WeaponCrateManager["WeaponCrateManager\n- Pickup prompts"]
-        InputManager["InputManager\n- WASD state\n- Mouse tracking"]
-        ShootingManager["ShootingManager\n- Fire rate control"]
+        PlayerManager["PlayerManager"]
+        ProjectileManager["ProjectileManager"]
+        WeaponCrateManager["WeaponCrateManager"]
+        InputManager["InputManager"]
+        ShootingManager["ShootingManager"]
     end
 
     subgraph UI["UI Layer"]
@@ -140,7 +140,7 @@ flowchart TB
     end
 
     subgraph Network["Network"]
-        WebSocketClient["WebSocketClient\n- Reconnect logic\n- Message handlers"]
+        WebSocketClient["WebSocketClient"]
     end
 
     WebSocketClient --> GameScene
@@ -152,23 +152,23 @@ flowchart TB
 ```mermaid
 flowchart TB
     subgraph Handler["WebSocket Handler"]
-        Upgrade["HTTP → WS\nUpgrade"]
-        MessageProcessor["Message\nProcessor"]
-        BroadcastHelper["Broadcast\nHelper"]
+        Upgrade["HTTP to WS Upgrade"]
+        MessageProcessor["Message Processor"]
+        BroadcastHelper["Broadcast Helper"]
     end
 
     subgraph Game["Game Package"]
-        GameServer["GameServer\n- 60Hz tick loop\n- State management"]
-        World["World\n- Player positions\n- Spawn points"]
-        Physics["Physics\n- Movement\n- Collision"]
+        GameServer["GameServer"]
+        World["World"]
+        Physics["Physics"]
         ProjectileManager_S["ProjectileManager"]
         WeaponCrateManager_S["WeaponCrateManager"]
     end
 
     subgraph Rooms["Room Management"]
-        RoomManager["RoomManager\n- Create/join rooms\n- Player assignment"]
-        Room["Room\n- 8 players max\n- Match state"]
-        Match["Match\n- Kill tracking\n- Timer"]
+        RoomManager["RoomManager"]
+        Room["Room"]
+        Match["Match"]
     end
 
     Handler --> Game
@@ -195,11 +195,11 @@ Schemas are defined in TypeScript using TypeBox, then compiled to JSON Schema fo
 
 ```mermaid
 flowchart LR
-    TS["TypeBox\nSchemas"]
-    Build["Build\nScript"]
-    JSON["JSON\nSchema"]
-    GoValid["Go\nValidator"]
-    TSType["TypeScript\nTypes"]
+    TS["TypeBox Schemas"]
+    Build["Build Script"]
+    JSON["JSON Schema"]
+    GoValid["Go Validator"]
+    TSType["TypeScript Types"]
 
     TS --> Build
     Build --> JSON
@@ -269,11 +269,11 @@ The server physics engine handles:
 
 ```mermaid
 flowchart LR
-    Input["Input\nVelocity"]
-    Friction["Apply\nFriction"]
-    Move["Update\nPosition"]
-    Bounds["Clamp to\nWorld Bounds"]
-    Output["Final\nPosition"]
+    Input["Input Velocity"]
+    Friction["Apply Friction"]
+    Move["Update Position"]
+    Bounds["Clamp to Bounds"]
+    Output["Final Position"]
 
     Input --> Friction --> Move --> Bounds --> Output
 ```
