@@ -17,9 +17,9 @@ AI-generated code faces unique validation challenges:
 flowchart TB
     subgraph Pyramid["Test Pyramid"]
         direction TB
-        Visual["Visual Regression\n40 screenshots\n(Slowest, highest confidence)"]
-        Integration["Integration Tests\nWebSocket E2E\n(Medium speed)"]
-        Unit["Unit Tests\n1,400+ tests\n(Fastest, lowest confidence for UI)"]
+        Visual["Visual Regression - 40 screenshots"]
+        Integration["Integration Tests - WebSocket E2E"]
+        Unit["Unit Tests - 1,400+ tests"]
     end
 
     Visual --> Integration --> Unit
@@ -129,11 +129,11 @@ Visual regression tests run a real browser with real Phaser rendering. Screensho
 ```mermaid
 flowchart LR
     subgraph Test["Visual Test"]
-        Launch["Launch\nBrowser"]
-        Navigate["Load\nTest Page"]
-        Interact["Call\nwindow.*"]
-        Screenshot["Capture\nScreenshot"]
-        Compare["Compare to\nBaseline"]
+        Launch["Launch Browser"]
+        Navigate["Load Test Page"]
+        Interact["Call window API"]
+        Screenshot["Capture Screenshot"]
+        Compare["Compare to Baseline"]
     end
 
     Launch --> Navigate --> Interact --> Screenshot --> Compare
@@ -277,9 +277,9 @@ flowchart TB
         Visual["Visual Tests"]
     end
 
-    Unit --> Logic["Logic errors\nEdge cases\nAlgorithm bugs"]
-    Integration --> Protocol["Protocol errors\nTiming issues\nState sync bugs"]
-    Visual --> Rendering["Rendering bugs\nUI layout\nAnimation issues"]
+    Unit --> Logic["Logic errors, edge cases, algorithm bugs"]
+    Integration --> Protocol["Protocol errors, timing issues, state sync"]
+    Visual --> Rendering["Rendering bugs, UI layout, animations"]
 ```
 
 ## CI/CD Integration
@@ -397,10 +397,10 @@ Unit tests catch logic errors. Visual tests catch rendering errors.
 
 ```mermaid
 flowchart LR
-    AI["AI Generates\nCode"]
-    Unit["Unit Tests\n(Logic)"]
-    Visual["Visual Tests\n(Rendering)"]
-    Human["Human Verifies\nScreenshots"]
+    AI["AI Generates Code"]
+    Unit["Unit Tests"]
+    Visual["Visual Tests"]
+    Human["Human Verifies"]
     Fix["Fix Issues"]
 
     AI --> Unit
@@ -424,15 +424,15 @@ Despite 1,400+ automated tests and visual regression infrastructure, **human pla
 ```mermaid
 flowchart TB
     subgraph Automated["What Automated Tests Can Do"]
-        Unit["Unit Tests\n- Discrete logic\n- Deterministic state"]
-        Visual["Visual Tests\n- Static frames\n- Controlled scenarios"]
-        Integration["Integration Tests\n- Message flow\n- Connection lifecycle"]
+        Unit["Unit Tests: Discrete logic"]
+        Visual["Visual Tests: Static frames"]
+        Integration["Integration Tests: Message flow"]
     end
 
     subgraph Human["What Only Humans Can Test"]
-        Feel["Game Feel\n- Input responsiveness\n- Animation smoothness"]
-        Emergent["Emergent Behavior\n- Multi-player chaos\n- Edge case combos"]
-        Realtime["Real-Time Experience\n- Latency perception\n- State sync glitches"]
+        Feel["Game Feel: Input responsiveness"]
+        Emergent["Emergent Behavior: Multiplayer chaos"]
+        Realtime["Real-Time: Latency perception"]
     end
 
     Automated -.->|"Gap"| Human
@@ -466,11 +466,11 @@ But they struggle with:
 ```mermaid
 flowchart LR
     subgraph "Visual Test Sweet Spot"
-        Simple["Simple UI\n✓ Health bar\n✓ Kill feed\n✓ Single animation"]
+        Simple["Simple UI: Health bar, Kill feed"]
     end
 
     subgraph "Complexity Wall"
-        Complex["Complex Scenarios\n✗ 8-player combat\n✗ Weapon switching mid-fight\n✗ Network desync recovery"]
+        Complex["Complex: 8-player combat, desync"]
     end
 
     Simple -->|"Diminishing returns"| Complex
@@ -484,18 +484,18 @@ When automated tests pass but something still feels wrong, **human playtesting i
 flowchart TB
     subgraph Development["Development Cycle"]
         Code["Write Code"]
-        Auto["Automated Tests\n(1,400+ tests)"]
-        Visual["Visual Regression\n(40 screenshots)"]
+        Auto["Automated Tests"]
+        Visual["Visual Regression"]
     end
 
     subgraph QA["Human QA"]
-        Play["Player Testing\n- Actually play the game\n- Multiple concurrent players"]
-        Feedback["Player Feedback\n- 'This feels laggy'\n- 'Animation stutters'\n- 'Hit didn't register'"]
+        Play["Player Testing"]
+        Feedback["Player Feedback"]
     end
 
     subgraph Fix["Resolution"]
-        Investigate["Investigate\n- Add logging\n- Reproduce manually"]
-        NewTest["Add Test\n(if automatable)"]
+        Investigate["Investigate"]
+        NewTest["Add Test"]
         Ship["Ship Fix"]
     end
 
@@ -529,21 +529,21 @@ The practical workflow integrates playtesting at the **epic level**, not per-sto
 ```mermaid
 flowchart TB
     subgraph Epic["Epic: Weapon System"]
-        S1["Story 1\nWeapon pickup"]
-        S2["Story 2\nAmmo & reload"]
-        S3["Story 3\nProjectile physics"]
-        S4["Story 4\nHit detection"]
-        S5["Story 5\nUI feedback"]
+        S1["Story 1: Weapon pickup"]
+        S2["Story 2: Ammo and reload"]
+        S3["Story 3: Projectile physics"]
+        S4["Story 4: Hit detection"]
+        S5["Story 5: UI feedback"]
     end
 
     subgraph AI["AI Agent Implementation"]
-        Parallel["Parallel Workers\n(Swarm)"]
-        Tests["All Tests Pass\n>90% coverage"]
+        Parallel["Parallel Workers via Swarm"]
+        Tests["All Tests Pass"]
     end
 
     subgraph QA["Playtesting Gate"]
-        Play["Serious Play Session\n- Full game loops\n- Multiple weapons\n- Edge case hunting"]
-        Bugs["Integration Bugs Found\n- Components don't mesh\n- Timing issues\n- Feel problems"]
+        Play["Serious Play Session"]
+        Bugs["Integration Bugs Found"]
     end
 
     subgraph Fix["Bug Bash"]

@@ -7,19 +7,19 @@ This document describes the AI-assisted development system used to build Stick R
 ```mermaid
 flowchart TB
     subgraph Human["Human Developer"]
-        Director["Director\n(You)"]
+        Director["Director (You)"]
     end
 
     subgraph Orchestration["Orchestration Layer"]
-        Swarm["Swarm CLI\n- Spawn workers\n- Monitor progress\n- Rescue incomplete work"]
-        Beads["Beads CLI\n- Issue tracking\n- Acceptance criteria\n- Progress notes"]
+        Swarm["Swarm CLI"]
+        Beads["Beads CLI"]
     end
 
     subgraph Workers["Agent Workers"]
-        W1["Worker 1\nWorktree A"]
-        W2["Worker 2\nWorktree B"]
-        W3["Worker 3\nWorktree C"]
-        Wn["Worker N\nWorktree N"]
+        W1["Worker 1"]
+        W2["Worker 2"]
+        W3["Worker 3"]
+        Wn["Worker N"]
     end
 
     subgraph Git["Git Infrastructure"]
@@ -178,12 +178,12 @@ Each worker follows the `/beads:full-cycle` workflow:
 flowchart LR
     subgraph "Full Cycle"
         Read["1. Read Issue"]
-        Research["2. Research\n(optional)"]
+        Research["2. Research"]
         Plan["3. Plan Changes"]
-        TDD["4. TDD\nImplementation"]
-        Lint["5. Lint &\nTypecheck"]
-        Coverage["6. Verify\nCoverage"]
-        Integration["7. Integration\nTests"]
+        TDD["4. TDD Implementation"]
+        Lint["5. Lint and Typecheck"]
+        Coverage["6. Verify Coverage"]
+        Integration["7. Integration Tests"]
         Summary["8. Summarize"]
     end
 
@@ -330,8 +330,8 @@ Workers on isolated worktrees rarely conflict, but when they do:
 ### Issue Selection
 
 - **Choose independent issues** - No dependencies between parallel workers
+- **Maximize parallelism** - Spawn as many workers as the backlog allows for independent issues
 - **Balance complexity** - Mix quick fixes with larger tasks
-- **Limit concurrency** - 2-3 workers is easier to monitor than 8
 
 ### Monitoring
 
