@@ -35,7 +35,8 @@ export default defineConfig({
         'package.json',
         'src/main.tsx', // App entry point, difficult to test
         'src/**/*.integration.helpers.ts', // Integration test helpers, tested during integration
-        'src/*-test-*.ts', // All test harness files for Playwright visual tests (ui-test, entity-test, match-end-test, etc.)
+        'src/*-test-*.ts', // All test harness files for Playwright visual tests (ui-test, entity-test, etc.)
+        'src/*-test-*.tsx', // React test harness files (match-end-react-test, etc.)
       ],
       include: ['src/**/*.ts', 'src/**/*.tsx'],
       thresholds: {

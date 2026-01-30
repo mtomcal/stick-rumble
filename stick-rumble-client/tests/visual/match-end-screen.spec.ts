@@ -11,11 +11,11 @@ test.describe('Match End Screen Visual Regression', () => {
     page.on('console', msg => console.log('PAGE LOG:', msg.text()));
     page.on('pageerror', err => console.error('PAGE ERROR:', err));
 
-    // Navigate to test page (Pure HTML/CSS without React)
-    await page.goto('/match-end-simple-test.html');
+    // Navigate to React test page
+    await page.goto('/match-end-react-test.html');
 
-    // Wait for page to load (marker is already set in HTML)
-    await page.waitForSelector('[data-testid="match-end-ready"][data-ready="true"]', {
+    // Wait for React app to initialize
+    await page.waitForSelector('[data-testid="match-end-react-ready"][data-ready="true"]', {
       timeout: 10000,
       state: 'attached',
     });
