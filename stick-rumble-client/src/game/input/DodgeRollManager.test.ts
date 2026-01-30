@@ -128,9 +128,15 @@ describe('DodgeRollManager', () => {
 
   describe('getCooldownProgress()', () => {
     it('should return 0.0 immediately after roll starts', () => {
+      vi.useFakeTimers();
+      const startTime = Date.now();
+      vi.setSystemTime(startTime);
+
       manager.startRoll();
       manager.endRoll();
       expect(manager.getCooldownProgress()).toBe(0.0);
+
+      vi.useRealTimers();
     });
 
     it('should return 0.5 at 1.5 seconds after roll', () => {
