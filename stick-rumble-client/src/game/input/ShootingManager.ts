@@ -3,6 +3,7 @@ import type { WebSocketClient } from '../network/WebSocketClient';
 import { WEAPON } from '../../shared/constants';
 import type { Clock } from '../utils/Clock';
 import { RealClock } from '../utils/Clock';
+import { getWeaponConfigSync } from '../../shared/weaponConfig';
 
 /**
  * Weapon state synchronized with server
@@ -158,6 +159,20 @@ export class ShootingManager {
       this.reloadStartTime = this.clock.now();
     }
 
+    // Update fire rate cooldown when weapon type changes
+    if (state.weaponType !== this.weaponState.weaponType) {
+      const weaponConfig = getWeaponConfigSync(state.weaponType);
+      if (weaponConfig && weaponConfig.fireRate > 0) {
+        // Calculate cooldown from fire rate: fireRate is rounds per second
+        this.fireCooldownMs = 1000 / weaponConfig.fireRate;
+
+        // Reset lastShotTime to allow immediate shooting with new weapon
+        // This ensures players can shoot immediately after picking up a weapon crate
+        this.lastShotTime = this.clock.now() - this.fireCooldownMs;
+      }
+      // If config not found, keep existing cooldown (no change)
+    }
+
     this.weaponState = { ...state };
   }
 
@@ -165,7 +180,7 @@ export class ShootingManager {
    * Get reload progress (0 to 1)
    */
   getReloadProgress(): number {
-    if (!this.weaponState.isReloading || this.reloadStartTime === 0) {
+    if (!this.weaponState.isReloading) {
       return 0;
     }
 
