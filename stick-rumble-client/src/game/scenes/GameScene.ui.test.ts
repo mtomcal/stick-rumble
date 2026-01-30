@@ -21,6 +21,9 @@ vi.mock('phaser', () => ({
         },
       },
     },
+    Math: {
+      DegToRad: (degrees: number) => degrees * (Math.PI / 180),
+    },
   },
 }));
 
@@ -610,6 +613,97 @@ describe('GameScene - UI', () => {
 
       // Verify health bar was updated to full health
       expect(mockUpdateHealth).toHaveBeenCalledWith(100, 100, false);
+    });
+  });
+
+  describe('reload progress UI', () => {
+    it('should update reload progress UI when shooting manager is reloading', async () => {
+      const mockSceneContext = createMockScene();
+      mockSceneContext.input = {
+        ...mockSceneContext.input,
+        on: vi.fn(),
+        keyboard: {
+          addKey: vi.fn().mockReturnValue({
+            on: vi.fn(),
+          }),
+          addKeys: mockSceneContext.input.keyboard.addKeys,
+        },
+      };
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      // Trigger the delayed callback to start connection
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Set readyState to OPEN and trigger onopen
+      mockWebSocketInstance.readyState = 1;
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen(new Event('open'));
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Mock shooting manager to be reloading
+      vi.spyOn(scene['shootingManager'], 'isReloading').mockReturnValue(true);
+      vi.spyOn(scene['shootingManager'], 'getReloadProgress').mockReturnValue(0.5);
+
+      // Spy on UI update methods
+      const updateReloadProgressSpy = vi.spyOn(scene['ui'], 'updateReloadProgress');
+      const updateReloadCircleSpy = vi.spyOn(scene['ui'], 'updateReloadCircle');
+
+      // Call update to trigger reload UI updates
+      scene.update(0, 16);
+
+      // Verify reload UI was updated
+      expect(updateReloadProgressSpy).toHaveBeenCalledWith(0.5, 10, 70, 200, 10);
+      expect(updateReloadCircleSpy).toHaveBeenCalledWith(0.5);
+    });
+
+    it('should not update reload progress UI when shooting manager is not reloading', async () => {
+      const mockSceneContext = createMockScene();
+      mockSceneContext.input = {
+        ...mockSceneContext.input,
+        on: vi.fn(),
+        keyboard: {
+          addKey: vi.fn().mockReturnValue({
+            on: vi.fn(),
+          }),
+          addKeys: mockSceneContext.input.keyboard.addKeys,
+        },
+      };
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      // Trigger the delayed callback to start connection
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Set readyState to OPEN and trigger onopen
+      mockWebSocketInstance.readyState = 1;
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen(new Event('open'));
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Mock shooting manager to NOT be reloading
+      vi.spyOn(scene['shootingManager'], 'isReloading').mockReturnValue(false);
+
+      // Spy on UI update methods
+      const updateReloadProgressSpy = vi.spyOn(scene['ui'], 'updateReloadProgress');
+      const updateReloadCircleSpy = vi.spyOn(scene['ui'], 'updateReloadCircle');
+
+      // Call update
+      scene.update(0, 16);
+
+      // Verify reload UI was NOT updated
+      expect(updateReloadProgressSpy).not.toHaveBeenCalled();
+      expect(updateReloadCircleSpy).not.toHaveBeenCalled();
     });
   });
 });
