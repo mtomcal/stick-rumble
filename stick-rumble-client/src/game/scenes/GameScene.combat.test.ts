@@ -18,6 +18,7 @@ vi.mock('phaser', () => ({
           A: 65,
           S: 83,
           D: 68,
+          SPACE: 32,
         },
       },
     },
@@ -760,6 +761,340 @@ describe('GameScene - Combat', () => {
       scene.update(0, 16);
       expect(meleeAttackSpy).not.toHaveBeenCalled();
       expect(shootSpy).not.toHaveBeenCalled();
+    });
+
+    it('should trigger local melee swing animation when meleeAttack returns true', async () => {
+      const mockSceneContext = createMockScene();
+      let pointerdownHandler: (() => void) | null = null;
+
+      const inputOnMock = vi.fn((event: string, handler: () => void) => {
+        if (event === 'pointerdown') {
+          pointerdownHandler = handler;
+        }
+      });
+
+      mockSceneContext.input = {
+        ...mockSceneContext.input,
+        on: inputOnMock,
+        keyboard: {
+          addKey: vi.fn().mockReturnValue({
+            on: vi.fn(),
+          }),
+          addKeys: mockSceneContext.input.keyboard.addKeys,
+        },
+      };
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      // Trigger the delayed callback to start connection
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Set readyState to OPEN and trigger onopen
+      mockWebSocketInstance.readyState = 1;
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen(new Event('open'));
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Setup local player
+      const localPlayerId = 'local-player';
+      vi.spyOn(scene['playerManager'], 'getLocalPlayerId').mockReturnValue(localPlayerId);
+      vi.spyOn(scene['playerManager'], 'getPlayerPosition').mockReturnValue({ x: 100, y: 200 });
+
+      // Set weapon to melee
+      vi.spyOn(scene['shootingManager'], 'isMeleeWeapon').mockReturnValue(true);
+      vi.spyOn(scene['shootingManager'], 'meleeAttack').mockReturnValue(true);
+      vi.spyOn(scene['inputManager'], 'getAimAngle').mockReturnValue(1.5);
+
+      // Spy on melee weapon manager methods
+      const updatePositionSpy = vi.spyOn(scene['meleeWeaponManager'], 'updatePosition');
+      const startSwingSpy = vi.spyOn(scene['meleeWeaponManager'], 'startSwing');
+
+      // Trigger pointerdown
+      expect(pointerdownHandler).not.toBeNull();
+      pointerdownHandler!();
+
+      // Verify melee animation was triggered
+      expect(updatePositionSpy).toHaveBeenCalledWith(localPlayerId, { x: 100, y: 200 });
+      expect(startSwingSpy).toHaveBeenCalledWith(localPlayerId, 1.5);
+    });
+
+    it('should not trigger melee swing animation when getPlayerPosition returns null', async () => {
+      const mockSceneContext = createMockScene();
+      let pointerdownHandler: (() => void) | null = null;
+
+      const inputOnMock = vi.fn((event: string, handler: () => void) => {
+        if (event === 'pointerdown') {
+          pointerdownHandler = handler;
+        }
+      });
+
+      mockSceneContext.input = {
+        ...mockSceneContext.input,
+        on: inputOnMock,
+        keyboard: {
+          addKey: vi.fn().mockReturnValue({
+            on: vi.fn(),
+          }),
+          addKeys: mockSceneContext.input.keyboard.addKeys,
+        },
+      };
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      // Trigger the delayed callback to start connection
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Set readyState to OPEN and trigger onopen
+      mockWebSocketInstance.readyState = 1;
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen(new Event('open'));
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Setup local player but return null for position
+      const localPlayerId = 'local-player';
+      vi.spyOn(scene['playerManager'], 'getLocalPlayerId').mockReturnValue(localPlayerId);
+      vi.spyOn(scene['playerManager'], 'getPlayerPosition').mockReturnValue(null);
+
+      // Set weapon to melee
+      vi.spyOn(scene['shootingManager'], 'isMeleeWeapon').mockReturnValue(true);
+      vi.spyOn(scene['shootingManager'], 'meleeAttack').mockReturnValue(true);
+      vi.spyOn(scene['inputManager'], 'getAimAngle').mockReturnValue(1.5);
+
+      // Spy on melee weapon manager methods
+      const updatePositionSpy = vi.spyOn(scene['meleeWeaponManager'], 'updatePosition');
+      const startSwingSpy = vi.spyOn(scene['meleeWeaponManager'], 'startSwing');
+
+      // Trigger pointerdown
+      expect(pointerdownHandler).not.toBeNull();
+      pointerdownHandler!();
+
+      // Verify melee animation was NOT triggered (no player position)
+      expect(updatePositionSpy).not.toHaveBeenCalled();
+      expect(startSwingSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('weapon pickup', () => {
+    it('should send weapon pickup request when E key pressed with nearby crate', async () => {
+      const mockSceneContext = createMockScene();
+      let pickupKeyHandler: (() => void) | null = null;
+
+      const pickupKeyOnMock = vi.fn((_event: string, handler: () => void) => {
+        if (_event === 'down') {
+          pickupKeyHandler = handler;
+        }
+      });
+
+      const addKeyMock = vi.fn((key: string) => {
+        if (key === 'E') {
+          return { on: pickupKeyOnMock };
+        }
+        return { on: vi.fn() };
+      });
+
+      mockSceneContext.input = {
+        ...mockSceneContext.input,
+        on: vi.fn(),
+        keyboard: {
+          addKey: addKeyMock,
+          addKeys: mockSceneContext.input.keyboard.addKeys,
+        },
+      };
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      // Trigger the delayed callback to start connection
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Set readyState to OPEN and trigger onopen
+      mockWebSocketInstance.readyState = 1;
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen(new Event('open'));
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Simulate nearby weapon crate by setting private property
+      (scene as any).nearbyWeaponCrate = {
+        id: 'crate-1',
+        weaponType: 'AK47'
+      };
+
+      // Spy on wsClient.send
+      const sendSpy = vi.spyOn(scene['wsClient'], 'send');
+
+      // Trigger the pickup key handler
+      expect(pickupKeyHandler).not.toBeNull();
+      pickupKeyHandler!();
+
+      expect(sendSpy).toHaveBeenCalledWith({
+        type: 'weapon:pickup_attempt',
+        timestamp: expect.any(Number),
+        data: { crateId: 'crate-1' }
+      });
+    });
+  });
+
+  describe('dodge roll', () => {
+    it('should send dodge roll request with WASD direction when SPACE pressed', async () => {
+      const mockSceneContext = createMockScene();
+      let dodgeKeyHandler: (() => void) | null = null;
+
+      const dodgeKeyOnMock = vi.fn((_event: string, handler: () => void) => {
+        if (_event === 'down') {
+          dodgeKeyHandler = handler;
+        }
+      });
+
+      const addKeyMock = vi.fn((key: string | number) => {
+        // Check for both Phaser.Input.Keyboard.KeyCodes.SPACE and number 32
+        if (key === 32 || (typeof key === 'object' && key !== null)) {
+          return { on: dodgeKeyOnMock };
+        }
+        return { on: vi.fn() };
+      });
+
+      mockSceneContext.input = {
+        ...mockSceneContext.input,
+        on: vi.fn(),
+        keyboard: {
+          addKey: addKeyMock,
+          addKeys: mockSceneContext.input.keyboard.addKeys,
+        },
+      };
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      // Trigger the delayed callback to start connection
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Set readyState to OPEN and trigger onopen
+      mockWebSocketInstance.readyState = 1;
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen(new Event('open'));
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Setup dodge roll manager to allow dodge
+      vi.spyOn(scene['dodgeRollManager'], 'canDodgeRoll').mockReturnValue(true);
+
+      // Setup input manager to return WASD state (moving right)
+      vi.spyOn(scene['inputManager'], 'getState').mockReturnValue({
+        up: false,
+        down: false,
+        left: false,
+        right: true,
+        aimAngle: 0,
+        isSprinting: false
+      });
+
+      // Spy on wsClient.send
+      const sendSpy = vi.spyOn(scene['wsClient'], 'send');
+
+      // Trigger the dodge key handler
+      expect(dodgeKeyHandler).not.toBeNull();
+      dodgeKeyHandler!();
+
+      expect(sendSpy).toHaveBeenCalledWith({
+        type: 'player:dodge_roll',
+        timestamp: expect.any(Number),
+        data: { direction: { x: 1, y: 0 } }
+      });
+    });
+
+    it('should send dodge roll request with aim angle direction when stationary', async () => {
+      const mockSceneContext = createMockScene();
+      let dodgeKeyHandler: (() => void) | null = null;
+
+      const dodgeKeyOnMock = vi.fn((_event: string, handler: () => void) => {
+        if (_event === 'down') {
+          dodgeKeyHandler = handler;
+        }
+      });
+
+      const addKeyMock = vi.fn((key: string | number) => {
+        // Check for both Phaser.Input.Keyboard.KeyCodes.SPACE and number 32
+        if (key === 32 || (typeof key === 'object' && key !== null)) {
+          return { on: dodgeKeyOnMock };
+        }
+        return { on: vi.fn() };
+      });
+
+      mockSceneContext.input = {
+        ...mockSceneContext.input,
+        on: vi.fn(),
+        keyboard: {
+          addKey: addKeyMock,
+          addKeys: mockSceneContext.input.keyboard.addKeys,
+        },
+      };
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      // Trigger the delayed callback to start connection
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Set readyState to OPEN and trigger onopen
+      mockWebSocketInstance.readyState = 1;
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen(new Event('open'));
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Setup dodge roll manager to allow dodge
+      vi.spyOn(scene['dodgeRollManager'], 'canDodgeRoll').mockReturnValue(true);
+
+      // Setup input manager to return no WASD input
+      vi.spyOn(scene['inputManager'], 'getState').mockReturnValue({
+        up: false,
+        down: false,
+        left: false,
+        right: false,
+        aimAngle: 0,
+        isSprinting: false
+      });
+
+      // Mock aim angle
+      vi.spyOn(scene['inputManager'], 'getAimAngle').mockReturnValue(Math.PI / 4); // 45 degrees
+
+      // Spy on wsClient.send
+      const sendSpy = vi.spyOn(scene['wsClient'], 'send');
+
+      // Trigger the dodge key handler
+      expect(dodgeKeyHandler).not.toBeNull();
+      dodgeKeyHandler!();
+
+      expect(sendSpy).toHaveBeenCalledWith({
+        type: 'player:dodge_roll',
+        timestamp: expect.any(Number),
+        data: {
+          direction: {
+            x: expect.closeTo(Math.cos(Math.PI / 4), 4),
+            y: expect.closeTo(Math.sin(Math.PI / 4), 4)
+          }
+        }
+      });
     });
   });
 });
