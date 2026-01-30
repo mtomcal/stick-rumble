@@ -803,4 +803,305 @@ describe('ShootingManager', () => {
       expect(shootingManager.isAutomatic()).toBe(true);
     });
   });
+
+  describe('getReloadProgress', () => {
+    it('should return 0 when not reloading', () => {
+      const progress = shootingManager.getReloadProgress();
+      expect(progress).toBe(0);
+    });
+
+    it('should return 0 immediately after starting reload (no time elapsed)', () => {
+      // Start reloading
+      shootingManager.updateWeaponState({
+        currentAmmo: 5,
+        maxAmmo: WEAPON.PISTOL_MAGAZINE_SIZE,
+        isReloading: true,
+        canShoot: false,
+        weaponType: 'Pistol',
+        isMelee: false,
+      });
+
+      // No time advanced yet, so progress should be 0
+      const progress = shootingManager.getReloadProgress();
+      expect(progress).toBe(0);
+    });
+
+    it('should return progress between 0 and 1 during reload', () => {
+      // Start reloading
+      shootingManager.updateWeaponState({
+        currentAmmo: 5,
+        maxAmmo: WEAPON.PISTOL_MAGAZINE_SIZE,
+        isReloading: true,
+        canShoot: false,
+        weaponType: 'Pistol',
+        isMelee: false,
+      });
+
+      // Advance time to 50% of reload (default 2000ms)
+      clock.advance(1000);
+
+      const progress = shootingManager.getReloadProgress();
+      expect(progress).toBeGreaterThan(0);
+      expect(progress).toBeLessThanOrEqual(1);
+      expect(progress).toBeCloseTo(0.5, 1);
+    });
+
+    it('should cap progress at 1.0 when reload time exceeded', () => {
+      // Start reloading
+      shootingManager.updateWeaponState({
+        currentAmmo: 5,
+        maxAmmo: WEAPON.PISTOL_MAGAZINE_SIZE,
+        isReloading: true,
+        canShoot: false,
+        weaponType: 'Pistol',
+        isMelee: false,
+      });
+
+      // Advance time past reload duration
+      clock.advance(3000);
+
+      const progress = shootingManager.getReloadProgress();
+      expect(progress).toBe(1.0);
+    });
+
+    it('should reset to 0 when reload completes', () => {
+      // Start reloading
+      shootingManager.updateWeaponState({
+        currentAmmo: 5,
+        maxAmmo: WEAPON.PISTOL_MAGAZINE_SIZE,
+        isReloading: true,
+        canShoot: false,
+        weaponType: 'Pistol',
+        isMelee: false,
+      });
+
+      // Advance time to mid-reload
+      clock.advance(1000);
+
+      // Verify progress is > 0
+      expect(shootingManager.getReloadProgress()).toBeGreaterThan(0);
+
+      // Complete reload
+      shootingManager.updateWeaponState({
+        currentAmmo: WEAPON.PISTOL_MAGAZINE_SIZE,
+        maxAmmo: WEAPON.PISTOL_MAGAZINE_SIZE,
+        isReloading: false,
+        canShoot: true,
+        weaponType: 'Pistol',
+        isMelee: false,
+      });
+
+      // Progress should be 0 now
+      const progress = shootingManager.getReloadProgress();
+      expect(progress).toBe(0);
+    });
+  });
+
+  describe('dynamic fire rate cooldown', () => {
+    it('should update fire rate cooldown when switching to Uzi (10 rounds/sec = 100ms)', () => {
+      // Start with Pistol (3 rounds/sec = 333ms)
+      shootingManager.shoot();
+      vi.clearAllMocks();
+
+      // Switch to Uzi (10 rounds/sec = 100ms)
+      shootingManager.updateWeaponState({
+        currentAmmo: 30,
+        maxAmmo: 30,
+        isReloading: false,
+        canShoot: true,
+        weaponType: 'Uzi',
+        isMelee: false,
+      });
+
+      // Should be able to shoot after 100ms (Uzi fire rate)
+      clock.advance(100);
+      shootingManager.shoot();
+      expect(mockWsClient.send).toHaveBeenCalled();
+    });
+
+    it('should update fire rate cooldown when switching to AK47 (6 rounds/sec = 166ms)', () => {
+      // Start with Pistol (3 rounds/sec = 333ms)
+      shootingManager.shoot();
+      vi.clearAllMocks();
+
+      // Switch to AK47 (6 rounds/sec = 166.67ms)
+      // Weapon pickup resets cooldown, allowing immediate first shot
+      shootingManager.updateWeaponState({
+        currentAmmo: 30,
+        maxAmmo: 30,
+        isReloading: false,
+        canShoot: true,
+        weaponType: 'AK47',
+        isMelee: false,
+      });
+
+      // Can shoot immediately after weapon pickup
+      shootingManager.shoot();
+      expect(mockWsClient.send).toHaveBeenCalledTimes(1);
+      vi.clearAllMocks();
+
+      // Should NOT be able to shoot again at 100ms (too soon for AK47 cooldown)
+      clock.advance(100);
+      shootingManager.shoot();
+      expect(mockWsClient.send).not.toHaveBeenCalled();
+
+      // Should be able to shoot after 167ms total (AK47 fire rate: 1000/6 = 166.67ms, need to exceed)
+      clock.advance(67);
+      shootingManager.shoot();
+      expect(mockWsClient.send).toHaveBeenCalled();
+    });
+
+    it('should update fire rate cooldown when switching to Shotgun (1 round/sec = 1000ms)', () => {
+      // Start with Pistol (3 rounds/sec = 333ms)
+      shootingManager.shoot();
+      vi.clearAllMocks();
+
+      // Switch to Shotgun (1 round/sec = 1000ms)
+      // Weapon pickup resets cooldown, allowing immediate first shot
+      shootingManager.updateWeaponState({
+        currentAmmo: 6,
+        maxAmmo: 6,
+        isReloading: false,
+        canShoot: true,
+        weaponType: 'Shotgun',
+        isMelee: false,
+      });
+
+      // Can shoot immediately after weapon pickup
+      shootingManager.shoot();
+      expect(mockWsClient.send).toHaveBeenCalledTimes(1);
+      vi.clearAllMocks();
+
+      // Should NOT be able to shoot again at 333ms (too soon for Shotgun cooldown)
+      clock.advance(333);
+      shootingManager.shoot();
+      expect(mockWsClient.send).not.toHaveBeenCalled();
+
+      // Should be able to shoot after 1000ms total (Shotgun fire rate)
+      clock.advance(667);
+      shootingManager.shoot();
+      expect(mockWsClient.send).toHaveBeenCalled();
+    });
+
+    it('should allow immediate shooting after weapon pickup (weapon switch resets cooldown)', () => {
+      // Start with Shotgun (1 round/sec = 1000ms)
+      shootingManager.updateWeaponState({
+        currentAmmo: 6,
+        maxAmmo: 6,
+        isReloading: false,
+        canShoot: true,
+        weaponType: 'Shotgun',
+        isMelee: false,
+      });
+
+      // Can shoot immediately with new weapon
+      shootingManager.shoot();
+      expect(mockWsClient.send).toHaveBeenCalledTimes(1);
+      vi.clearAllMocks();
+
+      // Immediately switch to Uzi (10 rounds/sec = 100ms)
+      // Weapon pickup resets cooldown to allow immediate shooting
+      shootingManager.updateWeaponState({
+        currentAmmo: 30,
+        maxAmmo: 30,
+        isReloading: false,
+        canShoot: true,
+        weaponType: 'Uzi',
+        isMelee: false,
+      });
+
+      // Should be able to shoot immediately after picking up Uzi
+      shootingManager.shoot();
+      expect(mockWsClient.send).toHaveBeenCalledTimes(1);
+      vi.clearAllMocks();
+
+      // Now subsequent shots should use Uzi's 100ms cooldown
+      clock.advance(100);
+      shootingManager.shoot();
+      expect(mockWsClient.send).toHaveBeenCalledTimes(1);
+    });
+
+    it('should handle rapid fire with Uzi after cooldown update', () => {
+      // Switch to Uzi
+      shootingManager.updateWeaponState({
+        currentAmmo: 30,
+        maxAmmo: 30,
+        isReloading: false,
+        canShoot: true,
+        weaponType: 'Uzi',
+        isMelee: false,
+      });
+
+      // First shot
+      shootingManager.shoot();
+      expect(mockWsClient.send).toHaveBeenCalledTimes(1);
+      vi.clearAllMocks();
+
+      // Second shot after 100ms (Uzi fire rate)
+      clock.advance(100);
+      shootingManager.shoot();
+      expect(mockWsClient.send).toHaveBeenCalledTimes(1);
+      vi.clearAllMocks();
+
+      // Third shot after another 100ms
+      clock.advance(100);
+      shootingManager.shoot();
+      expect(mockWsClient.send).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not update cooldown when weapon type stays the same', () => {
+      // Start with Pistol
+      const firstState = {
+        currentAmmo: 15,
+        maxAmmo: 15,
+        isReloading: false,
+        canShoot: true,
+        weaponType: 'Pistol',
+        isMelee: false,
+      };
+      shootingManager.updateWeaponState(firstState);
+
+      shootingManager.shoot();
+      vi.clearAllMocks();
+
+      // Update state but keep same weapon type (ammo decrease)
+      shootingManager.updateWeaponState({
+        currentAmmo: 14,
+        maxAmmo: 15,
+        isReloading: false,
+        canShoot: true,
+        weaponType: 'Pistol',
+        isMelee: false,
+      });
+
+      // Should still use Pistol fire rate (333.33ms, need to exceed)
+      clock.advance(334);
+      shootingManager.shoot();
+      expect(mockWsClient.send).toHaveBeenCalled();
+    });
+
+    it('should fall back to default cooldown if weapon config not found', () => {
+      // Update to unknown weapon type
+      shootingManager.updateWeaponState({
+        currentAmmo: 10,
+        maxAmmo: 10,
+        isReloading: false,
+        canShoot: true,
+        weaponType: 'UnknownWeapon',
+        isMelee: false,
+      });
+
+      shootingManager.shoot();
+      vi.clearAllMocks();
+
+      // Should still have some cooldown (fall back to last known or default)
+      shootingManager.shoot();
+      expect(mockWsClient.send).not.toHaveBeenCalled();
+
+      // After reasonable time, should be able to shoot
+      clock.advance(1000);
+      shootingManager.shoot();
+      expect(mockWsClient.send).toHaveBeenCalled();
+    });
+  });
 });
