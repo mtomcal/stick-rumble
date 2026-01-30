@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Match End Screen React Test Page</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #1a1a1a;
+      font-family: Arial, sans-serif;
+    }
+    #root {
+      width: 100vw;
+      height: 100vh;
+    }
+    /* Test marker */
+    .test-marker {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      pointer-events: none;
+      visibility: visible;
+      opacity: 0.01;
+    }
+  </style>
+</head>
+<body>
+  <!-- React root container -->
+  <div id="root"></div>
+
+  <!-- Test marker for Playwright -->
+  <div class="test-marker" data-testid="match-end-react-ready" data-ready="false"></div>
+
+  <script type="module" src="/src/match-end-react-test-main.tsx"></script>
+</body>
+</html>
