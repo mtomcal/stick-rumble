@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Match End Screen Simple Test Page</title>
+  <link rel="stylesheet" href="/src/App.css">
+  <link rel="stylesheet" href="/src/ui/match/MatchEndScreen.css">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #1a1a1a;
+      font-family: Arial, sans-serif;
+    }
+    /* Test marker */
+    .test-marker {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      pointer-events: none;
+      visibility: visible;
+      opacity: 0.01;
+    }
+    /* Match end screen will be hidden by default */
+    #match-end-container {
+      display: none;
+    }
+    #match-end-container.visible {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <!-- Match End Screen HTML Template -->
+  <div id="match-end-container">
+    <div class="match-end-backdrop">
+      <div class="match-end-modal" role="dialog" aria-label="Match End Results">
+        <button class="close-button" aria-label="Close">×</button>
+
+        <h2 class="match-end-title" id="winner-text"></h2>
+
+        <div class="match-end-content">
+          <!-- Rankings Table -->
+          <section class="rankings-section">
+            <h3>Final Rankings</h3>
+            <table class="rankings-table">
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th>Player</th>
+                  <th>Kills</th>
+                  <th>Deaths</th>
+                </tr>
+              </thead>
+              <tbody id="rankings-tbody">
+                <!-- Rows will be inserted here -->
+              </tbody>
+            </table>
+          </section>
+
+          <!-- XP Breakdown -->
+          <section class="xp-section">
+            <h3>XP Earned</h3>
+            <div class="xp-breakdown">
+              <div class="xp-row">
+                <span>Base XP:</span>
+                <span id="xp-base">0</span>
+              </div>
+              <div class="xp-row">
+                <span id="xp-kills-label">Kills (0 × 100):</span>
+                <span id="xp-kills">0</span>
+              </div>
+              <div class="xp-row">
+                <span>Win Bonus:</span>
+                <span id="xp-win">0</span>
+              </div>
+              <div class="xp-row">
+                <span>Top 3 Bonus:</span>
+                <span id="xp-top-three">0</span>
+              </div>
+              <div class="xp-row xp-total">
+                <span>Total XP:</span>
+                <span id="xp-total">0</span>
+              </div>
+            </div>
+          </section>
+
+          <!-- Countdown Timer -->
+          <div class="countdown-section">
+            <p id="countdown-text">Returning to lobby in 10s</p>
+          </div>
+
+          <!-- Play Again Button -->
+          <button class="play-again-button">Play Again</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Test marker for Playwright -->
+  <div class="test-marker" data-testid="match-end-ready" data-ready="true"></div>
+
+  <script type="module" src="/src/match-end-simple-test-main.ts"></script>
+</body>
+</html>
