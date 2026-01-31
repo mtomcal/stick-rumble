@@ -118,6 +118,10 @@ func (h *WebSocketHandler) broadcastPlayerStates(playerStates []game.PlayerState
 
 // broadcastProjectileSpawn sends projectile spawn event to all clients
 func (h *WebSocketHandler) broadcastProjectileSpawn(proj *game.Projectile) {
+	if proj == nil {
+		return
+	}
+
 	// Create projectile:spawn message data
 	data := map[string]interface{}{
 		"id":       proj.ID,
