@@ -39,6 +39,10 @@ import {
   WeaponRespawnedMessageSchema,
   MeleeHitDataSchema,
   MeleeHitMessageSchema,
+  RollStartDataSchema,
+  RollStartMessageSchema,
+  RollEndDataSchema,
+  RollEndMessageSchema,
 } from './server-to-client.js';
 
 describe('Server-to-Client Schemas', () => {
@@ -754,6 +758,7 @@ describe('Server-to-Client Schemas', () => {
             data: {
               id: 'proj-1',
               ownerId: 'p1',
+              weaponType: 'Pistol',
               position: { x: 0, y: 0 },
               velocity: { x: 1, y: 0 },
             },
@@ -807,6 +812,145 @@ describe('Server-to-Client Schemas', () => {
               winners: ['p1'],
               finalScores: [{ playerId: 'p1', kills: 5, deaths: 0, xp: 100 }],
               reason: 'elimination',
+            },
+          },
+        },
+        {
+          schema: PlayerDamagedMessageSchema,
+          message: {
+            type: 'player:damaged',
+            timestamp,
+            data: {
+              victimId: 'p2',
+              attackerId: 'p1',
+              damage: 25,
+              newHealth: 75,
+              projectileId: 'proj-1',
+            },
+          },
+        },
+        {
+          schema: HitConfirmedMessageSchema,
+          message: {
+            type: 'hit:confirmed',
+            timestamp,
+            data: {
+              victimId: 'p2',
+              damage: 25,
+              projectileId: 'proj-1',
+            },
+          },
+        },
+        {
+          schema: PlayerDeathMessageSchema,
+          message: {
+            type: 'player:death',
+            timestamp,
+            data: {
+              victimId: 'p2',
+              attackerId: 'p1',
+            },
+          },
+        },
+        {
+          schema: PlayerKillCreditMessageSchema,
+          message: {
+            type: 'player:kill_credit',
+            timestamp,
+            data: {
+              killerId: 'p1',
+              victimId: 'p2',
+              killerKills: 1,
+              killerXP: 100,
+            },
+          },
+        },
+        {
+          schema: PlayerRespawnMessageSchema,
+          message: {
+            type: 'player:respawn',
+            timestamp,
+            data: {
+              playerId: 'p2',
+              position: { x: 100, y: 100 },
+              health: 100,
+            },
+          },
+        },
+        {
+          schema: WeaponSpawnedMessageSchema,
+          message: {
+            type: 'weapon:spawned',
+            timestamp,
+            data: {
+              crates: [
+                {
+                  id: 'crate-1',
+                  position: { x: 50, y: 50 },
+                  weaponType: 'Shotgun',
+                  isAvailable: true,
+                },
+              ],
+            },
+          },
+        },
+        {
+          schema: WeaponPickupConfirmedMessageSchema,
+          message: {
+            type: 'weapon:pickup_confirmed',
+            timestamp,
+            data: {
+              playerId: 'p1',
+              crateId: 'crate-1',
+              weaponType: 'Shotgun',
+              nextRespawnTime: 30000,
+            },
+          },
+        },
+        {
+          schema: WeaponRespawnedMessageSchema,
+          message: {
+            type: 'weapon:respawned',
+            timestamp,
+            data: {
+              crateId: 'crate-1',
+              weaponType: 'Shotgun',
+              position: { x: 50, y: 50 },
+            },
+          },
+        },
+        {
+          schema: MeleeHitMessageSchema,
+          message: {
+            type: 'melee:hit',
+            timestamp,
+            data: {
+              attackerId: 'p1',
+              victims: ['p2'],
+              knockbackApplied: true,
+            },
+          },
+        },
+        {
+          schema: RollStartMessageSchema,
+          message: {
+            type: 'roll:start',
+            timestamp,
+            data: {
+              playerId: 'p1',
+              direction: { x: 1, y: 0 },
+              rollStartTime: timestamp,
+            },
+          },
+        },
+        {
+          schema: RollEndMessageSchema,
+          message: {
+            type: 'roll:end',
+            timestamp,
+            data: {
+              playerId: 'p1',
+              reason: 'completed',
             },
           },
         },
