@@ -15,6 +15,7 @@ describe('GameSceneEventHandlers', () => {
   let mockWeaponCrateManager: any;
   let mockPickupPromptUI: any;
   let mockMeleeWeaponManager: any;
+  let mockHitEffectManager: any;
   let mockHealthBarUI: HealthBarUI;
   let mockKillFeedUI: KillFeedUI;
   let mockGameSceneUI: GameSceneUI;
@@ -66,6 +67,13 @@ describe('GameSceneEventHandlers', () => {
       destroy: vi.fn(),
     } as any;
 
+    mockHitEffectManager = {
+      showBulletImpact: vi.fn(),
+      showMeleeHit: vi.fn(),
+      showMuzzleFlash: vi.fn(),
+      destroy: vi.fn(),
+    } as any;
+
     mockHealthBarUI = {
       updateHealth: vi.fn(),
     } as unknown as HealthBarUI;
@@ -99,7 +107,8 @@ describe('GameSceneEventHandlers', () => {
       vi.fn(), // onCameraFollowNeeded
       mockWeaponCrateManager,
       mockPickupPromptUI,
-      mockMeleeWeaponManager
+      mockMeleeWeaponManager,
+      mockHitEffectManager
     );
   });
 
@@ -363,7 +372,8 @@ describe('GameSceneEventHandlers', () => {
         vi.fn(),
         mockWeaponCrateManager,
         mockPickupPromptUI,
-      mockMeleeWeaponManager
+      mockMeleeWeaponManager,
+      mockHitEffectManager
       );
 
       eventHandlersNoAudio.setupEventHandlers();
@@ -573,7 +583,8 @@ describe('GameSceneEventHandlers', () => {
         vi.fn(),
         mockWeaponCrateManager,
         mockPickupPromptUI,
-      mockMeleeWeaponManager
+      mockMeleeWeaponManager,
+      mockHitEffectManager
       );
 
       // Setup shooting manager but not input manager
@@ -614,7 +625,8 @@ describe('GameSceneEventHandlers', () => {
         vi.fn(),
         mockWeaponCrateManager,
         mockPickupPromptUI,
-      mockMeleeWeaponManager
+      mockMeleeWeaponManager,
+      mockHitEffectManager
       );
 
       // Setup input manager but not shooting manager
@@ -655,7 +667,8 @@ describe('GameSceneEventHandlers', () => {
         vi.fn(),
         mockWeaponCrateManager,
         mockPickupPromptUI,
-      mockMeleeWeaponManager
+      mockMeleeWeaponManager,
+      mockHitEffectManager
       );
 
       eventHandlersNoManagers.setupEventHandlers();
@@ -707,7 +720,8 @@ describe('GameSceneEventHandlers', () => {
         vi.fn(),
         mockWeaponCrateManager,
         mockPickupPromptUI,
-      mockMeleeWeaponManager
+      mockMeleeWeaponManager,
+      mockHitEffectManager
       );
 
       eventHandlersNoInput.setupEventHandlers();
@@ -825,7 +839,8 @@ describe('GameSceneEventHandlers', () => {
         vi.fn(),
         mockWeaponCrateManager,
         mockPickupPromptUI,
-      mockMeleeWeaponManager
+      mockMeleeWeaponManager,
+      mockHitEffectManager
       );
 
       eventHandlersNoShooting.setupEventHandlers();
@@ -978,7 +993,8 @@ describe('GameSceneEventHandlers', () => {
         vi.fn(),
         mockWeaponCrateManager,
         mockPickupPromptUI,
-        mockMeleeWeaponManager
+        mockMeleeWeaponManager,
+      mockHitEffectManager
       );
 
       testHandlers.setupEventHandlers();
@@ -1021,7 +1037,8 @@ describe('GameSceneEventHandlers', () => {
         vi.fn(),
         mockWeaponCrateManager,
         mockPickupPromptUI,
-        mockMeleeWeaponManager
+        mockMeleeWeaponManager,
+      mockHitEffectManager
       );
 
       testHandlers.setupEventHandlers();
@@ -1236,7 +1253,8 @@ describe('GameSceneEventHandlers', () => {
         vi.fn(),
         mockWeaponCrateManager,
         mockPickupPromptUI,
-        mockMeleeWeaponManager
+        mockMeleeWeaponManager,
+      mockHitEffectManager
       );
 
       testHandlers.setupEventHandlers();
