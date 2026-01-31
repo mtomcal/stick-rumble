@@ -348,13 +348,15 @@ func TestBroadcastMatchTimer(t *testing.T) {
 func TestBroadcastWithNilPlayer(t *testing.T) {
 	handler := NewWebSocketHandler()
 
-	// Attempt to send weapon state to non-existent player
-	// Should not panic
-	handler.sendWeaponState("non-existent-player")
-	handler.sendShootFailed("non-existent-player", "test")
+	// Attempt to send weapon state to non-existent player - should not panic
+	require.NotPanics(t, func() {
+		handler.sendWeaponState("non-existent-player")
+		handler.sendShootFailed("non-existent-player", "test")
+	}, "Should handle non-existent player without panic")
 
-	// Test passes if no panic occurs
-	assert.True(t, true)
+	// Verify room lookup returns nil
+	room := handler.roomManager.GetRoomByPlayerID("non-existent-player")
+	assert.Nil(t, room, "Room should be nil for non-existent player")
 }
 
 // TestBroadcastWithNilRoom removed - simplified test suite
@@ -502,11 +504,14 @@ func TestMultipleSimultaneousBroadcasts(t *testing.T) {
 func TestBroadcastPlayerStatesWithEmptyArray(t *testing.T) {
 	handler := NewWebSocketHandler()
 
-	// Should not panic with empty player states
-	handler.broadcastPlayerStates([]game.PlayerState{})
+	// Should not panic with empty player states (early return on line 19)
+	require.NotPanics(t, func() {
+		handler.broadcastPlayerStates([]game.PlayerState{})
+	}, "Should handle empty player states without panic")
 
-	// Test passes if no panic occurs
-	assert.True(t, true)
+	// Verify no rooms exist (early return prevents broadcast)
+	rooms := handler.roomManager.GetAllRooms()
+	assert.Empty(t, rooms, "Should have no rooms for empty broadcast")
 }
 
 func TestSendWeaponSpawnsMessage(t *testing.T) {

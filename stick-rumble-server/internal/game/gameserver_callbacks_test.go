@@ -202,11 +202,19 @@ func TestCheckRollDuration_StillRolling(t *testing.T) {
 func TestCheckRollDuration_NoActivePlayers(t *testing.T) {
 	gs := NewGameServer(noBroadcast)
 
-	// Check with no players - should not panic
-	gs.checkRollDuration()
+	// Set callback to verify it's NOT called
+	callbackCalled := false
+	gs.SetOnRollEnd(func(playerID, reason string) {
+		callbackCalled = true
+	})
 
-	// Test passes if no panic
-	assert.True(t, true)
+	// Check with no players - should not panic
+	require.NotPanics(t, func() {
+		gs.checkRollDuration()
+	}, "Should handle no active players without panic")
+
+	// Verify callback was NOT called (no players rolling)
+	assert.False(t, callbackCalled, "Callback should not be called when no players exist")
 }
 
 func TestCheckRollDuration_MultipleRollingPlayers(t *testing.T) {
@@ -325,14 +333,22 @@ func TestCheckWeaponRespawns_NotYetReady(t *testing.T) {
 func TestCheckWeaponRespawns_NoCrates(t *testing.T) {
 	gs := NewGameServer(noBroadcast)
 
+	// Set callback to verify it's NOT called
+	callbackCalled := false
+	gs.SetOnWeaponRespawn(func(crate *WeaponCrate) {
+		callbackCalled = true
+	})
+
 	// Create game server without weapon crates
 	gs.weaponCrateManager = NewWeaponCrateManager()
 
 	// Check weapon respawns - should not panic
-	gs.checkWeaponRespawns()
+	require.NotPanics(t, func() {
+		gs.checkWeaponRespawns()
+	}, "Should handle no crates without panic")
 
-	// Test passes if no panic
-	assert.True(t, true)
+	// Verify callback was NOT called (no crates to respawn)
+	assert.False(t, callbackCalled, "Callback should not be called when no crates exist")
 }
 
 func TestCheckWeaponRespawns_AllAvailable(t *testing.T) {
