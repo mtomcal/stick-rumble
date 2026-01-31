@@ -4,6 +4,7 @@ import type { Clock } from '../utils/Clock';
 import { RealClock } from '../utils/Clock';
 import { ProceduralPlayerGraphics } from './ProceduralPlayerGraphics';
 import { ProceduralWeaponGraphics } from './ProceduralWeaponGraphics';
+import { HealthBar } from './HealthBar';
 
 /**
  * Player state from server
@@ -41,6 +42,7 @@ export class PlayerManager {
   private aimIndicators: Map<string, Phaser.GameObjects.Line> = new Map();
   private weaponGraphics: Map<string, ProceduralWeaponGraphics> = new Map();
   private weaponTypes: Map<string, string> = new Map();
+  private healthBars: Map<string, HealthBar> = new Map();
   private localPlayerId: string | null = null;
   private playerStates: Map<string, PlayerState> = new Map();
 
@@ -118,6 +120,12 @@ export class PlayerManager {
           this.weaponGraphics.delete(id);
         }
 
+        const healthBar = this.healthBars.get(id);
+        if (healthBar) {
+          healthBar.destroy();
+          this.healthBars.delete(id);
+        }
+
         this.weaponTypes.delete(id);
       }
     }
@@ -183,6 +191,12 @@ export class PlayerManager {
         );
         weaponGraphics.setRotation(aimAngle);
         this.weaponGraphics.set(state.id, weaponGraphics);
+
+        // Create health bar (positioned 8 pixels above player head)
+        const healthBarY = state.position.y - PLAYER.HEIGHT / 2 - 8;
+        const healthBar = new HealthBar(this.scene, state.position.x, healthBarY);
+        healthBar.setHealth(state.health ?? 100); // Default to 100 health if undefined
+        this.healthBars.set(state.id, healthBar);
       }
 
       // Update position
@@ -263,6 +277,17 @@ export class PlayerManager {
         const isAimingLeft = normalizedAngle > 90 && normalizedAngle < 270;
         weaponGraphics.setFlipY(isAimingLeft);
       }
+
+      // Update health bar
+      const healthBar = this.healthBars.get(state.id);
+      if (healthBar) {
+        // Update health value
+        healthBar.setHealth(state.health ?? 100);
+
+        // Update position (8 pixels above player head)
+        const healthBarY = state.position.y - PLAYER.HEIGHT / 2 - 8;
+        healthBar.setPosition(state.position.x, healthBarY);
+      }
     }
   }
 
@@ -289,6 +314,11 @@ export class PlayerManager {
       weaponGraphics.destroy();
     }
     this.weaponGraphics.clear();
+
+    for (const healthBar of this.healthBars.values()) {
+      healthBar.destroy();
+    }
+    this.healthBars.clear();
 
     this.weaponTypes.clear();
     this.playerStates.clear();
