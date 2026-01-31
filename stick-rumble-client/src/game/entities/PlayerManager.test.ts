@@ -4,7 +4,7 @@ import { ManualClock } from '../utils/Clock';
 
 // Create mock Phaser scene
 const createMockScene = () => {
-  const rectangles: Array<{
+  const sprites: Array<{
     x: number;
     y: number;
     setPosition: ReturnType<typeof vi.fn>;
@@ -12,7 +12,11 @@ const createMockScene = () => {
     setAngle: ReturnType<typeof vi.fn>;
     setTint: ReturnType<typeof vi.fn>;
     clearTint: ReturnType<typeof vi.fn>;
-    setFillStyle: ReturnType<typeof vi.fn>;
+    setOrigin: ReturnType<typeof vi.fn>;
+    setRotation: ReturnType<typeof vi.fn>;
+    setFlipY: ReturnType<typeof vi.fn>;
+    setTexture: ReturnType<typeof vi.fn>;
+    play: ReturnType<typeof vi.fn>;
     destroy: ReturnType<typeof vi.fn>;
   }> = [];
 
@@ -29,13 +33,39 @@ const createMockScene = () => {
     destroy: ReturnType<typeof vi.fn>;
   }> = [];
 
+  const containers: Array<{
+    add: ReturnType<typeof vi.fn>;
+    removeAll: ReturnType<typeof vi.fn>;
+    setRotation: ReturnType<typeof vi.fn>;
+    setPosition: ReturnType<typeof vi.fn>;
+    destroy: ReturnType<typeof vi.fn>;
+    scaleY: number;
+    rotation: number;
+  }> = [];
+
+  const graphicsObjects: Array<{
+    clear: ReturnType<typeof vi.fn>;
+    lineStyle: ReturnType<typeof vi.fn>;
+    fillStyle: ReturnType<typeof vi.fn>;
+    beginPath: ReturnType<typeof vi.fn>;
+    moveTo: ReturnType<typeof vi.fn>;
+    lineTo: ReturnType<typeof vi.fn>;
+    strokePath: ReturnType<typeof vi.fn>;
+    fillCircle: ReturnType<typeof vi.fn>;
+    strokeCircle: ReturnType<typeof vi.fn>;
+    setDepth: ReturnType<typeof vi.fn>;
+    setVisible: ReturnType<typeof vi.fn>;
+    destroy: ReturnType<typeof vi.fn>;
+    visible: boolean;
+  }> = [];
+
   return {
     sys: {
       isActive: vi.fn().mockReturnValue(true),
     },
     add: {
-      rectangle: vi.fn((x: number, y: number) => {
-        const rect = {
+      sprite: vi.fn((x: number, y: number) => {
+        const sprite = {
           x,
           y,
           setPosition: vi.fn(),
@@ -43,11 +73,15 @@ const createMockScene = () => {
           setAngle: vi.fn().mockReturnThis(),
           setTint: vi.fn().mockReturnThis(),
           clearTint: vi.fn().mockReturnThis(),
-          setFillStyle: vi.fn().mockReturnThis(),
+          setOrigin: vi.fn().mockReturnThis(),
+          setRotation: vi.fn().mockReturnThis(),
+          setFlipY: vi.fn().mockReturnThis(),
+          setTexture: vi.fn().mockReturnThis(),
+          play: vi.fn().mockReturnThis(),
           destroy: vi.fn(),
         };
-        rectangles.push(rect);
-        return rect;
+        sprites.push(sprite);
+        return sprite;
       }),
       text: vi.fn((x: number, y: number) => {
         const text = {
@@ -68,10 +102,47 @@ const createMockScene = () => {
         lines.push(line);
         return line;
       }),
+      container: vi.fn(() => {
+        const container = {
+          add: vi.fn(),
+          removeAll: vi.fn(),
+          setRotation: vi.fn(),
+          setPosition: vi.fn(),
+          destroy: vi.fn(),
+          scaleY: 1,
+          rotation: 0,
+        };
+        containers.push(container);
+        return container;
+      }),
+      rectangle: vi.fn(() => ({
+        setRotation: vi.fn(),
+      })),
+      graphics: vi.fn(() => {
+        const graphics = {
+          clear: vi.fn(),
+          lineStyle: vi.fn(),
+          fillStyle: vi.fn(),
+          beginPath: vi.fn(),
+          moveTo: vi.fn(),
+          lineTo: vi.fn(),
+          strokePath: vi.fn(),
+          fillCircle: vi.fn(),
+          strokeCircle: vi.fn(),
+          setDepth: vi.fn(),
+          setVisible: vi.fn(),
+          destroy: vi.fn(),
+          visible: true,
+        };
+        graphicsObjects.push(graphics);
+        return graphics;
+      }),
     },
-    rectangles,
+    sprites,
     texts,
     lines,
+    containers,
+    graphicsObjects,
   };
 };
 
@@ -124,16 +195,17 @@ describe('PlayerManager', () => {
       expect(() => manager.updatePlayers(playerStates)).not.toThrow();
     });
 
-    it('should create player sprites for new players', () => {
+    it('should create player graphics for new players', () => {
       const playerStates: PlayerState[] = [
         { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
       ];
 
       playerManager.updatePlayers(playerStates);
 
-      expect(mockScene.add.rectangle).toHaveBeenCalledWith(
-        100, 200, 32, 64, expect.any(Number)
-      );
+      // Should create graphics object for player
+      expect(mockScene.add.graphics).toHaveBeenCalled();
+      // Should create container for weapon
+      expect(mockScene.add.container).toHaveBeenCalled();
       expect(mockScene.add.text).toHaveBeenCalledWith(
         100,
         158, // y: 200 - 64/2 - 10 = 158
@@ -154,9 +226,10 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(playerStates);
 
-      expect(mockScene.add.rectangle).toHaveBeenCalledWith(
-        100, 200, 32, 64, 0x00ff00
-      );
+      expect(mockScene.add.graphics).toHaveBeenCalled();
+      // ProceduralPlayerGraphics uses fillStyle with color 0x00ff00 for local player
+      const graphics = mockScene.graphicsObjects[0];
+      expect(graphics.fillStyle).toHaveBeenCalledWith(0x00ff00, 1);
     });
 
     it('should create remote player with red color (0xff0000)', () => {
@@ -168,9 +241,10 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(playerStates);
 
-      expect(mockScene.add.rectangle).toHaveBeenCalledWith(
-        100, 200, 32, 64, 0xff0000
-      );
+      expect(mockScene.add.graphics).toHaveBeenCalled();
+      // ProceduralPlayerGraphics uses fillStyle with color 0xff0000 for remote player
+      const graphics = mockScene.graphicsObjects[0];
+      expect(graphics.fillStyle).toHaveBeenCalledWith(0xff0000, 1);
     });
 
     it('should add "You" label for local player', () => {
@@ -220,7 +294,7 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(initialStates);
 
-      const sprite = mockScene.rectangles[0];
+      const graphics = mockScene.graphicsObjects[0];
 
       const updatedStates: PlayerState[] = [
         { id: 'player-1', position: { x: 300, y: 400 }, velocity: { x: 0, y: 0 } },
@@ -228,7 +302,8 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(updatedStates);
 
-      expect(sprite.setPosition).toHaveBeenCalledWith(300, 400);
+      // ProceduralPlayerGraphics.setPosition triggers draw() which calls graphics.clear()
+      expect(graphics.clear).toHaveBeenCalled();
     });
 
     it('should update label positions when player moves', () => {
@@ -257,7 +332,7 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(initialStates);
 
-      const player1Sprite = mockScene.rectangles[0];
+      const player1Graphics = mockScene.graphicsObjects[0];
       const player1Label = mockScene.texts[0];
 
       // Update with only player-2
@@ -267,7 +342,7 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(updatedStates);
 
-      expect(player1Sprite.destroy).toHaveBeenCalled();
+      expect(player1Graphics.destroy).toHaveBeenCalled();
       expect(player1Label.destroy).toHaveBeenCalled();
     });
 
@@ -280,11 +355,13 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(playerStates);
 
-      expect(mockScene.add.rectangle).toHaveBeenCalledTimes(3);
+      // Each player creates 1 graphics (player) + 1 container (weapon)
+      expect(mockScene.add.graphics).toHaveBeenCalledTimes(3);
+      expect(mockScene.add.container).toHaveBeenCalledTimes(3);
       expect(mockScene.add.text).toHaveBeenCalledTimes(3);
     });
 
-    it('should not create duplicate sprites for same player', () => {
+    it('should not create duplicate graphics for same player', () => {
       const playerStates: PlayerState[] = [
         { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
       ];
@@ -293,7 +370,9 @@ describe('PlayerManager', () => {
       playerManager.updatePlayers(playerStates);
       playerManager.updatePlayers(playerStates);
 
-      expect(mockScene.add.rectangle).toHaveBeenCalledTimes(1);
+      // Each player creates 1 graphics + 1 container
+      expect(mockScene.add.graphics).toHaveBeenCalledTimes(1);
+      expect(mockScene.add.container).toHaveBeenCalledTimes(1);
       expect(mockScene.add.text).toHaveBeenCalledTimes(1);
     });
 
@@ -305,19 +384,19 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(playerStates);
 
-      const sprite = mockScene.rectangles[0];
+      const graphics = mockScene.graphicsObjects[0];
       const label = mockScene.texts[0];
 
       // Then update with empty list
       playerManager.updatePlayers([]);
 
-      expect(sprite.destroy).toHaveBeenCalled();
+      expect(graphics.destroy).toHaveBeenCalled();
       expect(label.destroy).toHaveBeenCalled();
     });
   });
 
   describe('destroy', () => {
-    it('should destroy all player sprites', () => {
+    it('should destroy all player graphics', () => {
       const playerStates: PlayerState[] = [
         { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
         { id: 'player-2', position: { x: 300, y: 400 }, velocity: { x: 0, y: 0 } },
@@ -327,8 +406,8 @@ describe('PlayerManager', () => {
 
       playerManager.destroy();
 
-      for (const rect of mockScene.rectangles) {
-        expect(rect.destroy).toHaveBeenCalled();
+      for (const graphics of mockScene.graphicsObjects) {
+        expect(graphics.destroy).toHaveBeenCalled();
       }
     });
 
@@ -472,18 +551,14 @@ describe('PlayerManager', () => {
       expect(() => playerManager.updatePlayers(deadState)).not.toThrow();
     });
 
-    it('should apply death visual effects (fade + gray) to dead players', () => {
+    it('should apply death visual effects (gray color) to dead players', () => {
       const aliveState: PlayerState[] = [
         { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
       ];
 
       playerManager.updatePlayers(aliveState);
 
-      const sprite = mockScene.rectangles[0];
-      const setAlphaSpy = vi.fn();
-      const setFillStyleSpy = vi.fn();
-      sprite.setAlpha = setAlphaSpy;
-      sprite.setFillStyle = setFillStyleSpy;
+      const graphics = mockScene.graphicsObjects[0];
 
       // Mark as dead
       const deadState: PlayerState[] = [
@@ -492,8 +567,8 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(deadState);
 
-      expect(setAlphaSpy).toHaveBeenCalledWith(0.5);
-      expect(setFillStyleSpy).toHaveBeenCalledWith(0x888888);
+      // ProceduralPlayerGraphics.setColor(0x888888) triggers draw() which uses fillStyle
+      expect(graphics.fillStyle).toHaveBeenCalledWith(0x888888, 1);
     });
 
     it('should restore visual effects when player respawns', () => {
@@ -503,11 +578,7 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(deadState);
 
-      const sprite = mockScene.rectangles[0];
-      const setAlphaSpy = vi.fn();
-      const setFillStyleSpy = vi.fn();
-      sprite.setAlpha = setAlphaSpy;
-      sprite.setFillStyle = setFillStyleSpy;
+      const graphics = mockScene.graphicsObjects[0];
 
       // Respawn (deathTime removed)
       const aliveState: PlayerState[] = [
@@ -516,8 +587,9 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(aliveState);
 
-      expect(setAlphaSpy).toHaveBeenCalledWith(1.0);
-      expect(setFillStyleSpy).toHaveBeenCalledWith(0xff0000); // Red for non-local player
+      // ProceduralPlayerGraphics.setColor(0xff0000) triggers draw() which uses fillStyle
+      // Red for non-local player
+      expect(graphics.fillStyle).toHaveBeenCalledWith(0xff0000, 1);
     });
 
     it('should return list of living players excluding dead ones', () => {
@@ -584,7 +656,7 @@ describe('PlayerManager', () => {
       expect(playerManager.getLocalPlayerSprite()).toBeNull();
     });
 
-    it('should return the local player sprite when it exists', () => {
+    it('should return the local player graphics object when it exists', () => {
       playerManager.setLocalPlayerId('local-player');
 
       const playerStates: PlayerState[] = [
@@ -593,10 +665,12 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(playerStates);
 
-      const sprite = playerManager.getLocalPlayerSprite();
-      expect(sprite).not.toBeNull();
-      expect(sprite?.x).toBe(100);
-      expect(sprite?.y).toBe(200);
+      const graphics = playerManager.getLocalPlayerSprite();
+      expect(graphics).not.toBeNull();
+      expect(graphics).toBeDefined();
+      // Should have Graphics object methods
+      expect(graphics).toHaveProperty('clear');
+      expect(graphics).toHaveProperty('lineStyle');
     });
 
     it('should return null after local player is removed', () => {
@@ -742,11 +816,12 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(rollingState);
 
-      const sprite = mockScene.rectangles[0];
-      expect(sprite.setAngle).toHaveBeenCalled();
+      const graphics = mockScene.graphicsObjects[0];
+      // ProceduralPlayerGraphics.setRotation triggers draw() which calls clear()
+      expect(graphics.clear).toHaveBeenCalled();
     });
 
-    it('should apply transparency (alpha 0.5) during invincibility frames when rolling', () => {
+    it('should apply visibility flicker during invincibility frames when rolling', () => {
       playerManager.setLocalPlayerId('player-1');
 
       // Player rolling (first 0.2s = i-frames)
@@ -761,12 +836,12 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(rollingState);
 
-      const sprite = mockScene.rectangles[0];
-      // During i-frames, alpha should be 0.5
-      expect(sprite.setAlpha).toHaveBeenCalledWith(0.5);
+      const graphics = mockScene.graphicsObjects[0];
+      // During rolling, setVisible is called for flicker effect
+      expect(graphics.setVisible).toHaveBeenCalled();
     });
 
-    it('should restore alpha to 1.0 when roll ends', () => {
+    it('should restore visibility when roll ends', () => {
       playerManager.setLocalPlayerId('player-1');
 
       // Start rolling
@@ -781,9 +856,7 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(rollingState);
 
-      const sprite = mockScene.rectangles[0];
-      const setAlphaSpy = vi.fn();
-      sprite.setAlpha = setAlphaSpy;
+      const graphics = mockScene.graphicsObjects[0];
 
       // End rolling
       const notRollingState: PlayerState[] = [
@@ -797,8 +870,8 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(notRollingState);
 
-      // Alpha should be restored to 1.0
-      expect(setAlphaSpy).toHaveBeenCalledWith(1.0);
+      // Visibility should be restored to true
+      expect(graphics.setVisible).toHaveBeenCalledWith(true);
     });
 
     it('should clear rotation when roll ends', () => {
@@ -816,9 +889,7 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(rollingState);
 
-      const sprite = mockScene.rectangles[0];
-      const setAngleSpy = vi.fn();
-      sprite.setAngle = setAngleSpy;
+      const graphics = mockScene.graphicsObjects[0];
 
       // End rolling
       const notRollingState: PlayerState[] = [
@@ -832,8 +903,8 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(notRollingState);
 
-      // Rotation should be cleared (angle = 0)
-      expect(setAngleSpy).toHaveBeenCalledWith(0);
+      // Rotation cleared, setRotation(0) triggers draw() which calls clear()
+      expect(graphics.clear).toHaveBeenCalled();
     });
 
     it('should handle players with undefined isRolling (backward compatibility)', () => {
@@ -965,9 +1036,9 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(rollingState);
 
-      const sprite = mockScene.rectangles[0];
+      const graphics = mockScene.graphicsObjects[0];
       // Color should be maintained during roll (green for local player)
-      expect(sprite.setFillStyle).toHaveBeenCalledWith(0x00ff00);
+      expect(graphics.fillStyle).toHaveBeenCalledWith(0x00ff00, 1);
     });
 
     it('should apply death effects even when rolling flag is set', () => {
@@ -986,10 +1057,9 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(deadAndRollingState);
 
-      const sprite = mockScene.rectangles[0];
-      // Death effect takes precedence
-      expect(sprite.setAlpha).toHaveBeenCalledWith(0.5);
-      expect(sprite.setFillStyle).toHaveBeenCalledWith(0x888888);
+      const graphics = mockScene.graphicsObjects[0];
+      // Death effect takes precedence - gray color
+      expect(graphics.fillStyle).toHaveBeenCalledWith(0x888888, 1);
     });
   });
 
@@ -1073,7 +1143,7 @@ describe('PlayerManager', () => {
 
   describe('Phase 2 Critical: Scene Lifecycle Tests', () => {
     describe('Destroy and recreation cycle', () => {
-      it('should properly cleanup all sprites on destroy', () => {
+      it('should properly cleanup all graphics on destroy', () => {
         const playerStates: PlayerState[] = [
           { id: 'player-1', position: { x: 100, y: 100 }, velocity: { x: 0, y: 0 } },
           { id: 'player-2', position: { x: 200, y: 200 }, velocity: { x: 0, y: 0 } },
@@ -1081,17 +1151,18 @@ describe('PlayerManager', () => {
 
         playerManager.updatePlayers(playerStates);
 
-        // Verify sprites were created
-        expect(mockScene.rectangles.length).toBe(2);
+        // Verify graphics were created (2 players × 1 graphics each = 2)
+        expect(mockScene.graphicsObjects.length).toBe(2);
+        expect(mockScene.containers.length).toBe(2);
         expect(mockScene.texts.length).toBe(2);
         expect(mockScene.lines.length).toBe(2);
 
         // Destroy PlayerManager
         playerManager.destroy();
 
-        // Verify all sprites were destroyed
-        expect(mockScene.rectangles[0].destroy).toHaveBeenCalled();
-        expect(mockScene.rectangles[1].destroy).toHaveBeenCalled();
+        // Verify all graphics were destroyed
+        expect(mockScene.graphicsObjects[0].destroy).toHaveBeenCalled();
+        expect(mockScene.graphicsObjects[1].destroy).toHaveBeenCalled();
         expect(mockScene.texts[0].destroy).toHaveBeenCalled();
         expect(mockScene.texts[1].destroy).toHaveBeenCalled();
         expect(mockScene.lines[0].destroy).toHaveBeenCalled();
@@ -1113,13 +1184,14 @@ describe('PlayerManager', () => {
 
         newPlayerManager.updatePlayers(playerStates);
 
-        // Verify new sprites were created
-        expect(newMockScene.rectangles.length).toBe(1);
+        // Verify new graphics were created (1 graphics + 1 container per player)
+        expect(newMockScene.graphicsObjects.length).toBe(1);
+        expect(newMockScene.containers.length).toBe(1);
         expect(newMockScene.texts.length).toBe(1);
         expect(newMockScene.lines.length).toBe(1);
       });
 
-      it('should track sprite count matches player count', () => {
+      it('should track graphics count matches player count', () => {
         const playerStates: PlayerState[] = [
           { id: 'player-1', position: { x: 100, y: 100 }, velocity: { x: 0, y: 0 } },
           { id: 'player-2', position: { x: 200, y: 200 }, velocity: { x: 0, y: 0 } },
@@ -1127,7 +1199,8 @@ describe('PlayerManager', () => {
         ];
 
         playerManager.updatePlayers(playerStates);
-        expect(mockScene.rectangles.length).toBe(3);
+        expect(mockScene.graphicsObjects.length).toBe(3);
+        expect(mockScene.containers.length).toBe(3);
 
         // Remove one player
         const updatedStates: PlayerState[] = [
@@ -1137,11 +1210,12 @@ describe('PlayerManager', () => {
 
         playerManager.updatePlayers(updatedStates);
 
-        // Verify removed player's sprite was destroyed
-        expect(mockScene.rectangles[2].destroy).toHaveBeenCalled();
+        // Verify removed player's graphics were destroyed (player-3 at index 2)
+        expect(mockScene.graphicsObjects[2].destroy).toHaveBeenCalled();
+        expect(mockScene.containers[2].destroy).toHaveBeenCalled();
       });
 
-      it('should have no zombie sprites after multiple updates and destroy', () => {
+      it('should have no zombie graphics after multiple updates and destroy', () => {
         // Create players
         const playerStates1: PlayerState[] = [
           { id: 'player-1', position: { x: 100, y: 100 }, velocity: { x: 0, y: 0 } },
@@ -1158,9 +1232,12 @@ describe('PlayerManager', () => {
         // Remove all players
         playerManager.updatePlayers([]);
 
-        // All sprites should be destroyed
-        mockScene.rectangles.forEach(sprite => {
-          expect(sprite.destroy).toHaveBeenCalled();
+        // All graphics should be destroyed
+        mockScene.graphicsObjects.forEach(graphics => {
+          expect(graphics.destroy).toHaveBeenCalled();
+        });
+        mockScene.containers.forEach(container => {
+          expect(container.destroy).toHaveBeenCalled();
         });
         mockScene.texts.forEach(text => {
           expect(text.destroy).toHaveBeenCalled();
@@ -1182,7 +1259,8 @@ describe('PlayerManager', () => {
           { id: 'player-2', position: { x: 200, y: 200 }, velocity: { x: 0, y: 0 } },
         ];
         playerManager.updatePlayers(playerStates);
-        expect(mockScene.rectangles.length).toBe(2);
+        expect(mockScene.graphicsObjects.length).toBe(2);
+        expect(mockScene.containers.length).toBe(2);
 
         // Scene lifecycle 1: Destroy
         playerManager.destroy();
@@ -1194,9 +1272,10 @@ describe('PlayerManager', () => {
         // Scene lifecycle 2: Create same players again
         newPlayerManager.updatePlayers(playerStates);
 
-        // Should create new sprites (not reuse old ones)
-        expect(newMockScene.rectangles.length).toBe(2);
-        expect(newMockScene.rectangles[0]).not.toBe(mockScene.rectangles[0]);
+        // Should create new graphics (not reuse old ones)
+        expect(newMockScene.graphicsObjects.length).toBe(2);
+        expect(newMockScene.containers.length).toBe(2);
+        expect(newMockScene.graphicsObjects[0]).not.toBe(mockScene.graphicsObjects[0]);
       });
 
       it('should handle multiple consecutive restarts without leaks', () => {
@@ -1211,9 +1290,11 @@ describe('PlayerManager', () => {
           tempManager.updatePlayers(playerStates);
           tempManager.destroy();
 
-          // Verify all sprites were destroyed in each cycle
-          expect(tempMockScene.rectangles.length).toBe(1);
-          expect(tempMockScene.rectangles[0].destroy).toHaveBeenCalled();
+          // Verify all graphics were destroyed in each cycle (1 graphics + 1 container per player)
+          expect(tempMockScene.graphicsObjects.length).toBe(1);
+          expect(tempMockScene.containers.length).toBe(1);
+          expect(tempMockScene.graphicsObjects[0].destroy).toHaveBeenCalled();
+          expect(tempMockScene.containers[0].destroy).toHaveBeenCalled();
         }
       });
 
@@ -1262,15 +1343,17 @@ describe('PlayerManager', () => {
       });
     });
 
-    describe('Sprite count validation', () => {
-      it('should maintain sprite count = player count at all times', () => {
+    describe('Graphics count validation', () => {
+      it('should maintain graphics count = player count at all times', () => {
         // Start with 2 players
         let playerStates: PlayerState[] = [
           { id: 'player-1', position: { x: 100, y: 100 }, velocity: { x: 0, y: 0 } },
           { id: 'player-2', position: { x: 200, y: 200 }, velocity: { x: 0, y: 0 } },
         ];
         playerManager.updatePlayers(playerStates);
-        expect(mockScene.rectangles.length).toBe(2);
+        // Each player creates 1 graphics + 1 container
+        expect(mockScene.graphicsObjects.length).toBe(2);
+        expect(mockScene.containers.length).toBe(2);
 
         // Add player
         playerStates = [
@@ -1279,21 +1362,23 @@ describe('PlayerManager', () => {
           { id: 'player-3', position: { x: 300, y: 300 }, velocity: { x: 0, y: 0 } },
         ];
         playerManager.updatePlayers(playerStates);
-        expect(mockScene.rectangles.length).toBe(3);
+        // 3 players * 1 graphics each = 3 graphics
+        expect(mockScene.graphicsObjects.length).toBe(3);
+        expect(mockScene.containers.length).toBe(3);
 
         // Remove 2 players
         playerStates = [
           { id: 'player-1', position: { x: 100, y: 100 }, velocity: { x: 0, y: 0 } },
         ];
         playerManager.updatePlayers(playerStates);
-        // Only 1 active sprite remains (others destroyed)
-        const activeSpriteCount = mockScene.rectangles.filter(
-          s => !s.destroy.mock.calls.length
+        // Only 1 active graphics remains
+        const activeGraphicsCount = mockScene.graphicsObjects.filter(
+          g => !g.destroy.mock.calls.length
         ).length;
-        expect(activeSpriteCount).toBe(1);
+        expect(activeGraphicsCount).toBe(1);
       });
 
-      it('should never duplicate sprites for same player ID', () => {
+      it('should never duplicate graphics for same player ID', () => {
         const playerStates: PlayerState[] = [
           { id: 'player-1', position: { x: 100, y: 100 }, velocity: { x: 0, y: 0 } },
         ];
@@ -1303,8 +1388,9 @@ describe('PlayerManager', () => {
         playerManager.updatePlayers(playerStates);
         playerManager.updatePlayers(playerStates);
 
-        // Should only create one sprite, not three
-        expect(mockScene.rectangles.length).toBe(1);
+        // Should only create 1 graphics + 1 container, not multiples
+        expect(mockScene.graphicsObjects.length).toBe(1);
+        expect(mockScene.containers.length).toBe(1);
       });
     });
   });

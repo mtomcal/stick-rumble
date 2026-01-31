@@ -48,6 +48,8 @@ export class GameScene extends Phaser.Scene {
   preload(): void {
     // Load audio assets
     AudioManager.preload(this);
+
+    // No sprite assets needed - using procedural graphics
   }
 
   create(): void {
@@ -75,7 +77,7 @@ export class GameScene extends Phaser.Scene {
     });
     titleText.setScrollFactor(0);
 
-    // Initialize player manager
+    // Initialize player manager (using procedural graphics)
     this.playerManager = new PlayerManager(this);
 
     // Initialize projectile manager
@@ -397,17 +399,17 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * Start camera follow on local player sprite if not already following
+   * Start camera follow on local player graphics object if not already following
    */
   private startCameraFollowIfNeeded(): void {
     if (this.isCameraFollowing) {
       return;
     }
 
-    const localPlayerSprite = this.playerManager.getLocalPlayerSprite();
-    if (localPlayerSprite) {
+    const localPlayerGraphics = this.playerManager.getLocalPlayerSprite();
+    if (localPlayerGraphics) {
       // Start following with smooth lerp (0.1 = smooth follow, 1 = instant)
-      this.cameras.main.startFollow(localPlayerSprite, true, 0.1, 0.1);
+      this.cameras.main.startFollow(localPlayerGraphics, true, 0.1, 0.1);
       this.isCameraFollowing = true;
     }
   }
