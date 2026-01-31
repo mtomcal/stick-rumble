@@ -251,4 +251,14 @@ describe('ProceduralPlayerGraphics', () => {
       expect(hasGreenColor).toBe(true);
     });
   });
+
+  describe('Graphics object access', () => {
+    it('should return the underlying Graphics object', () => {
+      const player = new ProceduralPlayerGraphics(scene, 100, 100, 0xff0000);
+      const graphicsObj = player.getGraphics();
+
+      expect(graphicsObj).toBeDefined();
+      expect(graphicsObj).toBe(graphics); // Should return the same mock graphics object
+    });
+  });
 });

@@ -656,7 +656,7 @@ describe('PlayerManager', () => {
       expect(playerManager.getLocalPlayerSprite()).toBeNull();
     });
 
-    it('should return the local player sprite when it exists', () => {
+    it('should return the local player graphics object when it exists', () => {
       playerManager.setLocalPlayerId('local-player');
 
       const playerStates: PlayerState[] = [
@@ -665,10 +665,12 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(playerStates);
 
-      const sprite = playerManager.getLocalPlayerSprite();
-      expect(sprite).not.toBeNull();
-      expect(sprite?.x).toBe(100);
-      expect(sprite?.y).toBe(200);
+      const graphics = playerManager.getLocalPlayerSprite();
+      expect(graphics).not.toBeNull();
+      expect(graphics).toBeDefined();
+      // Should have Graphics object methods
+      expect(graphics).toHaveProperty('clear');
+      expect(graphics).toHaveProperty('lineStyle');
     });
 
     it('should return null after local player is removed', () => {

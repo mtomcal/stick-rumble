@@ -340,15 +340,15 @@ export class PlayerManager {
   }
 
   /**
-   * Get the local player's position for camera follow
+   * Get the local player's Graphics object for camera follow
    * Returns null if local player doesn't exist yet
    */
-  getLocalPlayerSprite(): { x: number; y: number } | null {
+  getLocalPlayerSprite(): Phaser.GameObjects.Graphics | null {
     if (!this.localPlayerId) {
       return null;
     }
     const playerGraphics = this.players.get(this.localPlayerId);
-    return playerGraphics ? playerGraphics.getPosition() : null;
+    return playerGraphics ? playerGraphics.getGraphics() : null;
   }
 
   /**

@@ -191,6 +191,13 @@ export class ProceduralPlayerGraphics {
   }
 
   /**
+   * Get the underlying Graphics object (for camera follow, etc.)
+   */
+  getGraphics(): Phaser.GameObjects.Graphics {
+    return this.graphics;
+  }
+
+  /**
    * Cleanup
    */
   destroy(): void {
