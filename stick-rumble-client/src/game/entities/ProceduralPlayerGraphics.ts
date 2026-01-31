@@ -40,12 +40,16 @@ export class ProceduralPlayerGraphics {
   /**
    * Draw the stick figure
    * Based on StickFigure.ts lines 297-388
+   *
+   * Drawing is relative to Graphics object origin (0, 0).
+   * The Graphics object's x/y position is set by setPosition() for camera follow.
    */
   private draw(): void {
     this.graphics.clear();
 
-    const cx = this.x;
-    const cy = this.y;
+    // Draw at origin since Graphics object position is set via transform
+    const cx = 0;
+    const cy = 0;
     const rot = this.rotation;
 
     // Helper to rotate points around center
@@ -143,6 +147,9 @@ export class ProceduralPlayerGraphics {
   setPosition(x: number, y: number): void {
     this.x = x;
     this.y = y;
+    // Update Graphics object position for camera follow
+    this.graphics.x = x;
+    this.graphics.y = y;
     this.draw();
   }
 

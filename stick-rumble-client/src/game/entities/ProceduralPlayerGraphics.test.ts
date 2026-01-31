@@ -69,13 +69,14 @@ describe('ProceduralPlayerGraphics', () => {
       expect(hasRedColor).toBe(true);
     });
 
-    it('should draw head circle at center position', () => {
+    it('should draw head circle at local origin', () => {
       new ProceduralPlayerGraphics(scene, 100, 100, 0xff0000);
 
-      // Head should be drawn at (100, 100) with radius 13
+      // Head should be drawn at local origin (0, 0) with radius 13
+      // Graphics object position is set via graphics.x/graphics.y for camera follow
       const fillCircleCalls = (graphics.fillCircle as any).mock.calls;
       const hasHeadCircle = fillCircleCalls.some(
-        (call: any[]) => call[0] === 100 && call[1] === 100 && call[2] === 13
+        (call: any[]) => call[0] === 0 && call[1] === 0 && call[2] === 13
       );
       expect(hasHeadCircle).toBe(true);
     });
@@ -180,6 +181,16 @@ describe('ProceduralPlayerGraphics', () => {
 
       // Should redraw at new position
       expect(graphics.clear).toHaveBeenCalled();
+    });
+
+    it('should update Graphics object position for camera follow', () => {
+      const player = new ProceduralPlayerGraphics(scene, 100, 100, 0xff0000);
+
+      player.setPosition(200, 300);
+
+      // Graphics object position should be updated so camera can follow it
+      expect(graphics.x).toBe(200);
+      expect(graphics.y).toBe(300);
     });
 
     it('should return current position', () => {
