@@ -49,6 +49,7 @@ describe('GameSceneEventHandlers - Recoil Visual Feedback', () => {
       getLocalPlayerId: vi.fn().mockReturnValue('player-1'),
       getPlayerPosition: vi.fn().mockReturnValue({ x: 100, y: 200 }),
       getPlayerAimAngle: vi.fn().mockReturnValue(0),
+      updatePlayerWeapon: vi.fn(),
     } as unknown as PlayerManager;
 
     mockProjectileManager = {

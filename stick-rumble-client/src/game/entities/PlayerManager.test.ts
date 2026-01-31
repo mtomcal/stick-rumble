@@ -4,7 +4,7 @@ import { ManualClock } from '../utils/Clock';
 
 // Create mock Phaser scene
 const createMockScene = () => {
-  const rectangles: Array<{
+  const sprites: Array<{
     x: number;
     y: number;
     setPosition: ReturnType<typeof vi.fn>;
@@ -12,7 +12,11 @@ const createMockScene = () => {
     setAngle: ReturnType<typeof vi.fn>;
     setTint: ReturnType<typeof vi.fn>;
     clearTint: ReturnType<typeof vi.fn>;
-    setFillStyle: ReturnType<typeof vi.fn>;
+    setOrigin: ReturnType<typeof vi.fn>;
+    setRotation: ReturnType<typeof vi.fn>;
+    setFlipY: ReturnType<typeof vi.fn>;
+    setTexture: ReturnType<typeof vi.fn>;
+    play: ReturnType<typeof vi.fn>;
     destroy: ReturnType<typeof vi.fn>;
   }> = [];
 
@@ -34,8 +38,8 @@ const createMockScene = () => {
       isActive: vi.fn().mockReturnValue(true),
     },
     add: {
-      rectangle: vi.fn((x: number, y: number) => {
-        const rect = {
+      sprite: vi.fn((x: number, y: number) => {
+        const sprite = {
           x,
           y,
           setPosition: vi.fn(),
@@ -43,11 +47,15 @@ const createMockScene = () => {
           setAngle: vi.fn().mockReturnThis(),
           setTint: vi.fn().mockReturnThis(),
           clearTint: vi.fn().mockReturnThis(),
-          setFillStyle: vi.fn().mockReturnThis(),
+          setOrigin: vi.fn().mockReturnThis(),
+          setRotation: vi.fn().mockReturnThis(),
+          setFlipY: vi.fn().mockReturnThis(),
+          setTexture: vi.fn().mockReturnThis(),
+          play: vi.fn().mockReturnThis(),
           destroy: vi.fn(),
         };
-        rectangles.push(rect);
-        return rect;
+        sprites.push(sprite);
+        return sprite;
       }),
       text: vi.fn((x: number, y: number) => {
         const text = {
@@ -69,7 +77,7 @@ const createMockScene = () => {
         return line;
       }),
     },
-    rectangles,
+    sprites,
     texts,
     lines,
   };
@@ -131,8 +139,8 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(playerStates);
 
-      expect(mockScene.add.rectangle).toHaveBeenCalledWith(
-        100, 200, 32, 64, expect.any(Number)
+      expect(mockScene.add.sprite).toHaveBeenCalledWith(
+        100, 200, 'player-walk'
       );
       expect(mockScene.add.text).toHaveBeenCalledWith(
         100,
@@ -154,9 +162,10 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(playerStates);
 
-      expect(mockScene.add.rectangle).toHaveBeenCalledWith(
-        100, 200, 32, 64, 0x00ff00
+      expect(mockScene.add.sprite).toHaveBeenCalledWith(
+        100, 200, 'player-walk'
       );
+      expect(mockScene.sprites[0].setTint).toHaveBeenCalledWith(0x00ff00);
     });
 
     it('should create remote player with red color (0xff0000)', () => {
@@ -168,9 +177,10 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(playerStates);
 
-      expect(mockScene.add.rectangle).toHaveBeenCalledWith(
-        100, 200, 32, 64, 0xff0000
+      expect(mockScene.add.sprite).toHaveBeenCalledWith(
+        100, 200, 'player-walk'
       );
+      expect(mockScene.sprites[0].setTint).toHaveBeenCalledWith(0xff0000);
     });
 
     it('should add "You" label for local player', () => {
@@ -220,7 +230,7 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(initialStates);
 
-      const sprite = mockScene.rectangles[0];
+      const sprite = mockScene.sprites[0];
 
       const updatedStates: PlayerState[] = [
         { id: 'player-1', position: { x: 300, y: 400 }, velocity: { x: 0, y: 0 } },
@@ -257,7 +267,7 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(initialStates);
 
-      const player1Sprite = mockScene.rectangles[0];
+      const player1Sprite = mockScene.sprites[0];
       const player1Label = mockScene.texts[0];
 
       // Update with only player-2
@@ -280,7 +290,8 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(playerStates);
 
-      expect(mockScene.add.rectangle).toHaveBeenCalledTimes(3);
+      // Each player creates 2 sprites: player + weapon
+      expect(mockScene.add.sprite).toHaveBeenCalledTimes(6);
       expect(mockScene.add.text).toHaveBeenCalledTimes(3);
     });
 
@@ -293,7 +304,8 @@ describe('PlayerManager', () => {
       playerManager.updatePlayers(playerStates);
       playerManager.updatePlayers(playerStates);
 
-      expect(mockScene.add.rectangle).toHaveBeenCalledTimes(1);
+      // Each player creates 2 sprites: player + weapon
+      expect(mockScene.add.sprite).toHaveBeenCalledTimes(2);
       expect(mockScene.add.text).toHaveBeenCalledTimes(1);
     });
 
@@ -305,7 +317,7 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(playerStates);
 
-      const sprite = mockScene.rectangles[0];
+      const sprite = mockScene.sprites[0];
       const label = mockScene.texts[0];
 
       // Then update with empty list
@@ -327,7 +339,7 @@ describe('PlayerManager', () => {
 
       playerManager.destroy();
 
-      for (const rect of mockScene.rectangles) {
+      for (const rect of mockScene.sprites) {
         expect(rect.destroy).toHaveBeenCalled();
       }
     });
@@ -479,11 +491,11 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(aliveState);
 
-      const sprite = mockScene.rectangles[0];
+      const sprite = mockScene.sprites[0];
       const setAlphaSpy = vi.fn();
-      const setFillStyleSpy = vi.fn();
+      const setTintSpy = vi.fn();
       sprite.setAlpha = setAlphaSpy;
-      sprite.setFillStyle = setFillStyleSpy;
+      sprite.setTint = setTintSpy;
 
       // Mark as dead
       const deadState: PlayerState[] = [
@@ -493,7 +505,7 @@ describe('PlayerManager', () => {
       playerManager.updatePlayers(deadState);
 
       expect(setAlphaSpy).toHaveBeenCalledWith(0.5);
-      expect(setFillStyleSpy).toHaveBeenCalledWith(0x888888);
+      expect(setTintSpy).toHaveBeenCalledWith(0x888888);
     });
 
     it('should restore visual effects when player respawns', () => {
@@ -503,11 +515,11 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(deadState);
 
-      const sprite = mockScene.rectangles[0];
+      const sprite = mockScene.sprites[0];
       const setAlphaSpy = vi.fn();
-      const setFillStyleSpy = vi.fn();
+      const setTintSpy = vi.fn();
       sprite.setAlpha = setAlphaSpy;
-      sprite.setFillStyle = setFillStyleSpy;
+      sprite.setTint = setTintSpy;
 
       // Respawn (deathTime removed)
       const aliveState: PlayerState[] = [
@@ -517,7 +529,7 @@ describe('PlayerManager', () => {
       playerManager.updatePlayers(aliveState);
 
       expect(setAlphaSpy).toHaveBeenCalledWith(1.0);
-      expect(setFillStyleSpy).toHaveBeenCalledWith(0xff0000); // Red for non-local player
+      expect(setTintSpy).toHaveBeenCalledWith(0xff0000); // Red for non-local player
     });
 
     it('should return list of living players excluding dead ones', () => {
@@ -742,7 +754,7 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(rollingState);
 
-      const sprite = mockScene.rectangles[0];
+      const sprite = mockScene.sprites[0];
       expect(sprite.setAngle).toHaveBeenCalled();
     });
 
@@ -761,7 +773,7 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(rollingState);
 
-      const sprite = mockScene.rectangles[0];
+      const sprite = mockScene.sprites[0];
       // During i-frames, alpha should be 0.5
       expect(sprite.setAlpha).toHaveBeenCalledWith(0.5);
     });
@@ -781,7 +793,7 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(rollingState);
 
-      const sprite = mockScene.rectangles[0];
+      const sprite = mockScene.sprites[0];
       const setAlphaSpy = vi.fn();
       sprite.setAlpha = setAlphaSpy;
 
@@ -816,7 +828,7 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(rollingState);
 
-      const sprite = mockScene.rectangles[0];
+      const sprite = mockScene.sprites[0];
       const setAngleSpy = vi.fn();
       sprite.setAngle = setAngleSpy;
 
@@ -965,9 +977,9 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(rollingState);
 
-      const sprite = mockScene.rectangles[0];
+      const sprite = mockScene.sprites[0];
       // Color should be maintained during roll (green for local player)
-      expect(sprite.setFillStyle).toHaveBeenCalledWith(0x00ff00);
+      expect(sprite.setTint).toHaveBeenCalledWith(0x00ff00);
     });
 
     it('should apply death effects even when rolling flag is set', () => {
@@ -986,10 +998,10 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(deadAndRollingState);
 
-      const sprite = mockScene.rectangles[0];
+      const sprite = mockScene.sprites[0];
       // Death effect takes precedence
       expect(sprite.setAlpha).toHaveBeenCalledWith(0.5);
-      expect(sprite.setFillStyle).toHaveBeenCalledWith(0x888888);
+      expect(sprite.setTint).toHaveBeenCalledWith(0x888888);
     });
   });
 
@@ -1081,8 +1093,8 @@ describe('PlayerManager', () => {
 
         playerManager.updatePlayers(playerStates);
 
-        // Verify sprites were created
-        expect(mockScene.rectangles.length).toBe(2);
+        // Verify sprites were created (2 players × 2 sprites each = 4)
+        expect(mockScene.sprites.length).toBe(4);
         expect(mockScene.texts.length).toBe(2);
         expect(mockScene.lines.length).toBe(2);
 
@@ -1090,8 +1102,8 @@ describe('PlayerManager', () => {
         playerManager.destroy();
 
         // Verify all sprites were destroyed
-        expect(mockScene.rectangles[0].destroy).toHaveBeenCalled();
-        expect(mockScene.rectangles[1].destroy).toHaveBeenCalled();
+        expect(mockScene.sprites[0].destroy).toHaveBeenCalled();
+        expect(mockScene.sprites[1].destroy).toHaveBeenCalled();
         expect(mockScene.texts[0].destroy).toHaveBeenCalled();
         expect(mockScene.texts[1].destroy).toHaveBeenCalled();
         expect(mockScene.lines[0].destroy).toHaveBeenCalled();
@@ -1113,8 +1125,8 @@ describe('PlayerManager', () => {
 
         newPlayerManager.updatePlayers(playerStates);
 
-        // Verify new sprites were created
-        expect(newMockScene.rectangles.length).toBe(1);
+        // Verify new sprites were created (2 per player: player + weapon)
+        expect(newMockScene.sprites.length).toBe(2);
         expect(newMockScene.texts.length).toBe(1);
         expect(newMockScene.lines.length).toBe(1);
       });
@@ -1127,7 +1139,7 @@ describe('PlayerManager', () => {
         ];
 
         playerManager.updatePlayers(playerStates);
-        expect(mockScene.rectangles.length).toBe(3);
+        expect(mockScene.sprites.length).toBe(6);
 
         // Remove one player
         const updatedStates: PlayerState[] = [
@@ -1137,8 +1149,9 @@ describe('PlayerManager', () => {
 
         playerManager.updatePlayers(updatedStates);
 
-        // Verify removed player's sprite was destroyed
-        expect(mockScene.rectangles[2].destroy).toHaveBeenCalled();
+        // Verify removed player's sprites were destroyed (player-3 had 2 sprites: indices 4 and 5)
+        expect(mockScene.sprites[4].destroy).toHaveBeenCalled();
+        expect(mockScene.sprites[5].destroy).toHaveBeenCalled();
       });
 
       it('should have no zombie sprites after multiple updates and destroy', () => {
@@ -1159,7 +1172,7 @@ describe('PlayerManager', () => {
         playerManager.updatePlayers([]);
 
         // All sprites should be destroyed
-        mockScene.rectangles.forEach(sprite => {
+        mockScene.sprites.forEach(sprite => {
           expect(sprite.destroy).toHaveBeenCalled();
         });
         mockScene.texts.forEach(text => {
@@ -1182,7 +1195,7 @@ describe('PlayerManager', () => {
           { id: 'player-2', position: { x: 200, y: 200 }, velocity: { x: 0, y: 0 } },
         ];
         playerManager.updatePlayers(playerStates);
-        expect(mockScene.rectangles.length).toBe(2);
+        expect(mockScene.sprites.length).toBe(4);
 
         // Scene lifecycle 1: Destroy
         playerManager.destroy();
@@ -1195,8 +1208,8 @@ describe('PlayerManager', () => {
         newPlayerManager.updatePlayers(playerStates);
 
         // Should create new sprites (not reuse old ones)
-        expect(newMockScene.rectangles.length).toBe(2);
-        expect(newMockScene.rectangles[0]).not.toBe(mockScene.rectangles[0]);
+        expect(newMockScene.sprites.length).toBe(4);
+        expect(newMockScene.sprites[0]).not.toBe(mockScene.sprites[0]);
       });
 
       it('should handle multiple consecutive restarts without leaks', () => {
@@ -1211,9 +1224,10 @@ describe('PlayerManager', () => {
           tempManager.updatePlayers(playerStates);
           tempManager.destroy();
 
-          // Verify all sprites were destroyed in each cycle
-          expect(tempMockScene.rectangles.length).toBe(1);
-          expect(tempMockScene.rectangles[0].destroy).toHaveBeenCalled();
+          // Verify all sprites were destroyed in each cycle (2 per player: player + weapon)
+          expect(tempMockScene.sprites.length).toBe(2);
+          expect(tempMockScene.sprites[0].destroy).toHaveBeenCalled();
+          expect(tempMockScene.sprites[1].destroy).toHaveBeenCalled();
         }
       });
 
@@ -1270,7 +1284,8 @@ describe('PlayerManager', () => {
           { id: 'player-2', position: { x: 200, y: 200 }, velocity: { x: 0, y: 0 } },
         ];
         playerManager.updatePlayers(playerStates);
-        expect(mockScene.rectangles.length).toBe(2);
+        // Each player creates 2 sprites (player + weapon)
+        expect(mockScene.sprites.length).toBe(4);
 
         // Add player
         playerStates = [
@@ -1279,18 +1294,19 @@ describe('PlayerManager', () => {
           { id: 'player-3', position: { x: 300, y: 300 }, velocity: { x: 0, y: 0 } },
         ];
         playerManager.updatePlayers(playerStates);
-        expect(mockScene.rectangles.length).toBe(3);
+        // 3 players * 2 sprites each = 6 sprites
+        expect(mockScene.sprites.length).toBe(6);
 
         // Remove 2 players
         playerStates = [
           { id: 'player-1', position: { x: 100, y: 100 }, velocity: { x: 0, y: 0 } },
         ];
         playerManager.updatePlayers(playerStates);
-        // Only 1 active sprite remains (others destroyed)
-        const activeSpriteCount = mockScene.rectangles.filter(
+        // Only 2 active sprites remain (1 player + 1 weapon)
+        const activeSpriteCount = mockScene.sprites.filter(
           s => !s.destroy.mock.calls.length
         ).length;
-        expect(activeSpriteCount).toBe(1);
+        expect(activeSpriteCount).toBe(2);
       });
 
       it('should never duplicate sprites for same player ID', () => {
@@ -1303,8 +1319,8 @@ describe('PlayerManager', () => {
         playerManager.updatePlayers(playerStates);
         playerManager.updatePlayers(playerStates);
 
-        // Should only create one sprite, not three
-        expect(mockScene.rectangles.length).toBe(1);
+        // Should only create 2 sprites (player + weapon), not six
+        expect(mockScene.sprites.length).toBe(2);
       });
     });
   });

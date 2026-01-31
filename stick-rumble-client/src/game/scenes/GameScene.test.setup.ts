@@ -80,6 +80,25 @@ export const createMockScene = () => {
     destroy: vi.fn(),
   };
 
+  const mockSprite = {
+    x: 0,
+    y: 0,
+    setPosition: vi.fn().mockReturnThis(),
+    setAlpha: vi.fn().mockReturnThis(),
+    setAngle: vi.fn().mockReturnThis(),
+    setTint: vi.fn().mockReturnThis(),
+    clearTint: vi.fn().mockReturnThis(),
+    setOrigin: vi.fn().mockReturnThis(),
+    setRotation: vi.fn().mockReturnThis(),
+    setFlipY: vi.fn().mockReturnThis(),
+    setTexture: vi.fn().mockReturnThis(),
+    destroy: vi.fn(),
+    play: vi.fn().mockReturnThis(),
+    anims: {
+      currentAnim: null,
+    },
+  };
+
   const mockContext = {
     sys: {
       isActive: vi.fn().mockReturnValue(true),
@@ -87,6 +106,7 @@ export const createMockScene = () => {
     add: {
       text: vi.fn().mockReturnValue(mockText),
       rectangle: vi.fn().mockReturnValue(mockRectangle),
+      sprite: vi.fn().mockReturnValue(mockSprite),
       line: vi.fn().mockReturnValue(mockLine),
       circle: vi.fn().mockReturnValue({ destroy: vi.fn() }),
       container: vi.fn().mockReturnValue(mockContainer),
@@ -94,6 +114,8 @@ export const createMockScene = () => {
     },
     load: {
       audio: vi.fn(),
+      spritesheet: vi.fn(),
+      image: vi.fn(),
     },
     sound: {
       add: vi.fn().mockReturnValue({
@@ -105,6 +127,10 @@ export const createMockScene = () => {
       }),
       volume: 1,
       mute: false,
+    },
+    anims: {
+      create: vi.fn(),
+      generateFrameNumbers: vi.fn(),
     },
     cameras: {
       main: mockCamera,

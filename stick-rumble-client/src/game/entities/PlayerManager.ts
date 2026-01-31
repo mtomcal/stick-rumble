@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { PLAYER } from '../../shared/constants';
 import type { Clock } from '../utils/Clock';
 import { RealClock } from '../utils/Clock';
+import { SpriteAssetManager } from '../assets/SpriteAssetManager';
 
 /**
  * Player state from server
@@ -34,9 +35,11 @@ export class PlayerManager {
   // Clock is injected for future use in client-side prediction (Phase 2: GameSimulation)
   // Currently, all timing is server-authoritative
   private _clock: Clock;
-  private players: Map<string, Phaser.GameObjects.Rectangle> = new Map();
+  private players: Map<string, Phaser.GameObjects.Sprite> = new Map();
   private playerLabels: Map<string, Phaser.GameObjects.Text> = new Map();
   private aimIndicators: Map<string, Phaser.GameObjects.Line> = new Map();
+  private weaponSprites: Map<string, Phaser.GameObjects.Sprite> = new Map();
+  private weaponTypes: Map<string, string> = new Map();
   private localPlayerId: string | null = null;
   private playerStates: Map<string, PlayerState> = new Map();
 
@@ -107,6 +110,14 @@ export class PlayerManager {
           aimIndicator.destroy();
           this.aimIndicators.delete(id);
         }
+
+        const weaponSprite = this.weaponSprites.get(id);
+        if (weaponSprite) {
+          weaponSprite.destroy();
+          this.weaponSprites.delete(id);
+        }
+
+        this.weaponTypes.delete(id);
       }
     }
 
@@ -121,17 +132,24 @@ export class PlayerManager {
           continue;
         }
 
-        // Create new player sprite
+        // Create new player sprite (using sprite sheet instead of rectangle)
         const isLocal = state.id === this.localPlayerId;
-        const color = isLocal ? 0x00ff00 : 0xff0000;
 
-        sprite = this.scene.add.rectangle(
+        sprite = this.scene.add.sprite(
           state.position.x,
           state.position.y,
-          PLAYER.WIDTH,
-          PLAYER.HEIGHT,
-          color
+          'player-walk' // Sprite sheet key from SpriteAssetManager
         );
+
+        // Start walk animation
+        sprite.play('player-walk', true);
+
+        // Add tint for player identification (green for local, red for others)
+        if (isLocal) {
+          sprite.setTint(0x00ff00);
+        } else {
+          sprite.setTint(0xff0000);
+        }
 
         this.players.set(state.id, sprite);
 
@@ -159,6 +177,26 @@ export class PlayerManager {
           isLocal ? 0x00ff00 : 0xffff00 // Green for local, yellow for others
         );
         this.aimIndicators.set(state.id, aimLine);
+
+        // Create weapon sprite (default to Pistol)
+        const weaponType = this.weaponTypes.get(state.id) ?? 'Pistol';
+        const weaponSpriteKey = SpriteAssetManager.getWeaponSpriteKey(weaponType);
+        const weaponSprite = this.scene.add.sprite(
+          state.position.x,
+          state.position.y,
+          weaponSpriteKey
+        );
+        // Set origin to handle position (left side of sprite)
+        weaponSprite.setOrigin(0.2, 0.5);
+        // Position weapon slightly in front of player
+        const weaponOffsetX = Math.cos(aimAngle) * 10;
+        const weaponOffsetY = Math.sin(aimAngle) * 10;
+        weaponSprite.setPosition(
+          state.position.x + weaponOffsetX,
+          state.position.y + weaponOffsetY
+        );
+        weaponSprite.setRotation(aimAngle);
+        this.weaponSprites.set(state.id, weaponSprite);
       }
 
       // Update position
@@ -182,20 +220,21 @@ export class PlayerManager {
 
       // Apply death visual effects
       if (state.deathTime !== undefined) {
-        // Dead player: fade to 50% opacity and gray color
+        // Dead player: fade to 50% opacity and gray tint
         sprite.setAlpha(0.5);
-        sprite.setFillStyle(0x888888);
+        sprite.setTint(0x888888);
       } else if (!state.isRolling) {
         // Alive player (not rolling): full opacity and restore original color
         sprite.setAlpha(1.0);
+        sprite.clearTint();
         const isLocal = state.id === this.localPlayerId;
         const color = isLocal ? 0x00ff00 : 0xff0000;
-        sprite.setFillStyle(color);
+        sprite.setTint(color);
       } else {
-        // Alive player (rolling): keep transparency but update color
+        // Alive player (rolling): keep transparency but restore original color
         const isLocal = state.id === this.localPlayerId;
         const color = isLocal ? 0x00ff00 : 0xff0000;
-        sprite.setFillStyle(color);
+        sprite.setTint(color);
       }
 
       // Update label position
@@ -217,6 +256,26 @@ export class PlayerManager {
           state.position.x, state.position.y,
           endX, endY
         );
+      }
+
+      // Update weapon sprite position and rotation
+      const weaponSprite = this.weaponSprites.get(state.id);
+      if (weaponSprite) {
+        const aimAngle = state.aimAngle ?? 0;
+        const weaponOffsetX = Math.cos(aimAngle) * 10;
+        const weaponOffsetY = Math.sin(aimAngle) * 10;
+        weaponSprite.setPosition(
+          state.position.x + weaponOffsetX,
+          state.position.y + weaponOffsetY
+        );
+        weaponSprite.setRotation(aimAngle);
+
+        // Flip weapon sprite vertically when aiming left
+        // Angle is in radians: left is between π/2 (90°) and 3π/2 (270°)
+        const angleInDegrees = (aimAngle * 180) / Math.PI;
+        const normalizedAngle = ((angleInDegrees % 360) + 360) % 360; // Normalize to 0-360
+        const isAimingLeft = normalizedAngle > 90 && normalizedAngle < 270;
+        weaponSprite.setFlipY(isAimingLeft);
       }
     }
   }
@@ -240,6 +299,12 @@ export class PlayerManager {
     }
     this.aimIndicators.clear();
 
+    for (const weaponSprite of this.weaponSprites.values()) {
+      weaponSprite.destroy();
+    }
+    this.weaponSprites.clear();
+
+    this.weaponTypes.clear();
     this.playerStates.clear();
 
     // Reset localPlayerId so new room:joined can set it fresh
@@ -292,7 +357,7 @@ export class PlayerManager {
    * Get the local player's sprite (for camera follow)
    * Returns null if local player doesn't exist yet
    */
-  getLocalPlayerSprite(): Phaser.GameObjects.Rectangle | null {
+  getLocalPlayerSprite(): Phaser.GameObjects.Sprite | null {
     if (!this.localPlayerId) {
       return null;
     }
@@ -352,5 +417,21 @@ export class PlayerManager {
     );
 
     return velocityMagnitude > MOVEMENT_THRESHOLD;
+  }
+
+  /**
+   * Update the weapon type for a specific player
+   * This changes the weapon sprite displayed for the player
+   */
+  updatePlayerWeapon(playerId: string, weaponType: string): void {
+    // Store weapon type
+    this.weaponTypes.set(playerId, weaponType);
+
+    // Update weapon sprite if player exists
+    const weaponSprite = this.weaponSprites.get(playerId);
+    if (weaponSprite) {
+      const weaponSpriteKey = SpriteAssetManager.getWeaponSpriteKey(weaponType);
+      weaponSprite.setTexture(weaponSpriteKey);
+    }
   }
 }
