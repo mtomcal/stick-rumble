@@ -9,10 +9,15 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
-    }
+    },
+    "./package.json": "./package.json"
   },
+  "files": [
+    "dist",
+    "schemas"
+  ],
   "scripts": {
-    "postinstall": "npm run build",
+    "prepare": "npm run build",
     "build": "tsc && npm run generate:schemas",
     "generate:schemas": "node --import tsx src/build-schemas.ts",
     "validate": "node --import tsx src/validate-schemas.ts",
