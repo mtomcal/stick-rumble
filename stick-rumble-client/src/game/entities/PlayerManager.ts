@@ -2,7 +2,8 @@ import Phaser from 'phaser';
 import { PLAYER } from '../../shared/constants';
 import type { Clock } from '../utils/Clock';
 import { RealClock } from '../utils/Clock';
-import { SpriteAssetManager } from '../assets/SpriteAssetManager';
+import { ProceduralPlayerGraphics } from './ProceduralPlayerGraphics';
+import { ProceduralWeaponGraphics } from './ProceduralWeaponGraphics';
 
 /**
  * Player state from server
@@ -35,10 +36,10 @@ export class PlayerManager {
   // Clock is injected for future use in client-side prediction (Phase 2: GameSimulation)
   // Currently, all timing is server-authoritative
   private _clock: Clock;
-  private players: Map<string, Phaser.GameObjects.Sprite> = new Map();
+  private players: Map<string, ProceduralPlayerGraphics> = new Map();
   private playerLabels: Map<string, Phaser.GameObjects.Text> = new Map();
   private aimIndicators: Map<string, Phaser.GameObjects.Line> = new Map();
-  private weaponSprites: Map<string, Phaser.GameObjects.Sprite> = new Map();
+  private weaponGraphics: Map<string, ProceduralWeaponGraphics> = new Map();
   private weaponTypes: Map<string, string> = new Map();
   private localPlayerId: string | null = null;
   private playerStates: Map<string, PlayerState> = new Map();
@@ -111,10 +112,10 @@ export class PlayerManager {
           this.aimIndicators.delete(id);
         }
 
-        const weaponSprite = this.weaponSprites.get(id);
-        if (weaponSprite) {
-          weaponSprite.destroy();
-          this.weaponSprites.delete(id);
+        const weaponGraphics = this.weaponGraphics.get(id);
+        if (weaponGraphics) {
+          weaponGraphics.destroy();
+          this.weaponGraphics.delete(id);
         }
 
         this.weaponTypes.delete(id);
@@ -123,35 +124,27 @@ export class PlayerManager {
 
     // Update or create players
     for (const state of playerStates) {
-      let sprite = this.players.get(state.id);
+      let playerGraphics = this.players.get(state.id);
 
-      if (!sprite) {
+      if (!playerGraphics) {
         // Check if scene.add is available
         if (!this.scene.add) {
           console.error('Scene add system not available');
           continue;
         }
 
-        // Create new player sprite (using sprite sheet instead of rectangle)
+        // Create new player graphics (procedural stick figure)
         const isLocal = state.id === this.localPlayerId;
+        const color = isLocal ? 0x00ff00 : 0xff0000; // Green for local, red for others
 
-        sprite = this.scene.add.sprite(
+        playerGraphics = new ProceduralPlayerGraphics(
+          this.scene,
           state.position.x,
           state.position.y,
-          'player-walk' // Sprite sheet key from SpriteAssetManager
+          color
         );
 
-        // Start walk animation
-        sprite.play('player-walk', true);
-
-        // Add tint for player identification (green for local, red for others)
-        if (isLocal) {
-          sprite.setTint(0x00ff00);
-        } else {
-          sprite.setTint(0xff0000);
-        }
-
-        this.players.set(state.id, sprite);
+        this.players.set(state.id, playerGraphics);
 
         // Add label
         const label = this.scene.add.text(
@@ -178,64 +171,57 @@ export class PlayerManager {
         );
         this.aimIndicators.set(state.id, aimLine);
 
-        // Create weapon sprite (default to Pistol)
+        // Create weapon graphics (default to Pistol)
         const weaponType = this.weaponTypes.get(state.id) ?? 'Pistol';
-        const weaponSpriteKey = SpriteAssetManager.getWeaponSpriteKey(weaponType);
-        const weaponSprite = this.scene.add.sprite(
-          state.position.x,
-          state.position.y,
-          weaponSpriteKey
-        );
-        // Set origin to handle position (left side of sprite)
-        weaponSprite.setOrigin(0.2, 0.5);
-        // Position weapon slightly in front of player
         const weaponOffsetX = Math.cos(aimAngle) * 10;
         const weaponOffsetY = Math.sin(aimAngle) * 10;
-        weaponSprite.setPosition(
+        const weaponGraphics = new ProceduralWeaponGraphics(
+          this.scene,
           state.position.x + weaponOffsetX,
-          state.position.y + weaponOffsetY
+          state.position.y + weaponOffsetY,
+          weaponType
         );
-        weaponSprite.setRotation(aimAngle);
-        this.weaponSprites.set(state.id, weaponSprite);
+        weaponGraphics.setRotation(aimAngle);
+        this.weaponGraphics.set(state.id, weaponGraphics);
       }
 
       // Update position
-      sprite.setPosition(state.position.x, state.position.y);
+      playerGraphics.setPosition(state.position.x, state.position.y);
 
-      // Apply dodge roll visual effects (rotation and transparency during i-frames)
+      // Apply dodge roll visual effects (rotation during roll)
       if (state.isRolling) {
         // Apply 360° rotation animation (simulated with angle update)
-        // In a full implementation, this would be a tween, but for now we'll use a fixed rotation
-        // The angle will be continuously updated during the roll duration
-        const rollAngle = (this._clock.now() % 400) / 400 * 360; // 360° rotation over 0.4s
-        sprite.setAngle(rollAngle);
+        const rollAngle = ((this._clock.now() % 400) / 400) * Math.PI * 2; // 360° rotation over 0.4s
+        playerGraphics.setRotation(rollAngle);
 
         // Apply transparency during invincibility frames (first 0.2s)
         // Note: Server tracks actual i-frame timing, this is visual only
-        sprite.setAlpha(0.5);
+        playerGraphics.setVisible(this._clock.now() % 200 < 100); // Flicker effect
       } else {
         // Clear rotation when not rolling
-        sprite.setAngle(0);
+        playerGraphics.setRotation(0);
+        playerGraphics.setVisible(true);
       }
 
       // Apply death visual effects
       if (state.deathTime !== undefined) {
-        // Dead player: fade to 50% opacity and gray tint
-        sprite.setAlpha(0.5);
-        sprite.setTint(0x888888);
+        // Dead player: gray color
+        playerGraphics.setColor(0x888888);
       } else if (!state.isRolling) {
-        // Alive player (not rolling): full opacity and restore original color
-        sprite.setAlpha(1.0);
-        sprite.clearTint();
+        // Alive player (not rolling): restore original color
         const isLocal = state.id === this.localPlayerId;
         const color = isLocal ? 0x00ff00 : 0xff0000;
-        sprite.setTint(color);
+        playerGraphics.setColor(color);
       } else {
-        // Alive player (rolling): keep transparency but restore original color
+        // Alive player (rolling): keep original color
         const isLocal = state.id === this.localPlayerId;
         const color = isLocal ? 0x00ff00 : 0xff0000;
-        sprite.setTint(color);
+        playerGraphics.setColor(color);
       }
+
+      // Update walk cycle animation based on movement
+      const isMoving = Math.sqrt(state.velocity.x ** 2 + state.velocity.y ** 2) > 0.1;
+      playerGraphics.update(16, isMoving); // Assume 60 FPS (16ms delta)
 
       // Update label position
       const label = this.playerLabels.get(state.id);
@@ -258,24 +244,24 @@ export class PlayerManager {
         );
       }
 
-      // Update weapon sprite position and rotation
-      const weaponSprite = this.weaponSprites.get(state.id);
-      if (weaponSprite) {
+      // Update weapon graphics position and rotation
+      const weaponGraphics = this.weaponGraphics.get(state.id);
+      if (weaponGraphics) {
         const aimAngle = state.aimAngle ?? 0;
         const weaponOffsetX = Math.cos(aimAngle) * 10;
         const weaponOffsetY = Math.sin(aimAngle) * 10;
-        weaponSprite.setPosition(
+        weaponGraphics.setPosition(
           state.position.x + weaponOffsetX,
           state.position.y + weaponOffsetY
         );
-        weaponSprite.setRotation(aimAngle);
+        weaponGraphics.setRotation(aimAngle);
 
-        // Flip weapon sprite vertically when aiming left
+        // Flip weapon vertically when aiming left
         // Angle is in radians: left is between π/2 (90°) and 3π/2 (270°)
         const angleInDegrees = (aimAngle * 180) / Math.PI;
         const normalizedAngle = ((angleInDegrees % 360) + 360) % 360; // Normalize to 0-360
         const isAimingLeft = normalizedAngle > 90 && normalizedAngle < 270;
-        weaponSprite.setFlipY(isAimingLeft);
+        weaponGraphics.setFlipY(isAimingLeft);
       }
     }
   }
@@ -284,8 +270,8 @@ export class PlayerManager {
    * Cleanup all players
    */
   destroy(): void {
-    for (const sprite of this.players.values()) {
-      sprite.destroy();
+    for (const playerGraphics of this.players.values()) {
+      playerGraphics.destroy();
     }
     this.players.clear();
 
@@ -299,10 +285,10 @@ export class PlayerManager {
     }
     this.aimIndicators.clear();
 
-    for (const weaponSprite of this.weaponSprites.values()) {
-      weaponSprite.destroy();
+    for (const weaponGraphics of this.weaponGraphics.values()) {
+      weaponGraphics.destroy();
     }
-    this.weaponSprites.clear();
+    this.weaponGraphics.clear();
 
     this.weaponTypes.clear();
     this.playerStates.clear();
@@ -354,14 +340,15 @@ export class PlayerManager {
   }
 
   /**
-   * Get the local player's sprite (for camera follow)
+   * Get the local player's position for camera follow
    * Returns null if local player doesn't exist yet
    */
-  getLocalPlayerSprite(): Phaser.GameObjects.Sprite | null {
+  getLocalPlayerSprite(): { x: number; y: number } | null {
     if (!this.localPlayerId) {
       return null;
     }
-    return this.players.get(this.localPlayerId) ?? null;
+    const playerGraphics = this.players.get(this.localPlayerId);
+    return playerGraphics ? playerGraphics.getPosition() : null;
   }
 
   /**
@@ -421,17 +408,16 @@ export class PlayerManager {
 
   /**
    * Update the weapon type for a specific player
-   * This changes the weapon sprite displayed for the player
+   * This changes the weapon graphics displayed for the player
    */
   updatePlayerWeapon(playerId: string, weaponType: string): void {
     // Store weapon type
     this.weaponTypes.set(playerId, weaponType);
 
-    // Update weapon sprite if player exists
-    const weaponSprite = this.weaponSprites.get(playerId);
-    if (weaponSprite) {
-      const weaponSpriteKey = SpriteAssetManager.getWeaponSpriteKey(weaponType);
-      weaponSprite.setTexture(weaponSpriteKey);
+    // Update weapon graphics if player exists
+    const weaponGraphics = this.weaponGraphics.get(playerId);
+    if (weaponGraphics) {
+      weaponGraphics.setWeapon(weaponType);
     }
   }
 }

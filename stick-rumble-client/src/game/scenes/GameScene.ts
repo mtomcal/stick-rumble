@@ -16,7 +16,6 @@ import { GameSceneSpectator } from './GameSceneSpectator';
 import { GameSceneEventHandlers } from './GameSceneEventHandlers';
 import { ScreenShake } from '../effects/ScreenShake';
 import { AudioManager } from '../audio/AudioManager';
-import { SpriteAssetManager } from '../assets/SpriteAssetManager';
 import { ARENA } from '../../shared/constants';
 
 export class GameScene extends Phaser.Scene {
@@ -50,9 +49,7 @@ export class GameScene extends Phaser.Scene {
     // Load audio assets
     AudioManager.preload(this);
 
-    // Load sprite assets
-    SpriteAssetManager.preloadPlayerSprites(this);
-    SpriteAssetManager.preloadWeaponSprites(this);
+    // No sprite assets needed - using procedural graphics
   }
 
   create(): void {
@@ -80,10 +77,7 @@ export class GameScene extends Phaser.Scene {
     });
     titleText.setScrollFactor(0);
 
-    // Create player animations
-    SpriteAssetManager.createPlayerAnimations(this);
-
-    // Initialize player manager
+    // Initialize player manager (using procedural graphics)
     this.playerManager = new PlayerManager(this);
 
     // Initialize projectile manager

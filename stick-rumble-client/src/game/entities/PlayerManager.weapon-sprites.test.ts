@@ -3,7 +3,9 @@ import { PlayerManager, type PlayerState } from './PlayerManager';
 import * as Phaser from 'phaser';
 import { ManualClock } from '../utils/Clock';
 
-describe('PlayerManager - Weapon Sprite Rendering', () => {
+// DEPRECATED: Sprite-based weapon rendering replaced by procedural graphics
+// See: ProceduralWeaponGraphics.test.ts
+describe.skip('PlayerManager - Weapon Sprite Rendering', () => {
   let scene: Phaser.Scene;
   let playerManager: PlayerManager;
   let mockClock: ManualClock;
