@@ -17,7 +17,6 @@
     "schemas"
   ],
   "scripts": {
-    "postinstall": "npm run build",
     "build": "tsc && npm run generate:schemas",
     "generate:schemas": "node --import tsx src/build-schemas.ts",
     "validate": "node --import tsx src/validate-schemas.ts",
