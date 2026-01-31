@@ -487,6 +487,9 @@ export class GameSceneEventHandlers {
         this.currentWeaponType = messageData.weaponType;
       }
 
+      // Update weapon sprite for the player (Story 3.7A - weapon sprites)
+      this.playerManager.updatePlayerWeapon(messageData.playerId, messageData.weaponType);
+
       // Create melee weapon visual if picking up Bat or Katana
       const playerPos = this.playerManager.getPlayerPosition(messageData.playerId);
       if (playerPos) {
