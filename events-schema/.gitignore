@@ -1,8 +1,8 @@
 # Dependencies
 node_modules/
 
-# Build output
-dist/
+# Build output - COMMITTED to git (consumed by client/server without rebuilding)
+# dist/
 
 # Generated schemas - COMMITTED to git (Go server loads these at runtime)
 # Run `make schema-build` to regenerate from TypeBox definitions
