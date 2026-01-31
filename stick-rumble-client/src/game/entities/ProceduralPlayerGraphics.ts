@@ -44,8 +44,9 @@ export class ProceduralPlayerGraphics {
   private draw(): void {
     this.graphics.clear();
 
-    const cx = this.x;
-    const cy = this.y;
+    // Use local coordinates since Graphics transform is set in setPosition()
+    const cx = 0;
+    const cy = 0;
     const rot = this.rotation;
 
     // Helper to rotate points around center
@@ -143,6 +144,9 @@ export class ProceduralPlayerGraphics {
   setPosition(x: number, y: number): void {
     this.x = x;
     this.y = y;
+    // Update Graphics transform for camera follow
+    this.graphics.x = x;
+    this.graphics.y = y;
     this.draw();
   }
 
