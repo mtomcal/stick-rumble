@@ -397,11 +397,21 @@ func TestHandleInputStateAfterMatchEnded(t *testing.T) {
 		"isSprinting": false,
 	}
 
-	// Call handleInputState directly - should return early without errors
-	ts.handler.handleInputState(player1ID, inputData)
+	// Get initial player input state
+	world := ts.handler.gameServer.GetWorld()
+	player, exists := world.GetPlayer(player1ID)
+	require.True(t, exists)
+	initialInput := player.GetInput()
 
-	// No assertion needed - test passes if no panic/error occurs
-	assert.True(t, true, "handleInputState should silently ignore input after match ends")
+	// Call handleInputState directly - should return early without errors
+	require.NotPanics(t, func() {
+		ts.handler.handleInputState(player1ID, inputData)
+	}, "handleInputState should silently ignore input after match ends")
+
+	// Verify input was NOT updated (early return on match ended)
+	player, _ = world.GetPlayer(player1ID)
+	currentInput := player.GetInput()
+	assert.Equal(t, initialInput, currentInput, "Input should not be updated after match ends")
 }
 
 // TestHandleWeaponPickupPlayerNotFound tests handleWeaponPickup with non-existent player
@@ -415,21 +425,27 @@ func TestHandleWeaponPickupPlayerNotFound(t *testing.T) {
 	}
 
 	// Call with non-existent player - should return early
-	ts.handler.handleWeaponPickup("non-existent-player", pickupData)
+	require.NotPanics(t, func() {
+		ts.handler.handleWeaponPickup("non-existent-player", pickupData)
+	}, "Should handle non-existent player gracefully")
 
-	// No assertion needed - test passes if no panic occurs
-	assert.True(t, true, "Should handle non-existent player gracefully")
+	// Verify room lookup returns nil
+	room := ts.handler.roomManager.GetRoomByPlayerID("non-existent-player")
+	assert.Nil(t, room, "Room should be nil for non-existent player")
 }
 
 // TestBroadcastMatchTimersNilRoom tests broadcastMatchTimers with nil room
 func TestBroadcastMatchTimersNilRoom(t *testing.T) {
 	handler := NewWebSocketHandler()
 
-	// Call with nil room - should not panic
-	handler.broadcastMatchTimers()
+	// Call with no rooms - should not panic
+	require.NotPanics(t, func() {
+		handler.broadcastMatchTimers()
+	}, "Should handle no rooms gracefully")
 
-	// No assertion needed - test passes if no panic occurs
-	assert.True(t, true, "Should handle nil room gracefully")
+	// Verify no rooms exist
+	rooms := handler.roomManager.GetAllRooms()
+	assert.Empty(t, rooms, "Should have no rooms initially")
 }
 
 // Note: Global HandleWebSocket function is a simple one-line wrapper and is covered by integration tests
