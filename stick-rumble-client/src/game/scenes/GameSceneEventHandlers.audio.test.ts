@@ -20,6 +20,7 @@ describe('GameSceneEventHandlers - Audio Integration', () => {
   let mockWeaponCrateManager: any;
   let mockPickupPromptUI: any;
   let mockMeleeWeaponManager: any;
+  let mockHitEffectManager: any;
   let mockHealthBarUI: HealthBarUI;
   let mockKillFeedUI: KillFeedUI;
   let mockGameSceneUI: GameSceneUI;
@@ -79,6 +80,13 @@ describe('GameSceneEventHandlers - Audio Integration', () => {
       destroy: vi.fn(),
     } as any;
 
+    mockHitEffectManager = {
+      showBulletImpact: vi.fn(),
+      showMeleeHit: vi.fn(),
+      showMuzzleFlash: vi.fn(),
+      destroy: vi.fn(),
+    } as any;
+
     mockHealthBarUI = {
       updateHealth: vi.fn(),
     } as unknown as HealthBarUI;
@@ -122,7 +130,8 @@ describe('GameSceneEventHandlers - Audio Integration', () => {
       vi.fn(),
       mockWeaponCrateManager,
       mockPickupPromptUI,
-      mockMeleeWeaponManager
+      mockMeleeWeaponManager,
+      mockHitEffectManager
     );
 
     // Setup event handlers to register message handlers

@@ -280,9 +280,9 @@ describe('GameScene - Combat', () => {
         mockWebSocketInstance.onmessage(roomJoinedMessage as MessageEvent);
       }
 
-      // Mock projectileManager methods to avoid scene.add issues
+      // Mock projectileManager and hitEffectManager methods to avoid scene.add issues
       const spawnSpy = vi.spyOn(scene['projectileManager'], 'spawnProjectile').mockImplementation(() => {});
-      const muzzleFlashSpy = vi.spyOn(scene['projectileManager'], 'createMuzzleFlash').mockImplementation(() => {});
+      const muzzleFlashSpy = vi.spyOn(scene['hitEffectManager'], 'showMuzzleFlash').mockImplementation(() => ({} as any));
 
       // Simulate projectile:spawn message
       const projectileSpawnMessage = {
@@ -311,7 +311,9 @@ describe('GameScene - Combat', () => {
         velocity: { x: 800, y: 0 }
       });
 
-      expect(muzzleFlashSpy).toHaveBeenCalledWith(100, 200, 'Pistol');
+      // Muzzle flash now shows at projectile origin with calculated rotation
+      // velocity: { x: 800, y: 0 } => rotation = atan2(0, 800) = 0
+      expect(muzzleFlashSpy).toHaveBeenCalledWith(100, 200, 0);
     });
 
     it('should handle projectile:destroy messages and remove projectiles', async () => {

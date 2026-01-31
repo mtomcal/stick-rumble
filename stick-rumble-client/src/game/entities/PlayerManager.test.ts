@@ -47,6 +47,7 @@ const createMockScene = () => {
     clear: ReturnType<typeof vi.fn>;
     lineStyle: ReturnType<typeof vi.fn>;
     fillStyle: ReturnType<typeof vi.fn>;
+    fillRect: ReturnType<typeof vi.fn>;
     beginPath: ReturnType<typeof vi.fn>;
     moveTo: ReturnType<typeof vi.fn>;
     lineTo: ReturnType<typeof vi.fn>;
@@ -55,6 +56,7 @@ const createMockScene = () => {
     strokeCircle: ReturnType<typeof vi.fn>;
     setDepth: ReturnType<typeof vi.fn>;
     setVisible: ReturnType<typeof vi.fn>;
+    setPosition: ReturnType<typeof vi.fn>;
     destroy: ReturnType<typeof vi.fn>;
     visible: boolean;
   }> = [];
@@ -120,17 +122,19 @@ const createMockScene = () => {
       })),
       graphics: vi.fn(() => {
         const graphics = {
-          clear: vi.fn(),
-          lineStyle: vi.fn(),
-          fillStyle: vi.fn(),
-          beginPath: vi.fn(),
-          moveTo: vi.fn(),
-          lineTo: vi.fn(),
-          strokePath: vi.fn(),
-          fillCircle: vi.fn(),
-          strokeCircle: vi.fn(),
-          setDepth: vi.fn(),
-          setVisible: vi.fn(),
+          clear: vi.fn().mockReturnThis(),
+          lineStyle: vi.fn().mockReturnThis(),
+          fillStyle: vi.fn().mockReturnThis(),
+          fillRect: vi.fn().mockReturnThis(),
+          beginPath: vi.fn().mockReturnThis(),
+          moveTo: vi.fn().mockReturnThis(),
+          lineTo: vi.fn().mockReturnThis(),
+          strokePath: vi.fn().mockReturnThis(),
+          fillCircle: vi.fn().mockReturnThis(),
+          strokeCircle: vi.fn().mockReturnThis(),
+          setDepth: vi.fn().mockReturnThis(),
+          setVisible: vi.fn().mockReturnThis(),
+          setPosition: vi.fn().mockReturnThis(),
           destroy: vi.fn(),
           visible: true,
         };
@@ -355,8 +359,8 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(playerStates);
 
-      // Each player creates 1 graphics (player) + 1 container (weapon)
-      expect(mockScene.add.graphics).toHaveBeenCalledTimes(3);
+      // Each player creates 1 graphics (player) + 1 health bar (graphics) + 1 container (weapon)
+      expect(mockScene.add.graphics).toHaveBeenCalledTimes(6); // 3 players × 2 graphics each
       expect(mockScene.add.container).toHaveBeenCalledTimes(3);
       expect(mockScene.add.text).toHaveBeenCalledTimes(3);
     });
@@ -370,8 +374,8 @@ describe('PlayerManager', () => {
       playerManager.updatePlayers(playerStates);
       playerManager.updatePlayers(playerStates);
 
-      // Each player creates 1 graphics + 1 container
-      expect(mockScene.add.graphics).toHaveBeenCalledTimes(1);
+      // Each player creates 2 graphics (player + health bar) + 1 container
+      expect(mockScene.add.graphics).toHaveBeenCalledTimes(2); // 1 player × 2 graphics
       expect(mockScene.add.container).toHaveBeenCalledTimes(1);
       expect(mockScene.add.text).toHaveBeenCalledTimes(1);
     });
@@ -1151,8 +1155,8 @@ describe('PlayerManager', () => {
 
         playerManager.updatePlayers(playerStates);
 
-        // Verify graphics were created (2 players × 1 graphics each = 2)
-        expect(mockScene.graphicsObjects.length).toBe(2);
+        // Verify graphics were created (2 players × 2 graphics each = 4: player + health bar)
+        expect(mockScene.graphicsObjects.length).toBe(4);
         expect(mockScene.containers.length).toBe(2);
         expect(mockScene.texts.length).toBe(2);
         expect(mockScene.lines.length).toBe(2);
@@ -1184,8 +1188,8 @@ describe('PlayerManager', () => {
 
         newPlayerManager.updatePlayers(playerStates);
 
-        // Verify new graphics were created (1 graphics + 1 container per player)
-        expect(newMockScene.graphicsObjects.length).toBe(1);
+        // Verify new graphics were created (2 graphics per player: player + health bar)
+        expect(newMockScene.graphicsObjects.length).toBe(2);
         expect(newMockScene.containers.length).toBe(1);
         expect(newMockScene.texts.length).toBe(1);
         expect(newMockScene.lines.length).toBe(1);
@@ -1199,7 +1203,8 @@ describe('PlayerManager', () => {
         ];
 
         playerManager.updatePlayers(playerStates);
-        expect(mockScene.graphicsObjects.length).toBe(3);
+        // 3 players × 2 graphics each = 6 graphics (player + health bar)
+        expect(mockScene.graphicsObjects.length).toBe(6);
         expect(mockScene.containers.length).toBe(3);
 
         // Remove one player
@@ -1210,8 +1215,9 @@ describe('PlayerManager', () => {
 
         playerManager.updatePlayers(updatedStates);
 
-        // Verify removed player's graphics were destroyed (player-3 at index 2)
-        expect(mockScene.graphicsObjects[2].destroy).toHaveBeenCalled();
+        // Verify removed player's graphics were destroyed (player-3 graphics at index 4 and 5)
+        expect(mockScene.graphicsObjects[4].destroy).toHaveBeenCalled(); // player-3 player graphics
+        expect(mockScene.graphicsObjects[5].destroy).toHaveBeenCalled(); // player-3 health bar
         expect(mockScene.containers[2].destroy).toHaveBeenCalled();
       });
 
@@ -1259,7 +1265,8 @@ describe('PlayerManager', () => {
           { id: 'player-2', position: { x: 200, y: 200 }, velocity: { x: 0, y: 0 } },
         ];
         playerManager.updatePlayers(playerStates);
-        expect(mockScene.graphicsObjects.length).toBe(2);
+        // 2 players × 2 graphics each = 4 graphics (player + health bar)
+        expect(mockScene.graphicsObjects.length).toBe(4);
         expect(mockScene.containers.length).toBe(2);
 
         // Scene lifecycle 1: Destroy
@@ -1273,7 +1280,8 @@ describe('PlayerManager', () => {
         newPlayerManager.updatePlayers(playerStates);
 
         // Should create new graphics (not reuse old ones)
-        expect(newMockScene.graphicsObjects.length).toBe(2);
+        // 2 players × 2 graphics each = 4 graphics
+        expect(newMockScene.graphicsObjects.length).toBe(4);
         expect(newMockScene.containers.length).toBe(2);
         expect(newMockScene.graphicsObjects[0]).not.toBe(mockScene.graphicsObjects[0]);
       });
@@ -1290,10 +1298,11 @@ describe('PlayerManager', () => {
           tempManager.updatePlayers(playerStates);
           tempManager.destroy();
 
-          // Verify all graphics were destroyed in each cycle (1 graphics + 1 container per player)
-          expect(tempMockScene.graphicsObjects.length).toBe(1);
+          // Verify all graphics were destroyed in each cycle (2 graphics + 1 container per player)
+          expect(tempMockScene.graphicsObjects.length).toBe(2); // player + health bar
           expect(tempMockScene.containers.length).toBe(1);
           expect(tempMockScene.graphicsObjects[0].destroy).toHaveBeenCalled();
+          expect(tempMockScene.graphicsObjects[1].destroy).toHaveBeenCalled();
           expect(tempMockScene.containers[0].destroy).toHaveBeenCalled();
         }
       });
@@ -1351,8 +1360,8 @@ describe('PlayerManager', () => {
           { id: 'player-2', position: { x: 200, y: 200 }, velocity: { x: 0, y: 0 } },
         ];
         playerManager.updatePlayers(playerStates);
-        // Each player creates 1 graphics + 1 container
-        expect(mockScene.graphicsObjects.length).toBe(2);
+        // Each player creates 2 graphics (player + health bar) + 1 container
+        expect(mockScene.graphicsObjects.length).toBe(4); // 2 players × 2 graphics each
         expect(mockScene.containers.length).toBe(2);
 
         // Add player
@@ -1362,8 +1371,8 @@ describe('PlayerManager', () => {
           { id: 'player-3', position: { x: 300, y: 300 }, velocity: { x: 0, y: 0 } },
         ];
         playerManager.updatePlayers(playerStates);
-        // 3 players * 1 graphics each = 3 graphics
-        expect(mockScene.graphicsObjects.length).toBe(3);
+        // 3 players × 2 graphics each = 6 graphics (player + health bar)
+        expect(mockScene.graphicsObjects.length).toBe(6);
         expect(mockScene.containers.length).toBe(3);
 
         // Remove 2 players
@@ -1371,11 +1380,11 @@ describe('PlayerManager', () => {
           { id: 'player-1', position: { x: 100, y: 100 }, velocity: { x: 0, y: 0 } },
         ];
         playerManager.updatePlayers(playerStates);
-        // Only 1 active graphics remains
+        // Only 2 active graphics remain (1 player × 2 graphics: player + health bar)
         const activeGraphicsCount = mockScene.graphicsObjects.filter(
           g => !g.destroy.mock.calls.length
         ).length;
-        expect(activeGraphicsCount).toBe(1);
+        expect(activeGraphicsCount).toBe(2);
       });
 
       it('should never duplicate graphics for same player ID', () => {
@@ -1388,9 +1397,140 @@ describe('PlayerManager', () => {
         playerManager.updatePlayers(playerStates);
         playerManager.updatePlayers(playerStates);
 
-        // Should only create 1 graphics + 1 container, not multiples
-        expect(mockScene.graphicsObjects.length).toBe(1);
+        // Should only create 2 graphics (player + health bar) + 1 container, not multiples
+        expect(mockScene.graphicsObjects.length).toBe(2);
         expect(mockScene.containers.length).toBe(1);
+      });
+    });
+  });
+
+  describe('Health Bar Integration', () => {
+    it('should create health bar when player is created', () => {
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, health: 100 },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      // Health bar uses Graphics, so should create 2 graphics: 1 for player + 1 for health bar
+      expect(mockScene.graphicsObjects.length).toBe(2);
+    });
+
+    it('should update health bar when player health changes', () => {
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, health: 100 },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      const healthBarGraphics = mockScene.graphicsObjects[1]; // Second graphics is health bar
+      const clearCalls = healthBarGraphics.clear.mock.calls.length;
+
+      // Update health
+      const updatedStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, health: 50 },
+      ];
+
+      playerManager.updatePlayers(updatedStates);
+
+      // Health bar should be redrawn (clear called again)
+      expect(healthBarGraphics.clear.mock.calls.length).toBeGreaterThan(clearCalls);
+    });
+
+    it('should position health bar 8 pixels above player head', () => {
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, health: 75 },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      const healthBarGraphics = mockScene.graphicsObjects[1];
+
+      // Health bar should be positioned 8px above player head
+      // Player is at y=200, head is HEIGHT/2 above center, then 8px more for health bar
+      // Expected: y = 200 - 25 - 8 = 167 (PLAYER.HEIGHT = 50)
+      expect(healthBarGraphics.setPosition).toHaveBeenCalled();
+    });
+
+    it('should destroy health bar when player is removed', () => {
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, health: 100 },
+        { id: 'player-2', position: { x: 200, y: 300 }, velocity: { x: 0, y: 0 }, health: 100 },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      // 2 players × 2 graphics each (player + health bar) = 4 graphics
+      expect(mockScene.graphicsObjects.length).toBe(4);
+
+      // Remove player-1
+      const updatedStates: PlayerState[] = [
+        { id: 'player-2', position: { x: 200, y: 300 }, velocity: { x: 0, y: 0 }, health: 100 },
+      ];
+
+      playerManager.updatePlayers(updatedStates);
+
+      // Player-1's graphics should be destroyed (both player and health bar)
+      expect(mockScene.graphicsObjects[0].destroy).toHaveBeenCalled();
+      expect(mockScene.graphicsObjects[1].destroy).toHaveBeenCalled();
+    });
+
+    it('should handle players with undefined health (backward compatibility)', () => {
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+
+      expect(() => playerManager.updatePlayers(playerStates)).not.toThrow();
+    });
+
+    it('should default to 100 health when health is undefined', () => {
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      // Health bar should still be created with default 100 health
+      expect(mockScene.graphicsObjects.length).toBe(2); // Player + health bar
+    });
+
+    it('should update health bar position when player moves', () => {
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, health: 100 },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      const healthBarGraphics = mockScene.graphicsObjects[1];
+      const setPositionCalls = healthBarGraphics.setPosition.mock.calls.length;
+
+      // Move player
+      const updatedStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 300, y: 400 }, velocity: { x: 5, y: 5 }, health: 100 },
+      ];
+
+      playerManager.updatePlayers(updatedStates);
+
+      // Health bar position should be updated
+      expect(healthBarGraphics.setPosition.mock.calls.length).toBeGreaterThan(setPositionCalls);
+    });
+
+    it('should destroy all health bars on PlayerManager destroy', () => {
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, health: 100 },
+        { id: 'player-2', position: { x: 200, y: 300 }, velocity: { x: 0, y: 0 }, health: 75 },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      // 2 players × 2 graphics each = 4 graphics total
+      expect(mockScene.graphicsObjects.length).toBe(4);
+
+      playerManager.destroy();
+
+      // All graphics should be destroyed (both player and health bar graphics)
+      mockScene.graphicsObjects.forEach(graphics => {
+        expect(graphics.destroy).toHaveBeenCalled();
       });
     });
   });

@@ -20,6 +20,7 @@ describe('GameSceneEventHandlers - Recoil Visual Feedback', () => {
   let mockWeaponCrateManager: any;
   let mockPickupPromptUI: any;
   let mockMeleeWeaponManager: any;
+  let mockHitEffectManager: any;
   let mockHealthBarUI: HealthBarUI;
   let mockKillFeedUI: KillFeedUI;
   let mockGameSceneUI: GameSceneUI;
@@ -78,6 +79,13 @@ describe('GameSceneEventHandlers - Recoil Visual Feedback', () => {
       destroy: vi.fn(),
     } as any;
 
+    mockHitEffectManager = {
+      showBulletImpact: vi.fn(),
+      showMeleeHit: vi.fn(),
+      showMuzzleFlash: vi.fn(),
+      destroy: vi.fn(),
+    } as any;
+
     mockHealthBarUI = {
       updateHealth: vi.fn(),
     } as unknown as HealthBarUI;
@@ -117,7 +125,8 @@ describe('GameSceneEventHandlers - Recoil Visual Feedback', () => {
       vi.fn(), // onCameraFollowNeeded
       mockWeaponCrateManager,
       mockPickupPromptUI,
-      mockMeleeWeaponManager
+      mockMeleeWeaponManager,
+      mockHitEffectManager
     );
 
     // Setup event handlers to capture them

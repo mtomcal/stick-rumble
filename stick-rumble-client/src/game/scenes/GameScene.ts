@@ -7,6 +7,7 @@ import { PlayerManager } from '../entities/PlayerManager';
 import { ProjectileManager } from '../entities/ProjectileManager';
 import { WeaponCrateManager } from '../entities/WeaponCrateManager';
 import { MeleeWeaponManager } from '../entities/MeleeWeaponManager';
+import { HitEffectManager } from '../entities/HitEffectManager';
 import { HealthBarUI } from '../ui/HealthBarUI';
 import { KillFeedUI } from '../ui/KillFeedUI';
 import { PickupPromptUI } from '../ui/PickupPromptUI';
@@ -27,6 +28,7 @@ export class GameScene extends Phaser.Scene {
   private projectileManager!: ProjectileManager;
   private weaponCrateManager!: WeaponCrateManager;
   private meleeWeaponManager!: MeleeWeaponManager;
+  private hitEffectManager!: HitEffectManager;
   private pickupPromptUI!: PickupPromptUI;
   private healthBarUI!: HealthBarUI;
   private killFeedUI!: KillFeedUI;
@@ -89,6 +91,9 @@ export class GameScene extends Phaser.Scene {
     // Initialize melee weapon manager for swing animations
     this.meleeWeaponManager = new MeleeWeaponManager(this);
 
+    // Initialize hit effect manager with object pooling (Story 3.7B)
+    this.hitEffectManager = new HitEffectManager(this, 20);
+
     // Initialize pickup prompt UI
     this.pickupPromptUI = new PickupPromptUI(this);
 
@@ -132,7 +137,8 @@ export class GameScene extends Phaser.Scene {
       () => this.startCameraFollowIfNeeded(),
       this.weaponCrateManager,
       this.pickupPromptUI,
-      this.meleeWeaponManager
+      this.meleeWeaponManager,
+      this.hitEffectManager
     );
 
     // Inject screen shake into event handlers for recoil feedback (Story 3.3 Polish)
@@ -444,6 +450,9 @@ export class GameScene extends Phaser.Scene {
     }
     if (this.meleeWeaponManager) {
       this.meleeWeaponManager.destroy();
+    }
+    if (this.hitEffectManager) {
+      this.hitEffectManager.destroy();
     }
     if (this.pickupPromptUI) {
       this.pickupPromptUI.destroy();

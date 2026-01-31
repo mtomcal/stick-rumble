@@ -3,6 +3,7 @@ import type { PlayerManager } from '../entities/PlayerManager';
 import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { WeaponCrateManager } from '../entities/WeaponCrateManager';
 import type { MeleeWeaponManager } from '../entities/MeleeWeaponManager';
+import type { HitEffectManager } from '../entities/HitEffectManager';
 import type { PickupPromptUI } from '../ui/PickupPromptUI';
 import type { InputManager } from '../input/InputManager';
 import type { ShootingManager } from '../input/ShootingManager';
@@ -46,6 +47,7 @@ export class GameSceneEventHandlers {
   private projectileManager: ProjectileManager;
   private weaponCrateManager: WeaponCrateManager;
   private meleeWeaponManager: MeleeWeaponManager;
+  private hitEffectManager: HitEffectManager;
   private pickupPromptUI: PickupPromptUI;
   private inputManager: InputManager | null = null;
   private shootingManager: ShootingManager | null = null;
@@ -75,7 +77,8 @@ export class GameSceneEventHandlers {
     onCameraFollowNeeded: () => void,
     weaponCrateManager: WeaponCrateManager,
     pickupPromptUI: PickupPromptUI,
-    meleeWeaponManager: MeleeWeaponManager
+    meleeWeaponManager: MeleeWeaponManager,
+    hitEffectManager: HitEffectManager
   ) {
     this.wsClient = wsClient;
     this.playerManager = playerManager;
@@ -88,6 +91,7 @@ export class GameSceneEventHandlers {
     this.weaponCrateManager = weaponCrateManager;
     this.pickupPromptUI = pickupPromptUI;
     this.meleeWeaponManager = meleeWeaponManager;
+    this.hitEffectManager = hitEffectManager;
   }
 
   /**
@@ -267,12 +271,16 @@ export class GameSceneEventHandlers {
       const messageData = data as ProjectileSpawnData;
       this.projectileManager.spawnProjectile(messageData);
 
-      // Create muzzle flash at projectile origin with weapon-specific visuals
-      this.projectileManager.createMuzzleFlash(
-        messageData.position.x,
-        messageData.position.y,
-        messageData.weaponType
-      );
+      // Create muzzle flash at projectile origin (Story 3.7B: Hit Effects)
+      if (this.hitEffectManager) {
+        // Calculate rotation from velocity direction
+        const rotation = Math.atan2(messageData.velocity.y, messageData.velocity.x);
+        this.hitEffectManager.showMuzzleFlash(
+          messageData.position.x,
+          messageData.position.y,
+          rotation
+        );
+      }
 
       const isLocalPlayer = messageData.ownerId === this.playerManager.getLocalPlayerId();
 
@@ -354,6 +362,19 @@ export class GameSceneEventHandlers {
 
       // Show damage numbers above damaged player
       this.ui.showDamageNumber(this.playerManager, messageData.victimId, messageData.damage);
+
+      // Show hit effect at victim position (Story 3.7B: Hit Effects)
+      const victimPos = this.playerManager.getPlayerPosition(messageData.victimId);
+      if (victimPos && this.hitEffectManager) {
+        // Determine effect type based on damage source
+        // If damageType is 'melee', show melee hit effect, otherwise bullet impact
+        const damageType = 'damageType' in messageData ? (messageData as { damageType?: string }).damageType : undefined;
+        if (damageType === 'melee') {
+          this.hitEffectManager.showMeleeHit(victimPos.x, victimPos.y);
+        } else {
+          this.hitEffectManager.showBulletImpact(victimPos.x, victimPos.y);
+        }
+      }
     };
     this.handlerRefs.set('player:damaged', playerDamagedHandler);
     this.wsClient.on('player:damaged', playerDamagedHandler);
@@ -532,6 +553,16 @@ export class GameSceneEventHandlers {
       // Update weapon position and trigger swing animation
       this.meleeWeaponManager.updatePosition(messageData.attackerId, attackerPos);
       this.meleeWeaponManager.startSwing(messageData.attackerId, aimAngle);
+
+      // Show melee hit effect at attacker position (Story 3.7B: Hit Effects)
+      // Effect will appear at the swing origin, actual damage is shown via player:damaged
+      if (this.hitEffectManager) {
+        // Calculate effect position in front of attacker based on aim angle
+        const effectDistance = 30; // Distance in front of attacker
+        const effectX = attackerPos.x + Math.cos(aimAngle) * effectDistance;
+        const effectY = attackerPos.y + Math.sin(aimAngle) * effectDistance;
+        this.hitEffectManager.showMeleeHit(effectX, effectY);
+      }
     };
     this.handlerRefs.set('melee:hit', meleeHitHandler);
     this.wsClient.on('melee:hit', meleeHitHandler);
