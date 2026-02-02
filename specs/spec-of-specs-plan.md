@@ -38,7 +38,7 @@
 | [weapons.md](weapons.md) | **Complete** | ~750 | Complete weapon definitions and switching |
 | [shooting.md](shooting.md) | **Complete** | ~650 | Ranged attack mechanics |
 | [hit-detection.md](hit-detection.md) | **Complete** | ~550 | Collision detection and damage application |
-| [melee.md](melee.md) | Pending | ~375 | Melee attack mechanics |
+| [melee.md](melee.md) | **Complete** | ~580 | Melee attack mechanics |
 
 ### Phase 5: Advanced Mechanics
 
@@ -73,8 +73,8 @@
 ## Progress Summary
 
 - **Total Specs**: 21
-- **Completed**: 10 (constants.md, arena.md, player.md, movement.md, messages.md, networking.md, rooms.md, weapons.md, shooting.md, hit-detection.md)
-- **Pending**: 11
+- **Completed**: 11 (constants.md, arena.md, player.md, movement.md, messages.md, networking.md, rooms.md, weapons.md, shooting.md, hit-detection.md, melee.md)
+- **Pending**: 10
 - **Estimated Total Lines**: ~8,575
 
 ---
@@ -387,20 +387,55 @@
 - Death triggers kill:credit broadcast with updated stats (kills, XP)
 - Hit detection is server-authoritative - clients receive results only
 
+### 2026-02-02: melee.md
+
+**What was done:**
+- Documented complete melee attack system for Bat and Katana weapons
+- MeleeAttackResult and MeleeResult data structures for Go server
+- MeleeHitData message schema with attackerId, victims, knockbackApplied
+- Range + arc hit detection algorithm (cone-shaped attack area)
+- Multi-target AoE hit detection (single swing hits all targets in cone)
+- Knockback application for Bat (40px displacement with boundary clamping)
+- Client swing animation (200ms duration, 4 frames, pie-slice arc visual)
+- Failure reason codes (no_player, no_weapon, not_melee, player_dead)
+- Documented the **WHY** for all design decisions
+- Added 14 test scenarios covering hits, range, arc, knockback, boundaries
+
+**Sources analyzed:**
+- `stick-rumble-server/internal/game/melee_attack.go` (PerformMeleeAttack, isInMeleeRange, applyKnockback)
+- `stick-rumble-server/internal/game/melee_attack_test.go` (comprehensive test coverage)
+- `stick-rumble-server/internal/game/gameserver.go` (PlayerMeleeAttack, MeleeResult)
+- `stick-rumble-server/internal/network/message_processor.go` (handlePlayerMeleeAttack)
+- `stick-rumble-client/src/game/entities/MeleeWeapon.ts` (swing animation, arc rendering)
+- `stick-rumble-client/src/game/entities/MeleeWeaponManager.ts` (per-player weapon tracking)
+- `stick-rumble-client/src/game/scenes/GameSceneEventHandlers.ts` (melee:hit handler)
+- `events-schema/src/schemas/client-to-server.ts` (PlayerMeleeAttackData)
+- `events-schema/src/schemas/server-to-client.ts` (MeleeHitData)
+- `weapon-configs.json` (Bat/Katana stats)
+
+**Key findings:**
+- Bat: 25 damage, 64px range, 90° arc, 40px knockback, 2 swings/s
+- Katana: 45 damage, 80px range, 90° arc, 0 knockback, 1.25 swings/s
+- Cone hit detection: distance check + angle-from-aim check
+- 360° wraparound handled in angle difference calculation
+- Knockback direction: attacker → target normalized vector
+- melee:hit broadcasts even with empty victims (for swing animation)
+- Client swing animation triggered on melee:hit, not locally
+
 ---
 
 ## Next Priority
 
-**Phase 4 (Combat) continues!** hit-detection.md is now complete.
+**Phase 4 (Combat) is COMPLETE!** All combat specs documented.
 
-The next most important spec to generate is **melee.md** because:
-1. It completes Phase 4 (Combat) documentation
-2. Documents melee attack mechanics (Bat, Katana)
-3. Covers range/arc collision detection
-4. Explains knockback mechanics for Bat
-5. Completes the weapon system documentation
+The next most important spec to generate is **dodge-roll.md** because:
+1. It starts Phase 5 (Advanced Mechanics)
+2. Documents the dodge roll evasion mechanic
+3. Covers invincibility frames (first 200ms of 400ms roll)
+4. Explains cooldown system (3000ms between rolls)
+5. Details wall termination and state machine
 
-After melee.md, continue with Phase 5: **dodge-roll.md** and **match.md**.
+After dodge-roll.md, continue with **match.md** to complete Phase 5.
 
 ---
 
