@@ -54,7 +54,7 @@
 | [client-architecture.md](client-architecture.md) | **Complete** | ~750 | Frontend structure and rendering pipeline |
 | [graphics.md](graphics.md) | **Complete** | ~750 | Procedural rendering specifications |
 | [ui.md](ui.md) | **Complete** | ~700 | HUD and interface elements |
-| [audio.md](audio.md) | Pending | ~325 | Sound effects and audio system |
+| [audio.md](audio.md) | **Complete** | ~550 | Sound effects and audio system |
 
 ### Phase 7: Server Implementation
 
@@ -73,8 +73,8 @@
 ## Progress Summary
 
 - **Total Specs**: 21
-- **Completed**: 18 (README.md, overview.md, constants.md, arena.md, player.md, movement.md, messages.md, networking.md, rooms.md, weapons.md, shooting.md, hit-detection.md, melee.md, dodge-roll.md, match.md, client-architecture.md, graphics.md, ui.md)
-- **Pending**: 3
+- **Completed**: 19 (README.md, overview.md, constants.md, arena.md, player.md, movement.md, messages.md, networking.md, rooms.md, weapons.md, shooting.md, hit-detection.md, melee.md, dodge-roll.md, match.md, client-architecture.md, graphics.md, ui.md, audio.md)
+- **Pending**: 2
 - **Estimated Total Lines**: ~8,575
 
 ---
@@ -708,17 +708,55 @@
 - Match end modal has 10s auto-restart countdown
 - Event handlers update UI in response to server messages (not locally)
 
+### 2026-02-02: audio.md
+
+**What was done:**
+- Documented complete audio system using Phaser's WebAudio-backed sound manager
+- AudioManager class with volume control, mute state, and active sound tracking
+- Weapon sound mappings (Uzi, AK47, Shotgun) with fallback for unmapped weapons
+- Effect sounds (dodge roll whoosh)
+- Positional audio implementation:
+  - Pan calculation based on horizontal offset from listener
+  - Linear volume falloff based on Euclidean distance
+  - MAX_AUDIO_DISTANCE = 1000px for spatial boundary
+- Local vs remote player sound playback differentiation
+- Event integration flow (projectile:spawn, roll:start triggers)
+- Audio asset requirements and current placeholder files
+- Documented the **WHY** for all design decisions
+- Added 10 test scenarios covering playback, positional audio, volume, mute
+
+**Sources analyzed:**
+- `stick-rumble-client/src/game/audio/AudioManager.ts` (core implementation)
+- `stick-rumble-client/src/game/audio/AudioManager.test.ts` (test coverage)
+- `stick-rumble-client/src/game/scenes/GameScene.ts` (integration)
+- `stick-rumble-client/src/game/scenes/GameSceneEventHandlers.ts` (event triggers)
+- `stick-rumble-client/public/assets/audio/` (asset files)
+- `stick-rumble-client/public/assets/audio/README.md` (asset documentation)
+
+**Key findings:**
+- Audio is entirely client-side (server broadcasts events, clients render sound)
+- Positional audio uses simple linear falloff: `volume = 1 - distance/maxDistance`
+- Pan only on X-axis (stereo has no vertical component)
+- Unknown weapon types fall back to Uzi sound for graceful degradation
+- Active sounds tracked for proper cleanup on scene restart
+- Future sounds planned: empty click, hit confirmation, reload, melee swing
+
+**Why this spec matters:**
+- Completes Phase 6 (Client Implementation)
+- Audio provides critical gameplay feedback (weapon sounds, dodge roll confirmation)
+- Positional audio creates spatial awareness in multiplayer combat
+- Documents current implementation status and future audio work
+
 ---
 
 ## Next Priority
 
-**Phase 6 (Client Implementation) is NEARLY COMPLETE!**
+**Phase 6 (Client Implementation) is COMPLETE!**
 
 Remaining specs in priority order:
 
-1. **audio.md** (Phase 6) - Sound effects system
-2. **server-architecture.md** (Phase 7) - Backend structure, game loop
-3. **test-index.md** (Phase 8) - Cross-reference of all test scenarios
+1. **server-architecture.md** (Phase 7) - Backend structure, game loop
+2. **test-index.md** (Phase 8) - Cross-reference of all test scenarios
 
 ---
 

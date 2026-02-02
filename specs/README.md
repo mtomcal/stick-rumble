@@ -65,9 +65,9 @@ For an AI agent recreating Stick Rumble from scratch, read specs in this order:
 ### Phase 6: Client Implementation
 
 14. **[client-architecture.md](client-architecture.md)** - Phaser scenes, managers
-15. **[graphics.md](graphics.md)** - Procedural rendering (TODO)
-16. **[ui.md](ui.md)** - HUD elements, kill feed (TODO)
-17. **[audio.md](audio.md)** - Sound effects (TODO)
+15. **[graphics.md](graphics.md)** - Procedural rendering
+16. **[ui.md](ui.md)** - HUD elements, kill feed
+17. **[audio.md](audio.md)** - Sound effects and audio system
 
 ### Phase 7: Server Implementation
 
@@ -339,4 +339,5 @@ Test scenarios use the format `TS-{SPEC}-{NUMBER}`:
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.0.1 | 2026-02-02 | Added audio.md spec (19 specs complete) |
 | 1.0.0 | 2026-02-02 | Initial specification suite with 14 complete specs |
