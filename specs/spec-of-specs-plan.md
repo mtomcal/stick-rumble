@@ -44,7 +44,7 @@
 
 | Spec File | Status | Lines | Notes |
 |-----------|--------|-------|-------|
-| [dodge-roll.md](dodge-roll.md) | Pending | ~375 | Dodge roll evasion mechanic |
+| [dodge-roll.md](dodge-roll.md) | **Complete** | ~720 | Dodge roll evasion mechanic |
 | [match.md](match.md) | Pending | ~375 | Match lifecycle and win conditions |
 
 ### Phase 6: Client Implementation
@@ -73,8 +73,8 @@
 ## Progress Summary
 
 - **Total Specs**: 21
-- **Completed**: 11 (constants.md, arena.md, player.md, movement.md, messages.md, networking.md, rooms.md, weapons.md, shooting.md, hit-detection.md, melee.md)
-- **Pending**: 10
+- **Completed**: 12 (constants.md, arena.md, player.md, movement.md, messages.md, networking.md, rooms.md, weapons.md, shooting.md, hit-detection.md, melee.md, dodge-roll.md)
+- **Pending**: 9
 - **Estimated Total Lines**: ~8,575
 
 ---
@@ -422,20 +422,62 @@
 - melee:hit broadcasts even with empty victims (for swing animation)
 - Client swing animation triggered on melee:hit, not locally
 
+### 2026-02-02: dodge-roll.md
+
+**What was done:**
+- Documented complete dodge roll evasion mechanic
+- Roll state machine (READY → ROLLING → COOLDOWN → READY)
+- RollState struct for server (IsRolling, RollStartTime, LastRollTime, RollDirection)
+- DodgeRollManager class for client (cooldown tracking, input validation)
+- Roll direction calculation (WASD priority over aim angle)
+- Roll physics (250 px/s fixed velocity overriding normal movement)
+- Invincibility frames: first 200ms of 400ms roll
+- Wall collision detection and early termination
+- Cooldown system: 3 seconds between rolls
+- WebSocket messages: player:dodge_roll, roll:start, roll:end
+- Cooldown UI: circular progress indicator
+- Visual effects: 360° rotation, flicker during i-frames
+- Documented the **WHY** for all design decisions
+- Added 14 test scenarios covering roll physics, i-frames, cooldown, wall collision
+
+**Sources analyzed:**
+- `stick-rumble-server/internal/game/constants.go` (roll constants)
+- `stick-rumble-server/internal/game/player.go` (RollState, CanDodgeRoll, StartDodgeRoll, EndDodgeRoll, IsInvincibleFromRoll)
+- `stick-rumble-server/internal/game/physics.go` (roll velocity override, wall collision)
+- `stick-rumble-server/internal/game/gameserver.go` (checkRollDuration, onRollEnd callback)
+- `stick-rumble-server/internal/network/message_processor.go` (handlePlayerDodgeRoll)
+- `stick-rumble-server/internal/network/broadcast_helper.go` (broadcastRollStart, broadcastRollEnd)
+- `stick-rumble-client/src/game/input/DodgeRollManager.ts`
+- `stick-rumble-client/src/game/ui/DodgeRollCooldownUI.ts`
+- `stick-rumble-client/src/game/scenes/GameScene.ts` (SPACE key binding)
+- `stick-rumble-client/src/game/scenes/GameSceneEventHandlers.ts` (roll:start, roll:end handlers)
+- `stick-rumble-client/src/game/entities/PlayerManager.ts` (roll visual effects)
+- `events-schema/src/schemas/client-to-server.ts` (PlayerDodgeRollMessageSchema)
+- `events-schema/src/schemas/server-to-client.ts` (RollStartData, RollEndData)
+
+**Key findings:**
+- Roll is server-authoritative: client sends request, server validates and broadcasts
+- WASD keys take priority over aim angle for roll direction (intuitive for "dodge backward while shooting")
+- I-frames only for first half of roll (0.2s of 0.4s) - rewards early timing, punishes panic rolls
+- Wall collision detected by comparing clamped vs unclamped position during physics update
+- Cooldown starts when roll ends (not when it starts) - early wall termination still triggers full cooldown
+- Roll velocity (250 px/s) is calculated from distance/duration (100px / 0.4s)
+- Client tracks cooldown locally for UI, but server is authoritative for actual roll validation
+
 ---
 
 ## Next Priority
 
-**Phase 4 (Combat) is COMPLETE!** All combat specs documented.
+**dodge-roll.md is COMPLETE!** Phase 5 is half done.
 
-The next most important spec to generate is **dodge-roll.md** because:
-1. It starts Phase 5 (Advanced Mechanics)
-2. Documents the dodge roll evasion mechanic
-3. Covers invincibility frames (first 200ms of 400ms roll)
-4. Explains cooldown system (3000ms between rolls)
-5. Details wall termination and state machine
+The next most important spec to generate is **match.md** because:
+1. Completes Phase 5 (Advanced Mechanics)
+2. Documents match lifecycle and state machine (WAITING → ACTIVE → ENDED)
+3. Covers win conditions (kill target, time limit)
+4. Explains timer system and score tracking
+5. Details match:timer and match:ended messages
 
-After dodge-roll.md, continue with **match.md** to complete Phase 5.
+After match.md, continue with Phase 6 (Client Implementation) starting with **client-architecture.md**.
 
 ---
 
