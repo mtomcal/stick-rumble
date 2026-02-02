@@ -20,8 +20,8 @@
 
 | Spec File | Status | Lines | Notes |
 |-----------|--------|-------|-------|
-| [player.md](player.md) | Pending | ~450 | Player entity state and lifecycle |
-| [movement.md](movement.md) | Pending | ~400 | Physics-based movement system |
+| [player.md](player.md) | **Complete** | ~550 | Player entity state and lifecycle |
+| [movement.md](movement.md) | **Complete** | ~520 | Physics-based movement system |
 
 ### Phase 3: Networking
 
@@ -73,8 +73,8 @@
 ## Progress Summary
 
 - **Total Specs**: 21
-- **Completed**: 2 (constants.md, arena.md)
-- **Pending**: 19
+- **Completed**: 4 (constants.md, arena.md, player.md, movement.md)
+- **Pending**: 17
 - **Estimated Total Lines**: ~8,575
 
 ---
@@ -139,17 +139,68 @@
 - Client mirrors server physics for client-side prediction
 - Dodge roll terminates early when position clamping detects wall collision
 
+### 2026-02-02: player.md
+
+**What was done:**
+- Documented complete PlayerState structure for both Go (server) and TypeScript (client)
+- Health system: damage application, regeneration delay (5s), regeneration rate (10 HP/s)
+- Death system: death trigger (health ≤ 0), death state management
+- Respawn system: 3-second delay, state reset, 2-second invulnerability
+- Statistics tracking: kills, deaths, XP (100 XP per kill), KD ratio calculation
+- Documented the **WHY** for all design decisions (health values, timing, etc.)
+- Added 14 test scenarios covering health, death, respawn, and statistics
+
+**Sources analyzed:**
+- `stick-rumble-server/internal/game/player.go` (PlayerState, all methods)
+- `stick-rumble-server/internal/game/constants.go` (health, respawn constants)
+- `stick-rumble-server/internal/game/gameserver.go` (respawn flow)
+- `stick-rumble-client/src/game/entities/PlayerManager.ts`
+- `events-schema/src/schemas/server-to-client.ts` (PlayerState schema)
+
+**Key findings:**
+- PlayerState uses sync.RWMutex for thread-safe access
+- Health regeneration uses fractional accumulator for 60 Hz precision
+- Respawn resets weapon to default Pistol
+- Clock injection enables deterministic testing
+
+### 2026-02-02: movement.md
+
+**What was done:**
+- Input direction calculation from WASD keys with diagonal normalization
+- Velocity calculation: acceleration/deceleration model (50 px/s²)
+- Position integration: velocity * deltaTime with boundary clamping
+- Sprint mechanics: 1.5x speed (300 px/s), 1.5x accuracy penalty
+- Client-server sync: 60 Hz server tick, 20 Hz broadcast, event-driven input
+- Client-side prediction implementation
+- Documented the **WHY** for physics model choices
+- Added 10 test scenarios covering acceleration, sprint, normalization, boundaries
+
+**Sources analyzed:**
+- `stick-rumble-server/internal/game/physics.go` (physics engine)
+- `stick-rumble-server/internal/game/player.go` (InputState)
+- `stick-rumble-server/internal/game/gameserver.go` (tick/broadcast loops)
+- `stick-rumble-server/internal/game/constants.go` (movement constants)
+- `stick-rumble-client/src/game/input/InputManager.ts`
+- `stick-rumble-client/src/game/simulation/physics.ts`
+
+**Key findings:**
+- Diagonal movement normalized to prevent √2 speed boost
+- Symmetric acceleration/deceleration (50 px/s²) for predictable feel
+- Time to reach max speed: 4 seconds (200 px/s ÷ 50 px/s²)
+- Aim angle threshold (5°) prevents input spam on minor mouse movements
+- Dodge roll overrides normal movement with 250 px/s fixed velocity
+
 ---
 
 ## Next Priority
 
-The next most important specs to generate are **player.md** and **movement.md** because:
-1. They complete the Core Entities phase (Phase 2)
-2. player.md defines the entity that all other systems interact with
-3. movement.md defines physics that shooting, dodge roll, and hit detection depend on
-4. Both are medium complexity (~400-450 lines each)
+The next most important specs to generate are **messages.md** and **networking.md** because:
+1. They form the foundation of the Networking phase (Phase 3)
+2. messages.md documents ALL WebSocket message types used for client-server communication
+3. networking.md defines connection lifecycle, reconnection logic, and protocol details
+4. Combat specs (weapons, shooting, hit-detection) depend on message definitions
 
-After Core Entities, continue with **messages.md** (the largest spec at ~700 lines) to complete the Networking phase foundation.
+After Networking, continue with **weapons.md** to begin the Combat phase (Phase 4).
 
 ---
 
