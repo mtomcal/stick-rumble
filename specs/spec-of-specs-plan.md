@@ -51,7 +51,7 @@
 
 | Spec File | Status | Lines | Notes |
 |-----------|--------|-------|-------|
-| [client-architecture.md](client-architecture.md) | Pending | ~475 | Frontend structure and rendering pipeline |
+| [client-architecture.md](client-architecture.md) | **Complete** | ~750 | Frontend structure and rendering pipeline |
 | [graphics.md](graphics.md) | Pending | ~550 | Procedural rendering specifications |
 | [ui.md](ui.md) | Pending | ~425 | HUD and interface elements |
 | [audio.md](audio.md) | Pending | ~325 | Sound effects and audio system |
@@ -73,8 +73,8 @@
 ## Progress Summary
 
 - **Total Specs**: 21
-- **Completed**: 13 (constants.md, arena.md, player.md, movement.md, messages.md, networking.md, rooms.md, weapons.md, shooting.md, hit-detection.md, melee.md, dodge-roll.md, match.md)
-- **Pending**: 8
+- **Completed**: 14 (constants.md, arena.md, player.md, movement.md, messages.md, networking.md, rooms.md, weapons.md, shooting.md, hit-detection.md, melee.md, dodge-roll.md, match.md, client-architecture.md)
+- **Pending**: 7
 - **Estimated Total Lines**: ~8,575
 
 ---
@@ -499,20 +499,71 @@
 - Client sets matchEnded flag to ignore late player:move and match:timer messages
 - Multiple winners returned in array for tie handling
 
+### 2026-02-02: client-architecture.md
+
+**What was done:**
+- Documented complete Phaser 3 + React frontend architecture
+- Application folder structure with all major directories explained
+- GameConfig with physics, scale mode, and scene configuration
+- Scene lifecycle: preload, create (with initialization order), update, cleanup
+- All 8 manager classes documented:
+  - PlayerManager: stick figure rendering, player state tracking
+  - ProjectileManager: projectile lifecycle, tracer effects, muzzle flash
+  - WeaponCrateManager: crate rendering, availability tracking
+  - MeleeWeaponManager: melee weapon visuals, swing animations
+  - HitEffectManager: object pooling (20 objects), bullet/melee/muzzle effects
+  - InputManager: WASD + mouse capture, aim angle calculation
+  - ShootingManager: fire rate cooldowns, ammo state, reload
+  - DodgeRollManager: roll state, cooldown tracking, i-frames
+- Network integration: WebSocketClient event dispatch, GameSceneEventHandlers
+- React-Phaser bridge: PhaserGame component, window.onMatchEnd, window.restartGame
+- Complete rendering pipeline (frame order, depth layering)
+- Data structures: InputState, PlayerState, WeaponState, ProjectileData, WeaponCrateData
+- Documented the **WHY** for all architectural decisions
+- Added 10 test scenarios covering managers, lifecycle, and network
+
+**Sources analyzed:**
+- `stick-rumble-client/src/game/scenes/GameScene.ts` (scene lifecycle, manager orchestration)
+- `stick-rumble-client/src/game/scenes/GameSceneEventHandlers.ts` (16 message handlers)
+- `stick-rumble-client/src/game/entities/PlayerManager.ts` (player rendering)
+- `stick-rumble-client/src/game/entities/ProjectileManager.ts` (projectile lifecycle)
+- `stick-rumble-client/src/game/entities/WeaponCrateManager.ts` (crate management)
+- `stick-rumble-client/src/game/entities/MeleeWeaponManager.ts` (melee visuals)
+- `stick-rumble-client/src/game/entities/HitEffectManager.ts` (object pooling)
+- `stick-rumble-client/src/game/entities/ProceduralPlayerGraphics.ts` (stick figure rendering)
+- `stick-rumble-client/src/game/entities/ProceduralWeaponGraphics.ts` (weapon rendering)
+- `stick-rumble-client/src/game/input/InputManager.ts` (WASD + mouse)
+- `stick-rumble-client/src/game/input/ShootingManager.ts` (fire/reload)
+- `stick-rumble-client/src/game/input/DodgeRollManager.ts` (roll cooldown)
+- `stick-rumble-client/src/game/network/WebSocketClient.ts` (connection wrapper)
+- `stick-rumble-client/src/ui/common/PhaserGame.tsx` (React-Phaser bridge)
+- `stick-rumble-client/src/App.tsx` (React root, match end state)
+- `stick-rumble-client/src/game/config/GameConfig.ts` (Phaser configuration)
+
+**Key findings:**
+- Manager pattern isolates subsystems (one manager per entity type)
+- 100ms delay in create() ensures scene stability before WebSocket connect
+- Object pool size 20 handles 8-player combat effectively
+- Walk animation driven by velocity magnitude (natural movement feel)
+- Pending message queues handle race condition where messages arrive before room:joined
+- Handler cleanup prevents accumulation across scene restarts
+- Input threshold (5° for aim) prevents server spam
+- Local visual updates before server response for responsive feel
+
 ---
 
 ## Next Priority
 
-**Phase 5 (Advanced Mechanics) is COMPLETE!**
+**Phase 6 (Client Implementation) is IN PROGRESS!**
 
-The next most important spec to generate is **client-architecture.md** because:
-1. Starts Phase 6 (Client Implementation)
-2. Documents the Phaser + React architecture
-3. Explains scene lifecycle and manager classes
-4. Covers rendering pipeline and input handling
-5. Foundation for graphics.md, ui.md, and audio.md specs
+The next most important spec to generate is **graphics.md** because:
+1. Continues Phase 6 (Client Implementation)
+2. Documents procedural stick figure rendering
+3. Explains walk cycle animation math
+4. Details weapon, projectile, and effect rendering
+5. Foundation for visual consistency across the client
 
-After client-architecture.md, continue with **graphics.md** (procedural rendering).
+After graphics.md, continue with **ui.md** (HUD elements).
 
 ---
 
