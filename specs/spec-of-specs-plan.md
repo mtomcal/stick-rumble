@@ -29,7 +29,7 @@
 |-----------|--------|-------|-------|
 | [messages.md](messages.md) | **Complete** | ~950 | Complete WebSocket message catalog |
 | [networking.md](networking.md) | **Complete** | ~980 | WebSocket protocol and connection lifecycle |
-| [rooms.md](rooms.md) | Pending | ~325 | Room management and matchmaking |
+| [rooms.md](rooms.md) | **Complete** | ~420 | Room management and matchmaking |
 
 ### Phase 4: Combat
 
@@ -73,8 +73,8 @@
 ## Progress Summary
 
 - **Total Specs**: 21
-- **Completed**: 6 (constants.md, arena.md, player.md, movement.md, messages.md, networking.md)
-- **Pending**: 15
+- **Completed**: 7 (constants.md, arena.md, player.md, movement.md, messages.md, networking.md, rooms.md)
+- **Pending**: 14
 - **Estimated Total Lines**: ~8,575
 
 ---
@@ -256,17 +256,49 @@
 - Channel operations use panic recovery for closed channel safety
 - Context propagation enables graceful shutdown of all goroutines
 
+### 2026-02-02: rooms.md
+
+**What was done:**
+- Documented complete room management system for multiplayer matchmaking
+- RoomManager and Room data structures for both Go server
+- Auto-matchmaking algorithm: 2 players waiting → room created automatically
+- Room lifecycle: creation, destruction, player join/leave
+- Broadcasting patterns: room broadcast, exclude player, non-blocking sends
+- Pending message queue: handles race condition where messages arrive before room:joined
+- Tab reload handling: detects partial rooms and joins instead of waiting
+- Thread safety: RWMutex patterns for concurrent access
+- Documented the **WHY** for all design decisions (capacity, auto-create, no lobbies)
+- Added 10 test scenarios covering room creation, capacity, broadcasting, cleanup
+
+**Sources analyzed:**
+- `stick-rumble-server/internal/game/room.go` (Room, RoomManager, broadcast)
+- `stick-rumble-server/internal/game/match.go` (Match state, RegisterPlayer)
+- `stick-rumble-server/internal/network/websocket_handler.go` (connection handling)
+- `stick-rumble-client/src/game/scenes/GameSceneEventHandlers.ts` (room:joined, player:left handlers)
+- `stick-rumble-client/src/game/network/WebSocketClient.ts` (client connection)
+
+**Key findings:**
+- Send buffer size: 256 messages per player to handle burst traffic
+- Room capacity: 8 max (visual clarity in 1920x1080 arena)
+- Auto-create threshold: 2 players (no waiting for "full" lobby)
+- Tab reload: AddPlayer checks for 1-player rooms first
+- Pending queue: 10 message limit, FIFO drop to prevent memory growth
+- Panic recovery: All broadcast operations recover from closed channel panics
+- Empty rooms: Destroyed immediately (no reuse, fresh Match state)
+
 ---
 
 ## Next Priority
 
-The next most important spec to generate is **rooms.md** because:
-1. It completes Phase 3 (Networking) - all networking specs will be finished
-2. rooms.md documents how players are matchmade and assigned to games
-3. Combat specs (Phase 4) depend on understanding room-level concepts
-4. Many message handlers reference room broadcasting which is documented here
+**Phase 3 (Networking) is now COMPLETE!** All networking specs have been written.
 
-After rooms.md, continue with **weapons.md** to begin the Combat phase (Phase 4).
+The next most important spec to generate is **weapons.md** because:
+1. It starts Phase 4 (Combat) - the core gameplay systems
+2. weapons.md defines all 6 weapon types with damage, fire rate, and mechanics
+3. shooting.md, hit-detection.md, and melee.md all depend on weapon definitions
+4. Weapon spawn locations and pickup mechanics are referenced throughout combat specs
+
+After weapons.md, continue with **shooting.md** to document ranged attack mechanics.
 
 ---
 
