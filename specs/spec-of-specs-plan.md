@@ -35,7 +35,7 @@
 
 | Spec File | Status | Lines | Notes |
 |-----------|--------|-------|-------|
-| [weapons.md](weapons.md) | Pending | ~550 | Complete weapon definitions and switching |
+| [weapons.md](weapons.md) | **Complete** | ~750 | Complete weapon definitions and switching |
 | [shooting.md](shooting.md) | Pending | ~500 | Ranged attack mechanics |
 | [hit-detection.md](hit-detection.md) | Pending | ~475 | Collision detection and damage application |
 | [melee.md](melee.md) | Pending | ~375 | Melee attack mechanics |
@@ -73,8 +73,8 @@
 ## Progress Summary
 
 - **Total Specs**: 21
-- **Completed**: 7 (constants.md, arena.md, player.md, movement.md, messages.md, networking.md, rooms.md)
-- **Pending**: 14
+- **Completed**: 8 (constants.md, arena.md, player.md, movement.md, messages.md, networking.md, rooms.md, weapons.md)
+- **Pending**: 13
 - **Estimated Total Lines**: ~8,575
 
 ---
@@ -286,19 +286,54 @@
 - Panic recovery: All broadcast operations recover from closed channel panics
 - Empty rooms: Destroyed immediately (no reuse, fresh Match state)
 
+### 2026-02-02: weapons.md
+
+**What was done:**
+- Documented ALL 6 weapons (Pistol, Uzi, AK47, Shotgun, Bat, Katana)
+- Complete weapon stats table with damage, fire rate, magazine, reload, speed, range, spread, arc, knockback
+- Recoil system with vertical/horizontal accumulation, recovery time, max accumulation
+- Damage falloff formula (50% range = full damage, linear decline to max range)
+- Shotgun pellet system (8 pellets, even distribution with ±10% randomness)
+- Melee attack detection (range + arc check, 90° cone)
+- Bat knockback mechanics (40px push, boundary clamping)
+- Weapon spawn locations (5 fixed positions forming strategic pattern)
+- Pickup mechanics (32px radius, 30s respawn delay)
+- Visual configurations (muzzle flash, projectile colors, tracer widths)
+- Weapon configuration file structure (weapon-configs.json)
+- Documented the **WHY** for all design decisions
+- Added 10 test scenarios covering fire rate, pellets, falloff, recoil, melee, knockback
+
+**Sources analyzed:**
+- `weapon-configs.json` (authoritative weapon stats)
+- `stick-rumble-server/internal/game/weapon.go` (Weapon struct, WeaponState, CalculateDamageFalloff)
+- `stick-rumble-server/internal/game/ranged_attack.go` (shotgun pellets, recoil application)
+- `stick-rumble-server/internal/game/melee_attack.go` (melee range/arc, knockback)
+- `stick-rumble-server/internal/game/weapon_crate.go` (spawn locations, pickup flow)
+- `stick-rumble-server/internal/game/constants.go` (pickup radius, respawn delay, sprint multiplier)
+- `stick-rumble-client/src/shared/weaponConfig.ts` (visual configs, TypeScript interfaces)
+
+**Key findings:**
+- All weapons load from shared JSON file for client/server consistency
+- Shotgun pellet damage: 7.5 per pellet × 8 = 60 total (matches config)
+- AK47 has mixed recoil (vertical + horizontal) making it harder to control at range
+- Bat is only weapon with knockback (40px), Katana has higher damage instead
+- Melee weapons identified by: magazineSize == 0 AND projectileSpeed == 0
+- Sprint accuracy penalty: 1.5x spread multiplier
+- Weapon crates use strategic positioning (center top, left/right mid, bottom center, corner)
+
 ---
 
 ## Next Priority
 
-**Phase 3 (Networking) is now COMPLETE!** All networking specs have been written.
+**Phase 4 (Combat) is now IN PROGRESS!** weapons.md is complete.
 
-The next most important spec to generate is **weapons.md** because:
-1. It starts Phase 4 (Combat) - the core gameplay systems
-2. weapons.md defines all 6 weapon types with damage, fire rate, and mechanics
-3. shooting.md, hit-detection.md, and melee.md all depend on weapon definitions
-4. Weapon spawn locations and pickup mechanics are referenced throughout combat specs
+The next most important spec to generate is **shooting.md** because:
+1. It documents the ranged attack mechanics that use weapons.md definitions
+2. Shooting is the primary combat action in the game
+3. hit-detection.md depends on understanding projectile creation and behavior
+4. Covers fire rate enforcement, ammo/reload, projectile spawning, and failure reasons
 
-After weapons.md, continue with **shooting.md** to document ranged attack mechanics.
+After shooting.md, continue with **hit-detection.md** to document collision and damage.
 
 ---
 
