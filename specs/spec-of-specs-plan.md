@@ -37,7 +37,7 @@
 |-----------|--------|-------|-------|
 | [weapons.md](weapons.md) | **Complete** | ~750 | Complete weapon definitions and switching |
 | [shooting.md](shooting.md) | **Complete** | ~650 | Ranged attack mechanics |
-| [hit-detection.md](hit-detection.md) | Pending | ~475 | Collision detection and damage application |
+| [hit-detection.md](hit-detection.md) | **Complete** | ~550 | Collision detection and damage application |
 | [melee.md](melee.md) | Pending | ~375 | Melee attack mechanics |
 
 ### Phase 5: Advanced Mechanics
@@ -73,8 +73,8 @@
 ## Progress Summary
 
 - **Total Specs**: 21
-- **Completed**: 9 (constants.md, arena.md, player.md, movement.md, messages.md, networking.md, rooms.md, weapons.md, shooting.md)
-- **Pending**: 12
+- **Completed**: 10 (constants.md, arena.md, player.md, movement.md, messages.md, networking.md, rooms.md, weapons.md, shooting.md, hit-detection.md)
+- **Pending**: 11
 - **Estimated Total Lines**: ~8,575
 
 ---
@@ -355,20 +355,52 @@
 - Sprint applies 1.5x spread penalty, stacking with weapon base spread
 - Shotgun creates 8 independent projectiles, each tracked separately
 
+### 2026-02-02: hit-detection.md
+
+**What was done:**
+- Documented complete AABB collision detection algorithm
+- Projectile and HitEvent data structures for Go server
+- Player hitbox dimensions (32x64 centered on position)
+- 6-step collision check chain (alive, invulnerable, rolling, owner, range, AABB)
+- Damage application with health regeneration interrupt
+- Death trigger and kill/XP tracking
+- Projectile expiration (1000ms lifetime, arena bounds)
+- Invulnerability system (spawn protection + dodge roll i-frames)
+- Message flow diagrams for hit-with-death and hit-without-death
+- Documented the **WHY** for AABB vs circle collision, 60Hz tick rate, etc.
+- Added 14 test scenarios covering collision, invulnerability, range, expiration
+
+**Sources analyzed:**
+- `stick-rumble-server/internal/game/physics.go` (CheckProjectilePlayerCollision, AABB algorithm)
+- `stick-rumble-server/internal/game/projectile.go` (Projectile struct, IsExpired, IsOutOfBounds)
+- `stick-rumble-server/internal/game/player.go` (TakeDamage, IsInvincibleFromRoll)
+- `stick-rumble-server/internal/game/gameserver.go` (checkHitDetection, tick loop)
+- `stick-rumble-server/internal/network/message_processor.go` (onHit callback, death handling)
+- `stick-rumble-server/internal/game/gameserver_hitdetection_test.go` (test coverage)
+- `stick-rumble-server/internal/game/physics_collision_test.go` (collision algorithm tests)
+
+**Key findings:**
+- AABB collision chosen over circle for stick figure shape (32x64 rectangle)
+- Collision checks run at 60 Hz, O(projectiles × players) per tick
+- Range validation (800px max) happens before collision test for efficiency
+- Dodge roll i-frames only active for first 200ms of 400ms roll
+- Death triggers kill:credit broadcast with updated stats (kills, XP)
+- Hit detection is server-authoritative - clients receive results only
+
 ---
 
 ## Next Priority
 
-**Phase 4 (Combat) continues!** shooting.md is now complete.
+**Phase 4 (Combat) continues!** hit-detection.md is now complete.
 
-The next most important spec to generate is **hit-detection.md** because:
-1. It completes the projectile lifecycle started in shooting.md
-2. Defines how damage is applied to players
-3. Documents collision geometry and algorithms
-4. Covers damage falloff (50% to 100% range decay)
-5. Essential for understanding player:damaged and hit:confirmed messages
+The next most important spec to generate is **melee.md** because:
+1. It completes Phase 4 (Combat) documentation
+2. Documents melee attack mechanics (Bat, Katana)
+3. Covers range/arc collision detection
+4. Explains knockback mechanics for Bat
+5. Completes the weapon system documentation
 
-After hit-detection.md, continue with **melee.md** to complete combat documentation.
+After melee.md, continue with Phase 5: **dodge-roll.md** and **match.md**.
 
 ---
 
