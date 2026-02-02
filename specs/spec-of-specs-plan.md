@@ -60,22 +60,23 @@
 
 | Spec File | Status | Lines | Notes |
 |-----------|--------|-------|-------|
-| [server-architecture.md](server-architecture.md) | Pending | ~425 | Backend structure and game loop |
+| [server-architecture.md](server-architecture.md) | **Complete** | ~650 | Backend structure and game loop |
 
 ### Phase 8: Verification
 
 | Spec File | Status | Lines | Notes |
 |-----------|--------|-------|-------|
-| [test-index.md](test-index.md) | Pending | ~350 | Cross-reference of all test scenarios |
+| [test-index.md](test-index.md) | **Complete** | ~750 | Cross-reference of all test scenarios (179 tests)
 
 ---
 
 ## Progress Summary
 
 - **Total Specs**: 21
-- **Completed**: 19 (README.md, overview.md, constants.md, arena.md, player.md, movement.md, messages.md, networking.md, rooms.md, weapons.md, shooting.md, hit-detection.md, melee.md, dodge-roll.md, match.md, client-architecture.md, graphics.md, ui.md, audio.md)
-- **Pending**: 2
-- **Estimated Total Lines**: ~8,575
+- **Completed**: 21 (README.md, overview.md, constants.md, arena.md, player.md, movement.md, messages.md, networking.md, rooms.md, weapons.md, shooting.md, hit-detection.md, melee.md, dodge-roll.md, match.md, client-architecture.md, graphics.md, ui.md, audio.md, server-architecture.md, test-index.md)
+- **Pending**: 0
+- **Estimated Total Lines**: ~10,000
+- **Total Test Scenarios**: 179
 
 ---
 
@@ -747,16 +748,97 @@
 - Positional audio creates spatial awareness in multiplayer combat
 - Documents current implementation status and future audio work
 
+### 2026-02-02: server-architecture.md
+
+**What was done:**
+- Documented complete Go server architecture for server-authoritative multiplayer
+- Application structure with cmd/, internal/game/, internal/network/ organization
+- GameServer dual-loop architecture: 60Hz tick loop + 20Hz broadcast loop
+- WebSocketHandler with singleton pattern for shared room state
+- World data structure with RWMutex for thread-safe player access
+- Complete game loop implementation with 8-step tick processing
+- Message routing via switch statement with all 7 message types
+- Event callback system for decoupling game logic from network layer
+- Concurrency model documentation with goroutine architecture diagram
+- Synchronization primitives table (RWMutex, Mutex, Channels)
+- Deadlock prevention patterns (no nested locks, panic recovery)
+- Graceful shutdown with SIGTERM/SIGINT handling and 30s timeout
+- Error handling patterns (schema validation, channel full, closed channel, NaN/Inf sanitization)
+- Clock abstraction for deterministic testing
+- Broadcast function injection for testability
+- Schema validation as development-only feature
+- Documented the **WHY** for all design decisions
+- Added 10 test scenarios covering tick rate, threading, shutdown
+
+**Sources analyzed:**
+- `stick-rumble-server/cmd/server/main.go` (entry point, shutdown)
+- `stick-rumble-server/internal/game/gameserver.go` (game loops, tick processing)
+- `stick-rumble-server/internal/game/world.go` (player state, spawn algorithm)
+- `stick-rumble-server/internal/game/player.go` (PlayerState, InputState)
+- `stick-rumble-server/internal/game/room.go` (Room, RoomManager)
+- `stick-rumble-server/internal/game/physics.go` (movement, collision)
+- `stick-rumble-server/internal/game/constants.go` (tick rates, speeds)
+- `stick-rumble-server/internal/network/websocket_handler.go` (connection lifecycle)
+- `stick-rumble-server/internal/network/message_processor.go` (message routing)
+- `stick-rumble-server/internal/network/broadcast_helper.go` (broadcast patterns)
+
+**Key findings:**
+- Dual-loop design separates physics accuracy (60Hz) from network efficiency (20Hz)
+- Callbacks enable unit testing game logic without WebSocket dependencies
+- RWMutex used everywhere due to read-heavy access pattern (broadcasts dominate)
+- 256-message channel buffer handles combat bursts without blocking
+- Clock injection enables time-based tests without real delays
+- Schema validation has measurable CPU overhead, disabled in production
+
+**Why this spec matters:**
+- Completes Phase 7 (Server Implementation)
+- Documents the authoritative component in server-authoritative architecture
+- Critical for understanding how game state is managed and synchronized
+- Explains concurrency patterns that prevent race conditions
+
+### 2026-02-02: test-index.md
+
+**What was done:**
+- Comprehensive cross-reference index of ALL 179 test scenarios
+- Summary statistics: total tests, by category, by priority, by spec
+- Complete test catalog organized by spec (19 specs with tests)
+- Tests by Category: Unit (85), Integration (85), Visual (9)
+- Tests by Priority: Critical (65), High (85), Medium (20), Low (9)
+- Critical path implementation order with 7 phases
+- Detailed tables for each spec with test ID, category, priority, description
+- Implementation checklist with checkboxes for tracking progress
+- Documented the **WHY** for test organization and priorities
+
+**Sources analyzed:**
+- All 19 spec files containing test scenarios
+- Test scenario naming conventions from SPEC-OF-SPECS.md
+
+**Key findings:**
+- 179 total test scenarios across all specs
+- Average 9.4 tests per spec
+- Highest test count: dodge-roll.md, graphics.md, hit-detection.md, melee.md, player.md (14 each)
+- Critical tests focus on game loop, networking, and combat
+- Visual tests require Playwright for screenshot comparison
+- Implementation order follows dependency graph
+
+**Why this spec matters:**
+- Completes Phase 8 (Verification)
+- Single source of truth for all test scenarios
+- Enables tracking test implementation progress
+- Guides implementation order based on critical path
+
 ---
 
 ## Next Priority
 
-**Phase 6 (Client Implementation) is COMPLETE!**
+**ALL PHASES COMPLETE!**
 
-Remaining specs in priority order:
+All 21 specification documents have been created, covering:
+- 8 implementation phases
+- 179 test scenarios
+- ~10,000 lines of documentation
 
-1. **server-architecture.md** (Phase 7) - Backend structure, game loop
-2. **test-index.md** (Phase 8) - Cross-reference of all test scenarios
+The spec suite is now ready for AI agents to implement Stick Rumble from scratch.
 
 ---
 
