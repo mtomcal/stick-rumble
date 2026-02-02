@@ -45,7 +45,7 @@
 | Spec File | Status | Lines | Notes |
 |-----------|--------|-------|-------|
 | [dodge-roll.md](dodge-roll.md) | **Complete** | ~720 | Dodge roll evasion mechanic |
-| [match.md](match.md) | Pending | ~375 | Match lifecycle and win conditions |
+| [match.md](match.md) | **Complete** | ~750 | Match lifecycle and win conditions |
 
 ### Phase 6: Client Implementation
 
@@ -73,8 +73,8 @@
 ## Progress Summary
 
 - **Total Specs**: 21
-- **Completed**: 12 (constants.md, arena.md, player.md, movement.md, messages.md, networking.md, rooms.md, weapons.md, shooting.md, hit-detection.md, melee.md, dodge-roll.md)
-- **Pending**: 9
+- **Completed**: 13 (constants.md, arena.md, player.md, movement.md, messages.md, networking.md, rooms.md, weapons.md, shooting.md, hit-detection.md, melee.md, dodge-roll.md, match.md)
+- **Pending**: 8
 - **Estimated Total Lines**: ~8,575
 
 ---
@@ -464,20 +464,55 @@
 - Roll velocity (250 px/s) is calculated from distance/duration (100px / 0.4s)
 - Client tracks cooldown locally for UI, but server is authoritative for actual roll validation
 
+### 2026-02-02: match.md
+
+**What was done:**
+- Documented complete match lifecycle (WAITING → ACTIVE → ENDED state machine)
+- Match and MatchConfig data structures for Go server
+- PlayerScore schema for match:ended message
+- Win conditions: kill target (20 kills) and time limit (420 seconds / 7 minutes)
+- Winner determination with tie handling (multiple winners if equal kills)
+- Timer broadcast loop (1 Hz) with CheckTimeLimit in each iteration
+- Kill target check after each death (immediate win detection)
+- Test mode configuration (2 kills, 10 seconds) via TEST_MODE env var
+- Player registration to ensure 0-kill players appear in final scores
+- Client match:ended handling (freeze gameplay, display results)
+- Documented the **WHY** for all design decisions
+- Added 13 test scenarios covering state transitions, timer, win conditions, ties
+
+**Sources analyzed:**
+- `stick-rumble-server/internal/game/match.go` (Match struct, all methods)
+- `stick-rumble-server/internal/game/match_test.go` (comprehensive test coverage)
+- `stick-rumble-server/internal/game/room.go` (TEST_MODE env var, Match creation)
+- `stick-rumble-server/internal/network/websocket_handler.go` (matchTimerLoop)
+- `stick-rumble-server/internal/network/broadcast_helper.go` (broadcastMatchTimers, broadcastMatchEnded)
+- `stick-rumble-server/internal/network/message_processor.go` (kill target check after death)
+- `events-schema/src/schemas/server-to-client.ts` (MatchTimerData, MatchEndedData, PlayerScore)
+- `stick-rumble-client/src/game/scenes/GameSceneEventHandlers.ts` (match:timer, match:ended handlers)
+
+**Key findings:**
+- Match state machine prevents re-ending (only end once, first reason wins)
+- RegisteredPlayers separate from PlayerKills ensures 0-kill players in final scores
+- Timer loop checks time limit after each broadcast (1 Hz granularity)
+- Kill target checked immediately after each kill for instant win detection
+- GetFinalScores reads from World (authoritative) not Match (partial)
+- Client sets matchEnded flag to ignore late player:move and match:timer messages
+- Multiple winners returned in array for tie handling
+
 ---
 
 ## Next Priority
 
-**dodge-roll.md is COMPLETE!** Phase 5 is half done.
+**Phase 5 (Advanced Mechanics) is COMPLETE!**
 
-The next most important spec to generate is **match.md** because:
-1. Completes Phase 5 (Advanced Mechanics)
-2. Documents match lifecycle and state machine (WAITING → ACTIVE → ENDED)
-3. Covers win conditions (kill target, time limit)
-4. Explains timer system and score tracking
-5. Details match:timer and match:ended messages
+The next most important spec to generate is **client-architecture.md** because:
+1. Starts Phase 6 (Client Implementation)
+2. Documents the Phaser + React architecture
+3. Explains scene lifecycle and manager classes
+4. Covers rendering pipeline and input handling
+5. Foundation for graphics.md, ui.md, and audio.md specs
 
-After match.md, continue with Phase 6 (Client Implementation) starting with **client-architecture.md**.
+After client-architecture.md, continue with **graphics.md** (procedural rendering).
 
 ---
 
