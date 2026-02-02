@@ -14,7 +14,7 @@
 | [README.md](README.md) | Pending | ~250 | Entry point with reading order and dependency graph |
 | [overview.md](overview.md) | Pending | ~350 | High-level architecture and design philosophy |
 | [constants.md](constants.md) | **Complete** | ~650 | Single source of truth for all magic numbers |
-| [arena.md](arena.md) | Pending | ~250 | Game world boundaries and spatial rules |
+| [arena.md](arena.md) | **Complete** | ~450 | Game world boundaries and spatial rules |
 
 ### Phase 2: Core Entities
 
@@ -73,8 +73,8 @@
 ## Progress Summary
 
 - **Total Specs**: 21
-- **Completed**: 1 (constants.md)
-- **Pending**: 20
+- **Completed**: 2 (constants.md, arena.md)
+- **Pending**: 19
 - **Estimated Total Lines**: ~8,575
 
 ---
@@ -107,16 +107,49 @@
 - Damage falloff formula documented (50% range = 100% damage, 100% range = 0% damage)
 - Network tick rates verified: 60 Hz server, 20 Hz client updates
 
+### 2026-02-02: arena.md
+
+**What was done:**
+- Documented complete arena coordinate system (screen-space, origin top-left)
+- Detailed boundary collision handling with clamping algorithm
+- Projectile out-of-bounds destruction logic
+- Dodge roll wall termination behavior
+- Player spawn algorithm (balanced spawning away from enemies)
+- All 5 weapon crate fixed spawn positions with pentagon pattern reasoning
+- Distance calculation and AABB collision formulas
+- Weapon pickup proximity check (32px radius)
+- Documented the **WHY** for every design decision
+- Added 12 test scenarios covering all boundary cases
+
+**Sources analyzed:**
+- `stick-rumble-server/internal/game/constants.go`
+- `stick-rumble-server/internal/game/physics.go` (clampToArena, boundary logic)
+- `stick-rumble-server/internal/game/world.go` (getBalancedSpawnPointLocked)
+- `stick-rumble-server/internal/game/projectile.go` (IsOutOfBounds)
+- `stick-rumble-server/internal/game/weapon_crate.go` (spawn positions)
+- `stick-rumble-client/src/game/simulation/physics.ts`
+- `stick-rumble-client/src/game/scenes/GameScene.ts` (world bounds setup)
+- `stick-rumble-client/src/game/entities/ProjectileManager.ts`
+- `stick-rumble-client/src/game/entities/WeaponCrateManager.ts`
+
+**Key findings:**
+- Player boundaries: X ∈ [16, 1904], Y ∈ [32, 1048] (accounting for 32x64 hitbox)
+- Spawn margin: 100px from all edges, valid region [100, 1820] x [100, 980]
+- Balanced spawn tries 10 random candidates, picks one farthest from all enemies
+- Client mirrors server physics for client-side prediction
+- Dodge roll terminates early when position clamping detects wall collision
+
 ---
 
 ## Next Priority
 
-The next most important spec to generate is **arena.md** because:
-1. It's in the Foundation phase (required before other specs)
-2. It's short (~250 lines) and well-defined
-3. Player and movement specs depend on arena boundaries
+The next most important specs to generate are **player.md** and **movement.md** because:
+1. They complete the Core Entities phase (Phase 2)
+2. player.md defines the entity that all other systems interact with
+3. movement.md defines physics that shooting, dodge roll, and hit detection depend on
+4. Both are medium complexity (~400-450 lines each)
 
-After arena.md, continue with **player.md** and **movement.md** to complete the Core Entities phase.
+After Core Entities, continue with **messages.md** (the largest spec at ~700 lines) to complete the Networking phase foundation.
 
 ---
 
