@@ -36,7 +36,7 @@
 | Spec File | Status | Lines | Notes |
 |-----------|--------|-------|-------|
 | [weapons.md](weapons.md) | **Complete** | ~750 | Complete weapon definitions and switching |
-| [shooting.md](shooting.md) | Pending | ~500 | Ranged attack mechanics |
+| [shooting.md](shooting.md) | **Complete** | ~650 | Ranged attack mechanics |
 | [hit-detection.md](hit-detection.md) | Pending | ~475 | Collision detection and damage application |
 | [melee.md](melee.md) | Pending | ~375 | Melee attack mechanics |
 
@@ -73,8 +73,8 @@
 ## Progress Summary
 
 - **Total Specs**: 21
-- **Completed**: 8 (constants.md, arena.md, player.md, movement.md, messages.md, networking.md, rooms.md, weapons.md)
-- **Pending**: 13
+- **Completed**: 9 (constants.md, arena.md, player.md, movement.md, messages.md, networking.md, rooms.md, weapons.md, shooting.md)
+- **Pending**: 12
 - **Estimated Total Lines**: ~8,575
 
 ---
@@ -321,19 +321,54 @@
 - Sprint accuracy penalty: 1.5x spread multiplier
 - Weapon crates use strategic positioning (center top, left/right mid, bottom center, corner)
 
+### 2026-02-02: shooting.md
+
+**What was done:**
+- Documented complete shoot request flow (client → server → response)
+- ShootResult and Projectile data structures for Go server
+- All 4 shoot:failed reason codes (no_player, cooldown, empty, reloading)
+- Fire rate enforcement with per-weapon cooldown calculations
+- Projectile creation from aim angle with velocity calculation
+- Projectile update and expiration (1000ms lifetime, arena bounds)
+- Ammo system: decrement on shot, auto-reload on empty
+- Reload system: StartReload, CheckReloadComplete, reload cancellation
+- Recoil system: vertical accumulation, horizontal random, sprint penalty
+- Shotgun pellet spread: 8 pellets, even distribution, 10% jitter
+- Documented the **WHY** for all design decisions
+- Added 12 test scenarios covering success, failure, cooldown, ammo, reload, recoil
+
+**Sources analyzed:**
+- `stick-rumble-server/internal/game/weapon.go` (WeaponState, CanShoot, RecordShot, StartReload)
+- `stick-rumble-server/internal/game/projectile.go` (Projectile, NewProjectile, IsExpired, IsOutOfBounds)
+- `stick-rumble-server/internal/game/ranged_attack.go` (ApplyRecoilToAngle, CalculateShotgunPelletAngles)
+- `stick-rumble-server/internal/game/gameserver.go` (PlayerShoot, checkReloadComplete)
+- `stick-rumble-server/internal/network/message_processor.go` (handlePlayerShoot)
+- `stick-rumble-client/src/game/entities/ShootingManager.ts` (canShoot, shoot)
+- `events-schema/src/schemas/client-to-server.ts` (PlayerShootData)
+- `events-schema/src/schemas/server-to-client.ts` (projectile:spawn, shoot:failed, weapon:state)
+
+**Key findings:**
+- Server is authoritative - client sends only aimAngle, server validates everything
+- Auto-reload triggers when shooting with empty magazine
+- Fire rate enforced at 60 Hz precision (16.67ms resolution)
+- Recoil has max accumulation cap to prevent infinite climb
+- Sprint applies 1.5x spread penalty, stacking with weapon base spread
+- Shotgun creates 8 independent projectiles, each tracked separately
+
 ---
 
 ## Next Priority
 
-**Phase 4 (Combat) is now IN PROGRESS!** weapons.md is complete.
+**Phase 4 (Combat) continues!** shooting.md is now complete.
 
-The next most important spec to generate is **shooting.md** because:
-1. It documents the ranged attack mechanics that use weapons.md definitions
-2. Shooting is the primary combat action in the game
-3. hit-detection.md depends on understanding projectile creation and behavior
-4. Covers fire rate enforcement, ammo/reload, projectile spawning, and failure reasons
+The next most important spec to generate is **hit-detection.md** because:
+1. It completes the projectile lifecycle started in shooting.md
+2. Defines how damage is applied to players
+3. Documents collision geometry and algorithms
+4. Covers damage falloff (50% to 100% range decay)
+5. Essential for understanding player:damaged and hit:confirmed messages
 
-After shooting.md, continue with **hit-detection.md** to document collision and damage.
+After hit-detection.md, continue with **melee.md** to complete combat documentation.
 
 ---
 
