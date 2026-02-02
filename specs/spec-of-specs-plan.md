@@ -906,6 +906,86 @@ The spec suite is now ready for AI agents to implement Stick Rumble from scratch
 
 ---
 
+### 2026-02-02: Comprehensive Contract Validation
+
+**Objective:** Complete validation of ALL contracts across specs, events-schema, weapon-configs, and implementation code.
+
+#### WebSocket Message Contracts
+
+| Category | Spec Count | events-schema Count | Status |
+|----------|-----------|---------------------|--------|
+| Client→Server | 7 | 6 | ✅ OK (`test` excluded) |
+| Server→Client | 20 | 20 | ✅ OK |
+
+**Summary:** All production message types are fully captured. The `test` message is intentionally omitted from TypeBox schemas as it's only used for development/debugging.
+
+#### Weapon Configuration Contracts
+
+**Sources validated:**
+- `weapon-configs.json` (authoritative)
+- `specs/weapons.md`
+- Server: `weapon_config.go`, `weapon_factory.go`
+- Client: `weaponConfig.ts` (hardcoded fallback)
+
+| Weapon | JSON | Spec | Server | Client Fallback | Status |
+|--------|------|------|--------|-----------------|--------|
+| Pistol | ✅ | ✅ | ✅ | ✅ | OK |
+| Bat | ✅ | ✅ | ✅ | ✅ | OK |
+| Katana | ✅ | ✅ | ✅ | ✅ | OK |
+| Uzi | ✅ | ✅ | ✅ | **FIXED** | Fixed |
+| AK47 | ✅ | ✅ | ✅ | ✅ | OK |
+| Shotgun | ✅ | ✅ | ✅ | ✅ | OK |
+
+**Gap Found & Fixed:**
+- **Uzi muzzle flash in client hardcoded fallback** was incorrect:
+  - `muzzleFlashSize: 6` → Fixed to `8` (matches JSON)
+  - `muzzleFlashDuration: 30` → Fixed to `50` (matches JSON)
+- File: `stick-rumble-client/src/shared/weaponConfig.ts` lines 199-200
+
+**Shotgun Pellet System:**
+- `ShotgunPelletCount = 8` defined in `ranged_attack.go` (server constant)
+- `ShotgunPelletDamage = 7.5` defined in `ranged_attack.go` (server constant)
+- These are intentionally NOT in weapon-configs.json as they're shotgun-specific behavior, not configurable stats
+- Documented correctly in specs/weapons.md and specs/constants.md
+
+#### Game Constants Contracts
+
+**Validation scope:** Constants defined in specs vs implementation
+
+| Category | Spec | Server | Client | Status |
+|----------|------|--------|--------|--------|
+| Arena dimensions | ✅ | ✅ | ✅ | All match |
+| Player dimensions | ✅ | ✅ | ✅ | All match |
+| Health/Status | ✅ | ✅ | N/A | Server-only OK |
+| Movement | ✅ | ✅ | ✅ | All match |
+| Network | ✅ | ✅ | ✅ | All match |
+| Dodge Roll | ✅ | ✅ | N/A | Server-only OK |
+| Projectiles | ✅ | ✅ | ✅ | All match |
+
+**Notable findings:**
+- Sprint constants (SPRINT_SPEED, SPRINT_MULTIPLIER) only in server - this is correct as server is authoritative
+- Match configuration (kill target, time limit) not in constants.go - values are hardcoded in match.go
+- UI constants (kill feed entries, health bar dimensions) not centralized - acceptable as UI-only
+
+**No critical mismatches found.** All authoritative values match between spec and implementation.
+
+#### Contract Validation Summary
+
+| Contract Type | Status | Gaps Fixed |
+|--------------|--------|------------|
+| WebSocket Messages | ✅ Complete | player:left added previously |
+| Weapon Configs | ✅ Complete | Uzi muzzle flash fixed |
+| Game Constants | ✅ Complete | None needed |
+
+**Conclusion:** All contracts are now validated and synchronized across:
+- Specification documents (specs/*.md)
+- TypeBox schemas (events-schema/)
+- Shared configuration (weapon-configs.json)
+- Server implementation (stick-rumble-server/)
+- Client implementation (stick-rumble-client/)
+
+---
+
 ## Validation Checklist
 
 Before marking a spec as complete, verify:
