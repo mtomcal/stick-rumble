@@ -1,0 +1,37 @@
+{
+  "$id": "player_leftMessage",
+  "description": "player:left WebSocket message",
+  "type": "object",
+  "required": [
+    "type",
+    "timestamp",
+    "data"
+  ],
+  "properties": {
+    "type": {
+      "description": "Message type identifier",
+      "const": "player:left",
+      "type": "string"
+    },
+    "timestamp": {
+      "description": "Unix timestamp in milliseconds",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "data": {
+      "$id": "PlayerLeftData",
+      "description": "Player left event payload",
+      "type": "object",
+      "required": [
+        "playerId"
+      ],
+      "properties": {
+        "playerId": {
+          "description": "Unique identifier of the player who left",
+          "minLength": 1,
+          "type": "string"
+        }
+      }
+    }
+  }
+}

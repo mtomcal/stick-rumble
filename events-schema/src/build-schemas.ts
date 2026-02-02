@@ -24,6 +24,8 @@ import {
 import {
   RoomJoinedDataSchema,
   RoomJoinedMessageSchema,
+  PlayerLeftDataSchema,
+  PlayerLeftMessageSchema,
   PlayerStateSchema,
   PlayerMoveDataSchema,
   PlayerMoveMessageSchema,
@@ -138,6 +140,14 @@ const schemas: SchemaExport[] = [
   {
     schema: RoomJoinedMessageSchema,
     outputPath: 'schemas/server-to-client/room-joined-message.json',
+  },
+  {
+    schema: PlayerLeftDataSchema,
+    outputPath: 'schemas/server-to-client/player-left-data.json',
+  },
+  {
+    schema: PlayerLeftMessageSchema,
+    outputPath: 'schemas/server-to-client/player-left-message.json',
   },
   {
     schema: PlayerStateSchema,

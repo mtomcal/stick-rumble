@@ -1,0 +1,15 @@
+{
+  "$id": "PlayerLeftData",
+  "description": "Player left event payload",
+  "type": "object",
+  "required": [
+    "playerId"
+  ],
+  "properties": {
+    "playerId": {
+      "description": "Unique identifier of the player who left",
+      "minLength": 1,
+      "type": "string"
+    }
+  }
+}

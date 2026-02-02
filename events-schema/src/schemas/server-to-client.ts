@@ -29,6 +29,34 @@ export const RoomJoinedMessageSchema = createTypedMessageSchema('room:joined', R
 export type RoomJoinedMessage = Static<typeof RoomJoinedMessageSchema>;
 
 // ============================================================================
+// player:left
+// ============================================================================
+
+/**
+ * Player left data payload.
+ * Sent when a player disconnects from the room.
+ *
+ * **Why this message exists:** When a player's WebSocket connection closes,
+ * all other players in the room need to be notified so they can remove the
+ * player's sprite from their local game state. Without this message, ghost
+ * players would remain on screen after disconnection.
+ */
+export const PlayerLeftDataSchema = Type.Object(
+  {
+    playerId: Type.String({ description: 'Unique identifier of the player who left', minLength: 1 }),
+  },
+  { $id: 'PlayerLeftData', description: 'Player left event payload' }
+);
+
+export type PlayerLeftData = Static<typeof PlayerLeftDataSchema>;
+
+/**
+ * Complete player:left message schema
+ */
+export const PlayerLeftMessageSchema = createTypedMessageSchema('player:left', PlayerLeftDataSchema);
+export type PlayerLeftMessage = Static<typeof PlayerLeftMessageSchema>;
+
+// ============================================================================
 // player:move
 // ============================================================================
 

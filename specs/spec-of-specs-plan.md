@@ -842,6 +842,70 @@ The spec suite is now ready for AI agents to implement Stick Rumble from scratch
 
 ---
 
+## Contract Validation
+
+### 2026-02-02: Events-Schema Contract Validation
+
+**Objective:** Validate that all WebSocket message contracts documented in specs are captured in the `events-schema` TypeBox definitions.
+
+**What was checked:**
+- Client→Server message types (events-schema/src/schemas/client-to-server.ts)
+- Server→Client message types (events-schema/src/schemas/server-to-client.ts)
+- Compared against messages.md spec and actual server implementation
+
+**Findings:**
+
+| Message | In events-schema | In messages.md | In server code | Status |
+|---------|------------------|----------------|----------------|--------|
+| **Client→Server** | | | | |
+| input:state | ✓ | ✓ | ✓ | OK |
+| player:shoot | ✓ | ✓ | ✓ | OK |
+| player:reload | ✓ | ✓ | ✓ | OK |
+| weapon:pickup_attempt | ✓ | ✓ | ✓ | OK |
+| player:melee_attack | ✓ | ✓ | ✓ | OK |
+| player:dodge_roll | ✓ | ✓ | ✓ | OK |
+| test | ✗ | ✓ | default handler | N/A (testing only) |
+| **Server→Client** | | | | |
+| room:joined | ✓ | ✓ | ✓ | OK |
+| player:left | **✗ MISSING** | ✓ | ✓ | **FIXED** |
+| player:move | ✓ | ✓ | ✓ | OK |
+| projectile:spawn | ✓ | ✓ | ✓ | OK |
+| projectile:destroy | ✓ | ✓ | ✓ | OK |
+| weapon:state | ✓ | ✓ | ✓ | OK |
+| shoot:failed | ✓ | ✓ | ✓ | OK |
+| player:damaged | ✓ | ✓ | ✓ | OK |
+| hit:confirmed | ✓ | ✓ | ✓ | OK |
+| player:death | ✓ | ✓ | ✓ | OK |
+| player:kill_credit | ✓ | ✓ | ✓ | OK |
+| player:respawn | ✓ | ✓ | ✓ | OK |
+| match:timer | ✓ | ✓ | ✓ | OK |
+| match:ended | ✓ | ✓ | ✓ | OK |
+| weapon:spawned | ✓ | ✓ | ✓ | OK |
+| weapon:pickup_confirmed | ✓ | ✓ | ✓ | OK |
+| weapon:respawned | ✓ | ✓ | ✓ | OK |
+| melee:hit | ✓ | ✓ | ✓ | OK |
+| roll:start | ✓ | ✓ | ✓ | OK |
+| roll:end | ✓ | ✓ | ✓ | OK |
+
+**Gap Found:** `player:left` was documented in messages.md and used in the server code (room.go:292) but was NOT defined in the TypeBox events-schema. This meant:
+- No type safety for client code handling this message
+- No JSON Schema generated for server-side validation
+
+**Fix Applied:**
+1. Added `PlayerLeftDataSchema` and `PlayerLeftMessageSchema` to `events-schema/src/schemas/server-to-client.ts`
+2. Exported new schemas from `events-schema/src/index.ts`
+3. Added schema exports to `events-schema/src/build-schemas.ts`
+4. Regenerated JSON schemas (now 55 files, up from 53)
+
+**Why the `player:left` schema matters:**
+- When a player's WebSocket connection closes, all other players in the room need to be notified
+- Without this schema, the client has no type-safe way to handle the message
+- The server sends this message at `room.go:292` in the `RemovePlayer` function
+
+**Validation Result:** After fix, all contracts are now captured in events-schema. The `test` message is intentionally omitted from TypeBox as it's only used for testing and handled by the server's default message handler.
+
+---
+
 ## Validation Checklist
 
 Before marking a spec as complete, verify:
