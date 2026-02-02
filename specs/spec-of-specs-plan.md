@@ -53,7 +53,7 @@
 |-----------|--------|-------|-------|
 | [client-architecture.md](client-architecture.md) | **Complete** | ~750 | Frontend structure and rendering pipeline |
 | [graphics.md](graphics.md) | **Complete** | ~750 | Procedural rendering specifications |
-| [ui.md](ui.md) | Pending | ~425 | HUD and interface elements |
+| [ui.md](ui.md) | **Complete** | ~700 | HUD and interface elements |
 | [audio.md](audio.md) | Pending | ~325 | Sound effects and audio system |
 
 ### Phase 7: Server Implementation
@@ -73,8 +73,8 @@
 ## Progress Summary
 
 - **Total Specs**: 21
-- **Completed**: 17 (README.md, overview.md, constants.md, arena.md, player.md, movement.md, messages.md, networking.md, rooms.md, weapons.md, shooting.md, hit-detection.md, melee.md, dodge-roll.md, match.md, client-architecture.md, graphics.md)
-- **Pending**: 4
+- **Completed**: 18 (README.md, overview.md, constants.md, arena.md, player.md, movement.md, messages.md, networking.md, rooms.md, weapons.md, shooting.md, hit-detection.md, melee.md, dodge-roll.md, match.md, client-architecture.md, graphics.md, ui.md)
+- **Pending**: 3
 - **Estimated Total Lines**: ~8,575
 
 ---
@@ -665,18 +665,60 @@
 - Melee swing shows 90° arc with semi-transparent fill for attack cone feedback
 - Dodge roll flickers visibility during first 200ms (i-frames visual feedback)
 
+### 2026-02-02: ui.md
+
+**What was done:**
+- Documented ALL 14 UI elements in the game with complete visual specifications
+- Health Bar UI: Position, dimensions, color thresholds (green/yellow/red), regeneration pulse animation
+- Kill Feed: FIFO queue, 5 max entries, 5s fade delay, right-aligned positioning
+- Ammo Display: Current/max format, low ammo red color, hidden for melee weapons
+- Reload Indicators: Progress bar, centered circle, flashing "RELOAD!" text with priorities
+- Match Timer: MM:SS format, color transitions at 120s/60s thresholds
+- Dodge Roll Cooldown: Circular progress indicator (gray background, green arc)
+- Pickup Prompt: Bottom-center, yellow text, 32px proximity trigger
+- Crosshair: Mouse-following with per-weapon spread circles, lerp smoothing
+- Damage Flash: Full-screen red overlay, 200ms fade
+- Hit Marker: X-pattern confirmation, 200ms fade
+- Damage Numbers: Floating text above victim, 1000ms float+fade
+- Match End Screen: React modal with scoreboard, XP breakdown, countdown
+- Connection Status: Green/red text with control hints
+- Documented the **WHY** for every design decision (positioning, colors, timing)
+- Added 12 test scenarios covering all major UI behaviors
+
+**Sources analyzed:**
+- `stick-rumble-client/src/game/ui/HealthBarUI.ts`
+- `stick-rumble-client/src/game/ui/KillFeedUI.ts`
+- `stick-rumble-client/src/game/ui/DodgeRollCooldownUI.ts`
+- `stick-rumble-client/src/game/ui/PickupPromptUI.ts`
+- `stick-rumble-client/src/game/entities/Crosshair.ts`
+- `stick-rumble-client/src/game/scenes/GameSceneUI.ts`
+- `stick-rumble-client/src/ui/match/MatchEndScreen.tsx`
+- `stick-rumble-client/src/ui/match/MatchEndScreen.css`
+- `stick-rumble-client/src/game/scenes/GameScene.ts`
+- `stick-rumble-client/src/game/scenes/GameSceneEventHandlers.ts`
+
+**Key findings:**
+- UI depth layering: 999 (damage flash) → 1000 (base) → 1001-1003 (reload indicators)
+- All HUD elements use scrollFactor(0) for screen-fixed positioning
+- React modal for match end enables accessibility and standard UI patterns
+- Health color thresholds: >60% green, 30-60% yellow, <30% red
+- Kill feed uses right-align to prevent overlap with left HUD
+- Crosshair spread uses lerp (0.2 speed) for smooth transitions
+- Melee weapons hide ammo display and spread circle (infinite attacks, no spread)
+- Match end modal has 10s auto-restart countdown
+- Event handlers update UI in response to server messages (not locally)
+
 ---
 
 ## Next Priority
 
-**Phase 6 (Client Implementation) is IN PROGRESS!**
+**Phase 6 (Client Implementation) is NEARLY COMPLETE!**
 
 Remaining specs in priority order:
 
-1. **ui.md** (Phase 6) - HUD elements, kill feed, match end screen
-2. **audio.md** (Phase 6) - Sound effects system
-3. **server-architecture.md** (Phase 7) - Backend structure, game loop
-4. **test-index.md** (Phase 8) - Cross-reference of all test scenarios
+1. **audio.md** (Phase 6) - Sound effects system
+2. **server-architecture.md** (Phase 7) - Backend structure, game loop
+3. **test-index.md** (Phase 8) - Cross-reference of all test scenarios
 
 ---
 
