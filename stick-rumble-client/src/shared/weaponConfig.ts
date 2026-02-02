@@ -196,8 +196,8 @@ function getHardcodedWeaponConfigs(): Record<string, WeaponConfig> {
       spreadDegrees: 5.0,
       visuals: {
         muzzleFlashColor: '0xffaa00',
-        muzzleFlashSize: 6,
-        muzzleFlashDuration: 30,
+        muzzleFlashSize: 8, // Matches weapon-configs.json
+        muzzleFlashDuration: 50, // Matches weapon-configs.json
         projectile: {
           color: '0xffaa00', // Orange
           diameter: 3,
