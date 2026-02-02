@@ -12,7 +12,7 @@
 | Spec File | Status | Lines | Notes |
 |-----------|--------|-------|-------|
 | [README.md](README.md) | **Complete** | ~300 | Entry point with reading order and dependency graph |
-| [overview.md](overview.md) | Pending | ~350 | High-level architecture and design philosophy |
+| [overview.md](overview.md) | **Complete** | ~400 | High-level architecture and design philosophy |
 | [constants.md](constants.md) | **Complete** | ~650 | Single source of truth for all magic numbers |
 | [arena.md](arena.md) | **Complete** | ~450 | Game world boundaries and spatial rules |
 
@@ -73,8 +73,8 @@
 ## Progress Summary
 
 - **Total Specs**: 21
-- **Completed**: 15 (README.md, constants.md, arena.md, player.md, movement.md, messages.md, networking.md, rooms.md, weapons.md, shooting.md, hit-detection.md, melee.md, dodge-roll.md, match.md, client-architecture.md)
-- **Pending**: 6
+- **Completed**: 16 (README.md, overview.md, constants.md, arena.md, player.md, movement.md, messages.md, networking.md, rooms.md, weapons.md, shooting.md, hit-detection.md, melee.md, dodge-roll.md, match.md, client-architecture.md)
+- **Pending**: 5
 - **Estimated Total Lines**: ~8,575
 
 ---
@@ -578,20 +578,59 @@
 - Input threshold (5° for aim) prevents server spam
 - Local visual updates before server response for responsive feel
 
+### 2026-02-02: overview.md
+
+**What was done:**
+- Documented the high-level architecture and design philosophy for Stick Rumble
+- Complete game description: multiplayer browser-based stick figure arena shooter
+- Player count (2-8), match duration (3-7 minutes), win conditions (20 kills or 7 min timer)
+- Server-authoritative architecture pattern with ASCII diagram
+- Tick rates: 60 Hz server, 20 Hz broadcast, 60 Hz client render
+- Client-side prediction approach to mask network latency
+- Dual application structure documented:
+  - Frontend: Phaser 3.90.0 + React 19.2.0 + TypeScript 5.9.3 + Vite 7.2.4
+  - Backend: Go 1.25 + gorilla/websocket v1.5.3
+  - Shared: TypeBox 0.34.27 schemas for type-safe messages
+- Anti-cheat philosophy: trust no client, server validates all actions
+- Input validation patterns with example shoot validation code
+- Rate limiting table (input 60 Hz, shoot by weapon fire rate, reload once per mag, roll 3s cooldown)
+- Schema validation for development with ENABLE_SCHEMA_VALIDATION env var
+- Complete folder structure with descriptions
+- Naming conventions table (kebab-case for specs, PascalCase for TS, snake_case for Go)
+- Module boundaries diagram showing shared/client/server separation
+- Key design decisions table with rationale
+- Documented the **WHY** for all architectural choices
+- Added 5 test scenarios covering tick rate, broadcast rate, schema sync, validation, input capture
+
+**Sources analyzed:**
+- `stick-rumble-client/package.json` (client dependencies and versions)
+- `stick-rumble-server/go.mod` (server dependencies and versions)
+- `events-schema/package.json` (shared schema dependencies)
+- `CLAUDE.md` (project context and workflow)
+- `docs/ARCHITECTURE.md` (system design overview)
+- Project folder structure (both client and server)
+- Existing specs for cross-reference data
+
+**Why this spec is critical:**
+- Root specification that all other specs depend on
+- Provides architectural context needed to understand any specific system
+- Explains WHY server-authoritative design was chosen (anti-cheat)
+- Documents folder structure so AI agents can navigate codebase
+- Key design decisions inform implementation choices in all other specs
+
 ---
 
 ## Next Priority
 
-**Phase 1 (Foundation) and Phase 6 (Client Implementation) are IN PROGRESS!**
+**Phase 1 (Foundation) is COMPLETE! Phase 6 (Client Implementation) is IN PROGRESS!**
 
 Remaining specs in priority order:
 
-1. **overview.md** (Phase 1) - High-level architecture, design philosophy
-2. **graphics.md** (Phase 6) - Procedural stick figure rendering, animations
-3. **ui.md** (Phase 6) - HUD elements, kill feed, match end screen
-4. **audio.md** (Phase 6) - Sound effects system
-5. **server-architecture.md** (Phase 7) - Backend structure, game loop
-6. **test-index.md** (Phase 8) - Cross-reference of all test scenarios
+1. **graphics.md** (Phase 6) - Procedural stick figure rendering, animations
+2. **ui.md** (Phase 6) - HUD elements, kill feed, match end screen
+3. **audio.md** (Phase 6) - Sound effects system
+4. **server-architecture.md** (Phase 7) - Backend structure, game loop
+5. **test-index.md** (Phase 8) - Cross-reference of all test scenarios
 
 ---
 
