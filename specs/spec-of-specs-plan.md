@@ -52,7 +52,7 @@
 | Spec File | Status | Lines | Notes |
 |-----------|--------|-------|-------|
 | [client-architecture.md](client-architecture.md) | **Complete** | ~750 | Frontend structure and rendering pipeline |
-| [graphics.md](graphics.md) | Pending | ~550 | Procedural rendering specifications |
+| [graphics.md](graphics.md) | **Complete** | ~750 | Procedural rendering specifications |
 | [ui.md](ui.md) | Pending | ~425 | HUD and interface elements |
 | [audio.md](audio.md) | Pending | ~325 | Sound effects and audio system |
 
@@ -73,8 +73,8 @@
 ## Progress Summary
 
 - **Total Specs**: 21
-- **Completed**: 16 (README.md, overview.md, constants.md, arena.md, player.md, movement.md, messages.md, networking.md, rooms.md, weapons.md, shooting.md, hit-detection.md, melee.md, dodge-roll.md, match.md, client-architecture.md)
-- **Pending**: 5
+- **Completed**: 17 (README.md, overview.md, constants.md, arena.md, player.md, movement.md, messages.md, networking.md, rooms.md, weapons.md, shooting.md, hit-detection.md, melee.md, dodge-roll.md, match.md, client-architecture.md, graphics.md)
+- **Pending**: 4
 - **Estimated Total Lines**: ~8,575
 
 ---
@@ -618,19 +618,65 @@
 - Documents folder structure so AI agents can navigate codebase
 - Key design decisions inform implementation choices in all other specs
 
+### 2026-02-02: graphics.md
+
+**What was done:**
+- Documented complete procedural graphics system using Phaser GameObjects.Graphics
+- Stick figure rendering with head, arms, legs, and rotation support
+- Walk animation using sine wave oscillation (left/right leg opposite phase)
+- Player colors: local (green), enemy (red), dead (gray)
+- All 6 weapon procedural graphics from rectangles (Pistol, Bat, Katana, Uzi, AK47, Shotgun)
+- Projectile rendering with tracer lines and weapon-specific colors
+- Muzzle flash effects with per-weapon size/duration/color
+- Health bar rendering (world-space above player + HUD with dynamic colors)
+- Aim indicator lines and dynamic crosshair with spread visualization
+- Weapon crate rendering with bobbing animation and glow effect
+- Melee swing arc visualization (pie-slice for Bat/Katana)
+- Hit effect object pooling system (20 effects: bullet, melee, muzzle)
+- Dodge roll visual effects (360° rotation + i-frame flicker)
+- Dodge roll cooldown UI (circular progress indicator)
+- Death visual (gray color overlay)
+- Rendering layer depths and Z-ordering
+- Documented the **WHY** for all design decisions
+- Added 14 test scenarios covering player, animation, effects, pooling
+
+**Sources analyzed:**
+- `stick-rumble-client/src/game/entities/ProceduralPlayerGraphics.ts`
+- `stick-rumble-client/src/game/entities/ProceduralWeaponGraphics.ts`
+- `stick-rumble-client/src/game/entities/PlayerManager.ts`
+- `stick-rumble-client/src/game/entities/ProjectileManager.ts`
+- `stick-rumble-client/src/game/entities/HitEffectManager.ts`
+- `stick-rumble-client/src/game/entities/MeleeWeapon.ts`
+- `stick-rumble-client/src/game/entities/WeaponCrateManager.ts`
+- `stick-rumble-client/src/game/entities/HealthBar.ts`
+- `stick-rumble-client/src/game/entities/Crosshair.ts`
+- `stick-rumble-client/src/game/ui/HealthBarUI.ts`
+- `stick-rumble-client/src/game/ui/DodgeRollCooldownUI.ts`
+- `stick-rumble-client/src/shared/constants.ts`
+- `stick-rumble-client/public/weapon-configs.json`
+
+**Key findings:**
+- All graphics are procedural (no sprites) using Phaser's Graphics API
+- Object pooling for hit effects prevents GC stalls during combat
+- Walk animation uses simple sine wave: walkCycle += delta * 0.02
+- Rendering layers: Players (50), Effects (60), Melee arcs (100), UI (1000+)
+- Weapon configs define per-weapon visual properties (muzzle flash color/size/duration)
+- Health bar HUD uses color thresholds: green (>60%), yellow (30-60%), red (<30%)
+- Melee swing shows 90° arc with semi-transparent fill for attack cone feedback
+- Dodge roll flickers visibility during first 200ms (i-frames visual feedback)
+
 ---
 
 ## Next Priority
 
-**Phase 1 (Foundation) is COMPLETE! Phase 6 (Client Implementation) is IN PROGRESS!**
+**Phase 6 (Client Implementation) is IN PROGRESS!**
 
 Remaining specs in priority order:
 
-1. **graphics.md** (Phase 6) - Procedural stick figure rendering, animations
-2. **ui.md** (Phase 6) - HUD elements, kill feed, match end screen
-3. **audio.md** (Phase 6) - Sound effects system
-4. **server-architecture.md** (Phase 7) - Backend structure, game loop
-5. **test-index.md** (Phase 8) - Cross-reference of all test scenarios
+1. **ui.md** (Phase 6) - HUD elements, kill feed, match end screen
+2. **audio.md** (Phase 6) - Sound effects system
+3. **server-architecture.md** (Phase 7) - Backend structure, game loop
+4. **test-index.md** (Phase 8) - Cross-reference of all test scenarios
 
 ---
 
