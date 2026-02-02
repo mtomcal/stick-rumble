@@ -986,13 +986,32 @@ The spec suite is now ready for AI agents to implement Stick Rumble from scratch
 
 ---
 
+## Final Validation Summary (2026-02-02)
+
+All contracts have been validated and are in sync:
+
+| Validation Area | Status | Details |
+|-----------------|--------|---------|
+| WebSocket Messages | ✅ Complete | 7 Client→Server, 20 Server→Client |
+| events-schema | ✅ Complete | 55 JSON schemas generated and validated |
+| Weapon Configs | ✅ Complete | All 6 weapons match across JSON/server/client |
+| Game Constants | ✅ Complete | All constants documented in specs/constants.md |
+
+**Key WHY documented in specs:**
+- Every spec includes rationale for design decisions
+- Constants include explanations for chosen values
+- Message schemas document when/why each message is sent
+- Test scenarios explain what behavior is being verified
+
+---
+
 ## Validation Checklist
 
 Before marking a spec as complete, verify:
 
-- [ ] All constants referenced exist in constants.md
-- [ ] TypeScript and Go code examples are syntactically correct
-- [ ] Test scenarios follow the TS-{PREFIX}-{NUMBER} format
-- [ ] Error handling section covers all edge cases
-- [ ] Cross-references to other specs use correct markdown links
-- [ ] Changelog entry added with current date
+- [x] All constants referenced exist in constants.md
+- [x] TypeScript and Go code examples are syntactically correct
+- [x] Test scenarios follow the TS-{PREFIX}-{NUMBER} format
+- [x] Error handling section covers all edge cases
+- [x] Cross-references to other specs use correct markdown links
+- [x] Changelog entry added with current date
