@@ -28,7 +28,7 @@
 | Spec File | Status | Lines | Notes |
 |-----------|--------|-------|-------|
 | [messages.md](messages.md) | **Complete** | ~950 | Complete WebSocket message catalog |
-| [networking.md](networking.md) | Pending | ~425 | WebSocket protocol and connection lifecycle |
+| [networking.md](networking.md) | **Complete** | ~980 | WebSocket protocol and connection lifecycle |
 | [rooms.md](rooms.md) | Pending | ~325 | Room management and matchmaking |
 
 ### Phase 4: Combat
@@ -73,8 +73,8 @@
 ## Progress Summary
 
 - **Total Specs**: 21
-- **Completed**: 5 (constants.md, arena.md, player.md, movement.md, messages.md)
-- **Pending**: 16
+- **Completed**: 6 (constants.md, arena.md, player.md, movement.md, messages.md, networking.md)
+- **Pending**: 15
 - **Estimated Total Lines**: ~8,575
 
 ---
@@ -223,17 +223,50 @@
 - Schema validation is optional (ENABLE_SCHEMA_VALIDATION=true for development)
 - All failure messages (shoot:failed) include reason codes for debugging
 
+### 2026-02-02: networking.md
+
+**What was done:**
+- Documented complete WebSocket connection lifecycle (client and server)
+- Connection establishment with HTTP upgrade and player ID generation
+- Message serialization (JSON over text frames) with rationale for JSON vs binary
+- Message routing via switch statement with all 7 message types
+- Reconnection logic: 3 attempts with exponential backoff (1s, 2s, 4s)
+- Intentional disconnect handling (shouldReconnect flag, close code 1000)
+- Graceful server shutdown: SIGTERM/SIGINT handling with 30s timeout
+- Connection cleanup: send channel close, goroutine sync, room removal
+- Error handling: malformed JSON, unknown types, schema validation, buffer overflow
+- Documented the **WHY** for every protocol decision
+- Added 10 test scenarios covering connection, serialization, reconnection, shutdown
+
+**Sources analyzed:**
+- `stick-rumble-server/internal/network/websocket_handler.go` (connection handling, message loop)
+- `stick-rumble-server/internal/network/message_processor.go` (message routing)
+- `stick-rumble-server/internal/game/room.go` (broadcast, channel management)
+- `stick-rumble-server/internal/game/gameserver.go` (tick/broadcast loops)
+- `stick-rumble-server/internal/game/constants.go` (network constants)
+- `stick-rumble-server/cmd/server/main.go` (graceful shutdown)
+- `stick-rumble-client/src/game/network/WebSocketClient.ts` (client connection)
+
+**Key findings:**
+- Send buffer size: 256 messages per player to allow burst traffic
+- HTTP timeouts: Read/Write 15s, Idle 60s, Shutdown 30s
+- WebSocket upgrader uses 1024-byte buffers (sufficient for ~100-byte messages)
+- Global singleton handler ensures all connections share room state
+- Write goroutine per connection decouples game loop from socket writes
+- Channel operations use panic recovery for closed channel safety
+- Context propagation enables graceful shutdown of all goroutines
+
 ---
 
 ## Next Priority
 
-The next most important spec to generate is **networking.md** because:
-1. It completes the foundation of the Networking phase (Phase 3)
-2. networking.md defines connection lifecycle, reconnection logic, and protocol details
-3. Depends on messages.md (now complete) for message format reference
-4. Combat specs (weapons, shooting, hit-detection) depend on understanding the network layer
+The next most important spec to generate is **rooms.md** because:
+1. It completes Phase 3 (Networking) - all networking specs will be finished
+2. rooms.md documents how players are matchmade and assigned to games
+3. Combat specs (Phase 4) depend on understanding room-level concepts
+4. Many message handlers reference room broadcasting which is documented here
 
-After Networking, continue with **weapons.md** to begin the Combat phase (Phase 4).
+After rooms.md, continue with **weapons.md** to begin the Combat phase (Phase 4).
 
 ---
 
