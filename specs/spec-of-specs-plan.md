@@ -27,7 +27,7 @@
 
 | Spec File | Status | Lines | Notes |
 |-----------|--------|-------|-------|
-| [messages.md](messages.md) | Pending | ~700 | Complete WebSocket message catalog |
+| [messages.md](messages.md) | **Complete** | ~950 | Complete WebSocket message catalog |
 | [networking.md](networking.md) | Pending | ~425 | WebSocket protocol and connection lifecycle |
 | [rooms.md](rooms.md) | Pending | ~325 | Room management and matchmaking |
 
@@ -73,8 +73,8 @@
 ## Progress Summary
 
 - **Total Specs**: 21
-- **Completed**: 4 (constants.md, arena.md, player.md, movement.md)
-- **Pending**: 17
+- **Completed**: 5 (constants.md, arena.md, player.md, movement.md, messages.md)
+- **Pending**: 16
 - **Estimated Total Lines**: ~8,575
 
 ---
@@ -190,15 +190,48 @@
 - Aim angle threshold (5°) prevents input spam on minor mouse movements
 - Dodge roll overrides normal movement with 250 px/s fixed velocity
 
+### 2026-02-02: messages.md
+
+**What was done:**
+- Documented ALL 26 WebSocket message types (7 Client→Server, 19 Server→Client)
+- Complete TypeScript and Go schemas for every message with field descriptions
+- Documented the **WHY** for each message's existence and design
+- When each message is sent (trigger conditions)
+- Who receives each message (single player vs room broadcast)
+- Example JSON payloads for every message type
+- Server processing logic for each Client→Server message
+- Client handling instructions for each Server→Client message
+- Message flow diagrams for major workflows (connection, shooting, death/respawn, weapon pickup, match end)
+- Error handling section for invalid JSON, unknown types, schema validation
+- Added 10 test scenarios covering critical message flows
+
+**Sources analyzed:**
+- `events-schema/src/schemas/common.ts` (base Message format, Position, Velocity)
+- `events-schema/src/schemas/client-to-server.ts` (all 7 client→server schemas)
+- `events-schema/src/schemas/server-to-client.ts` (all 19 server→client schemas)
+- `stick-rumble-server/internal/network/websocket_handler.go` (connection handling)
+- `stick-rumble-server/internal/network/message_processor.go` (message routing)
+- `stick-rumble-server/internal/network/broadcast_helper.go` (broadcast patterns)
+- `stick-rumble-client/src/game/network/WebSocketClient.ts` (client connection)
+- `stick-rumble-client/src/game/scenes/GameSceneEventHandlers.ts` (message handlers)
+
+**Key findings:**
+- Message frequency: `input:state` (~60Hz), `player:move` (20Hz), `match:timer` (1Hz)
+- Two sending patterns: targeted (single player) vs broadcast (all in room)
+- `room:joined` must be received before processing `weapon:spawned` (client queues)
+- `match:ended` flag stops processing of movement/timer messages
+- Schema validation is optional (ENABLE_SCHEMA_VALIDATION=true for development)
+- All failure messages (shoot:failed) include reason codes for debugging
+
 ---
 
 ## Next Priority
 
-The next most important specs to generate are **messages.md** and **networking.md** because:
-1. They form the foundation of the Networking phase (Phase 3)
-2. messages.md documents ALL WebSocket message types used for client-server communication
-3. networking.md defines connection lifecycle, reconnection logic, and protocol details
-4. Combat specs (weapons, shooting, hit-detection) depend on message definitions
+The next most important spec to generate is **networking.md** because:
+1. It completes the foundation of the Networking phase (Phase 3)
+2. networking.md defines connection lifecycle, reconnection logic, and protocol details
+3. Depends on messages.md (now complete) for message format reference
+4. Combat specs (weapons, shooting, hit-detection) depend on understanding the network layer
 
 After Networking, continue with **weapons.md** to begin the Combat phase (Phase 4).
 
