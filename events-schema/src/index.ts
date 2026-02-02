@@ -52,6 +52,8 @@ export {
 export {
   RoomJoinedDataSchema,
   RoomJoinedMessageSchema,
+  PlayerLeftDataSchema,
+  PlayerLeftMessageSchema,
   PlayerStateSchema,
   PlayerMoveDataSchema,
   PlayerMoveMessageSchema,
@@ -93,6 +95,8 @@ export {
   RollEndMessageSchema,
   type RoomJoinedData,
   type RoomJoinedMessage,
+  type PlayerLeftData,
+  type PlayerLeftMessage,
   type PlayerState,
   type PlayerMoveData,
   type PlayerMoveMessage,
