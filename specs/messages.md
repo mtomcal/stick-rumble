@@ -96,7 +96,7 @@ type Message struct {
 | `player:dodge_roll` | Initiate dodge roll | On-demand (player presses Space) |
 | `test` | Echo test message | Testing only |
 
-### Server → Client (19 types)
+### Server → Client (20 types)
 
 | Type | Description | Recipients |
 |------|-------------|------------|
