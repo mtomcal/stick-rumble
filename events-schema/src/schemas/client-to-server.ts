@@ -17,6 +17,7 @@ export const InputStateDataSchema = Type.Object(
     right: Type.Boolean({ description: 'D key pressed' }),
     aimAngle: Type.Number({ description: 'Aim angle in radians' }),
     isSprinting: Type.Boolean({ description: 'Shift key pressed for sprint' }),
+    sequence: Type.Number({ description: 'Monotonically increasing sequence number for client-side prediction', minimum: 0 }),
   },
   { $id: 'InputStateData', description: 'Player input state payload' }
 );
