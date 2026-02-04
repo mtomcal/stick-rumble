@@ -72,6 +72,7 @@ describe('WebSocketClient Schema Validation', () => {
         right: true,
         aimAngle: 1.57,
         isSprinting: false,
+        sequence: 0,
       };
 
       client.sendInputState(inputState);
@@ -88,6 +89,8 @@ describe('WebSocketClient Schema Validation', () => {
       const invalidState = {
         up: true,
         down: false,
+        isSprinting: false,
+        sequence: 0,
         // missing left, right, aimAngle
       } as any;
 
@@ -107,6 +110,8 @@ describe('WebSocketClient Schema Validation', () => {
         left: false,
         right: true,
         aimAngle: 1.57,
+        isSprinting: false,
+        sequence: 0,
       } as any;
 
       client.sendInputState(invalidState);
@@ -126,6 +131,7 @@ describe('WebSocketClient Schema Validation', () => {
         right: true,
         aimAngle: 'not-a-number' as any,
         isSprinting: false,
+        sequence: 0,
       };
 
       client.sendInputState(invalidState);
@@ -272,9 +278,9 @@ describe('WebSocketClient Schema Validation', () => {
   describe('edge cases', () => {
     it('should handle all boolean combinations for input state', () => {
       const testCases = [
-        { up: false, down: false, left: false, right: false, aimAngle: 0, isSprinting: false },
-        { up: true, down: true, left: true, right: true, aimAngle: 3.14, isSprinting: false },
-        { up: true, down: false, left: true, right: false, aimAngle: -1.57, isSprinting: false },
+        { up: false, down: false, left: false, right: false, aimAngle: 0, isSprinting: false, sequence: 0 },
+        { up: true, down: true, left: true, right: true, aimAngle: 3.14, isSprinting: false, sequence: 1 },
+        { up: true, down: false, left: true, right: false, aimAngle: -1.57, isSprinting: false, sequence: 2 },
       ];
 
       testCases.forEach((testCase) => {
