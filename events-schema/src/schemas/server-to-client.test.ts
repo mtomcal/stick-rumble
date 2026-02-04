@@ -43,6 +43,12 @@ import {
   RollStartMessageSchema,
   RollEndDataSchema,
   RollEndMessageSchema,
+  ProjectileSnapshotSchema,
+  WeaponCrateSnapshotSchema,
+  StateSnapshotDataSchema,
+  StateSnapshotMessageSchema,
+  StateDeltaDataSchema,
+  StateDeltaMessageSchema,
 } from './server-to-client.js';
 
 describe('Server-to-Client Schemas', () => {
@@ -1086,6 +1092,154 @@ describe('Server-to-Client Schemas', () => {
       messages.forEach(({ schema, message }) => {
         expect(Value.Check(schema, message)).toBe(true);
       });
+    });
+  });
+
+  describe('StateSnapshotDataSchema', () => {
+    it('should validate valid full state snapshot', () => {
+      const data = {
+        players: [
+          {
+            id: 'player1',
+            position: { x: 100, y: 200 },
+            velocity: { x: 10, y: 5 },
+            health: 80,
+            maxHealth: 100,
+            rotation: 1.57,
+            isDead: false,
+            isSprinting: false,
+            isRolling: false,
+          },
+        ],
+        projectiles: [
+          {
+            id: 'proj1',
+            ownerId: 'player1',
+            position: { x: 150, y: 250 },
+            velocity: { x: 50, y: 0 },
+          },
+        ],
+        weaponCrates: [
+          {
+            id: 'crate1',
+            position: { x: 300, y: 300 },
+            weaponType: 'rifle',
+            isAvailable: true,
+          },
+        ],
+      };
+
+      expect(Value.Check(StateSnapshotDataSchema, data)).toBe(true);
+    });
+
+    it('should validate empty snapshot', () => {
+      const data = {
+        players: [],
+        projectiles: [],
+        weaponCrates: [],
+      };
+
+      expect(Value.Check(StateSnapshotDataSchema, data)).toBe(true);
+    });
+  });
+
+  describe('StateSnapshotMessageSchema', () => {
+    it('should validate complete state:snapshot message', () => {
+      const message = {
+        type: 'state:snapshot',
+        timestamp: 1234567890,
+        data: {
+          players: [
+            {
+              id: 'player1',
+              position: { x: 100, y: 200 },
+              velocity: { x: 10, y: 5 },
+              health: 80,
+              maxHealth: 100,
+              rotation: 1.57,
+              isDead: false,
+              isSprinting: false,
+              isRolling: false,
+            },
+          ],
+          projectiles: [],
+          weaponCrates: [],
+        },
+      };
+
+      expect(Value.Check(StateSnapshotMessageSchema, message)).toBe(true);
+    });
+  });
+
+  describe('StateDeltaDataSchema', () => {
+    it('should validate delta with only player changes', () => {
+      const data = {
+        players: [
+          {
+            id: 'player1',
+            position: { x: 105, y: 205 },
+            velocity: { x: 10, y: 5 },
+            health: 80,
+            maxHealth: 100,
+            rotation: 1.6,
+            isDead: false,
+            isSprinting: true,
+            isRolling: false,
+          },
+        ],
+      };
+
+      expect(Value.Check(StateDeltaDataSchema, data)).toBe(true);
+    });
+
+    it('should validate delta with projectile changes', () => {
+      const data = {
+        projectilesAdded: [
+          {
+            id: 'proj2',
+            ownerId: 'player1',
+            position: { x: 200, y: 300 },
+            velocity: { x: 60, y: 10 },
+          },
+        ],
+        projectilesRemoved: ['proj1'],
+      };
+
+      expect(Value.Check(StateDeltaDataSchema, data)).toBe(true);
+    });
+
+    it('should validate empty delta', () => {
+      const data = {};
+
+      expect(Value.Check(StateDeltaDataSchema, data)).toBe(true);
+    });
+  });
+
+  describe('StateDeltaMessageSchema', () => {
+    it('should validate complete state:delta message', () => {
+      const message = {
+        type: 'state:delta',
+        timestamp: 1234567890,
+        data: {
+          players: [
+            {
+              id: 'player1',
+              position: { x: 105, y: 205 },
+              velocity: { x: 10, y: 5 },
+              health: 80,
+              maxHealth: 100,
+              rotation: 1.6,
+              isDead: false,
+              isSprinting: true,
+              isRolling: false,
+            },
+          ],
+          projectilesAdded: [],
+          projectilesRemoved: [],
+        },
+      };
+
+      expect(Value.Check(StateDeltaMessageSchema, message)).toBe(true);
     });
   });
 });

@@ -35,7 +35,7 @@ func TestGameServerTickLoop(t *testing.T) {
 	var broadcastCount int
 	var mu sync.Mutex
 
-	broadcastFunc := func(states []PlayerState) {
+	broadcastFunc := func(states []PlayerStateSnapshot) {
 		mu.Lock()
 		broadcastCount++
 		mu.Unlock()
@@ -87,7 +87,7 @@ func TestGameServerBroadcastRate(t *testing.T) {
 	var broadcasts []time.Time
 	var mu sync.Mutex
 
-	broadcastFunc := func(states []PlayerState) {
+	broadcastFunc := func(states []PlayerStateSnapshot) {
 		mu.Lock()
 		broadcasts = append(broadcasts, time.Now())
 		mu.Unlock()
@@ -282,7 +282,7 @@ func TestGameServerHealthRegenerationAfterRespawn(t *testing.T) {
 
 	// Verify player is dead
 	state, _ := gs.GetPlayerState(playerID)
-	if !state.IsDead() {
+	if state.DeathTime == nil {
 		t.Fatal("Player should be dead")
 	}
 	if state.Health != 0 {

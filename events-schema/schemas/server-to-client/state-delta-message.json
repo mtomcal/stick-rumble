@@ -1,6 +1,6 @@
 {
-  "$id": "player_moveMessage",
-  "description": "player:move WebSocket message",
+  "$id": "state_deltaMessage",
+  "description": "state:delta WebSocket message",
   "type": "object",
   "required": [
     "type",
@@ -10,7 +10,7 @@
   "properties": {
     "type": {
       "description": "Message type identifier",
-      "const": "player:move",
+      "const": "state:delta",
       "type": "string"
     },
     "timestamp": {
@@ -19,15 +19,12 @@
       "type": "integer"
     },
     "data": {
-      "$id": "PlayerMoveData",
-      "description": "Player movement update payload",
+      "$id": "StateDeltaData",
+      "description": "Incremental state changes for delta compression",
       "type": "object",
-      "required": [
-        "players"
-      ],
       "properties": {
         "players": {
-          "description": "Array of player states",
+          "description": "Players that changed state",
           "type": "array",
           "items": {
             "$id": "PlayerState",
@@ -115,13 +112,81 @@
             }
           }
         },
+        "projectilesAdded": {
+          "description": "New projectiles spawned",
+          "type": "array",
+          "items": {
+            "$id": "ProjectileSnapshot",
+            "description": "Projectile state snapshot",
+            "type": "object",
+            "required": [
+              "id",
+              "ownerId",
+              "position",
+              "velocity"
+            ],
+            "properties": {
+              "id": {
+                "description": "Unique projectile identifier",
+                "minLength": 1,
+                "type": "string"
+              },
+              "ownerId": {
+                "description": "Player who fired the projectile",
+                "minLength": 1,
+                "type": "string"
+              },
+              "position": {
+                "description": "A 2D position coordinate",
+                "type": "object",
+                "required": [
+                  "x",
+                  "y"
+                ],
+                "properties": {
+                  "x": {
+                    "description": "X coordinate",
+                    "type": "number"
+                  },
+                  "y": {
+                    "description": "Y coordinate",
+                    "type": "number"
+                  }
+                }
+              },
+              "velocity": {
+                "description": "A 2D velocity vector",
+                "type": "object",
+                "required": [
+                  "x",
+                  "y"
+                ],
+                "properties": {
+                  "x": {
+                    "description": "X velocity component",
+                    "type": "number"
+                  },
+                  "y": {
+                    "description": "Y velocity component",
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "projectilesRemoved": {
+          "description": "IDs of destroyed projectiles",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "lastProcessedSequence": {
           "description": "Map of player IDs to their last processed input sequence number for client-side prediction reconciliation",
           "type": "object",
           "patternProperties": {
             "^(.*)$": {
-              "description": "Last processed input sequence number for this player",
-              "minimum": 0,
               "type": "number"
             }
           }

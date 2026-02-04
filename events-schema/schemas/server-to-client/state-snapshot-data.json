@@ -1,0 +1,230 @@
+{
+  "$id": "StateSnapshotData",
+  "description": "Full game state snapshot for delta compression",
+  "type": "object",
+  "required": [
+    "players",
+    "projectiles",
+    "weaponCrates"
+  ],
+  "properties": {
+    "players": {
+      "description": "Complete state of all players",
+      "type": "array",
+      "items": {
+        "$id": "PlayerState",
+        "description": "Player state for movement updates",
+        "type": "object",
+        "required": [
+          "id",
+          "position",
+          "velocity",
+          "health",
+          "maxHealth",
+          "rotation",
+          "isDead",
+          "isSprinting",
+          "isRolling"
+        ],
+        "properties": {
+          "id": {
+            "description": "Player unique identifier",
+            "minLength": 1,
+            "type": "string"
+          },
+          "position": {
+            "description": "A 2D position coordinate",
+            "type": "object",
+            "required": [
+              "x",
+              "y"
+            ],
+            "properties": {
+              "x": {
+                "description": "X coordinate",
+                "type": "number"
+              },
+              "y": {
+                "description": "Y coordinate",
+                "type": "number"
+              }
+            }
+          },
+          "velocity": {
+            "description": "A 2D velocity vector",
+            "type": "object",
+            "required": [
+              "x",
+              "y"
+            ],
+            "properties": {
+              "x": {
+                "description": "X velocity component",
+                "type": "number"
+              },
+              "y": {
+                "description": "Y velocity component",
+                "type": "number"
+              }
+            }
+          },
+          "health": {
+            "description": "Current health",
+            "minimum": 0,
+            "type": "number"
+          },
+          "maxHealth": {
+            "description": "Maximum health",
+            "minimum": 0,
+            "type": "number"
+          },
+          "rotation": {
+            "description": "Player rotation in radians",
+            "type": "number"
+          },
+          "isDead": {
+            "description": "Whether the player is dead",
+            "type": "boolean"
+          },
+          "isSprinting": {
+            "description": "Whether the player is currently sprinting",
+            "type": "boolean"
+          },
+          "isRolling": {
+            "description": "Whether the player is currently dodge rolling",
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "projectiles": {
+      "description": "Complete state of all projectiles",
+      "type": "array",
+      "items": {
+        "$id": "ProjectileSnapshot",
+        "description": "Projectile state snapshot",
+        "type": "object",
+        "required": [
+          "id",
+          "ownerId",
+          "position",
+          "velocity"
+        ],
+        "properties": {
+          "id": {
+            "description": "Unique projectile identifier",
+            "minLength": 1,
+            "type": "string"
+          },
+          "ownerId": {
+            "description": "Player who fired the projectile",
+            "minLength": 1,
+            "type": "string"
+          },
+          "position": {
+            "description": "A 2D position coordinate",
+            "type": "object",
+            "required": [
+              "x",
+              "y"
+            ],
+            "properties": {
+              "x": {
+                "description": "X coordinate",
+                "type": "number"
+              },
+              "y": {
+                "description": "Y coordinate",
+                "type": "number"
+              }
+            }
+          },
+          "velocity": {
+            "description": "A 2D velocity vector",
+            "type": "object",
+            "required": [
+              "x",
+              "y"
+            ],
+            "properties": {
+              "x": {
+                "description": "X velocity component",
+                "type": "number"
+              },
+              "y": {
+                "description": "Y velocity component",
+                "type": "number"
+              }
+            }
+          }
+        }
+      }
+    },
+    "weaponCrates": {
+      "description": "Complete state of all weapon crates",
+      "type": "array",
+      "items": {
+        "$id": "WeaponCrateSnapshot",
+        "description": "Weapon crate state snapshot",
+        "type": "object",
+        "required": [
+          "id",
+          "position",
+          "weaponType",
+          "isAvailable"
+        ],
+        "properties": {
+          "id": {
+            "description": "Unique crate identifier",
+            "minLength": 1,
+            "type": "string"
+          },
+          "position": {
+            "description": "A 2D position coordinate",
+            "type": "object",
+            "required": [
+              "x",
+              "y"
+            ],
+            "properties": {
+              "x": {
+                "description": "X coordinate",
+                "type": "number"
+              },
+              "y": {
+                "description": "Y coordinate",
+                "type": "number"
+              }
+            }
+          },
+          "weaponType": {
+            "description": "Type of weapon in the crate",
+            "minLength": 1,
+            "type": "string"
+          },
+          "isAvailable": {
+            "description": "Whether the crate is currently available for pickup",
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "lastProcessedSequence": {
+      "description": "Map of player IDs to their last processed input sequence number for client-side prediction reconciliation",
+      "type": "object",
+      "patternProperties": {
+        "^(.*)$": {
+          "type": "number"
+        }
+      }
+    },
+    "correctedPlayers": {
+      "description": "Array of player IDs whose positions were corrected by the server due to impossible movement detection",
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      }
+    }
+  }
+}
