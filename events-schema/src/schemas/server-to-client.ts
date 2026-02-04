@@ -94,6 +94,11 @@ export const PlayerMoveDataSchema = Type.Object(
         { description: 'Map of player IDs to their last processed input sequence number for client-side prediction reconciliation' }
       )
     ),
+    correctedPlayers: Type.Optional(
+      Type.Array(Type.String({ minLength: 1 }), {
+        description: 'Array of player IDs whose positions were corrected by the server due to impossible movement detection',
+      })
+    ),
   },
   { $id: 'PlayerMoveData', description: 'Player movement update payload' }
 );

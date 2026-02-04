@@ -57,9 +57,36 @@ func (h *WebSocketHandler) broadcastPlayerStates(playerStates []game.PlayerState
 			roomPlayers[j] = &playerStates[idx]
 		}
 
+		// Build lastProcessedSequence map for this room
+		// Get actual player pointers to access sequence numbers
+		lastProcessedSequence := make(map[string]interface{})
+		correctedPlayers := make([]string, 0)
+
+		for _, idx := range indices {
+			playerID := playerStates[idx].ID
+			// Get the actual player pointer from the world to access sequence
+			if player, exists := h.gameServer.GetWorld().GetPlayer(playerID); exists {
+				seq := player.GetInputSequence()
+				lastProcessedSequence[playerID] = float64(seq)
+
+				// Check if this player needs correction (recent correction in stats)
+				stats := player.GetCorrectionStats()
+				// If the last correction was very recent (within last 100ms), mark for correction
+				if !stats.LastCorrectionAt.IsZero() && time.Since(stats.LastCorrectionAt) < 100*time.Millisecond {
+					correctedPlayers = append(correctedPlayers, playerID)
+				}
+			}
+		}
+
 		// Create player:move message data for this room only
 		data := map[string]interface{}{
-			"players": roomPlayers,
+			"players":               roomPlayers,
+			"lastProcessedSequence": lastProcessedSequence,
+		}
+
+		// Only include correctedPlayers if there are any
+		if len(correctedPlayers) > 0 {
+			data["correctedPlayers"] = correctedPlayers
 		}
 
 		// Validate outgoing message schema (development mode only)
@@ -96,8 +123,30 @@ func (h *WebSocketHandler) broadcastPlayerStates(playerStates []game.PlayerState
 	for _, idx := range waitingPlayerIndices {
 		// Use pointer to avoid copying mutex
 		state := &playerStates[idx]
+
+		// Build lastProcessedSequence for this player
+		lastProcessedSequence := make(map[string]interface{})
+		correctedPlayers := make([]string, 0)
+
+		if player, exists := h.gameServer.GetWorld().GetPlayer(state.ID); exists {
+			seq := player.GetInputSequence()
+			lastProcessedSequence[state.ID] = float64(seq)
+
+			// Check if this player needs correction
+			stats := player.GetCorrectionStats()
+			if !stats.LastCorrectionAt.IsZero() && time.Since(stats.LastCorrectionAt) < 100*time.Millisecond {
+				correctedPlayers = append(correctedPlayers, state.ID)
+			}
+		}
+
 		data := map[string]interface{}{
-			"players": []*game.PlayerState{state},
+			"players":               []*game.PlayerState{state},
+			"lastProcessedSequence": lastProcessedSequence,
+		}
+
+		// Only include correctedPlayers if there are any
+		if len(correctedPlayers) > 0 {
+			data["correctedPlayers"] = correctedPlayers
 		}
 
 		message := Message{

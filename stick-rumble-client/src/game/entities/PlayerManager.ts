@@ -550,4 +550,40 @@ export class PlayerManager {
       weaponGraphics.setWeapon(weaponType);
     }
   }
+
+  /**
+   * Apply reconciled position from client-side prediction (Story 4.2)
+   * Used when server sends correction to fix prediction error
+   *
+   * @param playerId - Player to update
+   * @param reconciledState - Position and velocity after replaying inputs
+   * @param needsInstant - Whether to teleport instantly or smooth lerp
+   */
+  applyReconciledPosition(
+    playerId: string,
+    reconciledState: { position: { x: number; y: number }; velocity: { x: number; y: number } },
+    needsInstant: boolean
+  ): void {
+    const sprite = this.players.get(playerId);
+    if (!sprite) {
+      return;
+    }
+
+    if (needsInstant) {
+      // Large error (>=100px): Instant teleport
+      // TODO: Add visual flash effect in future story
+      sprite.setPosition(reconciledState.position.x, reconciledState.position.y);
+    } else {
+      // Small error (<100px): Smooth lerp will be handled by next update cycle
+      // For now, just apply the position directly (lerp will be added in polish story)
+      sprite.setPosition(reconciledState.position.x, reconciledState.position.y);
+    }
+
+    // Update stored player state
+    const playerState = this.playerStates.get(playerId);
+    if (playerState) {
+      playerState.position = { ...reconciledState.position };
+      playerState.velocity = { ...reconciledState.velocity };
+    }
+  }
 }

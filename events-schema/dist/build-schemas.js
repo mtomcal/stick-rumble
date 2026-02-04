@@ -9,7 +9,7 @@ import { fileURLToPath } from 'url';
 // Import schemas
 import { PositionSchema, VelocitySchema, MessageSchema } from './schemas/common.js';
 import { InputStateDataSchema, InputStateMessageSchema, PlayerShootDataSchema, PlayerShootMessageSchema, PlayerReloadMessageSchema, WeaponPickupAttemptDataSchema, WeaponPickupAttemptMessageSchema, PlayerMeleeAttackDataSchema, PlayerMeleeAttackMessageSchema, PlayerDodgeRollMessageSchema, } from './schemas/client-to-server.js';
-import { RoomJoinedDataSchema, RoomJoinedMessageSchema, PlayerStateSchema, PlayerMoveDataSchema, PlayerMoveMessageSchema, ProjectileSpawnDataSchema, ProjectileSpawnMessageSchema, ProjectileDestroyDataSchema, ProjectileDestroyMessageSchema, WeaponStateDataSchema, WeaponStateMessageSchema, ShootFailedDataSchema, ShootFailedMessageSchema, PlayerDamagedDataSchema, PlayerDamagedMessageSchema, HitConfirmedDataSchema, HitConfirmedMessageSchema, PlayerDeathDataSchema, PlayerDeathMessageSchema, PlayerKillCreditDataSchema, PlayerKillCreditMessageSchema, PlayerRespawnDataSchema, PlayerRespawnMessageSchema, MatchTimerDataSchema, MatchTimerMessageSchema, MatchEndedDataSchema, MatchEndedMessageSchema, WeaponCrateSchema, WeaponSpawnedDataSchema, WeaponSpawnedMessageSchema, WeaponPickupConfirmedDataSchema, WeaponPickupConfirmedMessageSchema, WeaponRespawnedDataSchema, WeaponRespawnedMessageSchema, MeleeHitDataSchema, MeleeHitMessageSchema, RollStartDataSchema, RollStartMessageSchema, RollEndDataSchema, RollEndMessageSchema, } from './schemas/server-to-client.js';
+import { RoomJoinedDataSchema, RoomJoinedMessageSchema, PlayerLeftDataSchema, PlayerLeftMessageSchema, PlayerStateSchema, PlayerMoveDataSchema, PlayerMoveMessageSchema, ProjectileSpawnDataSchema, ProjectileSpawnMessageSchema, ProjectileDestroyDataSchema, ProjectileDestroyMessageSchema, WeaponStateDataSchema, WeaponStateMessageSchema, ShootFailedDataSchema, ShootFailedMessageSchema, PlayerDamagedDataSchema, PlayerDamagedMessageSchema, HitConfirmedDataSchema, HitConfirmedMessageSchema, PlayerDeathDataSchema, PlayerDeathMessageSchema, PlayerKillCreditDataSchema, PlayerKillCreditMessageSchema, PlayerRespawnDataSchema, PlayerRespawnMessageSchema, MatchTimerDataSchema, MatchTimerMessageSchema, MatchEndedDataSchema, MatchEndedMessageSchema, WeaponCrateSchema, WeaponSpawnedDataSchema, WeaponSpawnedMessageSchema, WeaponPickupConfirmedDataSchema, WeaponPickupConfirmedMessageSchema, WeaponRespawnedDataSchema, WeaponRespawnedMessageSchema, MeleeHitDataSchema, MeleeHitMessageSchema, RollStartDataSchema, RollStartMessageSchema, RollEndDataSchema, RollEndMessageSchema, } from './schemas/server-to-client.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const rootDir = join(__dirname, '..');
@@ -75,6 +75,14 @@ const schemas = [
     {
         schema: RoomJoinedMessageSchema,
         outputPath: 'schemas/server-to-client/room-joined-message.json',
+    },
+    {
+        schema: PlayerLeftDataSchema,
+        outputPath: 'schemas/server-to-client/player-left-data.json',
+    },
+    {
+        schema: PlayerLeftMessageSchema,
+        outputPath: 'schemas/server-to-client/player-left-message.json',
     },
     {
         schema: PlayerStateSchema,

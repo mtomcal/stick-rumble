@@ -19,6 +19,25 @@ export const RoomJoinedDataSchema = Type.Object({
  */
 export const RoomJoinedMessageSchema = createTypedMessageSchema('room:joined', RoomJoinedDataSchema);
 // ============================================================================
+// player:left
+// ============================================================================
+/**
+ * Player left data payload.
+ * Sent when a player disconnects from the room.
+ *
+ * **Why this message exists:** When a player's WebSocket connection closes,
+ * all other players in the room need to be notified so they can remove the
+ * player's sprite from their local game state. Without this message, ghost
+ * players would remain on screen after disconnection.
+ */
+export const PlayerLeftDataSchema = Type.Object({
+    playerId: Type.String({ description: 'Unique identifier of the player who left', minLength: 1 }),
+}, { $id: 'PlayerLeftData', description: 'Player left event payload' });
+/**
+ * Complete player:left message schema
+ */
+export const PlayerLeftMessageSchema = createTypedMessageSchema('player:left', PlayerLeftDataSchema);
+// ============================================================================
 // player:move
 // ============================================================================
 /**
@@ -41,6 +60,10 @@ export const PlayerStateSchema = Type.Object({
  */
 export const PlayerMoveDataSchema = Type.Object({
     players: Type.Array(PlayerStateSchema, { description: 'Array of player states' }),
+    lastProcessedSequence: Type.Optional(Type.Record(Type.String({ description: 'Player ID' }), Type.Number({ description: 'Last processed input sequence number for this player', minimum: 0 }), { description: 'Map of player IDs to their last processed input sequence number for client-side prediction reconciliation' })),
+    correctedPlayers: Type.Optional(Type.Array(Type.String({ minLength: 1 }), {
+        description: 'Array of player IDs whose positions were corrected by the server due to impossible movement detection',
+    })),
 }, { $id: 'PlayerMoveData', description: 'Player movement update payload' });
 /**
  * Complete player:move message schema
