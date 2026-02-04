@@ -161,6 +161,23 @@
       "items": {
         "type": "string"
       }
+    },
+    "lastProcessedSequence": {
+      "description": "Map of player IDs to their last processed input sequence number for client-side prediction reconciliation",
+      "type": "object",
+      "patternProperties": {
+        "^(.*)$": {
+          "type": "number"
+        }
+      }
+    },
+    "correctedPlayers": {
+      "description": "Array of player IDs whose positions were corrected by the server due to impossible movement detection",
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      }
     }
   }
 }

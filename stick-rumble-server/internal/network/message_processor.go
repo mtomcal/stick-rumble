@@ -27,15 +27,22 @@ func (h *WebSocketHandler) handleInputState(playerID string, data any) {
 	dataMap := data.(map[string]interface{})
 
 	input := game.InputState{
-		Up:       dataMap["up"].(bool),
-		Down:     dataMap["down"].(bool),
-		Left:     dataMap["left"].(bool),
-		Right:    dataMap["right"].(bool),
-		AimAngle: dataMap["aimAngle"].(float64),
+		Up:          dataMap["up"].(bool),
+		Down:        dataMap["down"].(bool),
+		Left:        dataMap["left"].(bool),
+		Right:       dataMap["right"].(bool),
+		AimAngle:    dataMap["aimAngle"].(float64),
+		IsSprinting: dataMap["isSprinting"].(bool),
 	}
 
-	// Update game server with input
-	success := h.gameServer.UpdatePlayerInput(playerID, input)
+	// Extract sequence number for client-side prediction reconciliation
+	var sequence uint64
+	if seqFloat, ok := dataMap["sequence"].(float64); ok {
+		sequence = uint64(seqFloat)
+	}
+
+	// Update game server with input and sequence
+	success := h.gameServer.UpdatePlayerInputWithSequence(playerID, input, sequence)
 	if !success {
 		log.Printf("Failed to update input for player %s", playerID)
 	}

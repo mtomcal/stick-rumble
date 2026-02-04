@@ -14,6 +14,7 @@ import type { GameSceneUI } from './GameSceneUI';
 import type { GameSceneSpectator } from './GameSceneSpectator';
 import type { ScreenShake } from '../effects/ScreenShake';
 import type { AudioManager } from '../audio/AudioManager';
+import type { PredictionEngine } from '../physics/PredictionEngine';
 // Import generated schema types for server→client messages (replaces manual type assertions)
 import type {
   RoomJoinedData,
@@ -52,6 +53,7 @@ export class GameSceneEventHandlers {
   private inputManager: InputManager | null = null;
   private shootingManager: ShootingManager | null = null;
   private dodgeRollManager: DodgeRollManager | null = null;
+  private predictionEngine: PredictionEngine | null = null;
   private getHealthBarUI: () => HealthBarUI;
   private killFeedUI: KillFeedUI;
   private ui: GameSceneUI;
@@ -127,6 +129,13 @@ export class GameSceneEventHandlers {
    */
   setDodgeRollManager(dodgeRollManager: DodgeRollManager): void {
     this.dodgeRollManager = dodgeRollManager;
+  }
+
+  /**
+   * Set prediction engine for client-side reconciliation
+   */
+  setPredictionEngine(predictionEngine: PredictionEngine): void {
+    this.predictionEngine = predictionEngine;
   }
 
   /**
@@ -215,6 +224,22 @@ export class GameSceneEventHandlers {
               const isRegen = 'isRegenerating' in localPlayer ? (localPlayer as { isRegenerating?: boolean }).isRegenerating ?? false : false;
               this.getHealthBarUI().updateHealth(this.localPlayerHealth, 100, isRegen);
             }
+          }
+        }
+
+        // Client-side prediction reconciliation (Story 4.2)
+        // Check if server sent correction for local player
+        const localPlayerId = this.playerManager.getLocalPlayerId();
+        if (localPlayerId && messageData.correctedPlayers && messageData.correctedPlayers.includes(localPlayerId)) {
+          this.handleServerCorrection(messageData, localPlayerId);
+        }
+
+        // Clear input history up to server's last processed sequence (Story 4.2)
+        // This prevents memory bloat from accumulating inputs
+        if (localPlayerId && messageData.lastProcessedSequence && this.inputManager) {
+          const lastProcessed = messageData.lastProcessedSequence[localPlayerId];
+          if (lastProcessed !== undefined) {
+            this.inputManager.clearInputHistoryUpTo(lastProcessed);
           }
         }
 
@@ -601,5 +626,51 @@ export class GameSceneEventHandlers {
     };
     this.handlerRefs.set('roll:end', rollEndHandler);
     this.wsClient.on('roll:end', rollEndHandler);
+  }
+
+  /**
+   * Handle server correction for client-side prediction (Story 4.2)
+   * When server detects impossible movement, reconcile client state with server authority
+   *
+   * @param messageData - Player move data with correction info
+   * @param localPlayerId - ID of the local player
+   */
+  private handleServerCorrection(messageData: PlayerMoveData, localPlayerId: string): void {
+    // Ensure we have all required dependencies
+    if (!this.inputManager || !this.predictionEngine) {
+      return;
+    }
+
+    // Find local player in server state
+    const localPlayer = messageData.players.find(p => p.id === localPlayerId);
+    if (!localPlayer) {
+      return;
+    }
+
+    // Get last processed sequence from server
+    const lastProcessedSequence = messageData.lastProcessedSequence?.[localPlayerId];
+    if (lastProcessedSequence === undefined) {
+      return;
+    }
+
+    // Get pending inputs that need to be replayed
+    const pendingInputs = this.inputManager.getInputHistory();
+
+    // Reconcile: Start from server's authoritative state, replay pending inputs
+    const reconciledState = this.predictionEngine.reconcile(
+      localPlayer.position,
+      localPlayer.velocity,
+      lastProcessedSequence,
+      pendingInputs
+    );
+
+    // Determine if correction needs instant teleport or smooth lerp
+    const currentPosition = this.playerManager.getPlayerPosition(localPlayerId);
+    const needsInstant = currentPosition
+      ? this.predictionEngine.needsInstantCorrection(currentPosition, localPlayer.position)
+      : false;
+
+    // Apply reconciled state to player sprite
+    this.playerManager.applyReconciledPosition(localPlayerId, reconciledState, needsInstant);
   }
 }

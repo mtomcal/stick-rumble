@@ -90,6 +90,7 @@ export declare const PlayerMoveDataSchema: import("@sinclair/typebox").TObject<{
         isRolling: import("@sinclair/typebox").TBoolean;
     }>>;
     lastProcessedSequence: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TRecord<import("@sinclair/typebox").TString, import("@sinclair/typebox").TNumber>>;
+    correctedPlayers: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TArray<import("@sinclair/typebox").TString>>;
 }>;
 export type PlayerMoveData = Static<typeof PlayerMoveDataSchema>;
 /**
@@ -117,6 +118,7 @@ export declare const PlayerMoveMessageSchema: import("@sinclair/typebox").TObjec
             isRolling: import("@sinclair/typebox").TBoolean;
         }>>;
         lastProcessedSequence: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TRecord<import("@sinclair/typebox").TString, import("@sinclair/typebox").TNumber>>;
+        correctedPlayers: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TArray<import("@sinclair/typebox").TString>>;
     }>;
 }>;
 export type PlayerMoveMessage = Static<typeof PlayerMoveMessageSchema>;
@@ -662,6 +664,8 @@ export declare const StateSnapshotDataSchema: import("@sinclair/typebox").TObjec
         weaponType: import("@sinclair/typebox").TString;
         isAvailable: import("@sinclair/typebox").TBoolean;
     }>>;
+    lastProcessedSequence: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TRecord<import("@sinclair/typebox").TString, import("@sinclair/typebox").TNumber>>;
+    correctedPlayers: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TArray<import("@sinclair/typebox").TString>>;
 }>;
 export type StateSnapshotData = Static<typeof StateSnapshotDataSchema>;
 /**
@@ -709,6 +713,8 @@ export declare const StateSnapshotMessageSchema: import("@sinclair/typebox").TOb
             weaponType: import("@sinclair/typebox").TString;
             isAvailable: import("@sinclair/typebox").TBoolean;
         }>>;
+        lastProcessedSequence: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TRecord<import("@sinclair/typebox").TString, import("@sinclair/typebox").TNumber>>;
+        correctedPlayers: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TArray<import("@sinclair/typebox").TString>>;
     }>;
 }>;
 export type StateSnapshotMessage = Static<typeof StateSnapshotMessageSchema>;
@@ -748,6 +754,8 @@ export declare const StateDeltaDataSchema: import("@sinclair/typebox").TObject<{
         }>;
     }>>>;
     projectilesRemoved: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TArray<import("@sinclair/typebox").TString>>;
+    lastProcessedSequence: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TRecord<import("@sinclair/typebox").TString, import("@sinclair/typebox").TNumber>>;
+    correctedPlayers: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TArray<import("@sinclair/typebox").TString>>;
 }>;
 export type StateDeltaData = Static<typeof StateDeltaDataSchema>;
 /**
@@ -787,6 +795,8 @@ export declare const StateDeltaMessageSchema: import("@sinclair/typebox").TObjec
             }>;
         }>>>;
         projectilesRemoved: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TArray<import("@sinclair/typebox").TString>>;
+        lastProcessedSequence: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TRecord<import("@sinclair/typebox").TString, import("@sinclair/typebox").TNumber>>;
+        correctedPlayers: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TArray<import("@sinclair/typebox").TString>>;
     }>;
 }>;
 export type StateDeltaMessage = Static<typeof StateDeltaMessageSchema>;

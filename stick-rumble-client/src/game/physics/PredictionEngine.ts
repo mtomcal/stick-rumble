@@ -1,5 +1,5 @@
 import { MOVEMENT } from '../../shared/constants';
-import type { InputState } from '../input/InputManager';
+import type { InputState, InputHistoryEntry } from '../input/InputManager';
 
 /**
  * Position in 2D space
@@ -25,6 +25,9 @@ export interface PredictionResult {
   velocity: Velocity;
 }
 
+// Threshold for instant correction vs smooth lerp (in pixels)
+const INSTANT_CORRECTION_THRESHOLD = 100;
+
 /**
  * PredictionEngine simulates player physics on the client for client-side prediction.
  * This MUST match the server's physics simulation exactly to minimize prediction errors.
@@ -34,6 +37,11 @@ export interface PredictionResult {
  * - Diagonal movement is normalized to prevent faster diagonal speed
  * - Velocity capped at MOVEMENT.SPEED
  * - Deceleration when no input is active
+ *
+ * Reconciliation:
+ * - When server sends correction, discard incorrect predictions
+ * - Replay pending inputs from server's authoritative position
+ * - Smooth corrections for small errors, instant teleport for large errors
  */
 export class PredictionEngine {
   /**
@@ -111,5 +119,71 @@ export class PredictionEngine {
       position: { x: newPositionX, y: newPositionY },
       velocity: { x: newVelocityX, y: newVelocityY },
     };
+  }
+
+  /**
+   * Reconcile client prediction with server authoritative state.
+   * When server sends a correction, we:
+   * 1. Accept server position/velocity as authoritative
+   * 2. Replay all pending inputs (inputs sent but not yet acknowledged by server)
+   * 3. Return the reconciled state
+   *
+   * @param serverPosition - Server's authoritative position
+   * @param serverVelocity - Server's authoritative velocity
+   * @param lastProcessedSequence - Last input sequence the server processed
+   * @param pendingInputs - Inputs sent but not yet processed by server
+   * @returns Reconciled position and velocity after replaying pending inputs
+   */
+  reconcile(
+    serverPosition: Position,
+    serverVelocity: Velocity,
+    lastProcessedSequence: number,
+    pendingInputs: InputHistoryEntry[]
+  ): PredictionResult {
+    // Start from server's authoritative state
+    let position = { ...serverPosition };
+    let velocity = { ...serverVelocity };
+
+    // Replay all inputs that came after the server's last processed sequence
+    const inputsToReplay = pendingInputs.filter(entry => entry.sequence > lastProcessedSequence);
+
+    // Sort by sequence to ensure correct order
+    inputsToReplay.sort((a, b) => a.sequence - b.sequence);
+
+    // Replay each input using the same physics as prediction
+    for (const entry of inputsToReplay) {
+      const result = this.predictPosition(position, velocity, entry.input, 0.016);
+      position = result.position;
+      velocity = result.velocity;
+    }
+
+    return { position, velocity };
+  }
+
+  /**
+   * Calculate the distance between predicted and server positions
+   * Used to determine if correction should be smooth or instant
+   *
+   * @param predictedPos - Client's predicted position
+   * @param serverPos - Server's authoritative position
+   * @returns Distance in pixels
+   */
+  calculateCorrectionDistance(predictedPos: Position, serverPos: Position): number {
+    const dx = serverPos.x - predictedPos.x;
+    const dy = serverPos.y - predictedPos.y;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  /**
+   * Determine if a correction needs instant teleport or can use smooth lerp
+   * Large corrections (>=100px) are instant to avoid jarring visual drift
+   * Small corrections (<100px) are smoothed over time
+   *
+   * @param predictedPos - Client's predicted position
+   * @param serverPos - Server's authoritative position
+   * @returns True if correction should be instant, false if smooth
+   */
+  needsInstantCorrection(predictedPos: Position, serverPos: Position): boolean {
+    return this.calculateCorrectionDistance(predictedPos, serverPos) >= INSTANT_CORRECTION_THRESHOLD;
   }
 }

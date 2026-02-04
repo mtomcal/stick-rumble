@@ -125,6 +125,14 @@
               "type": "number"
             }
           }
+        },
+        "correctedPlayers": {
+          "description": "Array of player IDs whose positions were corrected by the server due to impossible movement detection",
+          "type": "array",
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          }
         }
       }
     }

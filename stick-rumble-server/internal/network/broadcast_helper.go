@@ -125,11 +125,34 @@ func (h *WebSocketHandler) sendSnapshot(clientID string, playerStates []game.Pla
 		})
 	}
 
+	// Build lastProcessedSequence and correctedPlayers for reconciliation (Story 4.2)
+	lastProcessedSequence := make(map[string]interface{})
+	correctedPlayers := make([]string, 0)
+
+	for _, state := range playerStates {
+		if player, exists := h.gameServer.GetWorld().GetPlayer(state.ID); exists {
+			seq := player.GetInputSequence()
+			lastProcessedSequence[state.ID] = float64(seq)
+
+			// Check if this player needs correction (recent correction in stats)
+			stats := player.GetCorrectionStats()
+			if !stats.LastCorrectionAt.IsZero() && time.Since(stats.LastCorrectionAt) < 100*time.Millisecond {
+				correctedPlayers = append(correctedPlayers, state.ID)
+			}
+		}
+	}
+
 	// Create state:snapshot message data
 	data := map[string]interface{}{
-		"players":      playerStates,
-		"projectiles":  projectileSnapshots,
-		"weaponCrates": crateSnapshots,
+		"players":               playerStates,
+		"projectiles":           projectileSnapshots,
+		"weaponCrates":          crateSnapshots,
+		"lastProcessedSequence": lastProcessedSequence,
+	}
+
+	// Only include correctedPlayers if there are any
+	if len(correctedPlayers) > 0 {
+		data["correctedPlayers"] = correctedPlayers
 	}
 
 	// Validate outgoing message schema (development mode only)
@@ -162,6 +185,23 @@ func (h *WebSocketHandler) sendDelta(clientID string, playerStates []game.Player
 	projectiles := h.gameServer.GetActiveProjectiles()
 	projectilesAdded, projectilesRemoved := h.deltaTracker.ComputeProjectileDelta(clientID, projectiles)
 
+	// Build lastProcessedSequence and correctedPlayers for reconciliation (Story 4.2)
+	lastProcessedSequence := make(map[string]interface{})
+	correctedPlayers := make([]string, 0)
+
+	for _, state := range playerStates {
+		if player, exists := h.gameServer.GetWorld().GetPlayer(state.ID); exists {
+			seq := player.GetInputSequence()
+			lastProcessedSequence[state.ID] = float64(seq)
+
+			// Check if this player needs correction (recent correction in stats)
+			stats := player.GetCorrectionStats()
+			if !stats.LastCorrectionAt.IsZero() && time.Since(stats.LastCorrectionAt) < 100*time.Millisecond {
+				correctedPlayers = append(correctedPlayers, state.ID)
+			}
+		}
+	}
+
 	// If nothing changed, don't send a message
 	if len(playerDelta) == 0 && len(projectilesAdded) == 0 && len(projectilesRemoved) == 0 {
 		return
@@ -189,6 +229,12 @@ func (h *WebSocketHandler) sendDelta(clientID string, playerStates []game.Player
 
 	if len(projectilesRemoved) > 0 {
 		data["projectilesRemoved"] = projectilesRemoved
+	}
+
+	// Add reconciliation data
+	data["lastProcessedSequence"] = lastProcessedSequence
+	if len(correctedPlayers) > 0 {
+		data["correctedPlayers"] = correctedPlayers
 	}
 
 	// Validate outgoing message schema (development mode only)

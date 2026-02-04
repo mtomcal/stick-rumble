@@ -165,6 +165,66 @@ describe('Server-to-Client Schemas', () => {
       expect(Value.Check(PlayerMoveDataSchema, data)).toBe(false);
     });
 
+    it('should validate player move data with correctedPlayers array', () => {
+      const data = {
+        players: [
+          {
+            id: 'player-1',
+            position: { x: 100, y: 200 },
+            velocity: { x: 5, y: -3 },
+            health: 100,
+            maxHealth: 100,
+            rotation: 1.57,
+            isDead: false,
+            isSprinting: true,
+            isRolling: false,
+          },
+        ],
+        correctedPlayers: ['player-1'],
+      };
+      expect(Value.Check(PlayerMoveDataSchema, data)).toBe(true);
+    });
+
+    it('should validate player move data with empty correctedPlayers array', () => {
+      const data = {
+        players: [
+          {
+            id: 'player-1',
+            position: { x: 100, y: 200 },
+            velocity: { x: 5, y: -3 },
+            health: 100,
+            maxHealth: 100,
+            rotation: 1.57,
+            isDead: false,
+            isSprinting: true,
+            isRolling: false,
+          },
+        ],
+        correctedPlayers: [],
+      };
+      expect(Value.Check(PlayerMoveDataSchema, data)).toBe(true);
+    });
+
+    it('should reject correctedPlayers with empty string', () => {
+      const data = {
+        players: [
+          {
+            id: 'player-1',
+            position: { x: 100, y: 200 },
+            velocity: { x: 5, y: -3 },
+            health: 100,
+            maxHealth: 100,
+            rotation: 1.57,
+            isDead: false,
+            isSprinting: true,
+            isRolling: false,
+          },
+        ],
+        correctedPlayers: [''],
+      };
+      expect(Value.Check(PlayerMoveDataSchema, data)).toBe(false);
+    });
+
     it('should accept lastProcessedSequence with sequence 0', () => {
       const data = {
         players: [

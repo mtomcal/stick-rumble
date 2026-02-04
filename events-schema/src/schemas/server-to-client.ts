@@ -114,6 +114,11 @@ export const PlayerMoveDataSchema = Type.Object(
         { description: 'Map of player IDs to their last processed input sequence number for client-side prediction reconciliation' }
       )
     ),
+    correctedPlayers: Type.Optional(
+      Type.Array(Type.String({ minLength: 1 }), {
+        description: 'Array of player IDs whose positions were corrected by the server due to impossible movement detection',
+      })
+    ),
   },
   { $id: 'PlayerMoveData', description: 'Player movement update payload' }
 );
@@ -651,6 +656,16 @@ export const StateSnapshotDataSchema = Type.Object(
     players: Type.Array(PlayerStateSchema, { description: 'Complete state of all players' }),
     projectiles: Type.Array(ProjectileSnapshotSchema, { description: 'Complete state of all projectiles' }),
     weaponCrates: Type.Array(WeaponCrateSnapshotSchema, { description: 'Complete state of all weapon crates' }),
+    lastProcessedSequence: Type.Optional(
+      Type.Record(Type.String(), Type.Number(), {
+        description: 'Map of player IDs to their last processed input sequence number for client-side prediction reconciliation',
+      })
+    ),
+    correctedPlayers: Type.Optional(
+      Type.Array(Type.String({ minLength: 1 }), {
+        description: 'Array of player IDs whose positions were corrected by the server due to impossible movement detection',
+      })
+    ),
   },
   { $id: 'StateSnapshotData', description: 'Full game state snapshot for delta compression' }
 );
@@ -677,6 +692,16 @@ export const StateDeltaDataSchema = Type.Object(
     players: Type.Optional(Type.Array(PlayerStateSchema, { description: 'Players that changed state' })),
     projectilesAdded: Type.Optional(Type.Array(ProjectileSnapshotSchema, { description: 'New projectiles spawned' })),
     projectilesRemoved: Type.Optional(Type.Array(Type.String(), { description: 'IDs of destroyed projectiles' })),
+    lastProcessedSequence: Type.Optional(
+      Type.Record(Type.String(), Type.Number(), {
+        description: 'Map of player IDs to their last processed input sequence number for client-side prediction reconciliation',
+      })
+    ),
+    correctedPlayers: Type.Optional(
+      Type.Array(Type.String({ minLength: 1 }), {
+        description: 'Array of player IDs whose positions were corrected by the server due to impossible movement detection',
+      })
+    ),
   },
   { $id: 'StateDeltaData', description: 'Incremental state changes for delta compression' }
 );
