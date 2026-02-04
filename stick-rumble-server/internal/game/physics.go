@@ -13,11 +13,24 @@ func NewPhysics() *Physics {
 	return &Physics{}
 }
 
+// UpdatePlayerResult contains the result of updating a player's physics
+type UpdatePlayerResult struct {
+	RollCancelled    bool // True if dodge roll was cancelled due to wall collision
+	CorrectionNeeded bool // True if the movement required correction (anti-cheat flag)
+}
+
 // UpdatePlayer updates a player's physics state based on input and delta time
 // deltaTime is in seconds
-// Returns true if a dodge roll was cancelled due to wall collision
-func (p *Physics) UpdatePlayer(player *PlayerState, deltaTime float64) bool {
-	rollCancelled := false
+// Returns UpdatePlayerResult with correction information
+func (p *Physics) UpdatePlayer(player *PlayerState, deltaTime float64) UpdatePlayerResult {
+	result := UpdatePlayerResult{
+		RollCancelled:    false,
+		CorrectionNeeded: false,
+	}
+
+	// Store old position for validation
+	oldPos := player.GetPosition()
+
 	// Check if player is rolling - if so, use roll velocity instead of input
 	if player.IsRolling() {
 		rollState := player.GetRollState()
@@ -94,14 +107,29 @@ func (p *Physics) UpdatePlayer(player *PlayerState, deltaTime float64) bool {
 	if isRolling && (clampedPos.X != newPos.X || clampedPos.Y != newPos.Y) {
 		// Wall collision detected during roll - end the roll
 		player.EndDodgeRoll()
-		rollCancelled = true
+		result.RollCancelled = true
 	}
 
 	// Sanitize position before setting it
 	clampedPos = sanitizeVector2(clampedPos, "UpdatePlayer position")
+
+	// Validate the movement for anti-cheat detection
+	input := player.GetInput()
+	validation := p.ValidatePlayerMovement(oldPos, clampedPos, currentVel, deltaTime, isRolling, input.IsSprinting)
+	if !validation.Valid {
+		// Movement failed validation - mark for correction
+		result.CorrectionNeeded = true
+		player.RecordCorrection()
+		log.Printf("Player %s movement correction needed: %s (old=%+v new=%+v vel=%+v)",
+			player.ID, validation.Reason, oldPos, clampedPos, currentVel)
+	}
+
+	// Record this movement update for anti-cheat statistics
+	player.RecordMovementUpdate()
+
 	player.SetPosition(clampedPos)
 
-	return rollCancelled
+	return result
 }
 
 // normalize returns a normalized vector (length = 1) or zero vector if input is zero
@@ -291,4 +319,73 @@ func (p *Physics) CheckAllProjectileCollisions(projectiles []*Projectile, player
 	}
 
 	return hits
+}
+
+// ValidationResult represents the result of movement validation
+type ValidationResult struct {
+	Valid  bool   // Whether the movement is valid
+	Reason string // Reason for invalidity (empty if valid)
+}
+
+// ValidatePlayerMovement checks if a player's movement is physically possible
+// This is used for server-side anti-cheat to detect impossible movements
+// Returns a ValidationResult indicating if the movement is valid
+func (p *Physics) ValidatePlayerMovement(oldPos, newPos, velocity Vector2, deltaTime float64, isRolling, isSprinting bool) ValidationResult {
+	// Constants for validation tolerance (allow small floating point errors)
+	const speedTolerance = 1.05 // 5% tolerance for floating point precision
+
+	// 1. Check bounds: player must stay within arena
+	halfWidth := PlayerWidth / 2
+	halfHeight := PlayerHeight / 2
+	if newPos.X < halfWidth || newPos.X > ArenaWidth-halfWidth ||
+		newPos.Y < halfHeight || newPos.Y > ArenaHeight-halfHeight {
+		return ValidationResult{Valid: false, Reason: "out_of_bounds"}
+	}
+
+	// 2. Check speed limits based on player state
+	var maxSpeed float64
+	if isRolling {
+		maxSpeed = DodgeRollVelocity
+	} else if isSprinting {
+		maxSpeed = SprintSpeed
+	} else {
+		maxSpeed = MovementSpeed
+	}
+
+	// Calculate actual velocity magnitude
+	velocityMagnitude := math.Sqrt(velocity.X*velocity.X + velocity.Y*velocity.Y)
+
+	// Check if velocity exceeds max speed (with tolerance)
+	if velocityMagnitude > maxSpeed*speedTolerance {
+		return ValidationResult{Valid: false, Reason: "speed_exceeded"}
+	}
+
+	// 3. Check if position change matches velocity * deltaTime (with tolerance)
+	expectedDelta := Vector2{
+		X: velocity.X * deltaTime,
+		Y: velocity.Y * deltaTime,
+	}
+	actualDelta := Vector2{
+		X: newPos.X - oldPos.X,
+		Y: newPos.Y - oldPos.Y,
+	}
+
+	// Calculate magnitude of difference between expected and actual delta
+	deltaDiff := Vector2{
+		X: actualDelta.X - expectedDelta.X,
+		Y: actualDelta.Y - expectedDelta.Y,
+	}
+	deltaDiffMagnitude := math.Sqrt(deltaDiff.X*deltaDiff.X + deltaDiff.Y*deltaDiff.Y)
+
+	// Allow for some tolerance in position delta (5% of expected movement)
+	expectedDeltaMagnitude := math.Sqrt(expectedDelta.X*expectedDelta.X + expectedDelta.Y*expectedDelta.Y)
+	maxDeltaDiff := expectedDeltaMagnitude * 0.05
+
+	// If the difference is too large, the movement is invalid
+	// Only check this if there's actual movement (avoid division by zero for stationary players)
+	if expectedDeltaMagnitude > 0.1 && deltaDiffMagnitude > maxDeltaDiff {
+		return ValidationResult{Valid: false, Reason: "position_mismatch"}
+	}
+
+	return ValidationResult{Valid: true, Reason: ""}
 }

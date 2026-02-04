@@ -196,10 +196,23 @@ func (gs *GameServer) updateAllPlayers(deltaTime float64) {
 
 	// Update each player's physics
 	for _, player := range players {
-		rollCancelled := gs.physics.UpdatePlayer(player, deltaTime)
+		result := gs.physics.UpdatePlayer(player, deltaTime)
+
 		// If roll was cancelled due to wall collision, notify via callback
-		if rollCancelled && gs.onRollEnd != nil {
+		if result.RollCancelled && gs.onRollEnd != nil {
 			gs.onRollEnd(player.ID, "wall_collision")
+		}
+
+		// Check if correction rate exceeds anti-cheat threshold
+		if result.CorrectionNeeded {
+			stats := player.GetCorrectionStats()
+			correctionRate := stats.GetCorrectionRate()
+
+			// Log warning if correction rate exceeds 20% threshold
+			if correctionRate > 0.20 {
+				log.Printf("ANTI-CHEAT WARNING: Player %s has high correction rate: %.2f%% (%d/%d)",
+					player.ID, correctionRate*100, stats.TotalCorrections, stats.TotalUpdates)
+			}
 		}
 	}
 }
@@ -229,6 +242,22 @@ func (gs *GameServer) RemovePlayer(playerID string) {
 // UpdatePlayerInput updates a player's input state
 func (gs *GameServer) UpdatePlayerInput(playerID string, input InputState) bool {
 	return gs.world.UpdatePlayerInput(playerID, input)
+}
+
+// UpdatePlayerInputWithSequence updates a player's input state and sequence number
+func (gs *GameServer) UpdatePlayerInputWithSequence(playerID string, input InputState, sequence uint64) bool {
+	player, exists := gs.world.GetPlayer(playerID)
+	if !exists {
+		return false
+	}
+
+	// Update input state
+	player.SetInput(input)
+
+	// Update sequence number
+	player.SetInputSequence(sequence)
+
+	return true
 }
 
 // GetPlayerState returns a snapshot of a player's state

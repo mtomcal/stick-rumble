@@ -23,6 +23,30 @@ export declare const RoomJoinedMessageSchema: import("@sinclair/typebox").TObjec
 }>;
 export type RoomJoinedMessage = Static<typeof RoomJoinedMessageSchema>;
 /**
+ * Player left data payload.
+ * Sent when a player disconnects from the room.
+ *
+ * **Why this message exists:** When a player's WebSocket connection closes,
+ * all other players in the room need to be notified so they can remove the
+ * player's sprite from their local game state. Without this message, ghost
+ * players would remain on screen after disconnection.
+ */
+export declare const PlayerLeftDataSchema: import("@sinclair/typebox").TObject<{
+    playerId: import("@sinclair/typebox").TString;
+}>;
+export type PlayerLeftData = Static<typeof PlayerLeftDataSchema>;
+/**
+ * Complete player:left message schema
+ */
+export declare const PlayerLeftMessageSchema: import("@sinclair/typebox").TObject<{
+    type: import("@sinclair/typebox").TLiteral<string>;
+    timestamp: import("@sinclair/typebox").TInteger;
+    data: import("@sinclair/typebox").TObject<{
+        playerId: import("@sinclair/typebox").TString;
+    }>;
+}>;
+export type PlayerLeftMessage = Static<typeof PlayerLeftMessageSchema>;
+/**
  * Player state schema for move updates.
  */
 export declare const PlayerStateSchema: import("@sinclair/typebox").TObject<{
@@ -65,6 +89,8 @@ export declare const PlayerMoveDataSchema: import("@sinclair/typebox").TObject<{
         isSprinting: import("@sinclair/typebox").TBoolean;
         isRolling: import("@sinclair/typebox").TBoolean;
     }>>;
+    lastProcessedSequence: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TRecord<import("@sinclair/typebox").TString, import("@sinclair/typebox").TNumber>>;
+    correctedPlayers: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TArray<import("@sinclair/typebox").TString>>;
 }>;
 export type PlayerMoveData = Static<typeof PlayerMoveDataSchema>;
 /**
@@ -91,6 +117,8 @@ export declare const PlayerMoveMessageSchema: import("@sinclair/typebox").TObjec
             isSprinting: import("@sinclair/typebox").TBoolean;
             isRolling: import("@sinclair/typebox").TBoolean;
         }>>;
+        lastProcessedSequence: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TRecord<import("@sinclair/typebox").TString, import("@sinclair/typebox").TNumber>>;
+        correctedPlayers: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TArray<import("@sinclair/typebox").TString>>;
     }>;
 }>;
 export type PlayerMoveMessage = Static<typeof PlayerMoveMessageSchema>;

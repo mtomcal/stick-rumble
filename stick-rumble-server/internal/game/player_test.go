@@ -1228,3 +1228,264 @@ func TestPlayerState_Respawn_ResetsLastDamageTime(t *testing.T) {
 		t.Errorf("lastDamageTime should be reset to recent time on respawn, got %v ago", timeSinceRespawn)
 	}
 }
+
+// Correction Tracking Tests (Anti-Cheat)
+
+func TestCorrectionStats_GetCorrectionRate_NoUpdates(t *testing.T) {
+	stats := CorrectionStats{}
+
+	rate := stats.GetCorrectionRate()
+
+	if rate != 0.0 {
+		t.Errorf("GetCorrectionRate() with no updates = %v, want 0.0", rate)
+	}
+}
+
+func TestCorrectionStats_GetCorrectionRate_NoCorrections(t *testing.T) {
+	stats := CorrectionStats{
+		TotalUpdates:     10,
+		TotalCorrections: 0,
+	}
+
+	rate := stats.GetCorrectionRate()
+
+	if rate != 0.0 {
+		t.Errorf("GetCorrectionRate() with 0 corrections = %v, want 0.0", rate)
+	}
+}
+
+func TestCorrectionStats_GetCorrectionRate_SomeCorrections(t *testing.T) {
+	stats := CorrectionStats{
+		TotalUpdates:     10,
+		TotalCorrections: 3,
+	}
+
+	rate := stats.GetCorrectionRate()
+	expected := 0.3 // 30%
+
+	if rate != expected {
+		t.Errorf("GetCorrectionRate() = %v, want %v", rate, expected)
+	}
+}
+
+func TestCorrectionStats_GetCorrectionRate_AllCorrections(t *testing.T) {
+	stats := CorrectionStats{
+		TotalUpdates:     10,
+		TotalCorrections: 10,
+	}
+
+	rate := stats.GetCorrectionRate()
+	expected := 1.0 // 100%
+
+	if rate != expected {
+		t.Errorf("GetCorrectionRate() = %v, want %v", rate, expected)
+	}
+}
+
+func TestPlayerState_RecordMovementUpdate(t *testing.T) {
+	player := NewPlayerState("test-player")
+
+	// Initially should be 0
+	stats := player.GetCorrectionStats()
+	if stats.TotalUpdates != 0 {
+		t.Errorf("Initial TotalUpdates = %v, want 0", stats.TotalUpdates)
+	}
+
+	// Record one update
+	player.RecordMovementUpdate()
+	stats = player.GetCorrectionStats()
+
+	if stats.TotalUpdates != 1 {
+		t.Errorf("TotalUpdates after one record = %v, want 1", stats.TotalUpdates)
+	}
+
+	// Record multiple updates
+	for i := 0; i < 9; i++ {
+		player.RecordMovementUpdate()
+	}
+	stats = player.GetCorrectionStats()
+
+	if stats.TotalUpdates != 10 {
+		t.Errorf("TotalUpdates after 10 records = %v, want 10", stats.TotalUpdates)
+	}
+}
+
+func TestPlayerState_RecordCorrection(t *testing.T) {
+	clock := NewManualClock(time.Now())
+	player := NewPlayerStateWithClock("test-player", clock)
+
+	// Initially should be 0
+	stats := player.GetCorrectionStats()
+	if stats.TotalCorrections != 0 {
+		t.Errorf("Initial TotalCorrections = %v, want 0", stats.TotalCorrections)
+	}
+
+	// Record one correction
+	player.RecordCorrection()
+	stats = player.GetCorrectionStats()
+
+	if stats.TotalCorrections != 1 {
+		t.Errorf("TotalCorrections after one record = %v, want 1", stats.TotalCorrections)
+	}
+
+	// Verify timestamp was set
+	if stats.LastCorrectionAt.IsZero() {
+		t.Error("LastCorrectionAt should be set after recording correction")
+	}
+
+	// Record another correction after time passes
+	initialTime := stats.LastCorrectionAt
+	clock.Advance(1 * time.Second)
+	player.RecordCorrection()
+	stats = player.GetCorrectionStats()
+
+	if stats.TotalCorrections != 2 {
+		t.Errorf("TotalCorrections after two records = %v, want 2", stats.TotalCorrections)
+	}
+
+	// Timestamp should be updated
+	if !stats.LastCorrectionAt.After(initialTime) {
+		t.Error("LastCorrectionAt should be updated on second correction")
+	}
+}
+
+func TestPlayerState_GetCorrectionStats_Combined(t *testing.T) {
+	player := NewPlayerState("test-player")
+
+	// Record 10 updates with 3 corrections
+	for i := 0; i < 10; i++ {
+		player.RecordMovementUpdate()
+		if i < 3 {
+			player.RecordCorrection()
+		}
+	}
+
+	stats := player.GetCorrectionStats()
+
+	if stats.TotalUpdates != 10 {
+		t.Errorf("TotalUpdates = %v, want 10", stats.TotalUpdates)
+	}
+
+	if stats.TotalCorrections != 3 {
+		t.Errorf("TotalCorrections = %v, want 3", stats.TotalCorrections)
+	}
+
+	rate := stats.GetCorrectionRate()
+	expected := 0.3 // 30%
+
+	if rate != expected {
+		t.Errorf("GetCorrectionRate() = %v, want %v", rate, expected)
+	}
+}
+
+func TestPlayerState_CorrectionRate_ExceedsThreshold(t *testing.T) {
+	player := NewPlayerState("test-player")
+
+	// Record 10 updates with 3 corrections (30% - exceeds 20% threshold)
+	for i := 0; i < 10; i++ {
+		player.RecordMovementUpdate()
+		if i < 3 {
+			player.RecordCorrection()
+		}
+	}
+
+	stats := player.GetCorrectionStats()
+	rate := stats.GetCorrectionRate()
+
+	// Verify rate exceeds 20% threshold
+	if rate <= 0.20 {
+		t.Errorf("GetCorrectionRate() = %v, want > 0.20 for anti-cheat test", rate)
+	}
+
+	// This should trigger anti-cheat warning in actual game loop
+	if rate != 0.3 {
+		t.Errorf("GetCorrectionRate() = %v, want 0.3", rate)
+	}
+}
+
+func TestPlayerState_CorrectionRate_BelowThreshold(t *testing.T) {
+	player := NewPlayerState("test-player")
+
+	// Record 100 updates with 10 corrections (10% - below 20% threshold)
+	for i := 0; i < 100; i++ {
+		player.RecordMovementUpdate()
+		if i < 10 {
+			player.RecordCorrection()
+		}
+	}
+
+	stats := player.GetCorrectionStats()
+	rate := stats.GetCorrectionRate()
+
+	// Verify rate is below 20% threshold
+	if rate > 0.20 {
+		t.Errorf("GetCorrectionRate() = %v, want <= 0.20", rate)
+	}
+
+	// Should not trigger anti-cheat warning
+	if rate != 0.1 {
+		t.Errorf("GetCorrectionRate() = %v, want 0.1", rate)
+	}
+}
+
+func TestPlayerState_CorrectionRate_ExactlyAtThreshold(t *testing.T) {
+	player := NewPlayerState("test-player")
+
+	// Record 100 updates with 20 corrections (20% - exactly at threshold)
+	for i := 0; i < 100; i++ {
+		player.RecordMovementUpdate()
+		if i < 20 {
+			player.RecordCorrection()
+		}
+	}
+
+	stats := player.GetCorrectionStats()
+	rate := stats.GetCorrectionRate()
+
+	// Verify rate is exactly 20%
+	if rate != 0.20 {
+		t.Errorf("GetCorrectionRate() = %v, want 0.20", rate)
+	}
+
+	// At exactly 20%, should NOT trigger warning (threshold is > 0.20, not >=)
+	if rate > 0.20 {
+		t.Error("Rate should not exceed threshold at exactly 20%")
+	}
+}
+
+func TestPlayerState_CorrectionThreadSafety(t *testing.T) {
+	player := NewPlayerState("test-player")
+	var wg sync.WaitGroup
+
+	// Concurrent correction tracking
+	for i := 0; i < 100; i++ {
+		wg.Add(3)
+
+		go func() {
+			defer wg.Done()
+			player.RecordMovementUpdate()
+		}()
+
+		go func() {
+			defer wg.Done()
+			player.RecordCorrection()
+		}()
+
+		go func() {
+			defer wg.Done()
+			player.GetCorrectionStats()
+		}()
+	}
+
+	wg.Wait()
+
+	// Verify all updates were recorded
+	stats := player.GetCorrectionStats()
+	if stats.TotalUpdates != 100 {
+		t.Errorf("TotalUpdates after concurrent operations = %v, want 100", stats.TotalUpdates)
+	}
+
+	if stats.TotalCorrections != 100 {
+		t.Errorf("TotalCorrections after concurrent operations = %v, want 100", stats.TotalCorrections)
+	}
+}
