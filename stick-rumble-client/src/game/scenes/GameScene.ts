@@ -319,6 +319,11 @@ export class GameScene extends Phaser.Scene {
     // Convert delta from ms to seconds
     this.lastDeltaTime = delta / 1000;
 
+    // Update player positions with interpolation (Story 4.3)
+    if (this.playerManager) {
+      this.playerManager.update(delta);
+    }
+
     // Update input manager to send player input to server (only when not spectating)
     if (this.inputManager && this.spectator && !this.spectator.isActive()) {
       this.inputManager.update();
