@@ -11,10 +11,23 @@ export interface InputState {
   right: boolean; // D key
   aimAngle: number; // Aim angle in radians
   isSprinting: boolean; // Shift key for sprint
+  sequence: number; // Sequence number for client-side prediction
+}
+
+/**
+ * Stored input history entry
+ */
+export interface InputHistoryEntry {
+  sequence: number;
+  input: InputState;
+  timestamp: number;
 }
 
 // Minimum angle change threshold to send update (about 5 degrees)
 const AIM_ANGLE_THRESHOLD = 0.087;
+
+// Maximum input history size (prevent memory bloat)
+const MAX_INPUT_HISTORY = 100;
 
 /**
  * InputManager handles keyboard input and mouse aim, sending state to server
@@ -36,12 +49,14 @@ export class InputManager {
   private aimAngle: number = 0;
   private lastSentAimAngle: number = 0;
   private isEnabled: boolean = true;
+  private sequence: number = 0; // Monotonically increasing sequence number
+  private inputHistory: InputHistoryEntry[] = []; // Store pending inputs for reconciliation
 
   constructor(scene: Phaser.Scene, wsClient: WebSocketClient) {
     this.scene = scene;
     this.wsClient = wsClient;
-    this.currentState = { up: false, down: false, left: false, right: false, aimAngle: 0, isSprinting: false };
-    this.lastSentState = { up: false, down: false, left: false, right: false, aimAngle: 0, isSprinting: false };
+    this.currentState = { up: false, down: false, left: false, right: false, aimAngle: 0, isSprinting: false, sequence: 0 };
+    this.lastSentState = { up: false, down: false, left: false, right: false, aimAngle: 0, isSprinting: false, sequence: 0 };
   }
 
   /**
@@ -88,6 +103,7 @@ export class InputManager {
       right: this.keys.D.isDown,
       aimAngle: this.aimAngle,
       isSprinting: this.keys.SHIFT.isDown,
+      sequence: this.sequence,
     };
 
     // Only send if state has changed
@@ -167,15 +183,32 @@ export class InputManager {
    * Send input state to server
    */
   private sendInputState(): void {
+    const timestamp = Date.now();
+
     this.wsClient.send({
       type: 'input:state',
-      timestamp: Date.now(),
+      timestamp,
       data: this.currentState,
     });
+
+    // Store in input history for reconciliation
+    this.inputHistory.push({
+      sequence: this.sequence,
+      input: { ...this.currentState },
+      timestamp,
+    });
+
+    // Limit history size to prevent memory bloat
+    if (this.inputHistory.length > MAX_INPUT_HISTORY) {
+      this.inputHistory.shift();
+    }
 
     // Update last sent state
     this.lastSentState = { ...this.currentState };
     this.lastSentAimAngle = this.currentState.aimAngle;
+
+    // Increment sequence for next input
+    this.sequence++;
   }
 
   /**
@@ -193,9 +226,32 @@ export class InputManager {
   }
 
   /**
+   * Get input history for reconciliation
+   */
+  getInputHistory(): InputHistoryEntry[] {
+    return [...this.inputHistory];
+  }
+
+  /**
+   * Clear input history up to and including a sequence number
+   * Used after server confirms processing up to a certain sequence
+   */
+  clearInputHistoryUpTo(sequence: number): void {
+    this.inputHistory = this.inputHistory.filter(entry => entry.sequence > sequence);
+  }
+
+  /**
+   * Get current sequence number
+   */
+  getCurrentSequence(): number {
+    return this.sequence;
+  }
+
+  /**
    * Cleanup
    */
   destroy(): void {
     // Keys are automatically cleaned up by Phaser
+    this.inputHistory = [];
   }
 }

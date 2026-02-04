@@ -395,6 +395,7 @@ func TestHandleInputStateAfterMatchEnded(t *testing.T) {
 		"right":       false,
 		"aimAngle":    0.0,
 		"isSprinting": false,
+		"sequence":    1,
 	}
 
 	// Get initial player input state

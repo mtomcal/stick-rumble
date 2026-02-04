@@ -114,6 +114,73 @@ describe('Server-to-Client Schemas', () => {
       expect(Value.Check(PlayerMoveDataSchema, data)).toBe(true);
     });
 
+    it('should validate player move data with lastProcessedSequence', () => {
+      const data = {
+        players: [
+          {
+            id: 'player-1',
+            position: { x: 100, y: 200 },
+            velocity: { x: 5, y: -3 },
+            health: 100,
+            maxHealth: 100,
+            rotation: 1.57,
+            isDead: false,
+            isSprinting: true,
+            isRolling: false,
+          },
+        ],
+        lastProcessedSequence: {
+          'player-1': 42,
+          'player-2': 17,
+        },
+      };
+      expect(Value.Check(PlayerMoveDataSchema, data)).toBe(true);
+    });
+
+    it('should reject negative sequence numbers in lastProcessedSequence', () => {
+      const data = {
+        players: [
+          {
+            id: 'player-1',
+            position: { x: 100, y: 200 },
+            velocity: { x: 5, y: -3 },
+            health: 100,
+            maxHealth: 100,
+            rotation: 1.57,
+            isDead: false,
+            isSprinting: true,
+            isRolling: false,
+          },
+        ],
+        lastProcessedSequence: {
+          'player-1': -1,
+        },
+      };
+      expect(Value.Check(PlayerMoveDataSchema, data)).toBe(false);
+    });
+
+    it('should accept lastProcessedSequence with sequence 0', () => {
+      const data = {
+        players: [
+          {
+            id: 'player-1',
+            position: { x: 100, y: 200 },
+            velocity: { x: 5, y: -3 },
+            health: 100,
+            maxHealth: 100,
+            rotation: 1.57,
+            isDead: false,
+            isSprinting: true,
+            isRolling: false,
+          },
+        ],
+        lastProcessedSequence: {
+          'player-1': 0,
+        },
+      };
+      expect(Value.Check(PlayerMoveDataSchema, data)).toBe(true);
+    });
+
     it('should reject invalid health values', () => {
       const data = {
         players: [

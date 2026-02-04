@@ -38,6 +38,7 @@ func TestHandleInputStateSuccess(t *testing.T) {
 		"right":       false,
 		"aimAngle":    1.57, // 90 degrees
 		"isSprinting": false,
+		"sequence":    1,
 	}
 
 	// Call handleInputState directly - should update input
@@ -70,6 +71,7 @@ func TestHandleInputStateNonExistentPlayer(t *testing.T) {
 		"right":       false,
 		"aimAngle":    0.0,
 		"isSprinting": false,
+		"sequence":    1,
 	}
 
 	// Call handleInputState with non-existent player
@@ -119,6 +121,7 @@ func TestHandleInputStateMatchEnded(t *testing.T) {
 		"right":       false,
 		"aimAngle":    2.0,
 		"isSprinting": false,
+		"sequence":    1,
 	}
 
 	// Call handleInputState directly - should return early without updating
@@ -150,14 +153,14 @@ func TestHandleInputStateSchemaValidationError(t *testing.T) {
 	require.True(t, exists)
 	initialInput := player.GetInput()
 
-	// Send invalid input state (missing required field "isSprinting")
+	// Send invalid input state (missing required fields "isSprinting" and "sequence")
 	invalidData := map[string]interface{}{
 		"up":       true,
 		"down":     false,
 		"left":     false,
 		"right":    false,
 		"aimAngle": 1.0,
-		// Missing: "isSprinting"
+		// Missing: "isSprinting" and "sequence"
 	}
 
 	// Call handleInputState - should handle validation failure gracefully (line 21-24)
@@ -196,6 +199,7 @@ func TestHandleInputStateWithDifferentInputs(t *testing.T) {
 		"right":       true,
 		"aimAngle":    3.14,
 		"isSprinting": false,
+		"sequence":    1,
 	}
 	ts.handler.handleInputState(player1ID, inputData1)
 	player, _ = world.GetPlayer(player1ID)
@@ -214,6 +218,7 @@ func TestHandleInputStateWithDifferentInputs(t *testing.T) {
 		"right":       true,
 		"aimAngle":    0.785, // 45 degrees
 		"isSprinting": false,
+		"sequence":    2,
 	}
 	ts.handler.handleInputState(player1ID, inputData2)
 	player, _ = world.GetPlayer(player1ID)
@@ -232,6 +237,7 @@ func TestHandleInputStateWithDifferentInputs(t *testing.T) {
 		"right":       false,
 		"aimAngle":    6.28, // 360 degrees
 		"isSprinting": false,
+		"sequence":    3,
 	}
 	ts.handler.handleInputState(player1ID, inputData3)
 	player, _ = world.GetPlayer(player1ID)

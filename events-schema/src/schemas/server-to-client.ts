@@ -87,6 +87,13 @@ export type PlayerState = Static<typeof PlayerStateSchema>;
 export const PlayerMoveDataSchema = Type.Object(
   {
     players: Type.Array(PlayerStateSchema, { description: 'Array of player states' }),
+    lastProcessedSequence: Type.Optional(
+      Type.Record(
+        Type.String({ description: 'Player ID' }),
+        Type.Number({ description: 'Last processed input sequence number for this player', minimum: 0 }),
+        { description: 'Map of player IDs to their last processed input sequence number for client-side prediction reconciliation' }
+      )
+    ),
   },
   { $id: 'PlayerMoveData', description: 'Player movement update payload' }
 );
