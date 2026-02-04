@@ -113,11 +113,11 @@ func (w *World) GetPlayer(playerID string) (*PlayerState, bool) {
 }
 
 // GetAllPlayers returns snapshots of all players (thread-safe)
-func (w *World) GetAllPlayers() []PlayerState {
+func (w *World) GetAllPlayers() []PlayerStateSnapshot {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 
-	snapshots := make([]PlayerState, 0, len(w.players))
+	snapshots := make([]PlayerStateSnapshot, 0, len(w.players))
 	for _, player := range w.players {
 		snapshots = append(snapshots, player.Snapshot())
 	}

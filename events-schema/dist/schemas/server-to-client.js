@@ -19,6 +19,25 @@ export const RoomJoinedDataSchema = Type.Object({
  */
 export const RoomJoinedMessageSchema = createTypedMessageSchema('room:joined', RoomJoinedDataSchema);
 // ============================================================================
+// player:left
+// ============================================================================
+/**
+ * Player left data payload.
+ * Sent when a player disconnects from the room.
+ *
+ * **Why this message exists:** When a player's WebSocket connection closes,
+ * all other players in the room need to be notified so they can remove the
+ * player's sprite from their local game state. Without this message, ghost
+ * players would remain on screen after disconnection.
+ */
+export const PlayerLeftDataSchema = Type.Object({
+    playerId: Type.String({ description: 'Unique identifier of the player who left', minLength: 1 }),
+}, { $id: 'PlayerLeftData', description: 'Player left event payload' });
+/**
+ * Complete player:left message schema
+ */
+export const PlayerLeftMessageSchema = createTypedMessageSchema('player:left', PlayerLeftDataSchema);
+// ============================================================================
 // player:move
 // ============================================================================
 /**
@@ -41,6 +60,7 @@ export const PlayerStateSchema = Type.Object({
  */
 export const PlayerMoveDataSchema = Type.Object({
     players: Type.Array(PlayerStateSchema, { description: 'Array of player states' }),
+    lastProcessedSequence: Type.Optional(Type.Record(Type.String({ description: 'Player ID' }), Type.Number({ description: 'Last processed input sequence number for this player', minimum: 0 }), { description: 'Map of player IDs to their last processed input sequence number for client-side prediction reconciliation' })),
 }, { $id: 'PlayerMoveData', description: 'Player movement update payload' });
 /**
  * Complete player:move message schema
@@ -344,4 +364,56 @@ export const RollEndDataSchema = Type.Object({
  * Complete roll:end message schema
  */
 export const RollEndMessageSchema = createTypedMessageSchema('roll:end', RollEndDataSchema);
+// ============================================================================
+// state:snapshot (Delta Compression - Full State Snapshot)
+// ============================================================================
+/**
+ * Projectile snapshot schema for full state updates.
+ */
+export const ProjectileSnapshotSchema = Type.Object({
+    id: Type.String({ description: 'Unique projectile identifier', minLength: 1 }),
+    ownerId: Type.String({ description: 'Player who fired the projectile', minLength: 1 }),
+    position: PositionSchema,
+    velocity: VelocitySchema,
+}, { $id: 'ProjectileSnapshot', description: 'Projectile state snapshot' });
+/**
+ * Weapon crate snapshot schema for full state updates.
+ */
+export const WeaponCrateSnapshotSchema = Type.Object({
+    id: Type.String({ description: 'Unique crate identifier', minLength: 1 }),
+    position: PositionSchema,
+    weaponType: Type.String({ description: 'Type of weapon in the crate', minLength: 1 }),
+    isAvailable: Type.Boolean({ description: 'Whether the crate is currently available for pickup' }),
+}, { $id: 'WeaponCrateSnapshot', description: 'Weapon crate state snapshot' });
+/**
+ * Full state snapshot data payload.
+ * Sent periodically (every 1 second) to prevent delta drift.
+ * Contains the complete game state.
+ */
+export const StateSnapshotDataSchema = Type.Object({
+    players: Type.Array(PlayerStateSchema, { description: 'Complete state of all players' }),
+    projectiles: Type.Array(ProjectileSnapshotSchema, { description: 'Complete state of all projectiles' }),
+    weaponCrates: Type.Array(WeaponCrateSnapshotSchema, { description: 'Complete state of all weapon crates' }),
+}, { $id: 'StateSnapshotData', description: 'Full game state snapshot for delta compression' });
+/**
+ * Complete state:snapshot message schema
+ */
+export const StateSnapshotMessageSchema = createTypedMessageSchema('state:snapshot', StateSnapshotDataSchema);
+// ============================================================================
+// state:delta (Delta Compression - Incremental Updates)
+// ============================================================================
+/**
+ * Delta state update data payload.
+ * Contains only changed entities since last update.
+ * Sent at high frequency (20Hz) between full snapshots.
+ */
+export const StateDeltaDataSchema = Type.Object({
+    players: Type.Optional(Type.Array(PlayerStateSchema, { description: 'Players that changed state' })),
+    projectilesAdded: Type.Optional(Type.Array(ProjectileSnapshotSchema, { description: 'New projectiles spawned' })),
+    projectilesRemoved: Type.Optional(Type.Array(Type.String(), { description: 'IDs of destroyed projectiles' })),
+}, { $id: 'StateDeltaData', description: 'Incremental state changes for delta compression' });
+/**
+ * Complete state:delta message schema
+ */
+export const StateDeltaMessageSchema = createTypedMessageSchema('state:delta', StateDeltaDataSchema);
 //# sourceMappingURL=server-to-client.js.map

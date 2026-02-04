@@ -161,7 +161,7 @@ func (h *WebSocketHandler) onHit(hit game.HitEvent) {
 	h.roomManager.SendToPlayer(hit.AttackerID, confirmBytes)
 
 	// If victim died, mark as dead and broadcast player:death
-	if !victimState.IsAlive() {
+	if victimState.Health <= 0 {
 		// Mark player as dead
 		h.gameServer.MarkPlayerDead(hit.VictimID)
 

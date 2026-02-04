@@ -1,0 +1,46 @@
+{
+  "$id": "WeaponCrateSnapshot",
+  "description": "Weapon crate state snapshot",
+  "type": "object",
+  "required": [
+    "id",
+    "position",
+    "weaponType",
+    "isAvailable"
+  ],
+  "properties": {
+    "id": {
+      "description": "Unique crate identifier",
+      "minLength": 1,
+      "type": "string"
+    },
+    "position": {
+      "$id": "Position",
+      "description": "A 2D position coordinate",
+      "type": "object",
+      "required": [
+        "x",
+        "y"
+      ],
+      "properties": {
+        "x": {
+          "description": "X coordinate",
+          "type": "number"
+        },
+        "y": {
+          "description": "Y coordinate",
+          "type": "number"
+        }
+      }
+    },
+    "weaponType": {
+      "description": "Type of weapon in the crate",
+      "minLength": 1,
+      "type": "string"
+    },
+    "isAvailable": {
+      "description": "Whether the crate is currently available for pickup",
+      "type": "boolean"
+    }
+  }
+}

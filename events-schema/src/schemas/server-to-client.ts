@@ -586,3 +586,85 @@ export type RollEndData = Static<typeof RollEndDataSchema>;
  */
 export const RollEndMessageSchema = createTypedMessageSchema('roll:end', RollEndDataSchema);
 export type RollEndMessage = Static<typeof RollEndMessageSchema>;
+
+// ============================================================================
+// state:snapshot (Delta Compression - Full State Snapshot)
+// ============================================================================
+
+/**
+ * Projectile snapshot schema for full state updates.
+ */
+export const ProjectileSnapshotSchema = Type.Object(
+  {
+    id: Type.String({ description: 'Unique projectile identifier', minLength: 1 }),
+    ownerId: Type.String({ description: 'Player who fired the projectile', minLength: 1 }),
+    position: PositionSchema,
+    velocity: VelocitySchema,
+  },
+  { $id: 'ProjectileSnapshot', description: 'Projectile state snapshot' }
+);
+
+export type ProjectileSnapshot = Static<typeof ProjectileSnapshotSchema>;
+
+/**
+ * Weapon crate snapshot schema for full state updates.
+ */
+export const WeaponCrateSnapshotSchema = Type.Object(
+  {
+    id: Type.String({ description: 'Unique crate identifier', minLength: 1 }),
+    position: PositionSchema,
+    weaponType: Type.String({ description: 'Type of weapon in the crate', minLength: 1 }),
+    isAvailable: Type.Boolean({ description: 'Whether the crate is currently available for pickup' }),
+  },
+  { $id: 'WeaponCrateSnapshot', description: 'Weapon crate state snapshot' }
+);
+
+export type WeaponCrateSnapshot = Static<typeof WeaponCrateSnapshotSchema>;
+
+/**
+ * Full state snapshot data payload.
+ * Sent periodically (every 1 second) to prevent delta drift.
+ * Contains the complete game state.
+ */
+export const StateSnapshotDataSchema = Type.Object(
+  {
+    players: Type.Array(PlayerStateSchema, { description: 'Complete state of all players' }),
+    projectiles: Type.Array(ProjectileSnapshotSchema, { description: 'Complete state of all projectiles' }),
+    weaponCrates: Type.Array(WeaponCrateSnapshotSchema, { description: 'Complete state of all weapon crates' }),
+  },
+  { $id: 'StateSnapshotData', description: 'Full game state snapshot for delta compression' }
+);
+
+export type StateSnapshotData = Static<typeof StateSnapshotDataSchema>;
+
+/**
+ * Complete state:snapshot message schema
+ */
+export const StateSnapshotMessageSchema = createTypedMessageSchema('state:snapshot', StateSnapshotDataSchema);
+export type StateSnapshotMessage = Static<typeof StateSnapshotMessageSchema>;
+
+// ============================================================================
+// state:delta (Delta Compression - Incremental Updates)
+// ============================================================================
+
+/**
+ * Delta state update data payload.
+ * Contains only changed entities since last update.
+ * Sent at high frequency (20Hz) between full snapshots.
+ */
+export const StateDeltaDataSchema = Type.Object(
+  {
+    players: Type.Optional(Type.Array(PlayerStateSchema, { description: 'Players that changed state' })),
+    projectilesAdded: Type.Optional(Type.Array(ProjectileSnapshotSchema, { description: 'New projectiles spawned' })),
+    projectilesRemoved: Type.Optional(Type.Array(Type.String(), { description: 'IDs of destroyed projectiles' })),
+  },
+  { $id: 'StateDeltaData', description: 'Incremental state changes for delta compression' }
+);
+
+export type StateDeltaData = Static<typeof StateDeltaDataSchema>;
+
+/**
+ * Complete state:delta message schema
+ */
+export const StateDeltaMessageSchema = createTypedMessageSchema('state:delta', StateDeltaDataSchema);
+export type StateDeltaMessage = Static<typeof StateDeltaMessageSchema>;

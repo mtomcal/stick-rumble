@@ -14,6 +14,7 @@ export declare const InputStateDataSchema: import("@sinclair/typebox").TObject<{
     right: import("@sinclair/typebox").TBoolean;
     aimAngle: import("@sinclair/typebox").TNumber;
     isSprinting: import("@sinclair/typebox").TBoolean;
+    sequence: import("@sinclair/typebox").TNumber;
 }>;
 export type InputStateData = Static<typeof InputStateDataSchema>;
 /**
@@ -29,6 +30,7 @@ export declare const InputStateMessageSchema: import("@sinclair/typebox").TObjec
         right: import("@sinclair/typebox").TBoolean;
         aimAngle: import("@sinclair/typebox").TNumber;
         isSprinting: import("@sinclair/typebox").TBoolean;
+        sequence: import("@sinclair/typebox").TNumber;
     }>;
 }>;
 export type InputStateMessage = Static<typeof InputStateMessageSchema>;

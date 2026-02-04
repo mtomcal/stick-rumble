@@ -8,10 +8,10 @@ import (
 )
 
 func TestGameServerMultiplePlayers(t *testing.T) {
-	var lastBroadcast []PlayerState
+	var lastBroadcast []PlayerStateSnapshot
 	var mu sync.Mutex
 
-	broadcastFunc := func(states []PlayerState) {
+	broadcastFunc := func(states []PlayerStateSnapshot) {
 		mu.Lock()
 		lastBroadcast = states
 		mu.Unlock()
@@ -67,7 +67,7 @@ func TestGameServerNoBroadcastWithoutPlayers(t *testing.T) {
 	var broadcastCount int
 	var mu sync.Mutex
 
-	broadcastFunc := func(states []PlayerState) {
+	broadcastFunc := func(states []PlayerStateSnapshot) {
 		mu.Lock()
 		broadcastCount++
 		mu.Unlock()

@@ -179,7 +179,7 @@ func TestGameServerHitDetection_MultipleHits(t *testing.T) {
 		t.Errorf("Expected health 0, got %d", player2State.Health)
 	}
 
-	if player2State.IsAlive() {
+	if player2State.Health > 0 {
 		t.Error("Player should be dead")
 	}
 }
