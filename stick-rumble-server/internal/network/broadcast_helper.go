@@ -9,8 +9,8 @@ import (
 	"github.com/mtomcal/stick-rumble-server/internal/game"
 )
 
-// broadcastPlayerStates sends player position updates to all players
-func (h *WebSocketHandler) broadcastPlayerStates(playerStates []game.PlayerState) {
+// broadcastPlayerStates sends player position updates to all players using delta compression
+func (h *WebSocketHandler) broadcastPlayerStates(playerStates []game.PlayerStateSnapshot) {
 	if len(playerStates) == 0 {
 		return
 	}
@@ -34,7 +34,6 @@ func (h *WebSocketHandler) broadcastPlayerStates(playerStates []game.PlayerState
 	}
 
 	// Group player state indices by room to avoid broadcasting cross-room player data
-	// This prevents the bug where players from different rooms appear in each other's games
 	// Using indices to avoid copying PlayerState which contains a mutex
 	roomPlayerIndices := make(map[string][]int)
 	waitingPlayerIndices := make([]int, 0)
@@ -49,71 +48,22 @@ func (h *WebSocketHandler) broadcastPlayerStates(playerStates []game.PlayerState
 		}
 	}
 
-	// Broadcast to each room with only that room's players
+	// Broadcast to each room with delta compression (per-client basis)
 	for roomID, indices := range roomPlayerIndices {
-		// Build player slice for this room only (use pointers to avoid copying mutex)
-		roomPlayers := make([]*game.PlayerState, len(indices))
+		// Build player slice for this room only
+		roomPlayers := make([]game.PlayerStateSnapshot, len(indices))
 		for j, idx := range indices {
-			roomPlayers[j] = &playerStates[idx]
+			roomPlayers[j] = playerStates[idx]
 		}
 
-		// Build lastProcessedSequence map for this room
-		// Get actual player pointers to access sequence numbers
-		lastProcessedSequence := make(map[string]interface{})
-		correctedPlayers := make([]string, 0)
-
-		for _, idx := range indices {
-			playerID := playerStates[idx].ID
-			// Get the actual player pointer from the world to access sequence
-			if player, exists := h.gameServer.GetWorld().GetPlayer(playerID); exists {
-				seq := player.GetInputSequence()
-				lastProcessedSequence[playerID] = float64(seq)
-
-				// Check if this player needs correction (recent correction in stats)
-				stats := player.GetCorrectionStats()
-				// If the last correction was very recent (within last 100ms), mark for correction
-				if !stats.LastCorrectionAt.IsZero() && time.Since(stats.LastCorrectionAt) < 100*time.Millisecond {
-					correctedPlayers = append(correctedPlayers, playerID)
-				}
-			}
-		}
-
-		// Create player:move message data for this room only
-		data := map[string]interface{}{
-			"players":               roomPlayers,
-			"lastProcessedSequence": lastProcessedSequence,
-		}
-
-		// Only include correctedPlayers if there are any
-		if len(correctedPlayers) > 0 {
-			data["correctedPlayers"] = correctedPlayers
-		}
-
-		// Validate outgoing message schema (development mode only)
-		if err := h.validateOutgoingMessage("player:move", data); err != nil {
-			log.Printf("Schema validation failed for player:move: %v", err)
-			// Continue anyway - validation is for development debugging only
-		}
-
-		// Create player:move message
-		message := Message{
-			Type:      "player:move",
-			Timestamp: 0, // Will be set by each client
-			Data:      data,
-		}
-
-		msgBytes, err := json.Marshal(message)
-		if err != nil {
-			log.Printf("Error marshaling player:move message: %v", err)
-			log.Printf("Player states that failed to marshal: %+v", roomPlayers)
-			continue
-		}
-
-		// Get room and broadcast
+		// Get room and broadcast to each player individually with delta compression
 		rooms := h.roomManager.GetAllRooms()
 		for _, room := range rooms {
 			if room.ID == roomID {
-				room.Broadcast(msgBytes, "")
+				// Broadcast to each player in the room with per-client delta compression
+				for _, player := range room.GetPlayers() {
+					h.broadcastPlayerStatesToClient(player.ID, roomPlayers)
+				}
 				break
 			}
 		}
@@ -121,48 +71,194 @@ func (h *WebSocketHandler) broadcastPlayerStates(playerStates []game.PlayerState
 
 	// Send to waiting players (each waiting player only sees their own state)
 	for _, idx := range waitingPlayerIndices {
-		// Use pointer to avoid copying mutex
-		state := &playerStates[idx]
+		// Create slice with single state
+		singlePlayerState := make([]game.PlayerStateSnapshot, 1)
+		singlePlayerState[0] = playerStates[idx]
+		h.broadcastPlayerStatesToClient(playerStates[idx].ID, singlePlayerState)
+	}
+}
 
-		// Build lastProcessedSequence for this player
-		lastProcessedSequence := make(map[string]interface{})
-		correctedPlayers := make([]string, 0)
+// broadcastPlayerStatesToClient sends player states to a specific client using delta compression
+func (h *WebSocketHandler) broadcastPlayerStatesToClient(clientID string, playerStates []game.PlayerStateSnapshot) {
+	// Check if we should send a full snapshot or a delta
+	shouldSnapshot := h.deltaTracker.ShouldSendSnapshot(clientID)
 
+	if shouldSnapshot {
+		// Send full snapshot
+		h.sendSnapshot(clientID, playerStates)
+		h.deltaTracker.UpdateLastSnapshot(clientID)
+		h.deltaTracker.UpdatePlayerState(clientID, playerStates)
+	} else {
+		// Send delta
+		h.sendDelta(clientID, playerStates)
+		h.deltaTracker.UpdatePlayerState(clientID, playerStates)
+	}
+}
+
+// sendSnapshot sends a full state snapshot to a client
+func (h *WebSocketHandler) sendSnapshot(clientID string, playerStates []game.PlayerStateSnapshot) {
+	// Get active projectiles
+	projectiles := h.gameServer.GetActiveProjectiles()
+
+	// Get weapon crates
+	weaponCrates := h.gameServer.GetWeaponCrateManager().GetAllCrates()
+
+	// Build projectile snapshot data
+	projectileSnapshots := make([]map[string]interface{}, len(projectiles))
+	for i, proj := range projectiles {
+		projectileSnapshots[i] = map[string]interface{}{
+			"id":       proj.ID,
+			"ownerId":  proj.OwnerID,
+			"position": proj.Position,
+			"velocity": proj.Velocity,
+		}
+	}
+
+	// Build weapon crate snapshot data
+	crateSnapshots := make([]map[string]interface{}, 0, len(weaponCrates))
+	for _, crate := range weaponCrates {
+		crateSnapshots = append(crateSnapshots, map[string]interface{}{
+			"id":          crate.ID,
+			"position":    crate.Position,
+			"weaponType":  crate.WeaponType,
+			"isAvailable": crate.IsAvailable,
+		})
+	}
+
+	// Build lastProcessedSequence and correctedPlayers for reconciliation (Story 4.2)
+	lastProcessedSequence := make(map[string]interface{})
+	correctedPlayers := make([]string, 0)
+
+	for _, state := range playerStates {
 		if player, exists := h.gameServer.GetWorld().GetPlayer(state.ID); exists {
 			seq := player.GetInputSequence()
 			lastProcessedSequence[state.ID] = float64(seq)
 
-			// Check if this player needs correction
+			// Check if this player needs correction (recent correction in stats)
 			stats := player.GetCorrectionStats()
 			if !stats.LastCorrectionAt.IsZero() && time.Since(stats.LastCorrectionAt) < 100*time.Millisecond {
 				correctedPlayers = append(correctedPlayers, state.ID)
 			}
 		}
-
-		data := map[string]interface{}{
-			"players":               []*game.PlayerState{state},
-			"lastProcessedSequence": lastProcessedSequence,
-		}
-
-		// Only include correctedPlayers if there are any
-		if len(correctedPlayers) > 0 {
-			data["correctedPlayers"] = correctedPlayers
-		}
-
-		message := Message{
-			Type:      "player:move",
-			Timestamp: 0,
-			Data:      data,
-		}
-
-		msgBytes, err := json.Marshal(message)
-		if err != nil {
-			log.Printf("Error marshaling player:move message for waiting player: %v", err)
-			continue
-		}
-
-		h.roomManager.SendToWaitingPlayer(state.ID, msgBytes)
 	}
+
+	// Create state:snapshot message data
+	data := map[string]interface{}{
+		"players":               playerStates,
+		"projectiles":           projectileSnapshots,
+		"weaponCrates":          crateSnapshots,
+		"lastProcessedSequence": lastProcessedSequence,
+	}
+
+	// Only include correctedPlayers if there are any
+	if len(correctedPlayers) > 0 {
+		data["correctedPlayers"] = correctedPlayers
+	}
+
+	// Validate outgoing message schema (development mode only)
+	if err := h.validateOutgoingMessage("state:snapshot", data); err != nil {
+		log.Printf("Schema validation failed for state:snapshot: %v", err)
+	}
+
+	message := Message{
+		Type:      "state:snapshot",
+		Timestamp: time.Now().UnixMilli(),
+		Data:      data,
+	}
+
+	msgBytes, err := json.Marshal(message)
+	if err != nil {
+		log.Printf("Error marshaling state:snapshot message: %v", err)
+		return
+	}
+
+	// Send to client
+	h.roomManager.SendToPlayer(clientID, msgBytes)
+}
+
+// sendDelta sends only changed state to a client
+func (h *WebSocketHandler) sendDelta(clientID string, playerStates []game.PlayerStateSnapshot) {
+	// Compute player delta
+	playerDelta := h.deltaTracker.ComputePlayerDelta(clientID, playerStates)
+
+	// Compute projectile delta
+	projectiles := h.gameServer.GetActiveProjectiles()
+	projectilesAdded, projectilesRemoved := h.deltaTracker.ComputeProjectileDelta(clientID, projectiles)
+
+	// Build lastProcessedSequence and correctedPlayers for reconciliation (Story 4.2)
+	lastProcessedSequence := make(map[string]interface{})
+	correctedPlayers := make([]string, 0)
+
+	for _, state := range playerStates {
+		if player, exists := h.gameServer.GetWorld().GetPlayer(state.ID); exists {
+			seq := player.GetInputSequence()
+			lastProcessedSequence[state.ID] = float64(seq)
+
+			// Check if this player needs correction (recent correction in stats)
+			stats := player.GetCorrectionStats()
+			if !stats.LastCorrectionAt.IsZero() && time.Since(stats.LastCorrectionAt) < 100*time.Millisecond {
+				correctedPlayers = append(correctedPlayers, state.ID)
+			}
+		}
+	}
+
+	// If nothing changed, don't send a message
+	if len(playerDelta) == 0 && len(projectilesAdded) == 0 && len(projectilesRemoved) == 0 {
+		return
+	}
+
+	// Build delta message data
+	data := make(map[string]interface{})
+
+	if len(playerDelta) > 0 {
+		data["players"] = playerDelta
+	}
+
+	if len(projectilesAdded) > 0 {
+		projSnapshots := make([]map[string]interface{}, len(projectilesAdded))
+		for i, proj := range projectilesAdded {
+			projSnapshots[i] = map[string]interface{}{
+				"id":       proj.ID,
+				"ownerId":  proj.OwnerID,
+				"position": proj.Position,
+				"velocity": proj.Velocity,
+			}
+		}
+		data["projectilesAdded"] = projSnapshots
+	}
+
+	if len(projectilesRemoved) > 0 {
+		data["projectilesRemoved"] = projectilesRemoved
+	}
+
+	// Add reconciliation data
+	data["lastProcessedSequence"] = lastProcessedSequence
+	if len(correctedPlayers) > 0 {
+		data["correctedPlayers"] = correctedPlayers
+	}
+
+	// Validate outgoing message schema (development mode only)
+	if err := h.validateOutgoingMessage("state:delta", data); err != nil {
+		log.Printf("Schema validation failed for state:delta: %v", err)
+	}
+
+	message := Message{
+		Type:      "state:delta",
+		Timestamp: time.Now().UnixMilli(),
+		Data:      data,
+	}
+
+	msgBytes, err := json.Marshal(message)
+	if err != nil {
+		log.Printf("Error marshaling state:delta message: %v", err)
+		return
+	}
+
+	// Send to client
+	h.roomManager.SendToPlayer(clientID, msgBytes)
+
+	// Update projectile state tracking
+	h.deltaTracker.UpdateProjectileState(clientID, projectiles)
 }
 
 // broadcastProjectileSpawn sends projectile spawn event to all clients

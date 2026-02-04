@@ -29,7 +29,7 @@ func TestBroadcastPlayerStatesWithNaN(t *testing.T) {
 	_ = consumeRoomJoinedAndGetPlayerID(t, conn2)
 
 	// Create player states with NaN values - should trigger validation logs
-	statesWithNaN := []game.PlayerState{
+	statesWithNaN := []game.PlayerStateSnapshot{
 		{
 			ID: "test-nan-player",
 			Position: game.Vector2{
@@ -66,7 +66,7 @@ func TestBroadcastPlayerStatesWithInf(t *testing.T) {
 	_ = consumeRoomJoinedAndGetPlayerID(t, conn2)
 
 	// Create player states with Infinity values - should trigger validation logs
-	statesWithInf := []game.PlayerState{
+	statesWithInf := []game.PlayerStateSnapshot{
 		{
 			ID: "test-inf-player",
 			Position: game.Vector2{
@@ -487,7 +487,7 @@ func TestBroadcastPlayerStatesEmptySlice(t *testing.T) {
 
 	// Empty slice should return early (line 19 check: if len(states) == 0)
 	require.NotPanics(t, func() {
-		handler.broadcastPlayerStates([]game.PlayerState{})
+		handler.broadcastPlayerStates([]game.PlayerStateSnapshot{})
 	}, "Should handle empty player states gracefully")
 
 	// Verify no broadcasts occur for empty slice (early return)

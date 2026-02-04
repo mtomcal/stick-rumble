@@ -586,7 +586,8 @@ describe('WebSocketClient', () => {
       const callback = vi.fn();
       client.onInputRecorded(callback);
 
-      client.sendInputState({ up: false, down: false, left: false, right: true, aimAngle: 0, isSprinting: false, sequence: 0 } as InputStateData);
+      const inputData: InputStateData = { up: false, down: false, left: false, right: true, aimAngle: 0, isSprinting: false, sequence: 0 };
+      client.sendInputState(inputData);
 
       expect(callback).not.toHaveBeenCalled();
       expect(client.getFrameNumber()).toBe(0);
@@ -606,7 +607,7 @@ describe('WebSocketClient', () => {
       client.onInputRecorded(callback);
       client.setInputRecording(true);
 
-      const inputData = { up: false, down: false, left: false, right: true, aimAngle: 0, isSprinting: false, sequence: 0 };
+      const inputData: InputStateData = { up: false, down: false, left: false, right: true, aimAngle: 0, isSprinting: false, sequence: 0 };
       client.sendInputState(inputData);
 
       expect(callback).toHaveBeenCalledOnce();
@@ -628,7 +629,8 @@ describe('WebSocketClient', () => {
       client.onInputRecorded(callback);
       client.setInputRecording(true);
 
-      client.sendInputState({ up: false, down: false, left: false, right: true, aimAngle: 0, isSprinting: false, sequence: 0 } as InputStateData);
+      const inputData: InputStateData = { up: false, down: false, left: false, right: true, aimAngle: 0, isSprinting: false, sequence: 0 };
+      client.sendInputState(inputData);
       client.sendInputState({ up: true, down: false, left: false, right: false, aimAngle: 1.5, isSprinting: false, sequence: 1 } as InputStateData);
       client.sendInputState({ up: false, down: true, left: false, right: false, aimAngle: 3.0, isSprinting: false, sequence: 2 } as InputStateData);
 
@@ -653,7 +655,8 @@ describe('WebSocketClient', () => {
       client.onInputRecorded(callback);
       client.setInputRecording(true);
 
-      client.sendInputState({ up: false, down: false, left: false, right: true, aimAngle: 0, isSprinting: false, sequence: 0 } as InputStateData);
+      const inputData: InputStateData = { up: false, down: false, left: false, right: true, aimAngle: 0, isSprinting: false, sequence: 0 };
+      client.sendInputState(inputData);
 
       expect(callback).toHaveBeenCalledOnce();
 
@@ -681,7 +684,8 @@ describe('WebSocketClient', () => {
       client.onInputRecorded(callback);
       client.setInputRecording(true);
 
-      client.sendInputState({ up: false, down: false, left: false, right: true, aimAngle: 0, isSprinting: false, sequence: 0 } as InputStateData);
+      const inputData: InputStateData = { up: false, down: false, left: false, right: true, aimAngle: 0, isSprinting: false, sequence: 0 };
+      client.sendInputState(inputData);
       client.sendInputState({ up: true, down: false, left: false, right: false, aimAngle: 1.5, isSprinting: false, sequence: 1 } as InputStateData);
 
       expect(client.getFrameNumber()).toBe(2);
@@ -709,7 +713,8 @@ describe('WebSocketClient', () => {
 
       // Should not throw without callback
       expect(() => {
-        client.sendInputState({ up: false, down: false, left: false, right: true, aimAngle: 0, isSprinting: false, sequence: 0 } as InputStateData);
+        const inputData: InputStateData = { up: false, down: false, left: false, right: true, aimAngle: 0, isSprinting: false, sequence: 0 };
+      client.sendInputState(inputData);
       }).not.toThrow();
 
       expect(client.getFrameNumber()).toBe(1);

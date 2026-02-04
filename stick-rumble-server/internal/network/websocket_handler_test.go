@@ -85,8 +85,6 @@ func (ts *testServer) connectTwoClients(t *testing.T) (*websocket.Conn, *websock
 func readMessage(t *testing.T, conn *websocket.Conn, timeout time.Duration) (*Message, error) {
 	conn.SetReadDeadline(time.Now().Add(timeout))
 	_, msgBytes, err := conn.ReadMessage()
-	// Clear the deadline after reading (success or failure)
-	// This prevents gorilla/websocket from marking the connection as permanently failed
 	conn.SetReadDeadline(time.Time{})
 
 	if err != nil {
@@ -134,11 +132,13 @@ func sendInputState(t *testing.T, conn *websocket.Conn, up, down, left, right bo
 		Type:      "input:state",
 		Timestamp: time.Now().UnixMilli(),
 		Data: map[string]interface{}{
-			"up":       up,
-			"down":     down,
-			"left":     left,
-			"right":    right,
-			"aimAngle": 0.0,
+			"up":          up,
+			"down":        down,
+			"left":        left,
+			"right":       right,
+			"aimAngle":    0.0,
+			"isSprinting": false,
+			"sequence":    0,
 		},
 	}
 	sendMessage(t, conn, msg)
@@ -347,27 +347,20 @@ func TestInputStateProcessing(t *testing.T) {
 		if err != nil {
 			continue
 		}
-		if msg.Type == "player:move" {
+		// Accept both state:snapshot and state:delta (delta compression system)
+		if msg.Type == "state:snapshot" || msg.Type == "state:delta" {
 			foundMove = true
 			data, ok := msg.Data.(map[string]interface{})
 			require.True(t, ok)
 
-			// Schema uses "players" array, not "updates"
+			// Both message types use "players" array
 			players, ok := data["players"].([]interface{})
-			if !ok {
-				// Try "updates" as fallback
-				players, ok = data["updates"].([]interface{})
-			}
-			require.True(t, ok, "Should have players or updates array")
+			require.True(t, ok, "Should have players array")
 
 			// Find player1's update
 			for _, player := range players {
 				playerMap := player.(map[string]interface{})
-				// Schema uses "id" not "playerId"
 				playerID := playerMap["id"]
-				if playerID == nil {
-					playerID = playerMap["playerId"]
-				}
 				if playerID == player1ID {
 					position := playerMap["position"].(map[string]interface{})
 					assert.NotNil(t, position)
@@ -379,7 +372,7 @@ func TestInputStateProcessing(t *testing.T) {
 			break
 		}
 	}
-	assert.True(t, foundMove, "Should receive player:move update")
+	assert.True(t, foundMove, "Should receive state:snapshot or state:delta update")
 }
 
 func TestInputAfterMatchEnded(t *testing.T) {

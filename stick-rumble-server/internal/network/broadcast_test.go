@@ -27,9 +27,13 @@ func TestBroadcastPlayerMove(t *testing.T) {
 	// Send input to move player 1
 	sendInputState(t, conn1, true, false, false, false)
 
-	// Both players should receive player:move updates
-	msg, err := readMessageOfType(t, conn1, "player:move", 2*time.Second)
-	require.NoError(t, err, "Should receive player:move message")
+	// Both players should receive state updates (either state:snapshot or state:delta)
+	// First message is always a snapshot
+	msg, err := readMessage(t, conn1, 2*time.Second)
+	require.NoError(t, err, "Should receive state update message")
+
+	// Accept either state:snapshot or state:delta
+	require.Contains(t, []string{"state:snapshot", "state:delta"}, msg.Type, "Should receive state update")
 
 	data, ok := msg.Data.(map[string]interface{})
 	require.True(t, ok)
@@ -506,7 +510,7 @@ func TestBroadcastPlayerStatesWithEmptyArray(t *testing.T) {
 
 	// Should not panic with empty player states (early return on line 19)
 	require.NotPanics(t, func() {
-		handler.broadcastPlayerStates([]game.PlayerState{})
+		handler.broadcastPlayerStates([]game.PlayerStateSnapshot{})
 	}, "Should handle empty player states without panic")
 
 	// Verify no rooms exist (early return prevents broadcast)

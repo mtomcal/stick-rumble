@@ -64,6 +64,12 @@ import {
   RollStartMessageSchema,
   RollEndDataSchema,
   RollEndMessageSchema,
+  ProjectileSnapshotSchema,
+  WeaponCrateSnapshotSchema,
+  StateSnapshotDataSchema,
+  StateSnapshotMessageSchema,
+  StateDeltaDataSchema,
+  StateDeltaMessageSchema,
 } from './schemas/server-to-client.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -300,6 +306,31 @@ const schemas: SchemaExport[] = [
   {
     schema: RollEndMessageSchema,
     outputPath: 'schemas/server-to-client/roll-end-message.json',
+  },
+  // Delta compression schemas
+  {
+    schema: ProjectileSnapshotSchema,
+    outputPath: 'schemas/server-to-client/projectile-snapshot.json',
+  },
+  {
+    schema: WeaponCrateSnapshotSchema,
+    outputPath: 'schemas/server-to-client/weapon-crate-snapshot.json',
+  },
+  {
+    schema: StateSnapshotDataSchema,
+    outputPath: 'schemas/server-to-client/state-snapshot-data.json',
+  },
+  {
+    schema: StateSnapshotMessageSchema,
+    outputPath: 'schemas/server-to-client/state-snapshot-message.json',
+  },
+  {
+    schema: StateDeltaDataSchema,
+    outputPath: 'schemas/server-to-client/state-delta-data.json',
+  },
+  {
+    schema: StateDeltaMessageSchema,
+    outputPath: 'schemas/server-to-client/state-delta-message.json',
   },
 ];
 

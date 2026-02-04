@@ -41,6 +41,7 @@ type WebSocketHandler struct {
 	validator         *SchemaValidator
 	outgoingValidator *SchemaValidator
 	networkSimulator  *NetworkSimulator // For artificial latency testing (Story 4.6)
+	deltaTracker      *DeltaTracker     // For delta compression (Story 4.4)
 }
 
 // NewWebSocketHandler creates a new WebSocket handler with room management
@@ -64,6 +65,7 @@ func NewWebSocketHandlerWithConfig(timerInterval time.Duration) *WebSocketHandle
 		validator:         NewSchemaValidator(schemaLoader),
 		outgoingValidator: NewSchemaValidator(outgoingSchemaLoader),
 		networkSimulator:  networkSimulator,
+		deltaTracker:      NewDeltaTracker(),
 	}
 
 	// Create game server with broadcast function
@@ -297,6 +299,7 @@ func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Reques
 	// Clean up on disconnect
 	h.roomManager.RemovePlayer(playerID)
 	h.gameServer.RemovePlayer(playerID)
+	h.deltaTracker.RemoveClient(playerID) // Clean up delta compression state
 	close(sendChan)
 	<-done // Wait for send goroutine to finish
 

@@ -9,7 +9,7 @@ import (
 )
 
 // Helper to create a dummy broadcast function
-func noBroadcast(playerStates []PlayerState) {}
+func noBroadcast(playerStates []PlayerStateSnapshot) {}
 
 // ==========================
 // Callback Setter Tests

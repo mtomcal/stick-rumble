@@ -1,6 +1,6 @@
 {
-  "$id": "WeaponCrate",
-  "description": "Weapon crate state",
+  "$id": "WeaponCrateSnapshot",
+  "description": "Weapon crate state snapshot",
   "type": "object",
   "required": [
     "id",
@@ -38,7 +38,7 @@
       "type": "string"
     },
     "isAvailable": {
-      "description": "Whether the crate is available for pickup",
+      "description": "Whether the crate is currently available for pickup",
       "type": "boolean"
     }
   }

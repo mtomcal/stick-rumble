@@ -46,7 +46,6 @@
                 "type": "string"
               },
               "position": {
-                "$id": "Position",
                 "description": "A 2D position coordinate",
                 "type": "object",
                 "required": [

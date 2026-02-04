@@ -591,4 +591,213 @@ export declare const RollEndMessageSchema: import("@sinclair/typebox").TObject<{
     }>;
 }>;
 export type RollEndMessage = Static<typeof RollEndMessageSchema>;
+/**
+ * Projectile snapshot schema for full state updates.
+ */
+export declare const ProjectileSnapshotSchema: import("@sinclair/typebox").TObject<{
+    id: import("@sinclair/typebox").TString;
+    ownerId: import("@sinclair/typebox").TString;
+    position: import("@sinclair/typebox").TObject<{
+        x: import("@sinclair/typebox").TNumber;
+        y: import("@sinclair/typebox").TNumber;
+    }>;
+    velocity: import("@sinclair/typebox").TObject<{
+        x: import("@sinclair/typebox").TNumber;
+        y: import("@sinclair/typebox").TNumber;
+    }>;
+}>;
+export type ProjectileSnapshot = Static<typeof ProjectileSnapshotSchema>;
+/**
+ * Weapon crate snapshot schema for full state updates.
+ */
+export declare const WeaponCrateSnapshotSchema: import("@sinclair/typebox").TObject<{
+    id: import("@sinclair/typebox").TString;
+    position: import("@sinclair/typebox").TObject<{
+        x: import("@sinclair/typebox").TNumber;
+        y: import("@sinclair/typebox").TNumber;
+    }>;
+    weaponType: import("@sinclair/typebox").TString;
+    isAvailable: import("@sinclair/typebox").TBoolean;
+}>;
+export type WeaponCrateSnapshot = Static<typeof WeaponCrateSnapshotSchema>;
+/**
+ * Full state snapshot data payload.
+ * Sent periodically (every 1 second) to prevent delta drift.
+ * Contains the complete game state.
+ */
+export declare const StateSnapshotDataSchema: import("@sinclair/typebox").TObject<{
+    players: import("@sinclair/typebox").TArray<import("@sinclair/typebox").TObject<{
+        id: import("@sinclair/typebox").TString;
+        position: import("@sinclair/typebox").TObject<{
+            x: import("@sinclair/typebox").TNumber;
+            y: import("@sinclair/typebox").TNumber;
+        }>;
+        velocity: import("@sinclair/typebox").TObject<{
+            x: import("@sinclair/typebox").TNumber;
+            y: import("@sinclair/typebox").TNumber;
+        }>;
+        health: import("@sinclair/typebox").TNumber;
+        maxHealth: import("@sinclair/typebox").TNumber;
+        rotation: import("@sinclair/typebox").TNumber;
+        isDead: import("@sinclair/typebox").TBoolean;
+        isSprinting: import("@sinclair/typebox").TBoolean;
+        isRolling: import("@sinclair/typebox").TBoolean;
+    }>>;
+    projectiles: import("@sinclair/typebox").TArray<import("@sinclair/typebox").TObject<{
+        id: import("@sinclair/typebox").TString;
+        ownerId: import("@sinclair/typebox").TString;
+        position: import("@sinclair/typebox").TObject<{
+            x: import("@sinclair/typebox").TNumber;
+            y: import("@sinclair/typebox").TNumber;
+        }>;
+        velocity: import("@sinclair/typebox").TObject<{
+            x: import("@sinclair/typebox").TNumber;
+            y: import("@sinclair/typebox").TNumber;
+        }>;
+    }>>;
+    weaponCrates: import("@sinclair/typebox").TArray<import("@sinclair/typebox").TObject<{
+        id: import("@sinclair/typebox").TString;
+        position: import("@sinclair/typebox").TObject<{
+            x: import("@sinclair/typebox").TNumber;
+            y: import("@sinclair/typebox").TNumber;
+        }>;
+        weaponType: import("@sinclair/typebox").TString;
+        isAvailable: import("@sinclair/typebox").TBoolean;
+    }>>;
+    lastProcessedSequence: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TRecord<import("@sinclair/typebox").TString, import("@sinclair/typebox").TNumber>>;
+    correctedPlayers: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TArray<import("@sinclair/typebox").TString>>;
+}>;
+export type StateSnapshotData = Static<typeof StateSnapshotDataSchema>;
+/**
+ * Complete state:snapshot message schema
+ */
+export declare const StateSnapshotMessageSchema: import("@sinclair/typebox").TObject<{
+    type: import("@sinclair/typebox").TLiteral<string>;
+    timestamp: import("@sinclair/typebox").TInteger;
+    data: import("@sinclair/typebox").TObject<{
+        players: import("@sinclair/typebox").TArray<import("@sinclair/typebox").TObject<{
+            id: import("@sinclair/typebox").TString;
+            position: import("@sinclair/typebox").TObject<{
+                x: import("@sinclair/typebox").TNumber;
+                y: import("@sinclair/typebox").TNumber;
+            }>;
+            velocity: import("@sinclair/typebox").TObject<{
+                x: import("@sinclair/typebox").TNumber;
+                y: import("@sinclair/typebox").TNumber;
+            }>;
+            health: import("@sinclair/typebox").TNumber;
+            maxHealth: import("@sinclair/typebox").TNumber;
+            rotation: import("@sinclair/typebox").TNumber;
+            isDead: import("@sinclair/typebox").TBoolean;
+            isSprinting: import("@sinclair/typebox").TBoolean;
+            isRolling: import("@sinclair/typebox").TBoolean;
+        }>>;
+        projectiles: import("@sinclair/typebox").TArray<import("@sinclair/typebox").TObject<{
+            id: import("@sinclair/typebox").TString;
+            ownerId: import("@sinclair/typebox").TString;
+            position: import("@sinclair/typebox").TObject<{
+                x: import("@sinclair/typebox").TNumber;
+                y: import("@sinclair/typebox").TNumber;
+            }>;
+            velocity: import("@sinclair/typebox").TObject<{
+                x: import("@sinclair/typebox").TNumber;
+                y: import("@sinclair/typebox").TNumber;
+            }>;
+        }>>;
+        weaponCrates: import("@sinclair/typebox").TArray<import("@sinclair/typebox").TObject<{
+            id: import("@sinclair/typebox").TString;
+            position: import("@sinclair/typebox").TObject<{
+                x: import("@sinclair/typebox").TNumber;
+                y: import("@sinclair/typebox").TNumber;
+            }>;
+            weaponType: import("@sinclair/typebox").TString;
+            isAvailable: import("@sinclair/typebox").TBoolean;
+        }>>;
+        lastProcessedSequence: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TRecord<import("@sinclair/typebox").TString, import("@sinclair/typebox").TNumber>>;
+        correctedPlayers: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TArray<import("@sinclair/typebox").TString>>;
+    }>;
+}>;
+export type StateSnapshotMessage = Static<typeof StateSnapshotMessageSchema>;
+/**
+ * Delta state update data payload.
+ * Contains only changed entities since last update.
+ * Sent at high frequency (20Hz) between full snapshots.
+ */
+export declare const StateDeltaDataSchema: import("@sinclair/typebox").TObject<{
+    players: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TArray<import("@sinclair/typebox").TObject<{
+        id: import("@sinclair/typebox").TString;
+        position: import("@sinclair/typebox").TObject<{
+            x: import("@sinclair/typebox").TNumber;
+            y: import("@sinclair/typebox").TNumber;
+        }>;
+        velocity: import("@sinclair/typebox").TObject<{
+            x: import("@sinclair/typebox").TNumber;
+            y: import("@sinclair/typebox").TNumber;
+        }>;
+        health: import("@sinclair/typebox").TNumber;
+        maxHealth: import("@sinclair/typebox").TNumber;
+        rotation: import("@sinclair/typebox").TNumber;
+        isDead: import("@sinclair/typebox").TBoolean;
+        isSprinting: import("@sinclair/typebox").TBoolean;
+        isRolling: import("@sinclair/typebox").TBoolean;
+    }>>>;
+    projectilesAdded: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TArray<import("@sinclair/typebox").TObject<{
+        id: import("@sinclair/typebox").TString;
+        ownerId: import("@sinclair/typebox").TString;
+        position: import("@sinclair/typebox").TObject<{
+            x: import("@sinclair/typebox").TNumber;
+            y: import("@sinclair/typebox").TNumber;
+        }>;
+        velocity: import("@sinclair/typebox").TObject<{
+            x: import("@sinclair/typebox").TNumber;
+            y: import("@sinclair/typebox").TNumber;
+        }>;
+    }>>>;
+    projectilesRemoved: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TArray<import("@sinclair/typebox").TString>>;
+    lastProcessedSequence: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TRecord<import("@sinclair/typebox").TString, import("@sinclair/typebox").TNumber>>;
+    correctedPlayers: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TArray<import("@sinclair/typebox").TString>>;
+}>;
+export type StateDeltaData = Static<typeof StateDeltaDataSchema>;
+/**
+ * Complete state:delta message schema
+ */
+export declare const StateDeltaMessageSchema: import("@sinclair/typebox").TObject<{
+    type: import("@sinclair/typebox").TLiteral<string>;
+    timestamp: import("@sinclair/typebox").TInteger;
+    data: import("@sinclair/typebox").TObject<{
+        players: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TArray<import("@sinclair/typebox").TObject<{
+            id: import("@sinclair/typebox").TString;
+            position: import("@sinclair/typebox").TObject<{
+                x: import("@sinclair/typebox").TNumber;
+                y: import("@sinclair/typebox").TNumber;
+            }>;
+            velocity: import("@sinclair/typebox").TObject<{
+                x: import("@sinclair/typebox").TNumber;
+                y: import("@sinclair/typebox").TNumber;
+            }>;
+            health: import("@sinclair/typebox").TNumber;
+            maxHealth: import("@sinclair/typebox").TNumber;
+            rotation: import("@sinclair/typebox").TNumber;
+            isDead: import("@sinclair/typebox").TBoolean;
+            isSprinting: import("@sinclair/typebox").TBoolean;
+            isRolling: import("@sinclair/typebox").TBoolean;
+        }>>>;
+        projectilesAdded: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TArray<import("@sinclair/typebox").TObject<{
+            id: import("@sinclair/typebox").TString;
+            ownerId: import("@sinclair/typebox").TString;
+            position: import("@sinclair/typebox").TObject<{
+                x: import("@sinclair/typebox").TNumber;
+                y: import("@sinclair/typebox").TNumber;
+            }>;
+            velocity: import("@sinclair/typebox").TObject<{
+                x: import("@sinclair/typebox").TNumber;
+                y: import("@sinclair/typebox").TNumber;
+            }>;
+        }>>>;
+        projectilesRemoved: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TArray<import("@sinclair/typebox").TString>>;
+        lastProcessedSequence: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TRecord<import("@sinclair/typebox").TString, import("@sinclair/typebox").TNumber>>;
+        correctedPlayers: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TArray<import("@sinclair/typebox").TString>>;
+    }>;
+}>;
+export type StateDeltaMessage = Static<typeof StateDeltaMessageSchema>;
 //# sourceMappingURL=server-to-client.d.ts.map

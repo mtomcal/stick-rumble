@@ -9,7 +9,7 @@ import { fileURLToPath } from 'url';
 // Import schemas
 import { PositionSchema, VelocitySchema, MessageSchema } from './schemas/common.js';
 import { InputStateDataSchema, InputStateMessageSchema, PlayerShootDataSchema, PlayerShootMessageSchema, PlayerReloadMessageSchema, WeaponPickupAttemptDataSchema, WeaponPickupAttemptMessageSchema, PlayerMeleeAttackDataSchema, PlayerMeleeAttackMessageSchema, PlayerDodgeRollMessageSchema, } from './schemas/client-to-server.js';
-import { RoomJoinedDataSchema, RoomJoinedMessageSchema, PlayerLeftDataSchema, PlayerLeftMessageSchema, PlayerStateSchema, PlayerMoveDataSchema, PlayerMoveMessageSchema, ProjectileSpawnDataSchema, ProjectileSpawnMessageSchema, ProjectileDestroyDataSchema, ProjectileDestroyMessageSchema, WeaponStateDataSchema, WeaponStateMessageSchema, ShootFailedDataSchema, ShootFailedMessageSchema, PlayerDamagedDataSchema, PlayerDamagedMessageSchema, HitConfirmedDataSchema, HitConfirmedMessageSchema, PlayerDeathDataSchema, PlayerDeathMessageSchema, PlayerKillCreditDataSchema, PlayerKillCreditMessageSchema, PlayerRespawnDataSchema, PlayerRespawnMessageSchema, MatchTimerDataSchema, MatchTimerMessageSchema, MatchEndedDataSchema, MatchEndedMessageSchema, WeaponCrateSchema, WeaponSpawnedDataSchema, WeaponSpawnedMessageSchema, WeaponPickupConfirmedDataSchema, WeaponPickupConfirmedMessageSchema, WeaponRespawnedDataSchema, WeaponRespawnedMessageSchema, MeleeHitDataSchema, MeleeHitMessageSchema, RollStartDataSchema, RollStartMessageSchema, RollEndDataSchema, RollEndMessageSchema, } from './schemas/server-to-client.js';
+import { RoomJoinedDataSchema, RoomJoinedMessageSchema, PlayerLeftDataSchema, PlayerLeftMessageSchema, PlayerStateSchema, PlayerMoveDataSchema, PlayerMoveMessageSchema, ProjectileSpawnDataSchema, ProjectileSpawnMessageSchema, ProjectileDestroyDataSchema, ProjectileDestroyMessageSchema, WeaponStateDataSchema, WeaponStateMessageSchema, ShootFailedDataSchema, ShootFailedMessageSchema, PlayerDamagedDataSchema, PlayerDamagedMessageSchema, HitConfirmedDataSchema, HitConfirmedMessageSchema, PlayerDeathDataSchema, PlayerDeathMessageSchema, PlayerKillCreditDataSchema, PlayerKillCreditMessageSchema, PlayerRespawnDataSchema, PlayerRespawnMessageSchema, MatchTimerDataSchema, MatchTimerMessageSchema, MatchEndedDataSchema, MatchEndedMessageSchema, WeaponCrateSchema, WeaponSpawnedDataSchema, WeaponSpawnedMessageSchema, WeaponPickupConfirmedDataSchema, WeaponPickupConfirmedMessageSchema, WeaponRespawnedDataSchema, WeaponRespawnedMessageSchema, MeleeHitDataSchema, MeleeHitMessageSchema, RollStartDataSchema, RollStartMessageSchema, RollEndDataSchema, RollEndMessageSchema, ProjectileSnapshotSchema, WeaponCrateSnapshotSchema, StateSnapshotDataSchema, StateSnapshotMessageSchema, StateDeltaDataSchema, StateDeltaMessageSchema, } from './schemas/server-to-client.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const rootDir = join(__dirname, '..');
@@ -235,6 +235,31 @@ const schemas = [
     {
         schema: RollEndMessageSchema,
         outputPath: 'schemas/server-to-client/roll-end-message.json',
+    },
+    // Delta compression schemas
+    {
+        schema: ProjectileSnapshotSchema,
+        outputPath: 'schemas/server-to-client/projectile-snapshot.json',
+    },
+    {
+        schema: WeaponCrateSnapshotSchema,
+        outputPath: 'schemas/server-to-client/weapon-crate-snapshot.json',
+    },
+    {
+        schema: StateSnapshotDataSchema,
+        outputPath: 'schemas/server-to-client/state-snapshot-data.json',
+    },
+    {
+        schema: StateSnapshotMessageSchema,
+        outputPath: 'schemas/server-to-client/state-snapshot-message.json',
+    },
+    {
+        schema: StateDeltaDataSchema,
+        outputPath: 'schemas/server-to-client/state-delta-data.json',
+    },
+    {
+        schema: StateDeltaMessageSchema,
+        outputPath: 'schemas/server-to-client/state-delta-message.json',
     },
 ];
 /**

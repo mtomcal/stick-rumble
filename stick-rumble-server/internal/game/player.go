@@ -44,6 +44,23 @@ func (cs *CorrectionStats) GetCorrectionRate() float64 {
 	return float64(cs.TotalCorrections) / float64(cs.TotalUpdates)
 }
 
+// PlayerStateSnapshot represents a player's state for broadcasting (no mutex, safe to copy by value)
+type PlayerStateSnapshot struct {
+	ID                     string     `json:"id"`
+	Position               Vector2    `json:"position"`
+	Velocity               Vector2    `json:"velocity"`
+	AimAngle               float64    `json:"aimAngle"`            // Aim angle in radians
+	Health                 int        `json:"health"`              // Current health (0-100)
+	IsInvulnerable         bool       `json:"isInvulnerable"`      // Spawn protection flag
+	InvulnerabilityEndTime time.Time  `json:"invulnerabilityEnd"`  // When spawn protection ends
+	DeathTime              *time.Time `json:"deathTime,omitempty"` // When player died (nil if alive)
+	Kills                  int        `json:"kills"`               // Number of kills
+	Deaths                 int        `json:"deaths"`              // Number of deaths
+	XP                     int        `json:"xp"`                  // Experience points
+	IsRegeneratingHealth   bool       `json:"isRegenerating"`      // Whether health is currently regenerating
+	Rolling                bool       `json:"isRolling"`           // Whether player is currently dodge rolling
+}
+
 // PlayerState represents a player's physics state in the game world
 type PlayerState struct {
 	ID                     string          `json:"id"`
@@ -168,11 +185,11 @@ func (p *PlayerState) IsAlive() bool {
 	return p.Health > 0
 }
 
-// Snapshot returns a thread-safe copy of the player's current state
-func (p *PlayerState) Snapshot() PlayerState {
+// Snapshot returns a thread-safe copy of the player's current state (safe to copy by value)
+func (p *PlayerState) Snapshot() PlayerStateSnapshot {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	return PlayerState{
+	return PlayerStateSnapshot{
 		ID:                     p.ID,
 		Position:               p.Position,
 		Velocity:               p.Velocity,
@@ -185,6 +202,7 @@ func (p *PlayerState) Snapshot() PlayerState {
 		Deaths:                 p.Deaths,
 		XP:                     p.XP,
 		IsRegeneratingHealth:   p.IsRegeneratingHealth,
+		Rolling:                p.Rolling,
 	}
 }
 

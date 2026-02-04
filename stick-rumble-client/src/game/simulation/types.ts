@@ -19,6 +19,9 @@ export interface InputState {
   down: boolean;
   left: boolean;
   right: boolean;
+  aimAngle?: number; // Aim angle in radians (optional for simulation tests)
+  isSprinting?: boolean; // Shift key for sprint (optional for simulation tests)
+  sequence?: number; // Sequence number for client-side prediction (optional for simulation tests)
 }
 
 /**

@@ -35,7 +35,7 @@ type GameServer struct {
 	clock              Clock         // Clock for time operations (injectable for testing)
 
 	// Broadcast function to send state updates to clients
-	broadcastFunc func(playerStates []PlayerState)
+	broadcastFunc func(playerStates []PlayerStateSnapshot)
 
 	// Callback for when a player's reload completes
 	onReloadComplete func(playerID string)
@@ -67,12 +67,12 @@ type GameServer struct {
 }
 
 // NewGameServer creates a new game server with a real clock
-func NewGameServer(broadcastFunc func(playerStates []PlayerState)) *GameServer {
+func NewGameServer(broadcastFunc func(playerStates []PlayerStateSnapshot)) *GameServer {
 	return NewGameServerWithClock(broadcastFunc, &RealClock{})
 }
 
 // NewGameServerWithClock creates a new game server with a custom clock (for testing)
-func NewGameServerWithClock(broadcastFunc func(playerStates []PlayerState), clock Clock) *GameServer {
+func NewGameServerWithClock(broadcastFunc func(playerStates []PlayerStateSnapshot), clock Clock) *GameServer {
 	return &GameServer{
 		world:              NewWorldWithClock(clock),
 		physics:            NewPhysics(),
@@ -261,10 +261,10 @@ func (gs *GameServer) UpdatePlayerInputWithSequence(playerID string, input Input
 }
 
 // GetPlayerState returns a snapshot of a player's state
-func (gs *GameServer) GetPlayerState(playerID string) (PlayerState, bool) {
+func (gs *GameServer) GetPlayerState(playerID string) (PlayerStateSnapshot, bool) {
 	player, exists := gs.world.GetPlayer(playerID)
 	if !exists {
-		return PlayerState{}, false
+		return PlayerStateSnapshot{}, false
 	}
 	return player.Snapshot(), true
 }
