@@ -5,6 +5,26 @@
 import { Type, type Static } from '@sinclair/typebox';
 import { createTypedMessageSchema, PositionSchema, VelocitySchema } from './common.js';
 
+/**
+ * Create reference schemas for Position and Velocity without the $id to avoid duplication.
+ * These are used inline in schemas to avoid duplicate $id issues in JSON Schema generation.
+ */
+const PositionRef = Type.Object(
+  {
+    x: Type.Number({ description: 'X coordinate' }),
+    y: Type.Number({ description: 'Y coordinate' }),
+  },
+  { description: 'A 2D position coordinate' }
+);
+
+const VelocityRef = Type.Object(
+  {
+    x: Type.Number({ description: 'X velocity component' }),
+    y: Type.Number({ description: 'Y velocity component' }),
+  },
+  { description: 'A 2D velocity vector' }
+);
+
 // ============================================================================
 // room:joined
 // ============================================================================
@@ -66,8 +86,8 @@ export type PlayerLeftMessage = Static<typeof PlayerLeftMessageSchema>;
 export const PlayerStateSchema = Type.Object(
   {
     id: Type.String({ description: 'Player unique identifier', minLength: 1 }),
-    position: PositionSchema,
-    velocity: VelocitySchema,
+    position: PositionRef,
+    velocity: VelocityRef,
     health: Type.Number({ description: 'Current health', minimum: 0 }),
     maxHealth: Type.Number({ description: 'Maximum health', minimum: 0 }),
     rotation: Type.Number({ description: 'Player rotation in radians' }),
@@ -119,8 +139,8 @@ export const ProjectileSpawnDataSchema = Type.Object(
     id: Type.String({ description: 'Unique projectile identifier', minLength: 1 }),
     ownerId: Type.String({ description: 'Player who fired the projectile', minLength: 1 }),
     weaponType: Type.String({ description: 'Type of weapon that fired the projectile', minLength: 1 }),
-    position: PositionSchema,
-    velocity: VelocitySchema,
+    position: PositionRef,
+    velocity: VelocityRef,
   },
   { $id: 'ProjectileSpawnData', description: 'Projectile spawn event payload' }
 );
@@ -329,7 +349,7 @@ export type PlayerKillCreditMessage = Static<typeof PlayerKillCreditMessageSchem
 export const PlayerRespawnDataSchema = Type.Object(
   {
     playerId: Type.String({ description: 'Player who respawned', minLength: 1 }),
-    position: PositionSchema,
+    position: PositionRef,
     health: Type.Number({ description: 'Respawn health', minimum: 0 }),
   },
   { $id: 'PlayerRespawnData', description: 'Player respawn event payload' }
@@ -419,7 +439,7 @@ export type MatchEndedMessage = Static<typeof MatchEndedMessageSchema>;
 export const WeaponCrateSchema = Type.Object(
   {
     id: Type.String({ description: 'Unique crate identifier', minLength: 1 }),
-    position: PositionSchema,
+    position: PositionRef,
     weaponType: Type.String({ description: 'Type of weapon in the crate', minLength: 1 }),
     isAvailable: Type.Boolean({ description: 'Whether the crate is available for pickup' }),
   },
@@ -491,7 +511,7 @@ export const WeaponRespawnedDataSchema = Type.Object(
   {
     crateId: Type.String({ description: 'Crate that respawned', minLength: 1 }),
     weaponType: Type.String({ description: 'Type of weapon in the crate', minLength: 1 }),
-    position: PositionSchema,
+    position: PositionRef,
   },
   { $id: 'WeaponRespawnedData', description: 'Weapon respawned event payload' }
 );
@@ -598,8 +618,8 @@ export const ProjectileSnapshotSchema = Type.Object(
   {
     id: Type.String({ description: 'Unique projectile identifier', minLength: 1 }),
     ownerId: Type.String({ description: 'Player who fired the projectile', minLength: 1 }),
-    position: PositionSchema,
-    velocity: VelocitySchema,
+    position: PositionRef,
+    velocity: VelocityRef,
   },
   { $id: 'ProjectileSnapshot', description: 'Projectile state snapshot' }
 );
@@ -612,7 +632,7 @@ export type ProjectileSnapshot = Static<typeof ProjectileSnapshotSchema>;
 export const WeaponCrateSnapshotSchema = Type.Object(
   {
     id: Type.String({ description: 'Unique crate identifier', minLength: 1 }),
-    position: PositionSchema,
+    position: PositionRef,
     weaponType: Type.String({ description: 'Type of weapon in the crate', minLength: 1 }),
     isAvailable: Type.Boolean({ description: 'Whether the crate is currently available for pickup' }),
   },

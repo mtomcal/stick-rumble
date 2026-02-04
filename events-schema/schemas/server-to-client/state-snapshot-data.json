@@ -33,7 +33,6 @@
             "type": "string"
           },
           "position": {
-            "$id": "Position",
             "description": "A 2D position coordinate",
             "type": "object",
             "required": [
@@ -52,7 +51,6 @@
             }
           },
           "velocity": {
-            "$id": "Velocity",
             "description": "A 2D velocity vector",
             "type": "object",
             "required": [
@@ -124,7 +122,6 @@
             "type": "string"
           },
           "position": {
-            "$id": "Position",
             "description": "A 2D position coordinate",
             "type": "object",
             "required": [
@@ -143,7 +140,6 @@
             }
           },
           "velocity": {
-            "$id": "Velocity",
             "description": "A 2D velocity vector",
             "type": "object",
             "required": [
@@ -184,7 +180,6 @@
             "type": "string"
           },
           "position": {
-            "$id": "Position",
             "description": "A 2D position coordinate",
             "type": "object",
             "required": [
