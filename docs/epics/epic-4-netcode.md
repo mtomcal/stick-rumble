@@ -6,7 +6,32 @@
 
 **FRs Covered:** FR13 (client prediction), FR16 (latency <100ms)
 
-**Status:** Not Started (0/6 stories)
+**Status:** In Progress (0/6 stories)
+
+**Epic Ready:** February 4, 2026 (Epic 3 complete)
+**Epic Started:** February 4, 2026
+
+---
+
+## Parallelization Structure
+
+Stories are organized for maximum parallel execution:
+
+```
+Phase 1 (parallel):
+  Epic 3 ──► 4.1 (Client Prediction)
+  Epic 3 ──► 4.6 (Latency Testing Tool)
+
+Phase 2 (parallel, after 4.1):
+  4.1 ──► 4.2 (Server Reconciliation)
+  4.1 ──► 4.3 (Interpolation)
+  4.1 ──► 4.4 (Delta Compression)
+
+Phase 3 (convergence):
+  4.2 + 4.3 + 4.4 ──► 4.5 (Lag Compensation)
+```
+
+**Execution phases reduced from 6 to 3** with up to 3 parallel workers.
 
 ---
 
@@ -33,7 +58,8 @@ So that controls are responsive despite network latency.
 **And** other players' movement is interpolated (smooth, slightly delayed) not predicted
 **And** my movement feels <50ms responsive (imperceptible lag)
 
-**Prerequisites:** Story 3.6
+**Prerequisites:** Epic 3 complete
+**Parallel with:** Story 4.6
 
 **Technical Notes:**
 - Client `PredictionEngine.ts` runs physics simulation identical to server
@@ -97,7 +123,8 @@ So that gameplay feels polished even with varied latency.
 
 **And** animations sync with interpolated movement (walk cycle matches speed)
 
-**Prerequisites:** Story 4.2
+**Prerequisites:** Story 4.1
+**Parallel with:** Story 4.2, Story 4.4
 
 **Technical Notes:**
 - Client maintains position history: last 10 positions per player with timestamps
@@ -130,7 +157,8 @@ So that the game runs smoothly on mobile data and scales to 8 players.
 **And** bandwidth usage per player: 2-5 KB/s (vs 10-15 KB/s without compression)
 **And** full snapshots sent every 1 second (prevent delta drift)
 
-**Prerequisites:** Story 4.3
+**Prerequisites:** Story 4.1
+**Parallel with:** Story 4.2, Story 4.3
 
 **Technical Notes:**
 - Server tracks last sent state per client: `lastSentState[clientId] = {players: {}, projectiles: {}}`
@@ -162,7 +190,7 @@ So that the game feels fair despite latency differences.
 **And** lag compensation applied to all hitscan weapons (instant bullets)
 **And** projectile weapons (Uzi, AK47) don't rewind (projectile travel time is natural compensation)
 
-**Prerequisites:** Story 4.4
+**Prerequisites:** Story 4.2, Story 4.3, Story 4.4 (convergence point)
 
 **Technical Notes:**
 - Server stores world history: last 200ms of positions (snapshots every 16ms = 60Hz)
@@ -194,7 +222,8 @@ So that I can test and tune netcode without needing poor connections.
 **And** netcode behaves identically to real poor network conditions
 **And** I can test prediction, interpolation, and lag compensation offline
 
-**Prerequisites:** Story 4.5
+**Prerequisites:** Epic 3 complete (no story dependencies)
+**Parallel with:** All other stories (independent infrastructure)
 
 **Technical Notes:**
 - Client `NetworkSimulator.ts` wraps WebSocket send/receive
