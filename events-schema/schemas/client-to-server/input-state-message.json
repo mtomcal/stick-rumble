@@ -28,7 +28,8 @@
         "left",
         "right",
         "aimAngle",
-        "isSprinting"
+        "isSprinting",
+        "sequence"
       ],
       "properties": {
         "up": {
@@ -54,6 +55,11 @@
         "isSprinting": {
           "description": "Shift key pressed for sprint",
           "type": "boolean"
+        },
+        "sequence": {
+          "description": "Monotonically increasing sequence number for client-side prediction",
+          "minimum": 0,
+          "type": "number"
         }
       }
     }

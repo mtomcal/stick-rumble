@@ -38,6 +38,7 @@ describe('Client-to-Server Schemas', () => {
         right: true,
         aimAngle: 1.57,
         isSprinting: false,
+        sequence: 1,
       };
 
       expect(validate(validData)).toBe(true);
@@ -83,14 +84,74 @@ describe('Client-to-Server Schemas', () => {
 
     it('should accept all boolean combinations', () => {
       const testCases = [
-        { up: false, down: false, left: false, right: false, aimAngle: 0, isSprinting: false },
-        { up: true, down: true, left: true, right: true, aimAngle: 3.14, isSprinting: true },
-        { up: true, down: false, left: true, right: false, aimAngle: -1.57, isSprinting: false },
+        { up: false, down: false, left: false, right: false, aimAngle: 0, isSprinting: false, sequence: 0 },
+        { up: true, down: true, left: true, right: true, aimAngle: 3.14, isSprinting: true, sequence: 1 },
+        { up: true, down: false, left: true, right: false, aimAngle: -1.57, isSprinting: false, sequence: 2 },
       ];
 
       testCases.forEach((testCase) => {
         expect(validate(testCase)).toBe(true);
       });
+    });
+
+    it('should require sequence number', () => {
+      const invalidData = {
+        up: true,
+        down: false,
+        left: false,
+        right: true,
+        aimAngle: 1.57,
+        isSprinting: false,
+        // missing sequence
+      };
+
+      expect(validate(invalidData)).toBe(false);
+      expect(validate.errors).toBeDefined();
+    });
+
+    it('should reject negative sequence numbers', () => {
+      const invalidData = {
+        up: true,
+        down: false,
+        left: false,
+        right: true,
+        aimAngle: 1.57,
+        isSprinting: false,
+        sequence: -1,
+      };
+
+      expect(validate(invalidData)).toBe(false);
+      expect(validate.errors).toBeDefined();
+    });
+
+    it('should accept sequence number 0', () => {
+      const validData = {
+        up: true,
+        down: false,
+        left: false,
+        right: true,
+        aimAngle: 1.57,
+        isSprinting: false,
+        sequence: 0,
+      };
+
+      expect(validate(validData)).toBe(true);
+      expect(validate.errors).toBeNull();
+    });
+
+    it('should accept large sequence numbers', () => {
+      const validData = {
+        up: true,
+        down: false,
+        left: false,
+        right: true,
+        aimAngle: 1.57,
+        isSprinting: false,
+        sequence: 999999,
+      };
+
+      expect(validate(validData)).toBe(true);
+      expect(validate.errors).toBeNull();
     });
   });
 
@@ -108,6 +169,7 @@ describe('Client-to-Server Schemas', () => {
           right: true,
           aimAngle: 1.57,
           isSprinting: true,
+          sequence: 1,
         },
       };
 
@@ -126,6 +188,7 @@ describe('Client-to-Server Schemas', () => {
           right: true,
           aimAngle: 1.57,
           isSprinting: false,
+          sequence: 1,
         },
       };
 
@@ -143,6 +206,7 @@ describe('Client-to-Server Schemas', () => {
           right: true,
           aimAngle: 1.57,
           isSprinting: false,
+          sequence: 1,
         },
       };
 
@@ -161,6 +225,7 @@ describe('Client-to-Server Schemas', () => {
           right: true,
           aimAngle: 1.57,
           isSprinting: false,
+          sequence: 1,
         },
       };
 

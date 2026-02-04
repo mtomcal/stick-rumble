@@ -116,6 +116,17 @@
               }
             }
           }
+        },
+        "lastProcessedSequence": {
+          "description": "Map of player IDs to their last processed input sequence number for client-side prediction reconciliation",
+          "type": "object",
+          "patternProperties": {
+            "^(.*)$": {
+              "description": "Last processed input sequence number for this player",
+              "minimum": 0,
+              "type": "number"
+            }
+          }
         }
       }
     }

@@ -1004,7 +1004,8 @@ describe('GameScene - Combat', () => {
         left: false,
         right: true,
         aimAngle: 0,
-        isSprinting: false
+        isSprinting: false,
+        sequence: 0
       });
 
       // Spy on wsClient.send
@@ -1074,7 +1075,8 @@ describe('GameScene - Combat', () => {
         left: false,
         right: false,
         aimAngle: 0,
-        isSprinting: false
+        isSprinting: false,
+        sequence: 0
       });
 
       // Mock aim angle

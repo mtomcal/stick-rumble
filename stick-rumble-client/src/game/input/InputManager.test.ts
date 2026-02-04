@@ -99,6 +99,7 @@ describe('InputManager', () => {
         right: false,
         aimAngle: 0,
         isSprinting: false,
+      sequence: 0,
       });
     });
   });
@@ -184,6 +185,7 @@ describe('InputManager', () => {
           right: false,
           aimAngle: expect.any(Number),
           isSprinting: false,
+          sequence: expect.any(Number),
         },
       });
     });
@@ -203,6 +205,7 @@ describe('InputManager', () => {
           right: false,
           aimAngle: expect.any(Number),
           isSprinting: false,
+          sequence: expect.any(Number),
         },
       });
     });
@@ -222,6 +225,7 @@ describe('InputManager', () => {
           right: false,
           aimAngle: expect.any(Number),
           isSprinting: false,
+          sequence: expect.any(Number),
         },
       });
     });
@@ -241,6 +245,7 @@ describe('InputManager', () => {
           right: true,
           aimAngle: expect.any(Number),
           isSprinting: false,
+          sequence: expect.any(Number),
         },
       });
     });
@@ -261,6 +266,7 @@ describe('InputManager', () => {
           right: true,
           aimAngle: expect.any(Number),
           isSprinting: false,
+          sequence: expect.any(Number),
         },
       });
     });
@@ -297,6 +303,7 @@ describe('InputManager', () => {
           right: false,
           aimAngle: expect.any(Number),
           isSprinting: false,
+          sequence: expect.any(Number),
         },
       });
     });
@@ -342,6 +349,7 @@ describe('InputManager', () => {
         right: false,
         aimAngle: expect.any(Number),
         isSprinting: false,
+      sequence: expect.any(Number),
       });
     });
 
@@ -410,6 +418,7 @@ describe('InputManager', () => {
           right: false,
           aimAngle: expect.any(Number),
           isSprinting: false,
+          sequence: expect.any(Number),
         },
       });
     });
@@ -532,6 +541,7 @@ describe('InputManager', () => {
           right: false,
           aimAngle: expect.any(Number),
           isSprinting: false,
+          sequence: expect.any(Number),
         },
       });
 
