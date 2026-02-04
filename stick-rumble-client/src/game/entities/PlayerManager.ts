@@ -5,6 +5,7 @@ import { RealClock } from '../utils/Clock';
 import { ProceduralPlayerGraphics } from './ProceduralPlayerGraphics';
 import { ProceduralWeaponGraphics } from './ProceduralWeaponGraphics';
 import { HealthBar } from './HealthBar';
+import { InterpolationEngine } from '../physics/InterpolationEngine';
 
 /**
  * Player state from server
@@ -34,8 +35,7 @@ const AIM_INDICATOR_LENGTH = 50;
  */
 export class PlayerManager {
   private scene: Phaser.Scene;
-  // Clock is injected for future use in client-side prediction (Phase 2: GameSimulation)
-  // Currently, all timing is server-authoritative
+  // Clock is used for interpolation timing and future client-side prediction
   private _clock: Clock;
   private players: Map<string, ProceduralPlayerGraphics> = new Map();
   private playerLabels: Map<string, Phaser.GameObjects.Text> = new Map();
@@ -45,6 +45,8 @@ export class PlayerManager {
   private healthBars: Map<string, HealthBar> = new Map();
   private localPlayerId: string | null = null;
   private playerStates: Map<string, PlayerState> = new Map();
+  // Interpolation engine for smooth movement of other players (Story 4.3)
+  private interpolationEngine: InterpolationEngine = new InterpolationEngine();
 
   constructor(scene: Phaser.Scene, clock: Clock = new RealClock()) {
     this.scene = scene;
@@ -80,7 +82,9 @@ export class PlayerManager {
   }
 
   /**
-   * Update all players from server state
+   * Update all players from server state.
+   * For other players: stores snapshots in interpolation engine
+   * For local player: immediately applies position (prediction handled elsewhere)
    */
   updatePlayers(playerStates: PlayerState[]): void {
     // Skip if scene is not active (destroyed or transitioning)
@@ -94,6 +98,16 @@ export class PlayerManager {
     this.playerStates.clear();
     for (const state of playerStates) {
       this.playerStates.set(state.id, state);
+
+      // Store snapshots for other players in interpolation engine
+      // Local player uses client-side prediction, not interpolation
+      if (state.id !== this.localPlayerId) {
+        this.interpolationEngine.addSnapshot(state.id, {
+          position: { ...state.position },
+          velocity: { ...state.velocity },
+          timestamp: this._clock.now(),
+        });
+      }
     }
 
     // Remove players that no longer exist
@@ -127,6 +141,9 @@ export class PlayerManager {
         }
 
         this.weaponTypes.delete(id);
+
+        // Clear interpolation data for removed player
+        this.interpolationEngine.clearPlayer(id);
       }
     }
 
@@ -199,7 +216,8 @@ export class PlayerManager {
         this.healthBars.set(state.id, healthBar);
       }
 
-      // Update position
+      // Update position immediately (for tests and initial rendering)
+      // The update() method will override with interpolated positions for other players
       playerGraphics.setPosition(state.position.x, state.position.y);
 
       // Apply dodge roll visual effects (rotation during roll)
@@ -287,6 +305,88 @@ export class PlayerManager {
         // Update position (8 pixels above player head)
         const healthBarY = state.position.y - PLAYER.HEIGHT / 2 - 8;
         healthBar.setPosition(state.position.x, healthBarY);
+      }
+    }
+  }
+
+  /**
+   * Update player visual state every frame with interpolation.
+   * Uses interpolation for other players, immediate rendering for local player.
+   * Call this method from Phaser's update loop (typically 60 FPS).
+   *
+   * @param delta - Delta time in milliseconds since last frame
+   */
+  update(delta: number): void {
+    // Skip if scene is not active
+    if (!this.isSceneValid()) {
+      return;
+    }
+
+    for (const [playerId, playerGraphics] of this.players) {
+      const state = this.playerStates.get(playerId);
+      if (!state) {
+        continue;
+      }
+
+      // Use interpolation for other players only
+      if (playerId !== this.localPlayerId) {
+        const interpolated = this.interpolationEngine.getInterpolatedPosition(
+          playerId,
+          this._clock.now()
+        );
+
+        if (interpolated) {
+          // Override position with interpolated position
+          playerGraphics.setPosition(interpolated.position.x, interpolated.position.y);
+
+          // Update label position
+          const label = this.playerLabels.get(playerId);
+          if (label) {
+            label.setPosition(
+              interpolated.position.x,
+              interpolated.position.y - PLAYER.HEIGHT / 2 - 10
+            );
+          }
+
+          // Update aim indicator
+          const aimIndicator = this.aimIndicators.get(playerId);
+          if (aimIndicator) {
+            const aimAngle = state.aimAngle ?? 0;
+            const endX = interpolated.position.x + Math.cos(aimAngle) * AIM_INDICATOR_LENGTH;
+            const endY = interpolated.position.y + Math.sin(aimAngle) * AIM_INDICATOR_LENGTH;
+            aimIndicator.setTo(
+              interpolated.position.x, interpolated.position.y,
+              endX, endY
+            );
+          }
+
+          // Update weapon graphics position
+          const weaponGraphics = this.weaponGraphics.get(playerId);
+          if (weaponGraphics) {
+            const aimAngle = state.aimAngle ?? 0;
+            const weaponOffsetX = Math.cos(aimAngle) * 10;
+            const weaponOffsetY = Math.sin(aimAngle) * 10;
+            weaponGraphics.setPosition(
+              interpolated.position.x + weaponOffsetX,
+              interpolated.position.y + weaponOffsetY
+            );
+          }
+
+          // Update health bar position
+          const healthBar = this.healthBars.get(playerId);
+          if (healthBar) {
+            const healthBarY = interpolated.position.y - PLAYER.HEIGHT / 2 - 8;
+            healthBar.setPosition(interpolated.position.x, healthBarY);
+          }
+
+          // Update walk cycle animation based on interpolated velocity
+          const isMoving = Math.sqrt(interpolated.velocity.x ** 2 + interpolated.velocity.y ** 2) > 0.1;
+          playerGraphics.update(delta, isMoving);
+        }
+      } else {
+        // Local player: just update animation (position handled by prediction/server)
+        const isMoving = Math.sqrt(state.velocity.x ** 2 + state.velocity.y ** 2) > 0.1;
+        playerGraphics.update(delta, isMoving);
       }
     }
   }
