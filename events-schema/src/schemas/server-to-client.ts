@@ -3,7 +3,7 @@
  * These define the messages sent from the Go server to the TypeScript client.
  */
 import { Type, type Static } from '@sinclair/typebox';
-import { createTypedMessageSchema, PositionSchema, VelocitySchema } from './common.js';
+import { createTypedMessageSchema } from './common.js';
 
 /**
  * Create reference schemas for Position and Velocity without the $id to avoid duplication.
