@@ -29,26 +29,43 @@ type RollState struct {
 	RollDirection Vector2   `json:"rollDirection"` // Direction vector of the roll (normalized)
 }
 
+// CorrectionStats tracks movement correction statistics for anti-cheat
+type CorrectionStats struct {
+	TotalUpdates     int // Total number of position updates
+	TotalCorrections int // Number of times position was corrected
+	LastCorrectionAt time.Time
+}
+
+// GetCorrectionRate returns the percentage of movements that were corrected
+func (cs *CorrectionStats) GetCorrectionRate() float64 {
+	if cs.TotalUpdates == 0 {
+		return 0.0
+	}
+	return float64(cs.TotalCorrections) / float64(cs.TotalUpdates)
+}
+
 // PlayerState represents a player's physics state in the game world
 type PlayerState struct {
-	ID                     string     `json:"id"`
-	Position               Vector2    `json:"position"`
-	Velocity               Vector2    `json:"velocity"`
-	AimAngle               float64    `json:"aimAngle"`            // Aim angle in radians
-	Health                 int        `json:"health"`              // Current health (0-100)
-	IsInvulnerable         bool       `json:"isInvulnerable"`      // Spawn protection flag
-	InvulnerabilityEndTime time.Time  `json:"invulnerabilityEnd"`  // When spawn protection ends
-	DeathTime              *time.Time `json:"deathTime,omitempty"` // When player died (nil if alive)
-	Kills                  int        `json:"kills"`               // Number of kills
-	Deaths                 int        `json:"deaths"`              // Number of deaths
-	XP                     int        `json:"xp"`                  // Experience points
-	IsRegeneratingHealth   bool       `json:"isRegenerating"`      // Whether health is currently regenerating
-	Rolling                bool       `json:"isRolling"`           // Whether player is currently dodge rolling (exported for JSON)
-	lastDamageTime         time.Time  // Private field: when player last took damage
-	regenAccumulator       float64    // Private field: accumulated fractional HP for regeneration
-	input                  InputState // Private field, accessed via methods
-	rollState              RollState  // Private field: dodge roll state
-	clock                  Clock      // Private field: clock for time operations (injectable for testing)
+	ID                     string          `json:"id"`
+	Position               Vector2         `json:"position"`
+	Velocity               Vector2         `json:"velocity"`
+	AimAngle               float64         `json:"aimAngle"`            // Aim angle in radians
+	Health                 int             `json:"health"`              // Current health (0-100)
+	IsInvulnerable         bool            `json:"isInvulnerable"`      // Spawn protection flag
+	InvulnerabilityEndTime time.Time       `json:"invulnerabilityEnd"`  // When spawn protection ends
+	DeathTime              *time.Time      `json:"deathTime,omitempty"` // When player died (nil if alive)
+	Kills                  int             `json:"kills"`               // Number of kills
+	Deaths                 int             `json:"deaths"`              // Number of deaths
+	XP                     int             `json:"xp"`                  // Experience points
+	IsRegeneratingHealth   bool            `json:"isRegenerating"`      // Whether health is currently regenerating
+	Rolling                bool            `json:"isRolling"`           // Whether player is currently dodge rolling (exported for JSON)
+	lastDamageTime         time.Time       // Private field: when player last took damage
+	regenAccumulator       float64         // Private field: accumulated fractional HP for regeneration
+	input                  InputState      // Private field, accessed via methods
+	inputSequence          uint64          // Private field: last processed input sequence number
+	rollState              RollState       // Private field: dodge roll state
+	correctionStats        CorrectionStats // Private field: correction tracking for anti-cheat
+	clock                  Clock           // Private field: clock for time operations (injectable for testing)
 	mu                     sync.RWMutex
 }
 
@@ -414,4 +431,40 @@ func (p *PlayerState) IsInvincibleFromRoll() bool {
 
 	timeSinceRollStart := p.clock.Since(p.rollState.RollStartTime).Seconds()
 	return timeSinceRollStart < DodgeRollInvincibilityDuration
+}
+
+// SetInputSequence updates the last processed input sequence number (thread-safe)
+func (p *PlayerState) SetInputSequence(seq uint64) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.inputSequence = seq
+}
+
+// GetInputSequence retrieves the last processed input sequence number (thread-safe)
+func (p *PlayerState) GetInputSequence() uint64 {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.inputSequence
+}
+
+// RecordMovementUpdate increments the total movement update counter (thread-safe)
+func (p *PlayerState) RecordMovementUpdate() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.correctionStats.TotalUpdates++
+}
+
+// RecordCorrection increments the correction counter and updates timestamp (thread-safe)
+func (p *PlayerState) RecordCorrection() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.correctionStats.TotalCorrections++
+	p.correctionStats.LastCorrectionAt = p.clock.Now()
+}
+
+// GetCorrectionStats returns a copy of the correction statistics (thread-safe)
+func (p *PlayerState) GetCorrectionStats() CorrectionStats {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.correctionStats
 }

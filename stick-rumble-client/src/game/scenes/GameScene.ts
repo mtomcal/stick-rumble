@@ -5,6 +5,7 @@ import { parseNetworkSimulatorParams } from '../network/urlParams';
 import { InputManager } from '../input/InputManager';
 import { ShootingManager } from '../input/ShootingManager';
 import { DodgeRollManager } from '../input/DodgeRollManager';
+import { PredictionEngine } from '../physics/PredictionEngine';
 import { PlayerManager } from '../entities/PlayerManager';
 import { ProjectileManager } from '../entities/ProjectileManager';
 import { WeaponCrateManager } from '../entities/WeaponCrateManager';
@@ -27,6 +28,7 @@ export class GameScene extends Phaser.Scene {
   private inputManager!: InputManager;
   private shootingManager!: ShootingManager;
   private dodgeRollManager!: DodgeRollManager;
+  private predictionEngine!: PredictionEngine;
   private playerManager!: PlayerManager;
   private projectileManager!: ProjectileManager;
   private weaponCrateManager!: WeaponCrateManager;
@@ -182,10 +184,14 @@ export class GameScene extends Phaser.Scene {
           // Initialize dodge roll manager
           this.dodgeRollManager = new DodgeRollManager();
 
+          // Initialize prediction engine for client-side reconciliation (Story 4.2)
+          this.predictionEngine = new PredictionEngine();
+
           // Pass managers to event handlers
           this.eventHandlers.setInputManager(this.inputManager);
           this.eventHandlers.setShootingManager(this.shootingManager);
           this.eventHandlers.setDodgeRollManager(this.dodgeRollManager);
+          this.eventHandlers.setPredictionEngine(this.predictionEngine);
 
           // Setup mouse click for shooting/melee
           this.input.on('pointerdown', () => {

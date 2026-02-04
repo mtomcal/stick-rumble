@@ -304,4 +304,106 @@ describe('PredictionEngine', () => {
       expect(position.y).toBeLessThan(100);
     });
   });
+
+  describe('Reconciliation', () => {
+    it('should reconcile position when server correction received', () => {
+      const engine = new PredictionEngine();
+
+      // Client-side prediction
+      let position = { x: 100, y: 100 };
+      let velocity = { x: 0, y: 0 };
+      const input = { up: true, down: false, left: false, right: false, aimAngle: 0, isSprinting: false, sequence: 1 };
+
+      // Simulate 10 frames of client prediction
+      for (let i = 0; i < 10; i++) {
+        const result = engine.predictPosition(position, velocity, input, 0.016);
+        position = result.position;
+        velocity = result.velocity;
+      }
+
+      // Server sends correction (e.g., due to collision or validation failure)
+      const serverPosition = { x: 100, y: 98 }; // Slightly different from predicted
+      const serverVelocity = { x: 0, y: -180 }; // Corrected velocity
+
+      // Client should accept server position as authoritative
+      const reconciled = engine.reconcile(
+        serverPosition,
+        serverVelocity,
+        5, // Server processed up to sequence 5
+        [
+          // Pending inputs after sequence 5
+          { sequence: 6, input, timestamp: Date.now() },
+          { sequence: 7, input, timestamp: Date.now() },
+        ]
+      );
+
+      // Should replay pending inputs on top of server position
+      expect(reconciled.position.y).toBeLessThan(serverPosition.y); // Moved up from server position
+    });
+
+    it('should calculate correction distance for smooth interpolation', () => {
+      const engine = new PredictionEngine();
+
+      const predictedPos = { x: 100, y: 100 };
+      const serverPos = { x: 102, y: 99 };
+
+      const distance = engine.calculateCorrectionDistance(predictedPos, serverPos);
+
+      // Distance should be ~2.236 (sqrt(2^2 + 1^2))
+      expect(distance).toBeCloseTo(2.236, 2);
+    });
+
+    it('should determine correction needs instant teleport for large errors', () => {
+      const engine = new PredictionEngine();
+
+      const predictedPos = { x: 100, y: 100 };
+      const serverPos = { x: 250, y: 100 }; // 150px away
+
+      const needsInstant = engine.needsInstantCorrection(predictedPos, serverPos);
+
+      expect(needsInstant).toBe(true);
+    });
+
+    it('should determine correction needs smooth lerp for small errors', () => {
+      const engine = new PredictionEngine();
+
+      const predictedPos = { x: 100, y: 100 };
+      const serverPos = { x: 105, y: 102 }; // ~5.4px away
+
+      const needsInstant = engine.needsInstantCorrection(predictedPos, serverPos);
+
+      expect(needsInstant).toBe(false);
+    });
+
+    it('should replay inputs correctly from server position', () => {
+      const engine = new PredictionEngine();
+
+      const serverPosition = { x: 100, y: 100 };
+      const serverVelocity = { x: 0, y: 0 };
+
+      const pendingInputs = [
+        { sequence: 1, input: { up: true, down: false, left: false, right: false, aimAngle: 0, isSprinting: false, sequence: 1 }, timestamp: Date.now() },
+        { sequence: 2, input: { up: true, down: false, left: false, right: false, aimAngle: 0, isSprinting: false, sequence: 2 }, timestamp: Date.now() + 16 },
+      ];
+
+      const reconciled = engine.reconcile(serverPosition, serverVelocity, 0, pendingInputs);
+
+      // After replaying 2 "up" inputs, y should be less than starting position
+      expect(reconciled.position.y).toBeLessThan(100);
+      expect(reconciled.velocity.y).toBeLessThan(0);
+    });
+
+    it('should handle empty pending inputs (no replay needed)', () => {
+      const engine = new PredictionEngine();
+
+      const serverPosition = { x: 100, y: 100 };
+      const serverVelocity = { x: 0, y: 0 };
+
+      const reconciled = engine.reconcile(serverPosition, serverVelocity, 5, []);
+
+      // Should return server state unchanged
+      expect(reconciled.position).toEqual(serverPosition);
+      expect(reconciled.velocity).toEqual(serverVelocity);
+    });
+  });
 });
