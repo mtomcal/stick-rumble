@@ -199,6 +199,22 @@ export class WebSocketClient {
       // Call all registered handlers for this message type
       handlers.forEach(handler => handler(message.data));
     }
+
+    // Delta compression backward compatibility:
+    // When receiving state:snapshot or state:delta, also emit player:move events
+    // so that existing code listening for player:move continues to work.
+    if (message.type === 'state:snapshot' || message.type === 'state:delta') {
+      const data = message.data as { players?: unknown[] };
+      if (data && data.players && data.players.length > 0) {
+        // Convert to player:move format and emit
+        const playerMoveHandlers = this.messageHandlers.get('player:move');
+        if (playerMoveHandlers) {
+          this.debug(`  -> forwarding to player:move handlers (${playerMoveHandlers.size})`);
+          playerMoveHandlers.forEach(handler => handler({ players: data.players }));
+        }
+      }
+    }
+
     // Silently ignore messages without handlers - this is expected behavior
     // as not all clients will handle all message types
   }
