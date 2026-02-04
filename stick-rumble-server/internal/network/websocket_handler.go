@@ -40,6 +40,7 @@ type WebSocketHandler struct {
 	timerInterval     time.Duration // Interval for match timer broadcasts (default 1s)
 	validator         *SchemaValidator
 	outgoingValidator *SchemaValidator
+	networkSimulator  *NetworkSimulator // For artificial latency testing (Story 4.6)
 }
 
 // NewWebSocketHandler creates a new WebSocket handler with room management
@@ -54,11 +55,15 @@ func NewWebSocketHandlerWithConfig(timerInterval time.Duration) *WebSocketHandle
 	schemaLoader := GetClientToServerSchemaLoader()
 	outgoingSchemaLoader := GetServerToClientSchemaLoader()
 
+	// Initialize network simulator from environment variables (Story 4.6)
+	networkSimulator := NewNetworkSimulator()
+
 	handler := &WebSocketHandler{
 		roomManager:       game.NewRoomManager(),
 		timerInterval:     timerInterval,
 		validator:         NewSchemaValidator(schemaLoader),
 		outgoingValidator: NewSchemaValidator(outgoingSchemaLoader),
+		networkSimulator:  networkSimulator,
 	}
 
 	// Create game server with broadcast function
@@ -215,9 +220,19 @@ func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Reques
 	go func() {
 		defer close(done)
 		for msg := range sendChan {
-			if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
-				log.Printf("Write error for %s: %v", playerID, err)
-				return
+			// Capture msg for closure (Story 4.6: Network simulator)
+			msgToSend := msg
+			if h.networkSimulator.IsEnabled() {
+				h.networkSimulator.SimulateSend(func() {
+					if err := conn.WriteMessage(websocket.TextMessage, msgToSend); err != nil {
+						log.Printf("Write error for %s: %v", playerID, err)
+					}
+				})
+			} else {
+				if err := conn.WriteMessage(websocket.TextMessage, msgToSend); err != nil {
+					log.Printf("Write error for %s: %v", playerID, err)
+					return
+				}
 			}
 		}
 	}()

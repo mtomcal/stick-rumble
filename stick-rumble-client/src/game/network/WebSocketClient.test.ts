@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { WebSocketClient, type Message } from './WebSocketClient';
+import { NetworkSimulator } from './NetworkSimulator';
 
 describe('WebSocketClient', () => {
   let mockWebSocket: any;
@@ -711,6 +712,174 @@ describe('WebSocketClient', () => {
       }).not.toThrow();
 
       expect(client.getFrameNumber()).toBe(1);
+    });
+  });
+
+  describe('NetworkSimulator integration', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('should accept NetworkSimulator in constructor', () => {
+      const simulator = new NetworkSimulator({ latency: 100, packetLoss: 5, enabled: true });
+      const client = new WebSocketClient('ws://localhost:8080/ws', false, simulator);
+
+      expect(client.getNetworkSimulator()).toBe(simulator);
+    });
+
+    it('should create default disabled simulator when none provided', () => {
+      const client = new WebSocketClient('ws://localhost:8080/ws');
+      const simulator = client.getNetworkSimulator();
+
+      expect(simulator).toBeDefined();
+      expect(simulator.isEnabled()).toBe(false);
+    });
+
+    it('should delay sending messages when simulator is enabled with latency', async () => {
+      const simulator = new NetworkSimulator({ latency: 100, enabled: true });
+      const client = new WebSocketClient('ws://localhost:8080/ws', false, simulator);
+
+      const connectPromise = client.connect();
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen({});
+      }
+      await connectPromise;
+
+      const message: Message = { type: 'test', timestamp: Date.now(), data: { foo: 'bar' } };
+      client.send(message);
+
+      // Should not send immediately
+      expect(mockWebSocketInstance.send).not.toHaveBeenCalled();
+
+      // Advance time past latency + jitter
+      vi.advanceTimersByTime(150);
+
+      expect(mockWebSocketInstance.send).toHaveBeenCalledWith(JSON.stringify(message));
+    });
+
+    it('should drop sent messages based on packet loss rate', async () => {
+      const simulator = new NetworkSimulator({ latency: 100, packetLoss: 20, enabled: true });
+      const client = new WebSocketClient('ws://localhost:8080/ws', false, simulator);
+
+      const connectPromise = client.connect();
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen({});
+      }
+      await connectPromise;
+
+      // Mock Math.random to return 0.1 (packet loss check)
+      // 0.1 * 100 = 10 which is < 20, so packet should be dropped
+      vi.spyOn(Math, 'random').mockReturnValue(0.1);
+
+      const message: Message = { type: 'test', timestamp: Date.now() };
+      client.send(message);
+
+      vi.advanceTimersByTime(500);
+
+      // Should not send due to packet loss
+      expect(mockWebSocketInstance.send).not.toHaveBeenCalled();
+    });
+
+    it('should delay received messages when simulator is enabled with latency', async () => {
+      const simulator = new NetworkSimulator({ latency: 100, enabled: true });
+      const client = new WebSocketClient('ws://localhost:8080/ws', false, simulator);
+
+      const connectPromise = client.connect();
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen({});
+      }
+      await connectPromise;
+
+      const handler = vi.fn();
+      client.on('test', handler);
+
+      const message: Message = { type: 'test', timestamp: Date.now(), data: { foo: 'bar' } };
+
+      // Simulate incoming message
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage({ data: JSON.stringify(message) });
+      }
+
+      // Handler should not be called immediately
+      expect(handler).not.toHaveBeenCalled();
+
+      // Advance time past latency + jitter
+      vi.advanceTimersByTime(150);
+
+      expect(handler).toHaveBeenCalledWith({ foo: 'bar' });
+    });
+
+    it('should drop received messages based on packet loss rate', async () => {
+      const simulator = new NetworkSimulator({ latency: 100, packetLoss: 20, enabled: true });
+      const client = new WebSocketClient('ws://localhost:8080/ws', false, simulator);
+
+      const connectPromise = client.connect();
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen({});
+      }
+      await connectPromise;
+
+      const handler = vi.fn();
+      client.on('test', handler);
+
+      // Mock Math.random to return 0.1 (packet loss check)
+      // 0.1 * 100 = 10 which is < 20, so packet should be dropped
+      vi.spyOn(Math, 'random').mockReturnValue(0.1);
+
+      const message: Message = { type: 'test', timestamp: Date.now(), data: { foo: 'bar' } };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage({ data: JSON.stringify(message) });
+      }
+
+      vi.advanceTimersByTime(500);
+
+      // Handler should not be called due to packet loss
+      expect(handler).not.toHaveBeenCalled();
+    });
+
+    it('should send immediately when simulator is disabled', async () => {
+      const simulator = new NetworkSimulator({ latency: 100, enabled: false });
+      const client = new WebSocketClient('ws://localhost:8080/ws', false, simulator);
+
+      const connectPromise = client.connect();
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen({});
+      }
+      await connectPromise;
+
+      const message: Message = { type: 'test', timestamp: Date.now() };
+      client.send(message);
+
+      // Should send immediately without delay
+      expect(mockWebSocketInstance.send).toHaveBeenCalledWith(JSON.stringify(message));
+    });
+
+    it('should receive immediately when simulator is disabled', async () => {
+      const simulator = new NetworkSimulator({ latency: 100, enabled: false });
+      const client = new WebSocketClient('ws://localhost:8080/ws', false, simulator);
+
+      const connectPromise = client.connect();
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen({});
+      }
+      await connectPromise;
+
+      const handler = vi.fn();
+      client.on('test', handler);
+
+      const message: Message = { type: 'test', timestamp: Date.now(), data: { foo: 'bar' } };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage({ data: JSON.stringify(message) });
+      }
+
+      // Handler should be called immediately
+      expect(handler).toHaveBeenCalledWith({ foo: 'bar' });
     });
   });
 });

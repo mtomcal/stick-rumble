@@ -7,6 +7,7 @@ import {
   type PlayerShootData,
   type WeaponPickupAttemptData,
 } from '@stick-rumble/events-schema';
+import { NetworkSimulator } from './NetworkSimulator';
 
 export interface Message {
   type: string;
@@ -48,11 +49,13 @@ export class WebSocketClient {
   private inputRecordingEnabled = false;
   private frameNumber = 0;
   private inputLogCallback?: (tick: number, input: InputStateData) => void;
+  private networkSimulator: NetworkSimulator;
 
-  constructor(url: string, debugMode = false) {
+  constructor(url: string, debugMode = false, networkSimulator?: NetworkSimulator) {
     this.url = url;
     this.debugMode = debugMode;
     this.clientId = `client-${Math.random().toString(36).substring(7)}`;
+    this.networkSimulator = networkSimulator || new NetworkSimulator();
 
     // Enable input recording if environment variable is set
     if (import.meta.env.VITE_LOG_INPUT_RECORDING === 'true') {
@@ -63,6 +66,13 @@ export class WebSocketClient {
 
   setDebugMode(enabled: boolean): void {
     this.debugMode = enabled;
+  }
+
+  /**
+   * Get the network simulator instance
+   */
+  getNetworkSimulator(): NetworkSimulator {
+    return this.networkSimulator;
   }
 
   /**
@@ -121,7 +131,10 @@ export class WebSocketClient {
         this.ws.onmessage = (event) => {
           try {
             const message: Message = JSON.parse(event.data);
-            this.handleMessage(message);
+            // Wrap receive with network simulator
+            this.networkSimulator.simulateReceive(message, (msg) => {
+              this.handleMessage(msg);
+            });
           } catch (err) {
             console.error('Failed to parse message:', err);
           }
@@ -144,7 +157,12 @@ export class WebSocketClient {
 
   send(message: Message): void {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(message));
+      // Wrap send with network simulator
+      this.networkSimulator.simulateSend(message, (msg) => {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+          this.ws.send(JSON.stringify(msg));
+        }
+      });
     } else {
       console.warn('WebSocket not connected, cannot send message');
     }
