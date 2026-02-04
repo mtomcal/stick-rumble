@@ -21,6 +21,8 @@ export interface MatchEndData {
   reason: string;
 }
 
+import type { NetworkSimulatorStats } from '../game/network/NetworkSimulator';
+
 /**
  * Window object extensions for Phaser-React communication
  */
@@ -28,5 +30,11 @@ declare global {
   interface Window {
     onMatchEnd?: (data: MatchEndData, playerId: string) => void;
     restartGame?: () => void;
+    // Network simulator controls (F8 debug panel)
+    onNetworkSimulatorToggle?: () => void;
+    getNetworkSimulatorStats?: () => NetworkSimulatorStats | null;
+    setNetworkSimulatorLatency?: (latency: number) => void;
+    setNetworkSimulatorPacketLoss?: (packetLoss: number) => void;
+    setNetworkSimulatorEnabled?: (enabled: boolean) => void;
   }
 }

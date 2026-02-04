@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import { WebSocketClient } from '../network/WebSocketClient';
+import { NetworkSimulator } from '../network/NetworkSimulator';
+import { parseNetworkSimulatorParams } from '../network/urlParams';
 import { InputManager } from '../input/InputManager';
 import { ShootingManager } from '../input/ShootingManager';
 import { DodgeRollManager } from '../input/DodgeRollManager';
@@ -21,6 +23,7 @@ import { ARENA } from '../../shared/constants';
 
 export class GameScene extends Phaser.Scene {
   private wsClient!: WebSocketClient;
+  private networkSimulator!: NetworkSimulator;
   private inputManager!: InputManager;
   private shootingManager!: ShootingManager;
   private dodgeRollManager!: DodgeRollManager;
@@ -121,9 +124,22 @@ export class GameScene extends Phaser.Scene {
     // Initialize audio manager (Story 3.3 Polish: Weapon-Specific Firing Sounds)
     this.audioManager = new AudioManager(this);
 
+    // Initialize network simulator with URL params (Story 4.6: Artificial Latency Testing)
+    const urlSimulatorConfig = parseNetworkSimulatorParams();
+    this.networkSimulator = new NetworkSimulator(urlSimulatorConfig || undefined);
+    if (urlSimulatorConfig) {
+      console.log('[NetworkSimulator] Configured from URL params:', urlSimulatorConfig);
+    }
+
+    // Setup window globals for React debug panel communication
+    this.setupNetworkSimulatorGlobals();
+
+    // Setup F8 key for network debug panel toggle
+    this.setupF8KeyHandler();
+
     // Connect to WebSocket server
     const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws';
-    this.wsClient = new WebSocketClient(wsUrl);
+    this.wsClient = new WebSocketClient(wsUrl, false, this.networkSimulator);
 
     // Initialize event handlers module
     this.eventHandlers = new GameSceneEventHandlers(
@@ -484,6 +500,9 @@ export class GameScene extends Phaser.Scene {
     if (this.wsClient) {
       this.wsClient.disconnect();
     }
+
+    // Cleanup network simulator globals
+    this.cleanupNetworkSimulatorGlobals();
   }
 
   /**
@@ -492,5 +511,56 @@ export class GameScene extends Phaser.Scene {
    */
   restartMatch(): void {
     this.scene.restart();
+  }
+
+  /**
+   * Setup F8 key handler to toggle network debug panel (Story 4.6)
+   */
+  private setupF8KeyHandler(): void {
+    const f8Key = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.F8);
+    if (f8Key) {
+      f8Key.on('down', () => {
+        if (window.onNetworkSimulatorToggle) {
+          window.onNetworkSimulatorToggle();
+        }
+      });
+    }
+  }
+
+  /**
+   * Setup window globals for React debug panel to control network simulator (Story 4.6)
+   */
+  private setupNetworkSimulatorGlobals(): void {
+    window.getNetworkSimulatorStats = () => {
+      return this.networkSimulator ? this.networkSimulator.getStats() : null;
+    };
+
+    window.setNetworkSimulatorLatency = (latency: number) => {
+      if (this.networkSimulator) {
+        this.networkSimulator.setLatency(latency);
+      }
+    };
+
+    window.setNetworkSimulatorPacketLoss = (packetLoss: number) => {
+      if (this.networkSimulator) {
+        this.networkSimulator.setPacketLoss(packetLoss);
+      }
+    };
+
+    window.setNetworkSimulatorEnabled = (enabled: boolean) => {
+      if (this.networkSimulator) {
+        this.networkSimulator.setEnabled(enabled);
+      }
+    };
+  }
+
+  /**
+   * Cleanup window globals on scene shutdown (Story 4.6)
+   */
+  private cleanupNetworkSimulatorGlobals(): void {
+    delete window.getNetworkSimulatorStats;
+    delete window.setNetworkSimulatorLatency;
+    delete window.setNetworkSimulatorPacketLoss;
+    delete window.setNetworkSimulatorEnabled;
   }
 }
