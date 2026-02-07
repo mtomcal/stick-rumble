@@ -36,6 +36,7 @@ type WeaponConfig struct {
 	KnockbackDistance float64       `json:"knockbackDistance"`
 	Recoil            *RecoilConfig `json:"recoil"`
 	SpreadDegrees     float64       `json:"spreadDegrees"`
+	IsHitscan         bool          `json:"isHitscan"` // Story 4.5: Lag compensation for instant-hit weapons
 	Visuals           WeaponVisuals `json:"visuals"`
 }
 
@@ -58,6 +59,7 @@ func (wc *WeaponConfig) ToWeapon() *Weapon {
 		ArcDegrees:        wc.ArcDegrees,
 		KnockbackDistance: wc.KnockbackDistance,
 		SpreadDegrees:     wc.SpreadDegrees,
+		IsHitscan:         wc.IsHitscan,
 	}
 
 	// Convert recoil config if present
