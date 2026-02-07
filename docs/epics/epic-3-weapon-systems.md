@@ -6,10 +6,11 @@
 
 **FRs Covered:** FR4 (weapon pickups), FR5 (reload/switch), FR6 (sprint/dodge)
 
-**Epic Status:** In Progress (5/14 stories complete, 36% done)
+**Epic Status:** ✅ COMPLETE (14/14 stories)
 
 **Epic Ready:** December 9, 2025 (Epic 2 complete)
 **Epic Started:** December 10, 2025 (Story 3.1 PR #3 merged)
+**Epic Completed:** February 4, 2026
 
 ---
 
@@ -18,11 +19,17 @@
 - Story 3.0: Weapon Balance Research & Validation (DONE - Dec 9)
 - Story 3.0B: Pistol damage mismatch fix (DONE)
 - Story 3.1: Weapon Pickup System (DONE - Dec 10, PR #3 merged)
+- Story 3.2: Melee Weapons - Bat and Katana (DONE)
+- Story 3.3: Ranged Weapons - Uzi, AK47, Shotgun (DONE)
 - Story 3.3A: Weapon acquisition system design (DONE)
+- Story 3.4: Manual Reload Mechanic (DONE)
 - Story 3.4A: Ammo economy & magazine balance design (DONE)
-- Tech Debt - JSON Schema Phase 3 (DONE - approved for merge Jan 12)
-- **CURRENT BLOCKER:** Tech Debt - JSON Schema Phase 4 → Stories 3.2+
-- Stories 3.2-3.7B: Blocked until JSON Schema tech debt complete
+- Story 3.5: Sprint Mechanic (DONE)
+- Story 3.6: Dodge Roll with Invincibility Frames (DONE)
+- Story 3.7A: Character & Weapon Sprites (DONE)
+- Story 3.7B: Health Bars & Hit Effects (DONE)
+- Story 3.8: Shared configuration system (DONE)
+- Tech Debt - JSON Schema Phases 1-4 (DONE)
 
 **Key Additions:**
 - Story 3.0 added for weapon balance research before implementation (prevents mid-epic rebalancing)
@@ -54,19 +61,19 @@ See docs/weapon-balance-analysis.md for full analysis with DPS calculations, TTK
 **Feature Stories (9 core):**
 - [x] 3.0: Weapon Balance Research & Validation
 - [x] 3.1: Weapon Pickup System
-- [ ] 3.2: Melee Weapons (Bat and Katana)
-- [ ] 3.3: Ranged Weapons (Uzi, AK47, Shotgun)
-- [ ] 3.4: Manual Reload Mechanic
-- [ ] 3.5: Sprint Mechanic
-- [ ] 3.6: Dodge Roll with Invincibility Frames
-- [ ] 3.7A: Character & Weapon Sprites
-- [ ] 3.7B: Health Bars & Hit Effects
+- [x] 3.2: Melee Weapons (Bat and Katana)
+- [x] 3.3: Ranged Weapons (Uzi, AK47, Shotgun)
+- [x] 3.4: Manual Reload Mechanic
+- [x] 3.5: Sprint Mechanic
+- [x] 3.6: Dodge Roll with Invincibility Frames
+- [x] 3.7A: Character & Weapon Sprites
+- [x] 3.7B: Health Bars & Hit Effects
 
 **Supporting Work:**
 - [x] 3.0B: Pistol damage mismatch fix (client 15->25)
 - [x] 3.3A: Weapon acquisition system design
 - [x] 3.4A: Ammo economy & magazine balance design
-- [ ] 3.8: Shared configuration system (blocked until 3.2-3.4 complete)
+- [x] 3.8: Shared configuration system
 
 **Epic Complete When:**
 - All 14 stories done (9 feature + 4 supporting + 1 tech debt)

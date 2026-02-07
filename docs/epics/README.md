@@ -20,8 +20,8 @@ This directory contains the epic breakdown for Stick Rumble, a multiplayer stick
 |------|------|--------|----------|
 | [Epic 1](./epic-1-foundation.md) | Foundation & Project Setup | Complete | 4/4 stories |
 | [Epic 2](./epic-2-core-combat.md) | Core Multiplayer Combat | Complete | 13/13 stories |
-| [Epic 3](./epic-3-weapon-systems.md) | Weapon Systems & Game Feel | In Progress | 2/14 stories |
-| [Epic 4](./epic-4-netcode.md) | Responsive Networked Gameplay | Not Started | 0/6 stories |
+| [Epic 3](./epic-3-weapon-systems.md) | Weapon Systems & Game Feel | ✅ Complete | 14/14 stories |
+| [Epic 4](./epic-4-netcode.md) | Responsive Networked Gameplay | In Progress | 0/6 stories |
 | [Epic 5](./epic-5-matchmaking.md) | Matchmaking & Lobbies | Not Started | 0/6 stories |
 | [Epic 6](./epic-6-progression.md) | Player Identity & Progression | Not Started | 0/7 stories |
 | [Epic 7](./epic-7-maps.md) | Arena Environments | Not Started | 0/5 stories |
