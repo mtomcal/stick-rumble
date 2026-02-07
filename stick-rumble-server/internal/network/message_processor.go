@@ -59,9 +59,10 @@ func (h *WebSocketHandler) handlePlayerShoot(playerID string, data any) {
 	// After validation, we can safely type assert
 	dataMap := data.(map[string]interface{})
 	aimAngle := dataMap["aimAngle"].(float64)
+	clientTimestamp := int64(dataMap["clientTimestamp"].(float64)) // Convert from float64 to int64
 
-	// Attempt to shoot
-	result := h.gameServer.PlayerShoot(playerID, aimAngle)
+	// Attempt to shoot with client timestamp for lag compensation
+	result := h.gameServer.PlayerShoot(playerID, aimAngle, clientTimestamp)
 
 	if result.Success {
 		// Broadcast projectile spawn to all players

@@ -23,11 +23,17 @@
       "description": "Player shoot action payload",
       "type": "object",
       "required": [
-        "aimAngle"
+        "aimAngle",
+        "clientTimestamp"
       ],
       "properties": {
         "aimAngle": {
           "description": "Aim angle in radians",
+          "type": "number"
+        },
+        "clientTimestamp": {
+          "description": "Client-side timestamp in milliseconds when shot was fired",
+          "minimum": 0,
           "type": "number"
         }
       }

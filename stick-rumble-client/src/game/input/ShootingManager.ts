@@ -88,15 +88,17 @@ export class ShootingManager {
       return false;
     }
 
-    // Record shot time for cooldown
-    this.lastShotTime = this.clock.now();
+    // Record shot time for cooldown and lag compensation
+    const shotTime = this.clock.now();
+    this.lastShotTime = shotTime;
 
-    // Send shoot message to server
+    // Send shoot message to server with client timestamp for lag compensation
     this.wsClient.send({
       type: 'player:shoot',
-      timestamp: this.clock.now(),
+      timestamp: shotTime,
       data: {
         aimAngle: this.aimAngle,
+        clientTimestamp: shotTime,
       },
     });
 

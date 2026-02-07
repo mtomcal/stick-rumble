@@ -32,7 +32,7 @@ func TestGameServerPlayerShoot(t *testing.T) {
 	gs.AddPlayer(playerID)
 
 	// Player should be able to shoot initially
-	result := gs.PlayerShoot(playerID, 0) // Aim angle 0 (right)
+	result := gs.PlayerShoot(playerID, 0, 0) // Aim angle 0 (right)
 
 	if !result.Success {
 		t.Error("Player should be able to shoot initially")
@@ -60,13 +60,13 @@ func TestGameServerPlayerShoot_FireRateCooldown(t *testing.T) {
 	gs.AddPlayer(playerID)
 
 	// First shot should succeed
-	result1 := gs.PlayerShoot(playerID, 0)
+	result1 := gs.PlayerShoot(playerID, 0, 0)
 	if !result1.Success {
 		t.Error("First shot should succeed")
 	}
 
 	// Immediate second shot should fail (fire rate cooldown)
-	result2 := gs.PlayerShoot(playerID, 0)
+	result2 := gs.PlayerShoot(playerID, 0, 0)
 	if result2.Success {
 		t.Error("Second shot should fail due to fire rate cooldown")
 	}
@@ -87,7 +87,7 @@ func TestGameServerPlayerShoot_EmptyMagazine(t *testing.T) {
 	ws.CurrentAmmo = 0
 
 	// Shot should fail with empty magazine
-	result := gs.PlayerShoot(playerID, 0)
+	result := gs.PlayerShoot(playerID, 0, 0)
 	if result.Success {
 		t.Error("Shot should fail with empty magazine")
 	}
@@ -100,7 +100,7 @@ func TestGameServerPlayerShoot_EmptyMagazine(t *testing.T) {
 func TestGameServerPlayerShoot_NonExistentPlayer(t *testing.T) {
 	gs := NewGameServer(nil)
 
-	result := gs.PlayerShoot("non-existent", 0)
+	result := gs.PlayerShoot("non-existent", 0, 0)
 
 	if result.Success {
 		t.Error("Shot should fail for non-existent player")

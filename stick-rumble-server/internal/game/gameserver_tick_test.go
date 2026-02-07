@@ -166,7 +166,7 @@ func TestGameServerProjectileUpdate(t *testing.T) {
 	gs.AddPlayer(playerID)
 
 	// Create a projectile
-	result := gs.PlayerShoot(playerID, 0)
+	result := gs.PlayerShoot(playerID, 0, 0)
 	if !result.Success {
 		t.Fatal("Failed to create projectile")
 	}
@@ -204,7 +204,7 @@ func TestGameServerGetActiveProjectiles(t *testing.T) {
 	}
 
 	// After shooting
-	result := gs.PlayerShoot(playerID, 0)
+	result := gs.PlayerShoot(playerID, 0, 0)
 	if !result.Success {
 		t.Fatal("Failed to shoot")
 	}

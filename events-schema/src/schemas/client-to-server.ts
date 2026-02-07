@@ -37,6 +37,7 @@ export type InputStateMessage = Static<typeof InputStateMessageSchema>;
 export const PlayerShootDataSchema = Type.Object(
   {
     aimAngle: Type.Number({ description: 'Aim angle in radians' }),
+    clientTimestamp: Type.Number({ description: 'Client-side timestamp in milliseconds when shot was fired', minimum: 0 }),
   },
   { $id: 'PlayerShootData', description: 'Player shoot action payload' }
 );

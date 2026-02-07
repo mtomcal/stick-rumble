@@ -819,3 +819,18 @@ func (h *WebSocketHandler) broadcastRollEnd(playerID string, reason string) {
 		room.Broadcast(msgBytes, "")
 	}
 }
+
+// getPlayerRTT retrieves a player's RTT for lag compensation (Story 4.5)
+func (h *WebSocketHandler) getPlayerRTT(playerID string) int64 {
+	room := h.roomManager.GetRoomByPlayerID(playerID)
+	if room == nil {
+		return 0
+	}
+
+	player := room.GetPlayer(playerID)
+	if player == nil {
+		return 0
+	}
+
+	return player.PingTracker.GetRTT()
+}
