@@ -3,6 +3,140 @@ import { PredictionEngine } from './PredictionEngine';
 import type { InputState } from '../input/InputManager';
 
 describe('PredictionEngine', () => {
+  describe('accelerateToward (internal helper)', () => {
+    it('should accelerate from zero toward target', () => {
+      const engine = new PredictionEngine();
+
+      // Access the private method through prediction
+      const input: InputState = {
+        up: false,
+        down: false,
+        left: false,
+        right: true,
+        aimAngle: 0,
+        isSprinting: false,
+        sequence: 0,
+      };
+
+      // Test acceleration behavior
+      const result = engine.predictPosition(
+        { x: 100, y: 100 },
+        { x: 0, y: 0 },
+        input,
+        0.1 // 100ms delta
+      );
+
+      // Should accelerate by accel * deltaTime in direction of target
+      // Target is 200 px/s right, accel is 50 px/s², dt is 0.1s
+      // But with acceleration-toward formula: min(maxChange, distance)
+      // maxChange = 50 * 0.1 = 5 px/s
+      expect(result.velocity.x).toBeCloseTo(5, 1);
+    });
+
+    it('should snap to target when close enough', () => {
+      const engine = new PredictionEngine();
+
+      // Start with velocity close to target
+      const input: InputState = {
+        up: false,
+        down: false,
+        left: false,
+        right: true,
+        aimAngle: 0,
+        isSprinting: false,
+        sequence: 0,
+      };
+
+      // Velocity very close to target (200)
+      const result = engine.predictPosition(
+        { x: 100, y: 100 },
+        { x: 197, y: 0 },
+        input,
+        0.1 // maxChange = 5, distance to target = 3
+      );
+
+      // Should snap to exactly 200 (target)
+      expect(result.velocity.x).toBeCloseTo(200, 0);
+    });
+
+    it('should decelerate toward zero with same algorithm', () => {
+      const engine = new PredictionEngine();
+
+      const inputReleased: InputState = {
+        up: false,
+        down: false,
+        left: false,
+        right: false,
+        aimAngle: 0,
+        isSprinting: false,
+        sequence: 0,
+      };
+
+      // Start with velocity 100
+      const result = engine.predictPosition(
+        { x: 100, y: 100 },
+        { x: 100, y: 0 },
+        inputReleased,
+        0.1 // decel * dt = 50 * 0.1 = 5
+      );
+
+      // Should reduce by 5 px/s (linear deceleration)
+      expect(result.velocity.x).toBeCloseTo(95, 1);
+    });
+
+    it('should handle zero velocity (no-op)', () => {
+      const engine = new PredictionEngine();
+
+      const inputReleased: InputState = {
+        up: false,
+        down: false,
+        left: false,
+        right: false,
+        aimAngle: 0,
+        isSprinting: false,
+        sequence: 0,
+      };
+
+      // Already at zero velocity
+      const result = engine.predictPosition(
+        { x: 100, y: 100 },
+        { x: 0, y: 0 },
+        inputReleased,
+        0.1
+      );
+
+      // Should remain at zero
+      expect(result.velocity.x).toBe(0);
+      expect(result.velocity.y).toBe(0);
+    });
+
+    it('should handle very small velocities near snap threshold', () => {
+      const engine = new PredictionEngine();
+
+      const inputReleased: InputState = {
+        up: false,
+        down: false,
+        left: false,
+        right: false,
+        aimAngle: 0,
+        isSprinting: false,
+        sequence: 0,
+      };
+
+      // Start with very small velocity (less than maxChange)
+      const result = engine.predictPosition(
+        { x: 100, y: 100 },
+        { x: 0.5, y: 0 },
+        inputReleased,
+        0.1 // maxChange = 5, velocity = 0.5 < 5, should snap to zero
+      );
+
+      // Should snap to exactly zero
+      expect(result.velocity.x).toBe(0);
+      expect(result.velocity.y).toBe(0);
+    });
+  });
+
   describe('predictPosition', () => {
     it('should not move when no input', () => {
       const engine = new PredictionEngine();
@@ -136,9 +270,10 @@ describe('PredictionEngine', () => {
       };
 
       // Simulate enough time to reach max speed
+      // With ACCELERATION=50 px/s² and target speed=200 px/s, takes ~4 seconds (240 frames at 60 FPS)
       let position = { x: 100, y: 100 };
       let velocity = { x: 0, y: 0 };
-      for (let i = 0; i < 100; i++) {
+      for (let i = 0; i < 300; i++) {
         const result = engine.predictPosition(position, velocity, input, 0.016);
         position = result.position;
         velocity = result.velocity;
@@ -210,7 +345,8 @@ describe('PredictionEngine', () => {
       let velocity = { x: 0, y: 0 };
 
       // Simulate many frames to ensure we hit max speed
-      for (let i = 0; i < 200; i++) {
+      // With ACCELERATION=50 px/s² and target speed=200 px/s, takes ~4 seconds (240 frames at 60 FPS)
+      for (let i = 0; i < 300; i++) {
         const result = engine.predictPosition(position, velocity, input, 0.016);
         position = result.position;
         velocity = result.velocity;
@@ -245,7 +381,7 @@ describe('PredictionEngine', () => {
       expect(result.position).toEqual({ x: 100, y: 100 });
     });
 
-    it('should decelerate to zero smoothly', () => {
+    it('should decelerate to zero smoothly using linear deceleration', () => {
       const engine = new PredictionEngine();
 
       // Start with some velocity
@@ -262,20 +398,75 @@ describe('PredictionEngine', () => {
         sequence: 0,
       };
 
-      // Decelerate over multiple frames - need enough time based on DECELERATION constant
-      // With DECELERATION=50 and multiplicative slowdown, need ~500 frames to get close to zero
-      for (let i = 0; i < 500; i++) {
+      // Decelerate over multiple frames
+      // With DECELERATION=50 and linear deceleration, should stop in ~3 seconds
+      // 150 px/s ÷ 50 px/s² = 3 seconds = 180 frames at 60 FPS
+      let frameCount = 0;
+      for (let i = 0; i < 200; i++) {
         const result = engine.predictPosition(position, velocity, inputReleased, 0.016);
         position = result.position;
         velocity = result.velocity;
+        frameCount++;
 
-        if (velocity.x <= 0.1) {
+        if (velocity.x === 0) {
           break;
         }
       }
 
-      // Should decelerate to near-zero (snap threshold is 0.1)
+      // Should decelerate to zero
       expect(velocity.x).toBe(0);
+      // Should take approximately 180 frames (3 seconds at 60 FPS)
+      expect(frameCount).toBeLessThan(200);
+      expect(frameCount).toBeGreaterThan(150);
+    });
+
+    it('should have NO sliding behavior - linear deceleration without exponential tail-off', () => {
+      const engine = new PredictionEngine();
+
+      // Start with moderate velocity (typical during gameplay direction changes)
+      let position = { x: 100, y: 100 };
+      let velocity = { x: 100, y: 0 };
+
+      const inputReleased: InputState = {
+        up: false,
+        down: false,
+        left: false,
+        right: false,
+        aimAngle: 0,
+        isSprinting: false,
+        sequence: 0,
+      };
+
+      // Track velocity reduction over time to verify linear deceleration
+      const velocityHistory: number[] = [];
+      for (let i = 0; i < 10; i++) {
+        velocityHistory.push(velocity.x);
+        const result = engine.predictPosition(position, velocity, inputReleased, 0.016);
+        position = result.position;
+        velocity = result.velocity;
+      }
+
+      // Verify linear deceleration: each frame reduces velocity by ~constant amount
+      // NOT multiplicative (which would show decreasing reduction rate)
+      const reductions: number[] = [];
+      for (let i = 1; i < velocityHistory.length; i++) {
+        reductions.push(velocityHistory[i - 1] - velocityHistory[i]);
+      }
+
+      // All reductions should be approximately equal (linear)
+      // Allow small variance due to snap-to-zero behavior
+      const avgReduction = reductions.reduce((sum, r) => sum + r, 0) / reductions.length;
+      for (const reduction of reductions) {
+        if (reduction > 0) {
+          // Should be close to average (within 10% tolerance for linear behavior)
+          expect(reduction).toBeGreaterThan(avgReduction * 0.9);
+          expect(reduction).toBeLessThan(avgReduction * 1.1);
+        }
+      }
+
+      // Verify no exponential tail-off: velocity doesn't asymptotically approach zero
+      // Linear deceleration means velocity reaches zero in finite time
+      expect(velocity.x).toBeLessThan(velocityHistory[0]); // Definitely decreased
     });
 
     it('should match server physics simulation', () => {
