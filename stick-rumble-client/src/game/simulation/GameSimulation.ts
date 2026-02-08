@@ -18,7 +18,6 @@ import type {
 import {
   normalize,
   accelerateToward,
-  decelerateToZero,
   clampToArena,
   checkAABBCollision,
 } from './physics';
@@ -263,7 +262,12 @@ export class GameSimulation {
       );
     } else {
       // No input - decelerate to zero
-      newVel = decelerateToZero(player.velocity, MOVEMENT.DECELERATION, dt);
+      newVel = accelerateToward(
+        player.velocity,
+        { x: 0, y: 0 },
+        MOVEMENT.DECELERATION,
+        dt
+      );
     }
 
     player.velocity = newVel;

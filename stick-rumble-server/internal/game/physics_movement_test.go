@@ -100,12 +100,12 @@ func TestUpdatePlayerNoInput(t *testing.T) {
 	// Set initial velocity
 	player.SetVelocity(Vector2{X: 100, Y: 0})
 
-	// Update with no input (should decelerate)
+	// Update with no input (should decelerate to zero)
+	// At Deceleration=1500, maxChange = 1500*0.1 = 150. Since 150 > 100, snaps to zero.
 	physics.UpdatePlayer(player, 0.1)
 
 	vel := player.GetVelocity()
-	// Should have decelerated by Deceleration * deltaTime = 50 * 0.1 = 5
-	expected := Vector2{X: 95, Y: 0}
+	expected := Vector2{X: 0, Y: 0}
 
 	if !vectorsAlmostEqual(vel, expected, 0.001) {
 		t.Errorf("After no input, velocity = %+v, want ~%+v", vel, expected)

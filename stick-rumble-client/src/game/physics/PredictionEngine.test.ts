@@ -59,7 +59,7 @@ describe('PredictionEngine', () => {
       expect(result.velocity.x).toBeCloseTo(200, 0);
     });
 
-    it('should decelerate toward zero with same algorithm', () => {
+    it('should stop instantly when no input', () => {
       const engine = new PredictionEngine();
 
       const inputReleased: InputState = {
@@ -77,11 +77,12 @@ describe('PredictionEngine', () => {
         { x: 100, y: 100 },
         { x: 100, y: 0 },
         inputReleased,
-        0.1 // decel * dt = 50 * 0.1 = 5
+        0.1
       );
 
-      // Should reduce by 5 px/s (linear deceleration)
-      expect(result.velocity.x).toBeCloseTo(95, 1);
+      // Should stop instantly
+      expect(result.velocity.x).toBe(0);
+      expect(result.velocity.y).toBe(0);
     });
 
     it('should handle zero velocity (no-op)', () => {
@@ -284,7 +285,7 @@ describe('PredictionEngine', () => {
       expect(velocityMagnitude).toBeCloseTo(200, 0);
     });
 
-    it('should decelerate when input released', () => {
+    it('should stop instantly when input released', () => {
       const engine = new PredictionEngine();
 
       // First, move right to build velocity
@@ -324,9 +325,9 @@ describe('PredictionEngine', () => {
 
       const result = engine.predictPosition(position, velocity, inputReleased, 0.1);
 
-      // Velocity should decrease
-      expect(result.velocity.x).toBeLessThan(velocityAfterMoving);
-      expect(result.velocity.x).toBeGreaterThanOrEqual(0); // Should not overshoot to negative
+      // Velocity should be exactly zero (instant stop)
+      expect(result.velocity.x).toBe(0);
+      expect(result.velocity.y).toBe(0);
     });
 
     it('should cap velocity at max speed', () => {
@@ -381,10 +382,9 @@ describe('PredictionEngine', () => {
       expect(result.position).toEqual({ x: 100, y: 100 });
     });
 
-    it('should decelerate to zero smoothly using linear deceleration', () => {
+    it('should decelerate quickly and stop within ~10 frames when no input', () => {
       const engine = new PredictionEngine();
 
-      // Start with some velocity
       let position = { x: 100, y: 100 };
       let velocity = { x: 150, y: 0 };
 
@@ -398,32 +398,30 @@ describe('PredictionEngine', () => {
         sequence: 0,
       };
 
-      // Decelerate over multiple frames
-      // With DECELERATION=50 and linear deceleration, should stop in ~3 seconds
-      // 150 px/s ÷ 50 px/s² = 3 seconds = 180 frames at 60 FPS
-      let frameCount = 0;
-      for (let i = 0; i < 200; i++) {
-        const result = engine.predictPosition(position, velocity, inputReleased, 0.016);
-        position = result.position;
-        velocity = result.velocity;
-        frameCount++;
+      // First frame: velocity should decrease but not reach zero
+      // maxChange = 1500 * 0.016 = 24, so 150 -> ~126
+      const result = engine.predictPosition(position, velocity, inputReleased, 0.016);
+      expect(result.velocity.x).toBeLessThan(150);
+      expect(result.velocity.x).toBeGreaterThan(0);
 
-        if (velocity.x === 0) {
-          break;
-        }
+      // Simulate until stopped (should take ~7 frames: 150/24 ≈ 6.25)
+      position = result.position;
+      velocity = result.velocity;
+      let frames = 1;
+      while (velocity.x > 0 && frames < 20) {
+        const r = engine.predictPosition(position, velocity, inputReleased, 0.016);
+        position = r.position;
+        velocity = r.velocity;
+        frames++;
       }
 
-      // Should decelerate to zero
       expect(velocity.x).toBe(0);
-      // Should take approximately 180 frames (3 seconds at 60 FPS)
-      expect(frameCount).toBeLessThan(200);
-      expect(frameCount).toBeGreaterThan(150);
+      expect(frames).toBeLessThanOrEqual(10);
     });
 
-    it('should have NO sliding behavior - linear deceleration without exponential tail-off', () => {
+    it('should stop quickly within ~10 frames when input released', () => {
       const engine = new PredictionEngine();
 
-      // Start with moderate velocity (typical during gameplay direction changes)
       let position = { x: 100, y: 100 };
       let velocity = { x: 100, y: 0 };
 
@@ -437,36 +435,25 @@ describe('PredictionEngine', () => {
         sequence: 0,
       };
 
-      // Track velocity reduction over time to verify linear deceleration
-      const velocityHistory: number[] = [];
-      for (let i = 0; i < 10; i++) {
-        velocityHistory.push(velocity.x);
+      // Simulate frames until stopped
+      // At DECELERATION=1500, maxChange per frame = 1500 * 0.016 = 24
+      // From vel=100, takes ~5 frames (100/24 ≈ 4.17)
+      let frames = 0;
+      while (velocity.x > 0 && frames < 20) {
         const result = engine.predictPosition(position, velocity, inputReleased, 0.016);
         position = result.position;
         velocity = result.velocity;
+        frames++;
       }
 
-      // Verify linear deceleration: each frame reduces velocity by ~constant amount
-      // NOT multiplicative (which would show decreasing reduction rate)
-      const reductions: number[] = [];
-      for (let i = 1; i < velocityHistory.length; i++) {
-        reductions.push(velocityHistory[i - 1] - velocityHistory[i]);
-      }
+      // Should stop within ~10 frames (well under 150ms)
+      expect(velocity.x).toBe(0);
+      expect(velocity.y).toBe(0);
+      expect(frames).toBeLessThanOrEqual(10);
 
-      // All reductions should be approximately equal (linear)
-      // Allow small variance due to snap-to-zero behavior
-      const avgReduction = reductions.reduce((sum, r) => sum + r, 0) / reductions.length;
-      for (const reduction of reductions) {
-        if (reduction > 0) {
-          // Should be close to average (within 10% tolerance for linear behavior)
-          expect(reduction).toBeGreaterThan(avgReduction * 0.9);
-          expect(reduction).toBeLessThan(avgReduction * 1.1);
-        }
-      }
-
-      // Verify no exponential tail-off: velocity doesn't asymptotically approach zero
-      // Linear deceleration means velocity reaches zero in finite time
-      expect(velocity.x).toBeLessThan(velocityHistory[0]); // Definitely decreased
+      // Position should have moved only slightly during deceleration
+      expect(position.x).toBeGreaterThan(100);
+      expect(position.x).toBeLessThan(110); // Very small slide distance
     });
 
     it('should match server physics simulation', () => {

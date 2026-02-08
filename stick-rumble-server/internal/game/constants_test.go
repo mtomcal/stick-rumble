@@ -12,7 +12,7 @@ func TestConstants(t *testing.T) {
 	}{
 		{"MovementSpeed", MovementSpeed, 200.0},
 		{"Acceleration", Acceleration, 50.0},
-		{"Deceleration", Deceleration, 50.0},
+		{"Deceleration", Deceleration, 1500.0},
 		{"ArenaWidth", ArenaWidth, 1920.0},
 		{"ArenaHeight", ArenaHeight, 1080.0},
 		{"PlayerWidth", PlayerWidth, 32.0},
