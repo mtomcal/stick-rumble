@@ -137,15 +137,15 @@ export class PredictionEngine {
       newVelocityX = newVelocity.x;
       newVelocityY = newVelocity.y;
     } else {
-      // No input: decelerate toward zero using same algorithm
-      const newVelocity = this.accelerateToward(
+      // No input: decelerate to zero
+      const decelerated = this.accelerateToward(
         { x: newVelocityX, y: newVelocityY },
         { x: 0, y: 0 },
         MOVEMENT.DECELERATION,
         deltaTime
       );
-      newVelocityX = newVelocity.x;
-      newVelocityY = newVelocity.y;
+      newVelocityX = decelerated.x;
+      newVelocityY = decelerated.y;
     }
 
     // Cap velocity at max speed

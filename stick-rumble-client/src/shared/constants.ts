@@ -13,8 +13,8 @@ export const MOVEMENT = {
   /** Acceleration rate in pixels per second squared */
   ACCELERATION: 50,
 
-  /** Deceleration rate when no input (same as acceleration for symmetric feel) */
-  DECELERATION: 50,
+  /** Deceleration rate when no input (quick stop in ~100-150ms) */
+  DECELERATION: 1500,
 } as const;
 
 /**

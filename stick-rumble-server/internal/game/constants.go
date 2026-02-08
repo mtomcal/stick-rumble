@@ -15,7 +15,7 @@ const (
 	Acceleration = 50.0
 
 	// Deceleration is the rate at which players decelerate when no input
-	Deceleration = 50.0
+	Deceleration = 1500.0
 )
 
 // Arena bounds - must match client-side values in src/shared/constants.ts

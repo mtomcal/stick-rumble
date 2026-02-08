@@ -206,10 +206,10 @@ describe('GameSimulation', () => {
   });
 
   describe('Player Deceleration', () => {
-    it('should decelerate to zero when no input', () => {
+    it('should stop quickly within ~10 frames when no input', () => {
       sim.addPlayer('p1', { x: 500, y: 500 });
 
-      // Accelerate to full speed
+      // Accelerate for 60 frames to build up velocity
       const input: InputState = { up: false, down: false, left: false, right: true };
       sim.updateInput('p1', input);
       for (let i = 0; i < 60; i++) {
@@ -218,20 +218,26 @@ describe('GameSimulation', () => {
 
       // Check moving
       let state = sim.getPlayerState('p1')!;
-      expect(state.velocity.x).toBeGreaterThan(0);
+      const velocityBeforeRelease = state.velocity.x;
+      expect(velocityBeforeRelease).toBeGreaterThan(0);
 
       // Release input
       const noInput: InputState = { up: false, down: false, left: false, right: false };
       sim.updateInput('p1', noInput);
 
-      // Simulate deceleration
-      for (let i = 0; i < 100; i++) {
+      // Should decelerate quickly (not instantly) and stop within ~10 frames
+      // At DECELERATION=1500, maxChange per frame = 1500 * 0.01667 ≈ 25 px/s
+      let frames = 0;
+      while (frames < 20) {
         sim.tick(16.67);
+        frames++;
+        state = sim.getPlayerState('p1')!;
+        if (state.velocity.x === 0) break;
       }
 
-      state = sim.getPlayerState('p1')!;
-      expect(state.velocity.x).toBeCloseTo(0, 1);
-      expect(state.velocity.y).toBeCloseTo(0, 1);
+      expect(state.velocity.x).toBe(0);
+      expect(state.velocity.y).toBe(0);
+      expect(frames).toBeLessThanOrEqual(10);
     });
   });
 
