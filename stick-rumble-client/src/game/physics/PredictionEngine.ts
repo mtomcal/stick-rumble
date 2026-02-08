@@ -45,6 +45,46 @@ const INSTANT_CORRECTION_THRESHOLD = 100;
  */
 export class PredictionEngine {
   /**
+   * Accelerate current velocity toward target velocity.
+   * This matches the server's accelerateToward() function in physics.go.
+   *
+   * @param current - Current velocity vector
+   * @param target - Target velocity vector
+   * @param accel - Acceleration rate in px/s²
+   * @param deltaTime - Time step in seconds
+   * @returns New velocity vector
+   */
+  private accelerateToward(
+    current: Velocity,
+    target: Velocity,
+    accel: number,
+    deltaTime: number
+  ): Velocity {
+    // Calculate difference vector
+    const diffX = target.x - current.x;
+    const diffY = target.y - current.y;
+
+    // Calculate maximum change possible this frame
+    const maxChange = accel * deltaTime;
+
+    // Calculate distance to target
+    const diffLength = Math.sqrt(diffX * diffX + diffY * diffY);
+
+    // If we're close enough, snap to target
+    if (diffLength <= maxChange) {
+      return { x: target.x, y: target.y };
+    }
+
+    // Normalize difference vector and apply maxChange
+    const diffNormX = diffX / diffLength;
+    const diffNormY = diffY / diffLength;
+
+    return {
+      x: current.x + diffNormX * maxChange,
+      y: current.y + diffNormY * maxChange,
+    };
+  }
+  /**
    * Predict the next position and velocity based on current state and input.
    * This implements the same physics as the server's movement system.
    *
@@ -82,25 +122,30 @@ export class PredictionEngine {
 
     if (directionMagnitude > 0) {
       // Apply acceleration toward desired direction
-      const targetVelocityX = directionX * MOVEMENT.SPEED;
-      const targetVelocityY = directionY * MOVEMENT.SPEED;
+      const targetVelocity = {
+        x: directionX * MOVEMENT.SPEED,
+        y: directionY * MOVEMENT.SPEED,
+      };
 
-      // Accelerate toward target velocity
-      newVelocityX += (targetVelocityX - newVelocityX) * MOVEMENT.ACCELERATION * deltaTime;
-      newVelocityY += (targetVelocityY - newVelocityY) * MOVEMENT.ACCELERATION * deltaTime;
+      // Accelerate toward target velocity using direction-based algorithm
+      const newVelocity = this.accelerateToward(
+        { x: newVelocityX, y: newVelocityY },
+        targetVelocity,
+        MOVEMENT.ACCELERATION,
+        deltaTime
+      );
+      newVelocityX = newVelocity.x;
+      newVelocityY = newVelocity.y;
     } else {
-      // No input: decelerate toward zero
-      const currentSpeed = Math.sqrt(newVelocityX ** 2 + newVelocityY ** 2);
-      if (currentSpeed > 0) {
-        const decelerationAmount = MOVEMENT.DECELERATION * deltaTime;
-        const decelerationFactor = Math.max(0, 1 - decelerationAmount / currentSpeed);
-        newVelocityX *= decelerationFactor;
-        newVelocityY *= decelerationFactor;
-
-        // Snap to zero if very close (prevent floating point drift)
-        if (Math.abs(newVelocityX) < 0.1) newVelocityX = 0;
-        if (Math.abs(newVelocityY) < 0.1) newVelocityY = 0;
-      }
+      // No input: decelerate toward zero using same algorithm
+      const newVelocity = this.accelerateToward(
+        { x: newVelocityX, y: newVelocityY },
+        { x: 0, y: 0 },
+        MOVEMENT.DECELERATION,
+        deltaTime
+      );
+      newVelocityX = newVelocity.x;
+      newVelocityY = newVelocity.y;
     }
 
     // Cap velocity at max speed
