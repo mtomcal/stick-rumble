@@ -512,6 +512,25 @@ export class PlayerManager {
         endX, endY
       );
     }
+
+    // Update weapon graphics immediately for responsive client-side feedback
+    const weaponGraphics = this.weaponGraphics.get(this.localPlayerId);
+    if (weaponGraphics && playerState) {
+      const weaponOffsetX = Math.cos(aimAngle) * 10;
+      const weaponOffsetY = Math.sin(aimAngle) * 10;
+      weaponGraphics.setPosition(
+        playerState.position.x + weaponOffsetX,
+        playerState.position.y + weaponOffsetY
+      );
+      weaponGraphics.setRotation(aimAngle);
+
+      // Flip weapon vertically when aiming left
+      // Angle is in radians: left is between π/2 (90°) and 3π/2 (270°)
+      const angleInDegrees = (aimAngle * 180) / Math.PI;
+      const normalizedAngle = ((angleInDegrees % 360) + 360) % 360; // Normalize to 0-360
+      const isAimingLeft = normalizedAngle > 90 && normalizedAngle < 270;
+      weaponGraphics.setFlipY(isAimingLeft);
+    }
   }
 
   /**
