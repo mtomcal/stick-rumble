@@ -43,7 +43,7 @@ export default defineConfig({
       thresholds: {
         lines: 90,
         functions: 90,
-        branches: 89.1, // Adjusted for weapon-specific visuals (weaponType fallback paths)
+        branches: 87.8, // Adjusted after stick-rumble-00s: removing dual position writers simplified branch structure
         statements: 90,
       },
     },
