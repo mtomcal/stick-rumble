@@ -216,9 +216,9 @@ export class PlayerManager {
         this.healthBars.set(state.id, healthBar);
       }
 
-      // Update position immediately (for tests and initial rendering)
-      // The update() method will override with interpolated positions for other players
-      playerGraphics.setPosition(state.position.x, state.position.y);
+      // DO NOT set position here - update() is the sole position writer
+      // This prevents flickering caused by dual position writers competing
+      // Position updates happen in update() via interpolation or server state
 
       // Apply dodge roll visual effects (rotation during roll)
       if (state.isRolling) {
@@ -251,41 +251,19 @@ export class PlayerManager {
         playerGraphics.setColor(color);
       }
 
-      // Update walk cycle animation based on movement
+      // DO NOT update label, aim indicator, weapon, or health bar positions here
+      // Position updates are handled in update() loop as the sole position writer
+
+      // Only update non-positional properties here:
+
+      // Update walk cycle animation based on movement (non-positional)
       const isMoving = Math.sqrt(state.velocity.x ** 2 + state.velocity.y ** 2) > 0.1;
       playerGraphics.update(16, isMoving); // Assume 60 FPS (16ms delta)
 
-      // Update label position
-      const label = this.playerLabels.get(state.id);
-      if (label) {
-        label.setPosition(
-          state.position.x,
-          state.position.y - PLAYER.HEIGHT / 2 - 10
-        );
-      }
-
-      // Update aim indicator
-      const aimIndicator = this.aimIndicators.get(state.id);
-      if (aimIndicator) {
-        const aimAngle = state.aimAngle ?? 0;
-        const endX = state.position.x + Math.cos(aimAngle) * AIM_INDICATOR_LENGTH;
-        const endY = state.position.y + Math.sin(aimAngle) * AIM_INDICATOR_LENGTH;
-        aimIndicator.setTo(
-          state.position.x, state.position.y,
-          endX, endY
-        );
-      }
-
-      // Update weapon graphics position and rotation
+      // Update weapon rotation (non-positional)
       const weaponGraphics = this.weaponGraphics.get(state.id);
       if (weaponGraphics) {
         const aimAngle = state.aimAngle ?? 0;
-        const weaponOffsetX = Math.cos(aimAngle) * 10;
-        const weaponOffsetY = Math.sin(aimAngle) * 10;
-        weaponGraphics.setPosition(
-          state.position.x + weaponOffsetX,
-          state.position.y + weaponOffsetY
-        );
         weaponGraphics.setRotation(aimAngle);
 
         // Flip weapon vertically when aiming left
@@ -296,15 +274,10 @@ export class PlayerManager {
         weaponGraphics.setFlipY(isAimingLeft);
       }
 
-      // Update health bar
+      // Update health value (non-positional)
       const healthBar = this.healthBars.get(state.id);
       if (healthBar) {
-        // Update health value
         healthBar.setHealth(state.health ?? 100);
-
-        // Update position (8 pixels above player head)
-        const healthBarY = state.position.y - PLAYER.HEIGHT / 2 - 8;
-        healthBar.setPosition(state.position.x, healthBarY);
       }
     }
   }
@@ -328,7 +301,10 @@ export class PlayerManager {
         continue;
       }
 
-      // Use interpolation for other players only
+      let renderPosition: { x: number; y: number };
+      let renderVelocity: { x: number; y: number };
+
+      // Use interpolation for remote players, raw state for local player
       if (playerId !== this.localPlayerId) {
         const interpolated = this.interpolationEngine.getInterpolatedPosition(
           playerId,
@@ -336,58 +312,65 @@ export class PlayerManager {
         );
 
         if (interpolated) {
-          // Override position with interpolated position
-          playerGraphics.setPosition(interpolated.position.x, interpolated.position.y);
-
-          // Update label position
-          const label = this.playerLabels.get(playerId);
-          if (label) {
-            label.setPosition(
-              interpolated.position.x,
-              interpolated.position.y - PLAYER.HEIGHT / 2 - 10
-            );
-          }
-
-          // Update aim indicator
-          const aimIndicator = this.aimIndicators.get(playerId);
-          if (aimIndicator) {
-            const aimAngle = state.aimAngle ?? 0;
-            const endX = interpolated.position.x + Math.cos(aimAngle) * AIM_INDICATOR_LENGTH;
-            const endY = interpolated.position.y + Math.sin(aimAngle) * AIM_INDICATOR_LENGTH;
-            aimIndicator.setTo(
-              interpolated.position.x, interpolated.position.y,
-              endX, endY
-            );
-          }
-
-          // Update weapon graphics position
-          const weaponGraphics = this.weaponGraphics.get(playerId);
-          if (weaponGraphics) {
-            const aimAngle = state.aimAngle ?? 0;
-            const weaponOffsetX = Math.cos(aimAngle) * 10;
-            const weaponOffsetY = Math.sin(aimAngle) * 10;
-            weaponGraphics.setPosition(
-              interpolated.position.x + weaponOffsetX,
-              interpolated.position.y + weaponOffsetY
-            );
-          }
-
-          // Update health bar position
-          const healthBar = this.healthBars.get(playerId);
-          if (healthBar) {
-            const healthBarY = interpolated.position.y - PLAYER.HEIGHT / 2 - 8;
-            healthBar.setPosition(interpolated.position.x, healthBarY);
-          }
-
-          // Update walk cycle animation based on interpolated velocity
-          const isMoving = Math.sqrt(interpolated.velocity.x ** 2 + interpolated.velocity.y ** 2) > 0.1;
-          playerGraphics.update(delta, isMoving);
+          renderPosition = interpolated.position;
+          renderVelocity = interpolated.velocity;
+        } else {
+          // Fallback to raw state if interpolation not ready
+          renderPosition = state.position;
+          renderVelocity = state.velocity;
         }
       } else {
-        // Local player: just update animation (position handled by prediction/server)
-        const isMoving = Math.sqrt(state.velocity.x ** 2 + state.velocity.y ** 2) > 0.1;
-        playerGraphics.update(delta, isMoving);
+        // Local player: use raw server state (prediction will override this in the future)
+        renderPosition = state.position;
+        renderVelocity = state.velocity;
       }
+
+      // SOLE POSITION WRITER: Update player sprite position
+      playerGraphics.setPosition(renderPosition.x, renderPosition.y);
+
+      // Update label position
+      const label = this.playerLabels.get(playerId);
+      if (label) {
+        label.setPosition(
+          renderPosition.x,
+          renderPosition.y - PLAYER.HEIGHT / 2 - 10
+        );
+      }
+
+      // Update aim indicator
+      const aimIndicator = this.aimIndicators.get(playerId);
+      if (aimIndicator) {
+        const aimAngle = state.aimAngle ?? 0;
+        const endX = renderPosition.x + Math.cos(aimAngle) * AIM_INDICATOR_LENGTH;
+        const endY = renderPosition.y + Math.sin(aimAngle) * AIM_INDICATOR_LENGTH;
+        aimIndicator.setTo(
+          renderPosition.x, renderPosition.y,
+          endX, endY
+        );
+      }
+
+      // Update weapon graphics position
+      const weaponGraphics = this.weaponGraphics.get(playerId);
+      if (weaponGraphics) {
+        const aimAngle = state.aimAngle ?? 0;
+        const weaponOffsetX = Math.cos(aimAngle) * 10;
+        const weaponOffsetY = Math.sin(aimAngle) * 10;
+        weaponGraphics.setPosition(
+          renderPosition.x + weaponOffsetX,
+          renderPosition.y + weaponOffsetY
+        );
+      }
+
+      // Update health bar position
+      const healthBar = this.healthBars.get(playerId);
+      if (healthBar) {
+        const healthBarY = renderPosition.y - PLAYER.HEIGHT / 2 - 8;
+        healthBar.setPosition(renderPosition.x, healthBarY);
+      }
+
+      // Update walk cycle animation based on velocity
+      const isMoving = Math.sqrt(renderVelocity.x ** 2 + renderVelocity.y ** 2) > 0.1;
+      playerGraphics.update(delta, isMoving);
     }
   }
 
