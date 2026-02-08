@@ -40,6 +40,7 @@ export type InputStateMessage = Static<typeof InputStateMessageSchema>;
  */
 export declare const PlayerShootDataSchema: import("@sinclair/typebox").TObject<{
     aimAngle: import("@sinclair/typebox").TNumber;
+    clientTimestamp: import("@sinclair/typebox").TNumber;
 }>;
 export type PlayerShootData = Static<typeof PlayerShootDataSchema>;
 /**
@@ -50,6 +51,7 @@ export declare const PlayerShootMessageSchema: import("@sinclair/typebox").TObje
     timestamp: import("@sinclair/typebox").TInteger;
     data: import("@sinclair/typebox").TObject<{
         aimAngle: import("@sinclair/typebox").TNumber;
+        clientTimestamp: import("@sinclair/typebox").TNumber;
     }>;
 }>;
 export type PlayerShootMessage = Static<typeof PlayerShootMessageSchema>;

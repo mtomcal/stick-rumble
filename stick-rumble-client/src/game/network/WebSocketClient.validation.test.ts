@@ -145,6 +145,7 @@ describe('WebSocketClient Schema Validation', () => {
     it('should send valid shoot message', () => {
       const shootData: PlayerShootData = {
         aimAngle: 3.14,
+        clientTimestamp: Date.now(),
       };
 
       client.sendShoot(shootData);
@@ -172,9 +173,10 @@ describe('WebSocketClient Schema Validation', () => {
     it('should reject shoot message with non-numeric aimAngle', () => {
       const invalidData = {
         aimAngle: 'invalid' as any,
+        clientTimestamp: Date.now(),
       };
 
-      client.sendShoot(invalidData);
+      client.sendShoot(invalidData as any);
 
       expect(mockWebSocketInstance.send).not.toHaveBeenCalled();
       expect(consoleErrorSpy).toHaveBeenCalled();
@@ -295,7 +297,7 @@ describe('WebSocketClient Schema Validation', () => {
       const testCases = [0, 1.57, 3.14, -1.57, 6.28, Math.PI];
 
       testCases.forEach((aimAngle) => {
-        client.sendShoot({ aimAngle });
+        client.sendShoot({ aimAngle, clientTimestamp: Date.now() });
       });
 
       expect(mockWebSocketInstance.send).toHaveBeenCalledTimes(6);
