@@ -47,6 +47,11 @@ export class PlayerManager {
   private playerStates: Map<string, PlayerState> = new Map();
   // Interpolation engine for smooth movement of other players (Story 4.3)
   private interpolationEngine: InterpolationEngine = new InterpolationEngine();
+  // Client-side predicted state for local player (Story stick-rumble-nki)
+  private localPlayerPredictedState: {
+    position: { x: number; y: number };
+    velocity: { x: number; y: number };
+  } | null = null;
 
   constructor(scene: Phaser.Scene, clock: Clock = new RealClock()) {
     this.scene = scene;
@@ -72,6 +77,29 @@ export class PlayerManager {
    */
   getLocalPlayerId(): string | null {
     return this.localPlayerId;
+  }
+
+  /**
+   * Set predicted position for local player (client-side prediction)
+   */
+  setLocalPlayerPredictedPosition(predicted: { position: { x: number; y: number }; velocity: { x: number; y: number } }): void {
+    this.localPlayerPredictedState = predicted;
+  }
+
+  /**
+   * Get player state by ID (for prediction engine)
+   * Returns undefined if player doesn't exist
+   */
+  getPlayerState(playerId: string): PlayerState | undefined {
+    return this.playerStates.get(playerId);
+  }
+
+  /**
+   * Get local player's predicted state (for prediction engine)
+   * Returns null if no prediction has run yet
+   */
+  getLocalPlayerPredictedState(): { position: { x: number; y: number }; velocity: { x: number; y: number } } | null {
+    return this.localPlayerPredictedState;
   }
 
   /**
@@ -317,7 +345,7 @@ export class PlayerManager {
       let renderPosition: { x: number; y: number };
       let renderVelocity: { x: number; y: number };
 
-      // Use interpolation for remote players, raw state for local player
+      // Use interpolation for remote players, prediction for local player
       if (playerId !== this.localPlayerId) {
         const interpolated = this.interpolationEngine.getInterpolatedPosition(
           playerId,
@@ -333,9 +361,15 @@ export class PlayerManager {
           renderVelocity = state.velocity;
         }
       } else {
-        // Local player: use raw server state (prediction will override this in the future)
-        renderPosition = state.position;
-        renderVelocity = state.velocity;
+        // Local player: use predicted state if available, fallback to server state
+        if (this.localPlayerPredictedState) {
+          renderPosition = this.localPlayerPredictedState.position;
+          renderVelocity = this.localPlayerPredictedState.velocity;
+        } else {
+          // Fallback to server state during initialization
+          renderPosition = state.position;
+          renderVelocity = state.velocity;
+        }
       }
 
       // SOLE POSITION WRITER: Update player sprite position
@@ -478,13 +512,20 @@ export class PlayerManager {
   }
 
   /**
-   * Get the local player's current position
+   * Get the local player's current position (predicted or server)
    * Returns undefined if local player doesn't exist yet
    */
   getLocalPlayerPosition(): { x: number; y: number } | undefined {
     if (!this.localPlayerId) {
       return undefined;
     }
+
+    // Return predicted position if available (Story stick-rumble-nki)
+    if (this.localPlayerPredictedState) {
+      return this.localPlayerPredictedState.position;
+    }
+
+    // Fallback to server state
     return this.getPlayerPosition(this.localPlayerId) ?? undefined;
   }
 

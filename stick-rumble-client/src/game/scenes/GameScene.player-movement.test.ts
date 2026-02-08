@@ -360,4 +360,76 @@ describe('GameScene - Player Movement', () => {
       expect(updateSpy).toHaveBeenCalledWith(0.01667);
     });
   });
+
+  describe('client-side prediction', () => {
+    it('should run prediction each frame for local player (Story stick-rumble-nki)', async () => {
+      const mockSceneContext = createMockScene();
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      // Trigger connection
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      mockWebSocketInstance.readyState = 1;
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen(new Event('open'));
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Set local player ID
+      scene['playerManager'].setLocalPlayerId('local-player');
+
+      // Add local player state via server message
+      const roomJoinedMessage = {
+        data: JSON.stringify({
+          type: 'room:joined',
+          timestamp: Date.now(),
+          data: { playerId: 'local-player', roomId: 'room-1' }
+        })
+      };
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(roomJoinedMessage as MessageEvent);
+      }
+
+      // Send initial player position
+      const playerMoveMessage = {
+        data: JSON.stringify({
+          type: 'player:move',
+          timestamp: Date.now(),
+          data: {
+            players: [
+              { id: 'local-player', position: { x: 500, y: 500 }, velocity: { x: 0, y: 0 } }
+            ]
+          }
+        })
+      };
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(playerMoveMessage as MessageEvent);
+      }
+
+      // Spy on prediction engine and player manager
+      const predictPositionSpy = vi.spyOn(scene['predictionEngine'], 'predictPosition');
+      const setLocalPlayerPredictedPositionSpy = vi.spyOn(scene['playerManager'], 'setLocalPlayerPredictedPosition');
+
+      // Call scene.update which should run prediction for local player
+      scene.update(0, 16.67);
+
+      // Verify prediction ran
+      expect(predictPositionSpy).toHaveBeenCalled();
+
+      // Verify prediction was called with correct arguments
+      const predictionCall = predictPositionSpy.mock.calls[0];
+      expect(predictionCall[0]).toEqual(expect.objectContaining({ x: expect.any(Number), y: expect.any(Number) })); // position
+      expect(predictionCall[1]).toEqual(expect.objectContaining({ x: expect.any(Number), y: expect.any(Number) })); // velocity
+      expect(predictionCall[2]).toEqual(expect.objectContaining({ up: expect.any(Boolean), down: expect.any(Boolean) })); // input state
+      expect(predictionCall[3]).toBeCloseTo(0.01667, 4); // delta time in seconds
+
+      // Verify predicted position was applied to player manager
+      expect(setLocalPlayerPredictedPositionSpy).toHaveBeenCalled();
+    });
+  });
 });
