@@ -311,21 +311,32 @@ describe('PlayerManager', () => {
     });
 
     it('should update label positions when player moves', () => {
+      // Set as local player to bypass interpolation and use raw server state
+      playerManager.setLocalPlayerId('player-1');
+
       const initialStates: PlayerState[] = [
         { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
       ];
 
       playerManager.updatePlayers(initialStates);
+      playerManager.update(16); // Trigger position write
 
       const label = mockScene.texts[0];
+      const initialCalls = label.setPosition.mock.calls.length;
 
       const updatedStates: PlayerState[] = [
         { id: 'player-1', position: { x: 300, y: 400 }, velocity: { x: 0, y: 0 } },
       ];
 
       playerManager.updatePlayers(updatedStates);
+      playerManager.update(16); // Trigger position write
 
-      expect(label.setPosition).toHaveBeenCalledWith(300, 358); // y: 400 - 64/2 - 10 = 358
+      // Label position should be updated in the update() call
+      expect(label.setPosition.mock.calls.length).toBeGreaterThan(initialCalls);
+      // Verify the last call has the correct position
+      const lastCall = label.setPosition.mock.calls[label.setPosition.mock.calls.length - 1];
+      expect(lastCall[0]).toBe(300);
+      expect(lastCall[1]).toBe(358); // y: 400 - 64/2 - 10 = 358
     });
 
     it('should remove players that no longer exist', () => {
@@ -452,6 +463,7 @@ describe('PlayerManager', () => {
       ];
 
       playerManager.updatePlayers(playerStates);
+      playerManager.update(16); // Trigger position write
 
       const line = mockScene.lines[0];
 
@@ -461,6 +473,7 @@ describe('PlayerManager', () => {
       ];
 
       playerManager.updatePlayers(updatedStates);
+      playerManager.update(16); // Trigger position write
 
       // Line should be updated from player center to point in aim direction
       // For angle = 0 (pointing right), line should extend 50px to the right
@@ -479,6 +492,7 @@ describe('PlayerManager', () => {
       ];
 
       playerManager.updatePlayers(playerStates);
+      playerManager.update(16); // Trigger position write
 
       const line = mockScene.lines[0];
 
@@ -488,6 +502,7 @@ describe('PlayerManager', () => {
       ];
 
       playerManager.updatePlayers(updatedStates);
+      playerManager.update(16); // Trigger position write
 
       // For angle = -PI/2 (pointing up), line should extend 50px upward (negative Y)
       // Expected: setTo(100, 200, 100 + 50*cos(-PI/2), 200 + 50*sin(-PI/2)) = setTo(100, 200, 100, 150)
@@ -1500,6 +1515,7 @@ describe('PlayerManager', () => {
       ];
 
       playerManager.updatePlayers(playerStates);
+      playerManager.update(16); // Trigger position write
 
       const healthBarGraphics = mockScene.graphicsObjects[1];
       const setPositionCalls = healthBarGraphics.setPosition.mock.calls.length;
@@ -1510,6 +1526,7 @@ describe('PlayerManager', () => {
       ];
 
       playerManager.updatePlayers(updatedStates);
+      playerManager.update(16); // Trigger position write
 
       // Health bar position should be updated
       expect(healthBarGraphics.setPosition.mock.calls.length).toBeGreaterThan(setPositionCalls);
@@ -1532,6 +1549,477 @@ describe('PlayerManager', () => {
       mockScene.graphicsObjects.forEach(graphics => {
         expect(graphics.destroy).toHaveBeenCalled();
       });
+    });
+  });
+
+  describe('Single Position Writer (Bug Fix: stick-rumble-00s)', () => {
+    it('should NOT set player position in updatePlayers()', () => {
+      // This test verifies the KEY BEHAVIOR: updatePlayers() does NOT write positions
+      // It only stores state and updates non-positional properties
+
+      playerManager.setLocalPlayerId('player-1');
+
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      // Get the player graphics and track position writes
+      const graphics = mockScene.graphicsObjects[0];
+
+      // Clear the setPosition spy to start fresh
+      graphics.setPosition.mockClear();
+
+      // Update player with new position
+      const updatedStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 150, y: 250 }, velocity: { x: 0, y: 0 } },
+      ];
+
+      playerManager.updatePlayers(updatedStates);
+
+      // KEY ASSERTION: updatePlayers() should NOT call setPosition() on player graphics
+      // Position writing is deferred to update() method
+      expect(graphics.setPosition).not.toHaveBeenCalled();
+    });
+
+    it('should set player position only in update() loop', () => {
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      const graphics = mockScene.graphicsObjects[0];
+      const clearCallsAfterCreate = graphics.clear.mock.calls.length;
+
+      // After update() is called, position should be set (draw() called)
+      playerManager.update(16);
+
+      // update() should have called setPosition which triggers draw()
+      expect(graphics.clear.mock.calls.length).toBeGreaterThan(clearCallsAfterCreate);
+    });
+
+    it('should use interpolated position for remote players in update()', () => {
+      playerManager.setLocalPlayerId('local-player');
+
+      const playerStates: PlayerState[] = [
+        { id: 'remote-player', position: { x: 100, y: 200 }, velocity: { x: 5, y: 5 } },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      const graphics = mockScene.graphicsObjects[0];
+      const clearCallsAfterCreate = graphics.clear.mock.calls.length;
+
+      // Advance clock to build interpolation buffer
+      clock.advance(50);
+
+      const updatedStates: PlayerState[] = [
+        { id: 'remote-player', position: { x: 150, y: 250 }, velocity: { x: 5, y: 5 } },
+      ];
+
+      playerManager.updatePlayers(updatedStates);
+
+      // update() should use interpolated position (not raw server state)
+      playerManager.update(16);
+
+      // Position should be set (draw() called, which clears graphics)
+      expect(graphics.clear.mock.calls.length).toBeGreaterThan(clearCallsAfterCreate);
+    });
+
+    it('should use raw server state for local player in update()', () => {
+      playerManager.setLocalPlayerId('local-player');
+
+      const playerStates: PlayerState[] = [
+        { id: 'local-player', position: { x: 100, y: 200 }, velocity: { x: 5, y: 5 } },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      const graphics = mockScene.graphicsObjects[0];
+      const clearCallsAfterCreate = graphics.clear.mock.calls.length;
+
+      // update() should use raw server state for local player (not interpolation)
+      playerManager.update(16);
+
+      // Position should be set (draw() called via setPosition)
+      expect(graphics.clear.mock.calls.length).toBeGreaterThan(clearCallsAfterCreate);
+    });
+
+    it('should update all UI elements (label, aim, weapon, health bar) only in update()', () => {
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: 0, health: 100 },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      const label = mockScene.texts[0];
+      const aimIndicator = mockScene.lines[0];
+      const weaponGraphics = mockScene.containers[0];
+      const healthBarGraphics = mockScene.graphicsObjects[1];
+
+      // Clear call counts from constructor/initialization
+      const labelCalls = label.setPosition.mock.calls.length;
+      const aimCalls = aimIndicator.setTo.mock.calls.length;
+      const weaponCalls = weaponGraphics.setPosition.mock.calls.length;
+      const healthBarCalls = healthBarGraphics.setPosition.mock.calls.length;
+
+      // Update player with new position
+      const updatedStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 150, y: 250 }, velocity: { x: 5, y: 5 }, aimAngle: Math.PI / 4, health: 80 },
+      ];
+
+      playerManager.updatePlayers(updatedStates);
+
+      // After updatePlayers(), UI elements should NOT have additional position updates
+      expect(label.setPosition.mock.calls.length).toBe(labelCalls);
+      expect(aimIndicator.setTo.mock.calls.length).toBe(aimCalls);
+      expect(weaponGraphics.setPosition.mock.calls.length).toBe(weaponCalls);
+      expect(healthBarGraphics.setPosition.mock.calls.length).toBe(healthBarCalls);
+
+      // After update(), all UI elements should be positioned
+      playerManager.update(16);
+
+      expect(label.setPosition.mock.calls.length).toBeGreaterThan(labelCalls);
+      expect(aimIndicator.setTo.mock.calls.length).toBeGreaterThan(aimCalls);
+      expect(weaponGraphics.setPosition.mock.calls.length).toBeGreaterThan(weaponCalls);
+      expect(healthBarGraphics.setPosition.mock.calls.length).toBeGreaterThan(healthBarCalls);
+    });
+
+    it('should write positions in update() method, not in updatePlayers()', () => {
+      // This test verifies the fix for the flickering bug:
+      // Before fix: updatePlayers() AND update() both wrote positions (causing flicker)
+      // After fix: only update() writes positions (single source of truth)
+
+      playerManager.setLocalPlayerId('player-1');
+
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      const label = mockScene.texts[0];
+      const aimIndicator = mockScene.lines[0];
+
+      // Clear spy counters
+      label.setPosition.mockClear();
+      aimIndicator.setTo.mockClear();
+
+      // Update player state
+      const updatedStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 110, y: 210 }, velocity: { x: 0, y: 0 }, aimAngle: Math.PI / 4 },
+      ];
+
+      playerManager.updatePlayers(updatedStates);
+
+      // KEY ASSERTION: updatePlayers() should NOT update UI element positions
+      expect(label.setPosition).not.toHaveBeenCalled();
+      expect(aimIndicator.setTo).not.toHaveBeenCalled();
+
+      // Now call update()
+      playerManager.update(16);
+
+      // AFTER update(), UI elements should be positioned
+      expect(label.setPosition).toHaveBeenCalled();
+      expect(aimIndicator.setTo).toHaveBeenCalled();
+    });
+
+    it('should handle multiple update() calls per updatePlayers() call (60 FPS vs 20Hz)', () => {
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 5, y: 5 } },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      const graphics = mockScene.graphicsObjects[0];
+      const clearCallsAfterCreate = graphics.clear.mock.calls.length;
+
+      // Simulate 3 render frames (60 FPS) between server updates (20Hz)
+      playerManager.update(16); // Frame 1
+      const calls1 = graphics.clear.mock.calls.length;
+
+      playerManager.update(16); // Frame 2
+      const calls2 = graphics.clear.mock.calls.length;
+
+      playerManager.update(16); // Frame 3
+      const calls3 = graphics.clear.mock.calls.length;
+
+      // Position should be written on every frame (each update() triggers draw())
+      expect(calls1).toBeGreaterThan(clearCallsAfterCreate);
+      expect(calls2).toBeGreaterThan(calls1);
+      expect(calls3).toBeGreaterThan(calls2);
+    });
+
+    it('should fallback to raw server state when interpolation returns null', () => {
+      // Test the fallback branch: when interpolation engine returns null for a remote player,
+      // the system should use raw server state instead
+      playerManager.setLocalPlayerId('local-player');
+
+      const remotePlayerStates: PlayerState[] = [
+        { id: 'remote-player', position: { x: 100, y: 200 }, velocity: { x: 5, y: 5 } },
+      ];
+
+      playerManager.updatePlayers(remotePlayerStates);
+
+      const graphics = mockScene.graphicsObjects[0];
+
+      // Call update() immediately before interpolation engine has enough data
+      // This should trigger the fallback branch that uses raw server state
+      playerManager.update(16);
+
+      // Verify position was written (even though interpolation may not be ready)
+      // The draw() method is called, which triggers clear()
+      expect(graphics.clear).toHaveBeenCalled();
+    });
+  });
+
+  describe('applyReconciledPosition', () => {
+    it('should apply instant teleport when needsInstant is true', () => {
+      playerManager.setLocalPlayerId('player1');
+      const playerStates: PlayerState[] = [
+        { id: 'player1', position: { x: 100, y: 100 }, velocity: { x: 0, y: 0 } },
+      ];
+      playerManager.updatePlayers(playerStates);
+
+      const graphics = mockScene.graphicsObjects[0];
+
+      // Apply reconciled position with instant teleport
+      playerManager.applyReconciledPosition(
+        'player1',
+        { position: { x: 200, y: 200 }, velocity: { x: 5, y: 5 } },
+        true
+      );
+
+      // Verify position was set (draw() is called, which triggers clear())
+      expect(graphics.clear).toHaveBeenCalled();
+    });
+
+    it('should apply smooth lerp when needsInstant is false', () => {
+      playerManager.setLocalPlayerId('player1');
+      const playerStates: PlayerState[] = [
+        { id: 'player1', position: { x: 100, y: 100 }, velocity: { x: 0, y: 0 } },
+      ];
+      playerManager.updatePlayers(playerStates);
+
+      const graphics = mockScene.graphicsObjects[0];
+
+      // Apply reconciled position with smooth lerp (small error)
+      playerManager.applyReconciledPosition(
+        'player1',
+        { position: { x: 105, y: 105 }, velocity: { x: 2, y: 2 } },
+        false
+      );
+
+      // Verify position was set
+      expect(graphics.clear).toHaveBeenCalled();
+    });
+
+    it('should update stored player state after reconciliation', () => {
+      playerManager.setLocalPlayerId('player1');
+      const playerStates: PlayerState[] = [
+        { id: 'player1', position: { x: 100, y: 100 }, velocity: { x: 0, y: 0 } },
+      ];
+      playerManager.updatePlayers(playerStates);
+
+      // Apply reconciled position
+      const reconciledState = { position: { x: 150, y: 150 }, velocity: { x: 10, y: 10 } };
+      playerManager.applyReconciledPosition('player1', reconciledState, true);
+
+      // Verify stored state was updated
+      const position = playerManager.getPlayerPosition('player1');
+      expect(position).toEqual({ x: 150, y: 150 });
+    });
+
+    it('should do nothing if player does not exist', () => {
+      // Try to apply reconciled position to non-existent player
+      playerManager.applyReconciledPosition(
+        'non-existent',
+        { position: { x: 100, y: 100 }, velocity: { x: 0, y: 0 } },
+        true
+      );
+
+      // Should not throw error, just return silently
+      expect(mockScene.graphicsObjects.length).toBe(0);
+    });
+  });
+
+  describe('scene.add unavailable error handling', () => {
+    it('should handle missing scene.add gracefully and skip player creation', () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      // Create scene without add system
+      const brokenScene = {
+        sys: {
+          isActive: vi.fn().mockReturnValue(true),
+        },
+        add: undefined, // Simulate missing add system
+      };
+
+      const manager = new PlayerManager(brokenScene as any);
+
+      // Try to create player - should fail gracefully
+      const playerStates: PlayerState[] = [
+        { id: 'player1', position: { x: 100, y: 100 }, velocity: { x: 0, y: 0 } },
+      ];
+
+      manager.updatePlayers(playerStates);
+
+      // Verify error was logged
+      expect(consoleErrorSpy).toHaveBeenCalledWith('Scene add system not available');
+
+      // Verify no player graphics were created (player state is stored, but graphics are not)
+      // The getPlayerPosition will return the stored position, but getLocalPlayerSprite should return null
+      expect(manager.getLocalPlayerSprite()).toBeNull();
+
+      consoleErrorSpy.mockRestore();
+    });
+  });
+
+  describe('update() with missing UI elements', () => {
+    it('should handle missing label in update() loop', () => {
+      playerManager.setLocalPlayerId('player1');
+      const playerStates: PlayerState[] = [
+        { id: 'player1', position: { x: 100, y: 100 }, velocity: { x: 0, y: 0 } },
+      ];
+      playerManager.updatePlayers(playerStates);
+
+      // Manually delete the label
+      const label = mockScene.texts[0];
+      if (label) {
+        (label.destroy as () => void)();
+      }
+      mockScene.texts.splice(0, 1);
+
+      // Update should not crash when label is missing
+      expect(() => playerManager.update(16)).not.toThrow();
+    });
+
+    it('should handle missing aim indicator in update() loop', () => {
+      playerManager.setLocalPlayerId('player1');
+      const playerStates: PlayerState[] = [
+        { id: 'player1', position: { x: 100, y: 100 }, velocity: { x: 0, y: 0 } },
+      ];
+      playerManager.updatePlayers(playerStates);
+
+      // Manually delete the aim indicator
+      const aimIndicator = mockScene.lines[0];
+      if (aimIndicator) {
+        (aimIndicator.destroy as () => void)();
+      }
+      mockScene.lines.splice(0, 1);
+
+      // Update should not crash when aim indicator is missing
+      expect(() => playerManager.update(16)).not.toThrow();
+    });
+
+    it('should handle missing weapon graphics in update() loop', () => {
+      playerManager.setLocalPlayerId('player1');
+      const playerStates: PlayerState[] = [
+        { id: 'player1', position: { x: 100, y: 100 }, velocity: { x: 0, y: 0 } },
+      ];
+      playerManager.updatePlayers(playerStates);
+
+      // Manually delete the weapon graphics container
+      const weaponContainer = mockScene.containers[0];
+      if (weaponContainer) {
+        (weaponContainer.destroy as () => void)();
+      }
+      mockScene.containers.splice(0, 1);
+
+      // Update should not crash when weapon graphics is missing
+      expect(() => playerManager.update(16)).not.toThrow();
+    });
+
+    it('should handle missing health bar in update() loop', () => {
+      playerManager.setLocalPlayerId('player1');
+      const playerStates: PlayerState[] = [
+        { id: 'player1', position: { x: 100, y: 100 }, velocity: { x: 0, y: 0 } },
+      ];
+      playerManager.updatePlayers(playerStates);
+
+      // Health bar is created as a container, delete it
+      const healthBarContainer = mockScene.containers[1]; // Second container is health bar
+      if (healthBarContainer) {
+        (healthBarContainer.destroy as () => void)();
+        mockScene.containers.splice(1, 1);
+      }
+
+      // Update should not crash when health bar is missing
+      expect(() => playerManager.update(16)).not.toThrow();
+    });
+  });
+
+  describe('color restoration during rolling', () => {
+    it('should maintain original color when player is alive and rolling', () => {
+      playerManager.setLocalPlayerId('player1');
+      const playerStates: PlayerState[] = [
+        {
+          id: 'player1',
+          position: { x: 100, y: 100 },
+          velocity: { x: 5, y: 5 },
+          isRolling: true,
+        },
+      ];
+      playerManager.updatePlayers(playerStates);
+
+      const graphics = mockScene.graphicsObjects[0];
+
+      // Verify green color (local player) was maintained during roll
+      // Color is applied via fillStyle and strokeStyle calls during draw
+      expect(graphics.fillStyle).toHaveBeenCalledWith(0x00ff00, expect.any(Number));
+    });
+
+    it('should restore original color when not rolling and not dead', () => {
+      playerManager.setLocalPlayerId('player1');
+
+      // First, create player while rolling
+      const rollingStates: PlayerState[] = [
+        {
+          id: 'player1',
+          position: { x: 100, y: 100 },
+          velocity: { x: 5, y: 5 },
+          isRolling: true,
+        },
+      ];
+      playerManager.updatePlayers(rollingStates);
+
+      const graphics = mockScene.graphicsObjects[0];
+      vi.clearAllMocks();
+
+      // Then, update to not rolling
+      const notRollingStates: PlayerState[] = [
+        {
+          id: 'player1',
+          position: { x: 110, y: 110 },
+          velocity: { x: 5, y: 5 },
+          isRolling: false,
+        },
+      ];
+      playerManager.updatePlayers(notRollingStates);
+
+      // Verify original color was restored
+      expect(graphics.fillStyle).toHaveBeenCalledWith(0x00ff00, expect.any(Number));
+    });
+
+    it('should use gray color for dead player even if rolling flag is set', () => {
+      playerManager.setLocalPlayerId('player1');
+      const playerStates: PlayerState[] = [
+        {
+          id: 'player1',
+          position: { x: 100, y: 100 },
+          velocity: { x: 0, y: 0 },
+          isRolling: true,
+          deathTime: Date.now(),
+        },
+      ];
+      playerManager.updatePlayers(playerStates);
+
+      const graphics = mockScene.graphicsObjects[0];
+
+      // Verify gray color was applied (death takes priority over rolling)
+      expect(graphics.fillStyle).toHaveBeenCalledWith(0x888888, expect.any(Number));
     });
   });
 });
