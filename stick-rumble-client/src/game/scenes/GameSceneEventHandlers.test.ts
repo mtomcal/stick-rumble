@@ -740,8 +740,8 @@ describe('GameSceneEventHandlers', () => {
         playerMoveHandler?.(data);
       }).not.toThrow();
 
-      // Should still update players
-      expect(mockPlayerManager.updatePlayers).toHaveBeenCalledWith(data.players);
+      // Should still update players (isDelta=false for legacy player:move without isFullSnapshot)
+      expect(mockPlayerManager.updatePlayers).toHaveBeenCalledWith(data.players, { isDelta: false });
     });
 
     it('should handle player:move when local player not found in list', () => {

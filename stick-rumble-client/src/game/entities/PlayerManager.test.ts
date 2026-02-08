@@ -2103,6 +2103,142 @@ describe('PlayerManager', () => {
     });
   });
 
+  describe('delta mode', () => {
+    it('should NOT destroy missing player sprites in delta mode', () => {
+      // Create two players
+      const initialStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+        { id: 'player-2', position: { x: 300, y: 400 }, velocity: { x: 0, y: 0 } },
+      ];
+
+      playerManager.updatePlayers(initialStates);
+
+      const player1Graphics = mockScene.graphicsObjects[0];
+      const player1Label = mockScene.texts[0];
+
+      // Send delta with only player-2 (player-1 is unchanged, not disconnected)
+      const deltaStates: PlayerState[] = [
+        { id: 'player-2', position: { x: 310, y: 410 }, velocity: { x: 5, y: 5 } },
+      ];
+
+      playerManager.updatePlayers(deltaStates, { isDelta: true });
+
+      // Player-1 should NOT be destroyed (it's just unchanged in the delta)
+      expect(player1Graphics.destroy).not.toHaveBeenCalled();
+      expect(player1Label.destroy).not.toHaveBeenCalled();
+    });
+
+    it('should merge states in delta mode (not clear existing)', () => {
+      playerManager.setLocalPlayerId('local-player');
+
+      // Create two players
+      const initialStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+        { id: 'player-2', position: { x: 300, y: 400 }, velocity: { x: 0, y: 0 } },
+      ];
+
+      playerManager.updatePlayers(initialStates);
+
+      // Send delta with only player-2
+      const deltaStates: PlayerState[] = [
+        { id: 'player-2', position: { x: 310, y: 410 }, velocity: { x: 5, y: 5 } },
+      ];
+
+      playerManager.updatePlayers(deltaStates, { isDelta: true });
+
+      // player-1's state should still be accessible (merged, not cleared)
+      const player1Pos = playerManager.getPlayerPosition('player-1');
+      expect(player1Pos).toEqual({ x: 100, y: 200 });
+
+      // player-2's state should be updated
+      const player2Pos = playerManager.getPlayerPosition('player-2');
+      expect(player2Pos).toEqual({ x: 310, y: 410 });
+    });
+
+    it('should still remove disconnected players in full snapshot mode', () => {
+      // Create two players
+      const initialStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+        { id: 'player-2', position: { x: 300, y: 400 }, velocity: { x: 0, y: 0 } },
+      ];
+
+      playerManager.updatePlayers(initialStates);
+
+      const player1Graphics = mockScene.graphicsObjects[0];
+
+      // Full snapshot with only player-2 (player-1 disconnected)
+      const snapshotStates: PlayerState[] = [
+        { id: 'player-2', position: { x: 300, y: 400 }, velocity: { x: 0, y: 0 } },
+      ];
+
+      playerManager.updatePlayers(snapshotStates, { isDelta: false });
+
+      // Player-1 SHOULD be destroyed in snapshot mode
+      expect(player1Graphics.destroy).toHaveBeenCalled();
+    });
+
+    it('should create sprites for new players in delta mode', () => {
+      // Create initial player
+      const initialStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+
+      playerManager.updatePlayers(initialStates);
+
+      const graphicsCountBefore = mockScene.graphicsObjects.length;
+
+      // Delta with a NEW player (player-3)
+      const deltaStates: PlayerState[] = [
+        { id: 'player-3', position: { x: 500, y: 600 }, velocity: { x: 0, y: 0 } },
+      ];
+
+      playerManager.updatePlayers(deltaStates, { isDelta: true });
+
+      // New player should have created additional graphics
+      expect(mockScene.graphicsObjects.length).toBeGreaterThan(graphicsCountBefore);
+    });
+
+    it('should default to snapshot behavior when no options provided', () => {
+      // Create two players
+      const initialStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+        { id: 'player-2', position: { x: 300, y: 400 }, velocity: { x: 0, y: 0 } },
+      ];
+
+      playerManager.updatePlayers(initialStates);
+
+      const player1Graphics = mockScene.graphicsObjects[0];
+
+      // No options = snapshot mode (default)
+      const updatedStates: PlayerState[] = [
+        { id: 'player-2', position: { x: 300, y: 400 }, velocity: { x: 0, y: 0 } },
+      ];
+
+      playerManager.updatePlayers(updatedStates);
+
+      // Player-1 should be destroyed (default is snapshot behavior)
+      expect(player1Graphics.destroy).toHaveBeenCalled();
+    });
+
+    it('should handle empty delta gracefully', () => {
+      // Create initial players
+      const initialStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+
+      playerManager.updatePlayers(initialStates);
+
+      const player1Graphics = mockScene.graphicsObjects[0];
+
+      // Empty delta should not destroy anyone
+      playerManager.updatePlayers([], { isDelta: true });
+
+      expect(player1Graphics.destroy).not.toHaveBeenCalled();
+      // Player state should still be accessible
+      expect(playerManager.getPlayerPosition('player-1')).toEqual({ x: 100, y: 200 });
+    });
+  });
+
   describe('color restoration during rolling', () => {
     it('should maintain original color when player is alive and rolling', () => {
       playerManager.setLocalPlayerId('player1');

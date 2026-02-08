@@ -85,17 +85,27 @@ export class PlayerManager {
    * Update all players from server state.
    * For other players: stores snapshots in interpolation engine
    * For local player: immediately applies position (prediction handled elsewhere)
+   *
+   * @param playerStates - Array of player states from server
+   * @param options - Optional settings for delta vs snapshot handling
+   * @param options.isDelta - When true, merge incoming states (don't clear missing players).
+   *                          When false (default), treat as full roster and destroy missing players.
    */
-  updatePlayers(playerStates: PlayerState[]): void {
+  updatePlayers(playerStates: PlayerState[], options?: { isDelta?: boolean }): void {
     // Skip if scene is not active (destroyed or transitioning)
     if (!this.isSceneValid()) {
       return;
     }
 
+    const isDelta = options?.isDelta ?? false;
     const currentPlayerIds = new Set(playerStates.map(p => p.id));
 
     // Store player states for death tracking
-    this.playerStates.clear();
+    // In delta mode: merge into existing states (don't clear)
+    // In snapshot mode: replace all states
+    if (!isDelta) {
+      this.playerStates.clear();
+    }
     for (const state of playerStates) {
       this.playerStates.set(state.id, state);
 
@@ -110,40 +120,43 @@ export class PlayerManager {
       }
     }
 
-    // Remove players that no longer exist
-    for (const [id, sprite] of this.players) {
-      if (!currentPlayerIds.has(id)) {
-        sprite.destroy();
-        this.players.delete(id);
+    // Remove players that no longer exist (only in snapshot mode)
+    // In delta mode, missing players are simply unchanged, not disconnected
+    if (!isDelta) {
+      for (const [id, sprite] of this.players) {
+        if (!currentPlayerIds.has(id)) {
+          sprite.destroy();
+          this.players.delete(id);
 
-        const label = this.playerLabels.get(id);
-        if (label) {
-          label.destroy();
-          this.playerLabels.delete(id);
+          const label = this.playerLabels.get(id);
+          if (label) {
+            label.destroy();
+            this.playerLabels.delete(id);
+          }
+
+          const aimIndicator = this.aimIndicators.get(id);
+          if (aimIndicator) {
+            aimIndicator.destroy();
+            this.aimIndicators.delete(id);
+          }
+
+          const weaponGraphics = this.weaponGraphics.get(id);
+          if (weaponGraphics) {
+            weaponGraphics.destroy();
+            this.weaponGraphics.delete(id);
+          }
+
+          const healthBar = this.healthBars.get(id);
+          if (healthBar) {
+            healthBar.destroy();
+            this.healthBars.delete(id);
+          }
+
+          this.weaponTypes.delete(id);
+
+          // Clear interpolation data for removed player
+          this.interpolationEngine.clearPlayer(id);
         }
-
-        const aimIndicator = this.aimIndicators.get(id);
-        if (aimIndicator) {
-          aimIndicator.destroy();
-          this.aimIndicators.delete(id);
-        }
-
-        const weaponGraphics = this.weaponGraphics.get(id);
-        if (weaponGraphics) {
-          weaponGraphics.destroy();
-          this.weaponGraphics.delete(id);
-        }
-
-        const healthBar = this.healthBars.get(id);
-        if (healthBar) {
-          healthBar.destroy();
-          this.healthBars.delete(id);
-        }
-
-        this.weaponTypes.delete(id);
-
-        // Clear interpolation data for removed player
-        this.interpolationEngine.clearPlayer(id);
       }
     }
 

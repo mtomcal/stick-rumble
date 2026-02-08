@@ -344,6 +344,86 @@ describe('GameScene - Camera Follow', () => {
       expect(mockSceneContext.cameras.main.startFollow).not.toHaveBeenCalled();
     });
 
+    it('should re-attach camera when sprite reference changes (recreated after delta destroy)', async () => {
+      const mockSceneContext = createMockScene();
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      // Trigger the delayed callback to create WebSocket
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      // Set local player ID
+      const roomJoinedMessage = {
+        data: JSON.stringify({
+          type: 'room:joined',
+          timestamp: Date.now(),
+          data: { playerId: 'local-player' }
+        })
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(roomJoinedMessage as MessageEvent);
+      }
+
+      // Mock playerManager.getLocalPlayerSprite to return first sprite
+      const mockSprite1 = { x: 100, y: 100 };
+      const getSpriteSpy = vi.spyOn(scene['playerManager'], 'getLocalPlayerSprite');
+      getSpriteSpy.mockReturnValue(mockSprite1 as any);
+      vi.spyOn(scene['playerManager'], 'updatePlayers').mockImplementation(() => {});
+
+      // First player:move - camera starts following sprite1
+      const playerMoveMessage1 = {
+        data: JSON.stringify({
+          type: 'player:move',
+          timestamp: Date.now(),
+          data: {
+            players: [
+              { id: 'local-player', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } }
+            ]
+          }
+        })
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(playerMoveMessage1 as MessageEvent);
+      }
+
+      expect(mockSceneContext.cameras.main.startFollow).toHaveBeenCalledTimes(1);
+      expect(mockSceneContext.cameras.main.startFollow).toHaveBeenCalledWith(
+        mockSprite1, true, 0.1, 0.1
+      );
+
+      // Simulate sprite being recreated (different reference)
+      const mockSprite2 = { x: 200, y: 200 };
+      getSpriteSpy.mockReturnValue(mockSprite2 as any);
+
+      // Second player:move - camera should re-attach to new sprite
+      const playerMoveMessage2 = {
+        data: JSON.stringify({
+          type: 'player:move',
+          timestamp: Date.now(),
+          data: {
+            players: [
+              { id: 'local-player', position: { x: 200, y: 200 }, velocity: { x: 0, y: 0 } }
+            ]
+          }
+        })
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage(playerMoveMessage2 as MessageEvent);
+      }
+
+      // Camera should have been re-attached (called twice total)
+      expect(mockSceneContext.cameras.main.startFollow).toHaveBeenCalledTimes(2);
+      expect(mockSceneContext.cameras.main.startFollow).toHaveBeenLastCalledWith(
+        mockSprite2, true, 0.1, 0.1
+      );
+    });
+
     it('should center camera on arena initially', async () => {
       const mockSceneContext = createMockScene();
       Object.assign(scene, mockSceneContext);

@@ -197,9 +197,13 @@ export class GameSceneEventHandlers {
         this.pendingPlayerMoves.push(data);
         return;
       }
-      const messageData = data as PlayerMoveData;
+      const messageData = data as PlayerMoveData & { isFullSnapshot?: boolean };
       if (messageData.players) {
-        this.playerManager.updatePlayers(messageData.players);
+        // When isFullSnapshot is explicitly false (delta), use merge mode to avoid destroying
+        // sprites for players that are simply unchanged (not disconnected).
+        // When isFullSnapshot is true or undefined (legacy player:move), use snapshot mode.
+        const isDelta = messageData.isFullSnapshot === false;
+        this.playerManager.updatePlayers(messageData.players, { isDelta });
 
         // Update melee weapon positions to follow players
         for (const player of messageData.players) {
