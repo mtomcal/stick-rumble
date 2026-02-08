@@ -49,6 +49,9 @@ describe('GameSceneEventHandlers - Client-Side Reconciliation', () => {
       getPlayerAimAngle: vi.fn().mockReturnValue(0),
       updatePlayerWeapon: vi.fn(),
       applyReconciledPosition: vi.fn(),
+      setLocalPlayerPredictedPosition: vi.fn(),
+      getPlayerState: vi.fn().mockReturnValue({ position: { x: 500, y: 500 }, velocity: { x: 0, y: 0 } }),
+      getLocalPlayerPredictedState: vi.fn().mockReturnValue(null),
     } as unknown as PlayerManager;
 
     mockProjectileManager = {
@@ -217,7 +220,7 @@ describe('GameSceneEventHandlers - Client-Side Reconciliation', () => {
     expect(call[2]).toBe(true); // Large correction, instant teleport
   });
 
-  it('should not reconcile if player is not in correctedPlayers list', () => {
+  it('should always reconcile local player even if not in correctedPlayers list (Story stick-rumble-nki)', () => {
     const messageData: PlayerMoveData = {
       players: [
         {
@@ -238,14 +241,14 @@ describe('GameSceneEventHandlers - Client-Side Reconciliation', () => {
 
     playerMoveHandler(messageData);
 
-    // Verify no reconciliation happened
-    expect(mockPlayerManager.applyReconciledPosition).not.toHaveBeenCalled();
+    // Verify reconciliation always happens for local player (Story stick-rumble-nki)
+    expect(mockPlayerManager.applyReconciledPosition).toHaveBeenCalled();
 
     // Input history is still cleared (separate from correction logic)
     expect(mockInputManager.clearInputHistoryUpTo).toHaveBeenCalledWith(3);
   });
 
-  it('should handle missing correctedPlayers field (no corrections)', () => {
+  it('should always reconcile local player even with missing correctedPlayers field (Story stick-rumble-nki)', () => {
     const messageData: PlayerMoveData = {
       players: [
         {
@@ -266,8 +269,8 @@ describe('GameSceneEventHandlers - Client-Side Reconciliation', () => {
 
     playerMoveHandler(messageData);
 
-    // Verify no reconciliation happened
-    expect(mockPlayerManager.applyReconciledPosition).not.toHaveBeenCalled();
+    // Verify reconciliation always happens for local player (Story stick-rumble-nki)
+    expect(mockPlayerManager.applyReconciledPosition).toHaveBeenCalled();
   });
 
   it('should clear input history even without correction', () => {
