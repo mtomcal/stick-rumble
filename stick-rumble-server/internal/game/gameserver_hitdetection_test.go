@@ -32,7 +32,7 @@ func TestGameServerHitDetection(t *testing.T) {
 	player2.SetPosition(Vector2{X: 1000, Y: 540})
 
 	// Shoot from player1 toward player2
-	result := gs.PlayerShoot(player1ID, 0.0) // Angle 0 = right
+	result := gs.PlayerShoot(player1ID, 0.0, 0) // Angle 0 = right
 	if !result.Success {
 		t.Fatal("PlayerShoot should succeed")
 	}
@@ -102,7 +102,7 @@ func TestGameServerHitDetection_NoHit(t *testing.T) {
 	player2.SetPosition(Vector2{X: 1000, Y: 1000})
 
 	// Shoot from player1
-	result := gs.PlayerShoot(player1ID, 0.0)
+	result := gs.PlayerShoot(player1ID, 0.0, 0)
 	if !result.Success {
 		t.Fatal("PlayerShoot should succeed")
 	}
@@ -148,7 +148,7 @@ func TestGameServerHitDetection_MultipleHits(t *testing.T) {
 
 	// Fire 4 shots (should kill with 25 damage each = 100 total)
 	for i := 0; i < 4; i++ {
-		result := gs.PlayerShoot(player1ID, 0.0)
+		result := gs.PlayerShoot(player1ID, 0.0, 0)
 		if !result.Success {
 			t.Fatalf("PlayerShoot %d should succeed", i+1)
 		}
@@ -208,7 +208,7 @@ func TestGameServerHitDetection_DeadPlayerNoHit(t *testing.T) {
 	player2.TakeDamage(100) // Kill player2
 
 	// Shoot at dead player
-	result := gs.PlayerShoot(player1ID, 0.0)
+	result := gs.PlayerShoot(player1ID, 0.0, 0)
 	if !result.Success {
 		t.Fatal("PlayerShoot should succeed")
 	}

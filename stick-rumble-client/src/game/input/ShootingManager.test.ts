@@ -77,9 +77,33 @@ describe('ShootingManager', () => {
           type: 'player:shoot',
           data: expect.objectContaining({
             aimAngle,
+            clientTimestamp: expect.any(Number),
           }),
         })
       );
+    });
+
+    it('should include clientTimestamp in shoot message', () => {
+      const aimAngle = 1.5;
+      const startTime = 12345;
+      const clockWithStartTime = new ManualClock(startTime);
+      const shootingManagerWithTime = new ShootingManager(
+        scene,
+        mockWsClient as unknown as WebSocketClient,
+        clockWithStartTime
+      );
+
+      shootingManagerWithTime.setAimAngle(aimAngle);
+      shootingManagerWithTime.shoot();
+
+      expect(mockWsClient.send).toHaveBeenCalledWith({
+        type: 'player:shoot',
+        timestamp: startTime,
+        data: {
+          aimAngle,
+          clientTimestamp: startTime,
+        },
+      });
     });
 
     it('should not shoot when on cooldown', () => {
