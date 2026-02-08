@@ -335,6 +335,34 @@ export class GameScene extends Phaser.Scene {
     if (this.inputManager && this.spectator && !this.spectator.isActive()) {
       this.inputManager.update();
 
+      // Client-side prediction for local player (Story stick-rumble-nki)
+      // Predict next frame's position based on current input for instant visual feedback
+      if (this.predictionEngine && this.playerManager.getLocalPlayerId()) {
+        const localPlayerId = this.playerManager.getLocalPlayerId();
+        if (localPlayerId) {
+          const currentState = this.playerManager.getPlayerState(localPlayerId);
+          if (currentState) {
+            const inputState = this.inputManager.getState();
+
+            // Use predicted position if available, fallback to server state for first prediction
+            const predictedState = this.playerManager.getLocalPlayerPredictedState();
+            const basePosition = predictedState?.position ?? currentState.position;
+            const baseVelocity = predictedState?.velocity ?? currentState.velocity;
+
+            // Predict next position based on current input
+            const predicted = this.predictionEngine.predictPosition(
+              basePosition,
+              baseVelocity,
+              inputState,
+              this.lastDeltaTime
+            );
+
+            // Store predicted state for rendering
+            this.playerManager.setLocalPlayerPredictedPosition(predicted);
+          }
+        }
+      }
+
       // Update local player's aim indicator immediately for responsive controls
       // This provides client-side prediction without waiting for server echo
       const currentAimAngle = this.inputManager.getAimAngle();
@@ -421,6 +449,10 @@ export class GameScene extends Phaser.Scene {
     }
 
     const localPlayerPos = this.playerManager.getLocalPlayerPosition();
+    if (!localPlayerPos) {
+      return;
+    }
+
     const nearest = this.weaponCrateManager.checkProximity(localPlayerPos);
 
     if (nearest) {

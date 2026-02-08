@@ -231,10 +231,11 @@ export class GameSceneEventHandlers {
           }
         }
 
-        // Client-side prediction reconciliation (Story 4.2)
-        // Check if server sent correction for local player
+        // Client-side prediction reconciliation (Story 4.2 + stick-rumble-nki)
+        // Always reconcile local player prediction with server state
         const localPlayerId = this.playerManager.getLocalPlayerId();
-        if (localPlayerId && messageData.correctedPlayers && messageData.correctedPlayers.includes(localPlayerId)) {
+        if (localPlayerId && this.predictionEngine && this.inputManager) {
+          // Always reconcile for local player to correct any prediction drift
           this.handleServerCorrection(messageData, localPlayerId);
         }
 
@@ -654,6 +655,17 @@ export class GameSceneEventHandlers {
     // Get last processed sequence from server
     const lastProcessedSequence = messageData.lastProcessedSequence?.[localPlayerId];
     if (lastProcessedSequence === undefined) {
+      // No sequence info - update predicted state and apply server position
+      this.playerManager.setLocalPlayerPredictedPosition({
+        position: localPlayer.position,
+        velocity: localPlayer.velocity,
+      });
+      // Apply server position as the source of truth
+      this.playerManager.applyReconciledPosition(
+        localPlayerId,
+        { position: localPlayer.position, velocity: localPlayer.velocity },
+        false // Use smooth interpolation for updates without sequence info
+      );
       return;
     }
 
@@ -667,6 +679,9 @@ export class GameSceneEventHandlers {
       lastProcessedSequence,
       pendingInputs
     );
+
+    // Update predicted state with reconciled position
+    this.playerManager.setLocalPlayerPredictedPosition(reconciledState);
 
     // Determine if correction needs instant teleport or smooth lerp
     const currentPosition = this.playerManager.getPlayerPosition(localPlayerId);
