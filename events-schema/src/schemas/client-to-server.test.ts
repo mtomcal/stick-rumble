@@ -240,6 +240,7 @@ describe('Client-to-Server Schemas', () => {
     it('should validate valid shoot data', () => {
       const validData: PlayerShootData = {
         aimAngle: 1.57,
+        clientTimestamp: Date.now(),
       };
 
       expect(validate(validData)).toBe(true);
@@ -247,7 +248,18 @@ describe('Client-to-Server Schemas', () => {
     });
 
     it('should reject data with missing aimAngle', () => {
-      const invalidData = {};
+      const invalidData = {
+        clientTimestamp: Date.now(),
+      };
+
+      expect(validate(invalidData)).toBe(false);
+      expect(validate.errors).toBeDefined();
+    });
+
+    it('should reject data with missing clientTimestamp', () => {
+      const invalidData = {
+        aimAngle: 1.57,
+      };
 
       expect(validate(invalidData)).toBe(false);
       expect(validate.errors).toBeDefined();
@@ -256,18 +268,50 @@ describe('Client-to-Server Schemas', () => {
     it('should reject data with non-numeric aimAngle', () => {
       const invalidData = {
         aimAngle: 'not-a-number',
+        clientTimestamp: Date.now(),
       };
 
       expect(validate(invalidData)).toBe(false);
       expect(validate.errors).toBeDefined();
     });
 
-    it('should accept various numeric aimAngle values', () => {
+    it('should reject data with non-numeric clientTimestamp', () => {
+      const invalidData = {
+        aimAngle: 1.57,
+        clientTimestamp: 'not-a-number',
+      };
+
+      expect(validate(invalidData)).toBe(false);
+      expect(validate.errors).toBeDefined();
+    });
+
+    it('should reject data with negative clientTimestamp', () => {
+      const invalidData = {
+        aimAngle: 1.57,
+        clientTimestamp: -1,
+      };
+
+      expect(validate(invalidData)).toBe(false);
+      expect(validate.errors).toBeDefined();
+    });
+
+    it('should accept various numeric aimAngle values with valid timestamp', () => {
       const testCases = [0, 1.57, 3.14, -1.57, 6.28];
+      const timestamp = Date.now();
 
       testCases.forEach((aimAngle) => {
-        expect(validate({ aimAngle })).toBe(true);
+        expect(validate({ aimAngle, clientTimestamp: timestamp })).toBe(true);
       });
+    });
+
+    it('should accept clientTimestamp of 0', () => {
+      const validData = {
+        aimAngle: 1.57,
+        clientTimestamp: 0,
+      };
+
+      expect(validate(validData)).toBe(true);
+      expect(validate.errors).toBeNull();
     });
   });
 
@@ -280,6 +324,7 @@ describe('Client-to-Server Schemas', () => {
         timestamp: Date.now(),
         data: {
           aimAngle: 1.57,
+          clientTimestamp: Date.now(),
         },
       };
 
@@ -293,6 +338,7 @@ describe('Client-to-Server Schemas', () => {
         timestamp: Date.now(),
         data: {
           aimAngle: 1.57,
+          clientTimestamp: Date.now(),
         },
       };
 

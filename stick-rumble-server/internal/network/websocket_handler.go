@@ -86,6 +86,9 @@ func NewWebSocketHandlerWithConfig(timerInterval time.Duration) *WebSocketHandle
 	// Register callback for dodge roll end events
 	handler.gameServer.SetOnRollEnd(handler.broadcastRollEnd)
 
+	// Register callback to get player RTT for lag compensation (Story 4.5)
+	handler.gameServer.SetGetRTT(handler.getPlayerRTT)
+
 	return handler
 }
 
@@ -196,10 +199,7 @@ func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Reques
 	// Buffer size 256: Allows burst messages while preventing memory exhaustion.
 	// If buffer fills (slow/unresponsive client), messages are dropped with log warning.
 	sendChan := make(chan []byte, 256)
-	player := &game.Player{
-		ID:       playerID,
-		SendChan: sendChan,
-	}
+	player := game.NewPlayer(playerID, sendChan)
 
 	log.Printf("Client connected: %s", playerID)
 
@@ -216,6 +216,46 @@ func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Reques
 			h.sendWeaponSpawns(p.ID)
 		}
 	}
+
+	// Setup ping/pong for RTT measurement (Story 4.5: Lag compensation)
+	var pingMu sync.Mutex
+	var lastPingTime time.Time
+
+	conn.SetPongHandler(func(appData string) error {
+		pingMu.Lock()
+		defer pingMu.Unlock()
+
+		// Calculate RTT and record it
+		if !lastPingTime.IsZero() {
+			rtt := time.Since(lastPingTime)
+			player.PingTracker.RecordRTT(rtt)
+			log.Printf("Player %s RTT: %dms (avg: %dms)", playerID, rtt.Milliseconds(), player.PingTracker.GetRTT())
+		}
+		return nil
+	})
+
+	// Start goroutine to send periodic pings for RTT measurement
+	pingDone := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(2 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-pingDone:
+				return
+			case <-ticker.C:
+				pingMu.Lock()
+				lastPingTime = time.Now()
+				pingMu.Unlock()
+
+				if err := conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(1*time.Second)); err != nil {
+					log.Printf("Ping error for %s: %v", playerID, err)
+					return
+				}
+			}
+		}
+	}()
 
 	// Start goroutine to send messages to client
 	done := make(chan struct{})
@@ -297,6 +337,7 @@ func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Clean up on disconnect
+	close(pingDone) // Stop ping goroutine
 	h.roomManager.RemovePlayer(playerID)
 	h.gameServer.RemovePlayer(playerID)
 	h.deltaTracker.RemoveClient(playerID) // Clean up delta compression state

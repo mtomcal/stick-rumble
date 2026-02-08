@@ -13,6 +13,7 @@
       "knockbackDistance": 0,
       "recoil": null,
       "spreadDegrees": 0,
+      "isHitscan": true,
       "visuals": {
         "muzzleFlashColor": "0xffdd00",
         "muzzleFlashSize": 8,

@@ -19,7 +19,7 @@ func TestPlayerShoot_AutoReload(t *testing.T) {
 	ws.CurrentAmmo = 0
 
 	// Attempt to shoot with empty magazine
-	result := gs.PlayerShoot(playerID, 0)
+	result := gs.PlayerShoot(playerID, 0, 0)
 
 	if result.Success {
 		t.Error("shoot should fail with empty magazine")
@@ -51,7 +51,7 @@ func TestPlayerShoot_NoAutoReloadWhenAlreadyReloading(t *testing.T) {
 	firstReloadStart := ws.ReloadStartTime
 
 	// Attempt to shoot while reloading
-	result := gs.PlayerShoot(playerID, 0)
+	result := gs.PlayerShoot(playerID, 0, 0)
 
 	if result.Success {
 		t.Error("shoot should fail while reloading")

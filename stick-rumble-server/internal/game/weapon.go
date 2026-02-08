@@ -50,6 +50,7 @@ type Weapon struct {
 	KnockbackDistance float64        // Knockback distance in pixels (Bat only)
 	Recoil            *RecoilPattern // Recoil pattern (nil for no recoil)
 	SpreadDegrees     float64        // Movement spread in degrees (+/- while moving, 0 for stationary)
+	IsHitscan         bool           // Story 4.5: Instant-hit weapon (lag compensated) vs projectile
 }
 
 // IsMelee returns true if this is a melee weapon

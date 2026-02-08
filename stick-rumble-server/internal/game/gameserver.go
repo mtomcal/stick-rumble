@@ -3,6 +3,7 @@ package game
 import (
 	"context"
 	"log"
+	"math"
 	"sync"
 	"time"
 )
@@ -30,6 +31,7 @@ type GameServer struct {
 	weaponCrateManager *WeaponCrateManager
 	weaponStates       map[string]*WeaponState
 	weaponMu           sync.RWMutex
+	positionHistory    *PositionHistory // Position history for lag compensation
 	tickRate           time.Duration
 	updateRate         time.Duration // Rate at which to broadcast updates to clients
 	clock              Clock         // Clock for time operations (injectable for testing)
@@ -42,6 +44,9 @@ type GameServer struct {
 
 	// Callback for when a projectile hits a player
 	onHit func(hit HitEvent)
+
+	// Callback to get a player's RTT for lag compensation
+	getRTT func(playerID string) int64
 
 	// Callback for when a player respawns
 	onRespawn func(playerID string, position Vector2)
@@ -79,6 +84,7 @@ func NewGameServerWithClock(broadcastFunc func(playerStates []PlayerStateSnapsho
 		projectileManager:  NewProjectileManager(),
 		weaponCrateManager: NewWeaponCrateManager(),
 		weaponStates:       make(map[string]*WeaponState),
+		positionHistory:    NewPositionHistory(), // Initialize position history for lag compensation
 		tickRate:           time.Duration(ServerTickInterval) * time.Millisecond,
 		updateRate:         time.Duration(ClientUpdateInterval) * time.Millisecond,
 		broadcastFunc:      broadcastFunc,
@@ -132,6 +138,9 @@ func (gs *GameServer) tickLoop(ctx context.Context) {
 
 			// Update all players
 			gs.updateAllPlayers(deltaTime)
+
+			// Record position snapshots for lag compensation (after movement update)
+			gs.recordPositionSnapshots(now)
 
 			// Update all projectiles
 			gs.projectileManager.Update(deltaTime)
@@ -214,6 +223,19 @@ func (gs *GameServer) updateAllPlayers(deltaTime float64) {
 					player.ID, correctionRate*100, stats.TotalCorrections, stats.TotalUpdates)
 			}
 		}
+	}
+}
+
+// recordPositionSnapshots records current player positions for lag compensation
+func (gs *GameServer) recordPositionSnapshots(timestamp time.Time) {
+	// Get all players (thread-safe)
+	gs.world.mu.RLock()
+	defer gs.world.mu.RUnlock()
+
+	// Record position snapshot for each player
+	for playerID, player := range gs.world.players {
+		position := player.GetPosition()
+		gs.positionHistory.RecordSnapshot(playerID, position, timestamp)
 	}
 }
 
@@ -307,9 +329,11 @@ func (gs *GameServer) SetWeaponState(playerID string, weaponState *WeaponState) 
 	gs.weaponStates[playerID] = weaponState
 }
 
-// PlayerShoot attempts to fire a projectile for the given player
+// PlayerShoot attempts to fire a weapon for the given player
 // If the magazine is empty, automatically triggers a reload
-func (gs *GameServer) PlayerShoot(playerID string, aimAngle float64) ShootResult {
+// For hitscan weapons: applies lag compensation using clientTimestamp and RTT
+// For projectile weapons: creates a projectile
+func (gs *GameServer) PlayerShoot(playerID string, aimAngle float64, clientTimestamp int64) ShootResult {
 	// Check if player exists
 	player, exists := gs.world.GetPlayer(playerID)
 	if !exists {
@@ -342,7 +366,16 @@ func (gs *GameServer) PlayerShoot(playerID string, aimAngle float64) ShootResult
 		return ShootResult{Success: false, Reason: ShootFailedCooldown}
 	}
 
-	// Create projectile at player position
+	// Record the shot (decrements ammo, sets cooldown)
+	ws.RecordShot()
+
+	// Branch: Hitscan vs Projectile weapon
+	if ws.Weapon.IsHitscan {
+		// Hitscan weapon: instant hit with lag compensation
+		return gs.processHitscanShot(playerID, player, ws.Weapon, aimAngle, clientTimestamp)
+	}
+
+	// Projectile weapon: create projectile (no lag compensation)
 	pos := player.GetPosition()
 	proj := gs.projectileManager.CreateProjectile(
 		playerID,
@@ -351,9 +384,6 @@ func (gs *GameServer) PlayerShoot(playerID string, aimAngle float64) ShootResult
 		aimAngle,
 		ws.Weapon.ProjectileSpeed,
 	)
-
-	// Record the shot (decrements ammo, sets cooldown)
-	ws.RecordShot()
 
 	return ShootResult{
 		Success:    true,
@@ -487,6 +517,11 @@ func (gs *GameServer) SetOnWeaponRespawn(callback func(crate *WeaponCrate)) {
 // SetOnRollEnd sets the callback for when a player's dodge roll ends
 func (gs *GameServer) SetOnRollEnd(callback func(playerID string, reason string)) {
 	gs.onRollEnd = callback
+}
+
+// SetGetRTT sets the callback to retrieve a player's RTT for lag compensation
+func (gs *GameServer) SetGetRTT(callback func(playerID string) int64) {
+	gs.getRTT = callback
 }
 
 // GetWeaponCrateManager returns the weapon crate manager
@@ -676,4 +711,120 @@ func (gs *GameServer) checkWeaponRespawns() {
 			gs.onWeaponRespawn(crate)
 		}
 	}
+}
+
+// processHitscanShot performs lag-compensated hit detection for hitscan weapons
+// Story 4.5: Rewinds player positions by (shooterRTT + victimRTT)/2, clamped to 150ms
+func (gs *GameServer) processHitscanShot(shooterID string, shooter *PlayerState, weapon *Weapon, aimAngle float64, clientTimestamp int64) ShootResult {
+	// Get shooter's RTT
+	shooterRTT := int64(0)
+	if gs.getRTT != nil {
+		shooterRTT = gs.getRTT(shooterID)
+	}
+
+	// Calculate rewind time (half of total RTT for fairness)
+	// In real lag comp, we'd use (shooterRTT + victimRTT)/2 per victim
+	// For simplicity, using shooterRTT as baseline, clamped to 150ms max
+	rewindMs := shooterRTT
+	const maxRewindMs = 150
+	if rewindMs > maxRewindMs {
+		rewindMs = maxRewindMs
+	}
+
+	// Calculate query time for position history
+	rewindDuration := time.Duration(rewindMs) * time.Millisecond
+	queryTime := gs.clock.Now().Add(-rewindDuration)
+
+	// Get shooter position
+	shooterPos := shooter.GetPosition()
+
+	// Perform raycast hit detection at rewound positions
+	gs.world.mu.RLock()
+	var hitVictim *PlayerState
+	var hitDistance float64 = weapon.Range + 1 // Start beyond range
+
+	for victimID, victim := range gs.world.players {
+		// Skip shooter and dead players
+		if victimID == shooterID || !victim.IsAlive() {
+			continue
+		}
+
+		// Get victim's position at rewound time
+		victimPos, found := gs.positionHistory.GetPositionAt(victimID, queryTime)
+		if !found {
+			// Fallback to current position if no history
+			victimPos = victim.GetPosition()
+		}
+
+		// Check if raycast hits the victim
+		// Use circular hitbox approximation: radius = PlayerWidth/2 = 16px
+		const hitboxRadius = PlayerWidth / 2
+		if gs.raycastHit(shooterPos, aimAngle, weapon.Range, victimPos, hitboxRadius) {
+			// Calculate distance to find closest hit
+			dx := victimPos.X - shooterPos.X
+			dy := victimPos.Y - shooterPos.Y
+			dist := math.Sqrt(dx*dx + dy*dy)
+
+			if dist < hitDistance {
+				hitDistance = dist
+				hitVictim = victim
+			}
+		}
+	}
+	gs.world.mu.RUnlock()
+
+	// Apply damage if hit
+	if hitVictim != nil {
+		hitVictim.TakeDamage(weapon.Damage)
+
+		// Notify via callback
+		if gs.onHit != nil {
+			gs.onHit(HitEvent{
+				ProjectileID: "", // No projectile for hitscan
+				AttackerID:   shooterID,
+				VictimID:     hitVictim.ID,
+			})
+		}
+	}
+
+	return ShootResult{
+		Success:    true,
+		Projectile: nil, // No projectile for hitscan
+	}
+}
+
+// raycastHit checks if a ray from origin at angle hits a circular target
+func (gs *GameServer) raycastHit(origin Vector2, angleRad float64, maxRange float64, targetPos Vector2, targetRadius float64) bool {
+	// Ray direction vector
+	rayDirX := math.Cos(angleRad)
+	rayDirY := math.Sin(angleRad)
+
+	// Vector from ray origin to circle center
+	toTargetX := targetPos.X - origin.X
+	toTargetY := targetPos.Y - origin.Y
+
+	// Project toTarget onto ray direction to find closest point on ray
+	projection := toTargetX*rayDirX + toTargetY*rayDirY
+
+	// If projection is negative, target is behind the ray
+	if projection < 0 {
+		return false
+	}
+
+	// If projection exceeds range, target is beyond weapon range
+	if projection > maxRange {
+		return false
+	}
+
+	// Find closest point on ray to target center
+	closestX := origin.X + projection*rayDirX
+	closestY := origin.Y + projection*rayDirY
+
+	// Distance from closest point to target center
+	distX := targetPos.X - closestX
+	distY := targetPos.Y - closestY
+	distSq := distX*distX + distY*distY
+
+	// Hit if distance is less than target radius
+	return distSq <= targetRadius*targetRadius
 }

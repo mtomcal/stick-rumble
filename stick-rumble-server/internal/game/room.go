@@ -13,8 +13,18 @@ import (
 
 // Player represents a connected player
 type Player struct {
-	ID       string
-	SendChan chan []byte
+	ID          string
+	SendChan    chan []byte
+	PingTracker *PingTracker // Tracks RTT for lag compensation
+}
+
+// NewPlayer creates a new player with initialized ping tracker
+func NewPlayer(id string, sendChan chan []byte) *Player {
+	return &Player{
+		ID:          id,
+		SendChan:    sendChan,
+		PingTracker: NewPingTracker(),
+	}
 }
 
 // Room represents a game room with multiple players
