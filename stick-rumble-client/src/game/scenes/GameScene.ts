@@ -45,6 +45,7 @@ export class GameScene extends Phaser.Scene {
   private audioManager!: AudioManager;
   private lastDeltaTime: number = 0;
   private isCameraFollowing: boolean = false;
+  private cameraFollowTarget: Phaser.GameObjects.Graphics | null = null;
   private nearbyWeaponCrate: { id: string; weaponType: string } | null = null;
   private isPointerHeld: boolean = false;
 
@@ -432,19 +433,31 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * Start camera follow on local player graphics object if not already following
+   * Start camera follow on local player graphics object if not already following.
+   * Also re-attaches camera if the sprite reference changed (e.g., sprite was
+   * destroyed and recreated due to delta compression clearing it).
    */
   private startCameraFollowIfNeeded(): void {
+    const localPlayerGraphics = this.playerManager.getLocalPlayerSprite();
+    if (!localPlayerGraphics) {
+      return;
+    }
+
+    // Re-attach camera if sprite reference changed (recreated after destroy)
+    if (this.isCameraFollowing && this.cameraFollowTarget !== localPlayerGraphics) {
+      this.cameras.main.startFollow(localPlayerGraphics, true, 0.1, 0.1);
+      this.cameraFollowTarget = localPlayerGraphics;
+      return;
+    }
+
     if (this.isCameraFollowing) {
       return;
     }
 
-    const localPlayerGraphics = this.playerManager.getLocalPlayerSprite();
-    if (localPlayerGraphics) {
-      // Start following with smooth lerp (0.1 = smooth follow, 1 = instant)
-      this.cameras.main.startFollow(localPlayerGraphics, true, 0.1, 0.1);
-      this.isCameraFollowing = true;
-    }
+    // Start following with smooth lerp (0.1 = smooth follow, 1 = instant)
+    this.cameras.main.startFollow(localPlayerGraphics, true, 0.1, 0.1);
+    this.isCameraFollowing = true;
+    this.cameraFollowTarget = localPlayerGraphics;
   }
 
   /**
@@ -453,6 +466,7 @@ export class GameScene extends Phaser.Scene {
   private stopCameraFollow(): void {
     this.cameras.main.stopFollow();
     this.isCameraFollowing = false;
+    this.cameraFollowTarget = null;
   }
 
   /**

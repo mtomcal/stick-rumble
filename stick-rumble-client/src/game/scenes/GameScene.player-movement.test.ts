@@ -284,7 +284,7 @@ describe('GameScene - Player Movement', () => {
       // Verify PlayerManager.updatePlayers was called with correct data including aim angle
       expect(updatePlayersSpy).toHaveBeenCalledWith([
         { id: 'player1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: 1.57 }
-      ]);
+      ], { isDelta: false });
 
       // Verify InputManager.setPlayerPosition is NOT called (player ID doesn't match local player)
       expect(setPlayerPositionSpy).not.toHaveBeenCalled();
@@ -336,7 +336,7 @@ describe('GameScene - Player Movement', () => {
       // Verify PlayerManager.updatePlayers was called with the correct data
       expect(updatePlayersSpy).toHaveBeenCalledWith([
         { id: 'local-player-id', position: { x: 300, y: 400 }, velocity: { x: 10, y: 20 }, aimAngle: 0.5 }
-      ]);
+      ], { isDelta: false });
 
       // Verify InputManager.setPlayerPosition was called with local player's position for aim calculation
       expect(setPlayerPositionSpy).toHaveBeenCalledWith(300, 400);

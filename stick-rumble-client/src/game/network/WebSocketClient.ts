@@ -204,13 +204,23 @@ export class WebSocketClient {
     // When receiving state:snapshot or state:delta, also emit player:move events
     // so that existing code listening for player:move continues to work.
     if (message.type === 'state:snapshot' || message.type === 'state:delta') {
-      const data = message.data as { players?: unknown[] };
-      if (data && data.players && data.players.length > 0) {
-        // Convert to player:move format and emit
+      const data = message.data as {
+        players?: unknown[];
+        lastProcessedSequence?: Record<string, number>;
+        correctedPlayers?: string[];
+      };
+      if (data) {
+        const isFullSnapshot = message.type === 'state:snapshot';
+        // Forward all fields including reconciliation data (Story 4.2)
         const playerMoveHandlers = this.messageHandlers.get('player:move');
         if (playerMoveHandlers) {
-          this.debug(`  -> forwarding to player:move handlers (${playerMoveHandlers.size})`);
-          playerMoveHandlers.forEach(handler => handler({ players: data.players }));
+          this.debug(`  -> forwarding to player:move handlers (${playerMoveHandlers.size}), isFullSnapshot=${isFullSnapshot}`);
+          playerMoveHandlers.forEach(handler => handler({
+            players: data.players ?? [],
+            lastProcessedSequence: data.lastProcessedSequence,
+            correctedPlayers: data.correctedPlayers,
+            isFullSnapshot,
+          }));
         }
       }
     }

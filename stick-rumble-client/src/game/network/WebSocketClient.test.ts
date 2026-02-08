@@ -721,6 +721,174 @@ describe('WebSocketClient', () => {
     });
   });
 
+  describe('delta compression forwarding', () => {
+    it('should forward state:snapshot with isFullSnapshot=true and all fields', async () => {
+      const client = new WebSocketClient('ws://localhost:8080/ws');
+
+      const connectPromise = client.connect();
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen({});
+      }
+      await connectPromise;
+
+      const handler = vi.fn();
+      client.on('player:move', handler);
+
+      const snapshotMessage: Message = {
+        type: 'state:snapshot',
+        timestamp: Date.now(),
+        data: {
+          players: [
+            { id: 'p1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+          ],
+          lastProcessedSequence: { p1: 42 },
+          correctedPlayers: ['p1'],
+        },
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage({ data: JSON.stringify(snapshotMessage) });
+      }
+
+      expect(handler).toHaveBeenCalledTimes(1);
+      const forwardedData = handler.mock.calls[0][0];
+      expect(forwardedData.isFullSnapshot).toBe(true);
+      expect(forwardedData.players).toEqual([
+        { id: 'p1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ]);
+      expect(forwardedData.lastProcessedSequence).toEqual({ p1: 42 });
+      expect(forwardedData.correctedPlayers).toEqual(['p1']);
+    });
+
+    it('should forward state:delta with isFullSnapshot=false', async () => {
+      const client = new WebSocketClient('ws://localhost:8080/ws');
+
+      const connectPromise = client.connect();
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen({});
+      }
+      await connectPromise;
+
+      const handler = vi.fn();
+      client.on('player:move', handler);
+
+      const deltaMessage: Message = {
+        type: 'state:delta',
+        timestamp: Date.now(),
+        data: {
+          players: [
+            { id: 'p2', position: { x: 300, y: 400 }, velocity: { x: 5, y: 5 } },
+          ],
+        },
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage({ data: JSON.stringify(deltaMessage) });
+      }
+
+      expect(handler).toHaveBeenCalledTimes(1);
+      const forwardedData = handler.mock.calls[0][0];
+      expect(forwardedData.isFullSnapshot).toBe(false);
+      expect(forwardedData.players).toEqual([
+        { id: 'p2', position: { x: 300, y: 400 }, velocity: { x: 5, y: 5 } },
+      ]);
+    });
+
+    it('should forward lastProcessedSequence and correctedPlayers through', async () => {
+      const client = new WebSocketClient('ws://localhost:8080/ws');
+
+      const connectPromise = client.connect();
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen({});
+      }
+      await connectPromise;
+
+      const handler = vi.fn();
+      client.on('player:move', handler);
+
+      const message: Message = {
+        type: 'state:delta',
+        timestamp: Date.now(),
+        data: {
+          players: [],
+          lastProcessedSequence: { p1: 99, p2: 50 },
+          correctedPlayers: ['p1'],
+        },
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage({ data: JSON.stringify(message) });
+      }
+
+      expect(handler).toHaveBeenCalledTimes(1);
+      const forwardedData = handler.mock.calls[0][0];
+      expect(forwardedData.lastProcessedSequence).toEqual({ p1: 99, p2: 50 });
+      expect(forwardedData.correctedPlayers).toEqual(['p1']);
+    });
+
+    it('should forward delta with empty players (reconciliation only)', async () => {
+      const client = new WebSocketClient('ws://localhost:8080/ws');
+
+      const connectPromise = client.connect();
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen({});
+      }
+      await connectPromise;
+
+      const handler = vi.fn();
+      client.on('player:move', handler);
+
+      // Delta with no players but with reconciliation data
+      const message: Message = {
+        type: 'state:delta',
+        timestamp: Date.now(),
+        data: {
+          lastProcessedSequence: { p1: 10 },
+        },
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage({ data: JSON.stringify(message) });
+      }
+
+      expect(handler).toHaveBeenCalledTimes(1);
+      const forwardedData = handler.mock.calls[0][0];
+      expect(forwardedData.players).toEqual([]);
+      expect(forwardedData.lastProcessedSequence).toEqual({ p1: 10 });
+    });
+
+    it('should also emit native state:snapshot handlers', async () => {
+      const client = new WebSocketClient('ws://localhost:8080/ws');
+
+      const connectPromise = client.connect();
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen({});
+      }
+      await connectPromise;
+
+      const snapshotHandler = vi.fn();
+      const playerMoveHandler = vi.fn();
+      client.on('state:snapshot', snapshotHandler);
+      client.on('player:move', playerMoveHandler);
+
+      const message: Message = {
+        type: 'state:snapshot',
+        timestamp: Date.now(),
+        data: {
+          players: [{ id: 'p1', position: { x: 1, y: 2 }, velocity: { x: 0, y: 0 } }],
+        },
+      };
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage({ data: JSON.stringify(message) });
+      }
+
+      // Both native handler and forwarded handler should be called
+      expect(snapshotHandler).toHaveBeenCalledTimes(1);
+      expect(playerMoveHandler).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('NetworkSimulator integration', () => {
     beforeEach(() => {
       vi.useFakeTimers();
