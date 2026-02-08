@@ -771,6 +771,158 @@ describe('PlayerManager', () => {
       playerManager.updateLocalPlayerAim(-Math.PI / 2);
       expect(setToSpy).toHaveBeenCalledWith(100, 200, 100, 150);
     });
+
+    it('should update local player weapon rotation immediately', () => {
+      playerManager.setLocalPlayerId('local-player');
+
+      const playerStates: PlayerState[] = [
+        { id: 'local-player', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: 0 },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      const weapon = mockScene.containers[0];
+      const setRotationSpy = vi.fn();
+      weapon.setRotation = setRotationSpy;
+
+      // Update aim angle to point down (90 degrees = PI/2 radians)
+      const newAimAngle = Math.PI / 2;
+      playerManager.updateLocalPlayerAim(newAimAngle);
+
+      expect(setRotationSpy).toHaveBeenCalledWith(Math.PI / 2);
+    });
+
+    it('should update local player weapon position immediately', () => {
+      playerManager.setLocalPlayerId('local-player');
+
+      const playerStates: PlayerState[] = [
+        { id: 'local-player', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: 0 },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      const weapon = mockScene.containers[0];
+      const setPositionSpy = vi.fn();
+      weapon.setPosition = setPositionSpy;
+
+      // Update aim angle to point right (0 radians)
+      const newAimAngle = 0;
+      playerManager.updateLocalPlayerAim(newAimAngle);
+
+      // Weapon should be positioned 10px from player center in aim direction
+      // cos(0) = 1, sin(0) = 0, so offset = (10, 0)
+      expect(setPositionSpy).toHaveBeenCalledWith(110, 200);
+    });
+
+    it('should flip local player weapon vertically when aiming left', () => {
+      playerManager.setLocalPlayerId('local-player');
+
+      const playerStates: PlayerState[] = [
+        { id: 'local-player', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: 0 },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      const weapon = mockScene.containers[0];
+
+      // Aim left (180 degrees = PI radians)
+      playerManager.updateLocalPlayerAim(Math.PI);
+
+      // Weapon should be flipped (scaleY = -1) when aiming left
+      expect(weapon.scaleY).toBe(-1);
+    });
+
+    it('should not flip local player weapon when aiming right', () => {
+      playerManager.setLocalPlayerId('local-player');
+
+      const playerStates: PlayerState[] = [
+        { id: 'local-player', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: Math.PI },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      const weapon = mockScene.containers[0];
+
+      // Aim right (0 radians)
+      playerManager.updateLocalPlayerAim(0);
+
+      // Weapon should NOT be flipped (scaleY = 1) when aiming right
+      expect(weapon.scaleY).toBe(1);
+    });
+
+    it('should calculate weapon position correctly for different angles', () => {
+      playerManager.setLocalPlayerId('local-player');
+
+      const playerStates: PlayerState[] = [
+        { id: 'local-player', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: 0 },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      const weapon = mockScene.containers[0];
+      const setPositionSpy = vi.fn();
+      weapon.setPosition = setPositionSpy;
+
+      // Test pointing right (0 radians)
+      playerManager.updateLocalPlayerAim(0);
+      expect(setPositionSpy).toHaveBeenCalledWith(110, 200); // x: 100 + 10*cos(0), y: 200 + 10*sin(0)
+
+      // Test pointing left (PI radians)
+      playerManager.updateLocalPlayerAim(Math.PI);
+      expect(setPositionSpy).toHaveBeenCalledWith(90, 200); // x: 100 + 10*cos(PI), y: 200 + 10*sin(PI)
+
+      // Test pointing down (PI/2 radians)
+      playerManager.updateLocalPlayerAim(Math.PI / 2);
+      expect(setPositionSpy).toHaveBeenCalledWith(100, 210); // x: 100 + 10*cos(PI/2), y: 200 + 10*sin(PI/2)
+
+      // Test pointing up (-PI/2 radians)
+      playerManager.updateLocalPlayerAim(-Math.PI / 2);
+      expect(setPositionSpy).toHaveBeenCalledWith(100, 190); // x: 100 + 10*cos(-PI/2), y: 200 + 10*sin(-PI/2)
+    });
+
+    it('should not update weapon if local player weapon does not exist', () => {
+      playerManager.setLocalPlayerId('local-player');
+
+      // Create player but don't create weapon (edge case)
+      const playerStates: PlayerState[] = [
+        { id: 'local-player', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: 0 },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      // Manually remove weapon to simulate edge case
+      const weaponGraphics = (playerManager as any).weaponGraphics as Map<string, any>;
+      weaponGraphics.delete('local-player');
+
+      // Should not throw error
+      expect(() => playerManager.updateLocalPlayerAim(Math.PI / 2)).not.toThrow();
+    });
+
+    it('should update both aim indicator and weapon simultaneously', () => {
+      playerManager.setLocalPlayerId('local-player');
+
+      const playerStates: PlayerState[] = [
+        { id: 'local-player', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: 0 },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+
+      const line = mockScene.lines[0];
+      const lineSetToSpy = vi.fn();
+      line.setTo = lineSetToSpy;
+
+      const weapon = mockScene.containers[0];
+      const weaponSetRotationSpy = vi.fn();
+      weapon.setRotation = weaponSetRotationSpy;
+
+      // Update aim angle
+      const newAimAngle = Math.PI / 4;
+      playerManager.updateLocalPlayerAim(newAimAngle);
+
+      // Both should be updated
+      expect(lineSetToSpy).toHaveBeenCalled();
+      expect(weaponSetRotationSpy).toHaveBeenCalledWith(Math.PI / 4);
+    });
   });
 
   describe('getPlayerPosition', () => {
