@@ -25,11 +25,13 @@ const createMockScene = () => {
     y: number;
     setOrigin: ReturnType<typeof vi.fn>;
     setPosition: ReturnType<typeof vi.fn>;
+    setVisible: ReturnType<typeof vi.fn>;
     destroy: ReturnType<typeof vi.fn>;
   }> = [];
 
   const lines: Array<{
     setTo: ReturnType<typeof vi.fn>;
+    setVisible: ReturnType<typeof vi.fn>;
     destroy: ReturnType<typeof vi.fn>;
   }> = [];
 
@@ -38,6 +40,7 @@ const createMockScene = () => {
     removeAll: ReturnType<typeof vi.fn>;
     setRotation: ReturnType<typeof vi.fn>;
     setPosition: ReturnType<typeof vi.fn>;
+    setVisible: ReturnType<typeof vi.fn>;
     destroy: ReturnType<typeof vi.fn>;
     scaleY: number;
     rotation: number;
@@ -91,6 +94,7 @@ const createMockScene = () => {
           y,
           setOrigin: vi.fn().mockReturnThis(),
           setPosition: vi.fn(),
+          setVisible: vi.fn(),
           destroy: vi.fn(),
         };
         texts.push(text);
@@ -99,6 +103,7 @@ const createMockScene = () => {
       line: vi.fn(() => {
         const line = {
           setTo: vi.fn(),
+          setVisible: vi.fn(),
           destroy: vi.fn(),
         };
         lines.push(line);
@@ -110,6 +115,7 @@ const createMockScene = () => {
           removeAll: vi.fn(),
           setRotation: vi.fn(),
           setPosition: vi.fn(),
+          setVisible: vi.fn(),
           destroy: vi.fn(),
           scaleY: 1,
           rotation: 0,
@@ -2308,6 +2314,191 @@ describe('PlayerManager', () => {
 
       // Verify gray color was applied (death takes priority over rolling)
       expect(graphics.fillStyle).toHaveBeenCalledWith(0x888888, expect.any(Number));
+    });
+  });
+
+  describe('setPlayerVisible', () => {
+    it('should hide all elements for a player', () => {
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+      playerManager.updatePlayers(playerStates);
+
+      const graphics = mockScene.graphicsObjects[0]; // player graphics
+      const label = mockScene.texts[0];
+      const line = mockScene.lines[0];
+      const container = mockScene.containers[0]; // weapon
+      const healthBarGraphics = mockScene.graphicsObjects[1]; // health bar
+
+      playerManager.setPlayerVisible('player-1', false);
+
+      expect(graphics.setVisible).toHaveBeenCalledWith(false);
+      expect(label.setVisible).toHaveBeenCalledWith(false);
+      expect(line.setVisible).toHaveBeenCalledWith(false);
+      expect(container.setVisible).toHaveBeenCalledWith(false);
+      expect(healthBarGraphics.setVisible).toHaveBeenCalledWith(false);
+    });
+
+    it('should show all elements for a player', () => {
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+      playerManager.updatePlayers(playerStates);
+
+      // Hide first
+      playerManager.setPlayerVisible('player-1', false);
+
+      const graphics = mockScene.graphicsObjects[0];
+      const label = mockScene.texts[0];
+      const line = mockScene.lines[0];
+      const container = mockScene.containers[0];
+      const healthBarGraphics = mockScene.graphicsObjects[1];
+
+      // Then show
+      playerManager.setPlayerVisible('player-1', true);
+
+      expect(graphics.setVisible).toHaveBeenCalledWith(true);
+      expect(label.setVisible).toHaveBeenCalledWith(true);
+      expect(line.setVisible).toHaveBeenCalledWith(true);
+      expect(container.setVisible).toHaveBeenCalledWith(true);
+      expect(healthBarGraphics.setVisible).toHaveBeenCalledWith(true);
+    });
+
+    it('should handle non-existent player gracefully', () => {
+      expect(() => playerManager.setPlayerVisible('non-existent', false)).not.toThrow();
+    });
+  });
+
+  describe('teleportPlayer', () => {
+    it('should update player sprite position instantly', () => {
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+      playerManager.updatePlayers(playerStates);
+
+      const graphics = mockScene.graphicsObjects[0];
+
+      playerManager.teleportPlayer('player-1', { x: 500, y: 300 });
+
+      // ProceduralPlayerGraphics.setPosition triggers graphics position update
+      expect(graphics.clear).toHaveBeenCalled();
+    });
+
+    it('should update stored player state', () => {
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+      playerManager.updatePlayers(playerStates);
+
+      playerManager.teleportPlayer('player-1', { x: 500, y: 300 });
+
+      const state = playerManager.getPlayerState('player-1');
+      expect(state?.position).toEqual({ x: 500, y: 300 });
+    });
+
+    it('should update label position', () => {
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+      playerManager.updatePlayers(playerStates);
+
+      const label = mockScene.texts[0];
+
+      playerManager.teleportPlayer('player-1', { x: 500, y: 300 });
+
+      // Label should be positioned above the new position
+      expect(label.setPosition).toHaveBeenCalledWith(500, 258); // 300 - 64/2 - 10
+    });
+
+    it('should update aim indicator position', () => {
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: 0 },
+      ];
+      playerManager.updatePlayers(playerStates);
+
+      const line = mockScene.lines[0];
+
+      playerManager.teleportPlayer('player-1', { x: 500, y: 300 });
+
+      expect(line.setTo).toHaveBeenCalledWith(500, 300, 550, 300); // angle=0, endX = 500+50, endY = 300
+    });
+
+    it('should update weapon graphics position', () => {
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: 0 },
+      ];
+      playerManager.updatePlayers(playerStates);
+
+      const weapon = mockScene.containers[0];
+
+      playerManager.teleportPlayer('player-1', { x: 500, y: 300 });
+
+      expect(weapon.setPosition).toHaveBeenCalledWith(510, 300); // 500+10*cos(0), 300+10*sin(0)
+    });
+
+    it('should update health bar position', () => {
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+      playerManager.updatePlayers(playerStates);
+
+      const healthBarGraphics = mockScene.graphicsObjects[1];
+
+      playerManager.teleportPlayer('player-1', { x: 500, y: 300 });
+
+      // Health bar positioned via setPosition on its internal graphics
+      expect(healthBarGraphics.setPosition).toHaveBeenCalled();
+    });
+
+    it('should clear predicted state for local player', () => {
+      playerManager.setLocalPlayerId('player-1');
+
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+      playerManager.updatePlayers(playerStates);
+
+      // Set a predicted state
+      playerManager.setLocalPlayerPredictedPosition({
+        position: { x: 150, y: 250 },
+        velocity: { x: 10, y: 0 },
+      });
+
+      expect(playerManager.getLocalPlayerPredictedState()).not.toBeNull();
+
+      playerManager.teleportPlayer('player-1', { x: 500, y: 300 });
+
+      expect(playerManager.getLocalPlayerPredictedState()).toBeNull();
+    });
+
+    it('should handle non-existent player gracefully', () => {
+      expect(() => playerManager.teleportPlayer('non-existent', { x: 500, y: 300 })).not.toThrow();
+    });
+  });
+
+  describe('dead player visibility guard', () => {
+    it('should not call setVisible(true) on dead players in updatePlayers', () => {
+      playerManager.setLocalPlayerId('player-1');
+
+      // Create player alive first
+      const aliveState: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+      playerManager.updatePlayers(aliveState);
+
+      const graphics = mockScene.graphicsObjects[0];
+      graphics.setVisible.mockClear();
+
+      // Now mark as dead
+      const deadState: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, deathTime: clock.now() },
+      ];
+      playerManager.updatePlayers(deadState);
+
+      // setVisible should NOT have been called with true (the dead player guard)
+      const setVisibleCalls = graphics.setVisible.mock.calls as boolean[][];
+      const setVisibleTrueCalls = setVisibleCalls.filter(call => call[0] === true);
+      expect(setVisibleTrueCalls).toHaveLength(0);
     });
   });
 });

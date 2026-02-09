@@ -145,6 +145,13 @@ export class ProceduralWeaponGraphics {
   }
 
   /**
+   * Set visibility of the weapon
+   */
+  setVisible(visible: boolean): void {
+    this.container.setVisible(visible);
+  }
+
+  /**
    * Flip weapon vertically (for left/right aiming)
    */
   setFlipY(flip: boolean): void {

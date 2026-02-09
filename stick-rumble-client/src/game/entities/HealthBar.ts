@@ -43,6 +43,13 @@ export class HealthBar {
   }
 
   /**
+   * Set visibility of the health bar
+   */
+  setVisible(visible: boolean): void {
+    this.graphics.setVisible(visible);
+  }
+
+  /**
    * Destroy the health bar graphics
    */
   destroy(): void {
