@@ -424,8 +424,9 @@ export class GameSceneEventHandlers {
       const messageData = data as PlayerDeathData;
       console.log(`Player ${messageData.victimId} was killed by ${messageData.attackerId}`);
 
-      // If local player died, enter spectator mode
+      // If local player died, hide sprite and enter spectator mode
       if (messageData.victimId === this.playerManager.getLocalPlayerId()) {
+        this.playerManager.setPlayerVisible(messageData.victimId, false);
         this.spectator.enterSpectatorMode();
       }
     };
@@ -448,10 +449,14 @@ export class GameSceneEventHandlers {
       const messageData = data as PlayerRespawnData;
       console.log(`Player ${messageData.playerId} respawned at (${messageData.position.x}, ${messageData.position.y})`);
 
-      // If local player respawned, exit spectator mode and reset health
+      // If local player respawned, teleport to spawn position, show, then exit spectator mode
       if (messageData.playerId === this.playerManager.getLocalPlayerId()) {
         this.localPlayerHealth = messageData.health;
         this.getHealthBarUI().updateHealth(this.localPlayerHealth, 100, false); // Not regenerating on respawn
+
+        // Teleport to spawn position before showing to prevent flicker
+        this.playerManager.teleportPlayer(messageData.playerId, messageData.position);
+        this.playerManager.setPlayerVisible(messageData.playerId, true);
         this.spectator.exitSpectatorMode();
 
         // Camera follow will be restarted automatically on next player:move

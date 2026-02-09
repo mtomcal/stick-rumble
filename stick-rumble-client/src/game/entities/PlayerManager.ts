@@ -270,8 +270,9 @@ export class PlayerManager {
         // Apply transparency during invincibility frames (first 0.2s)
         // Note: Server tracks actual i-frame timing, this is visual only
         playerGraphics.setVisible(this._clock.now() % 200 < 100); // Flicker effect
-      } else {
-        // Clear rotation when not rolling
+      } else if (state.deathTime === undefined) {
+        // Clear rotation when not rolling and alive
+        // Skip setVisible(true) for dead players to prevent flicker on respawn
         playerGraphics.setRotation(0);
         playerGraphics.setVisible(true);
       }
@@ -604,6 +605,90 @@ export class PlayerManager {
     const weaponGraphics = this.weaponGraphics.get(playerId);
     if (weaponGraphics) {
       weaponGraphics.setWeapon(weaponType);
+    }
+  }
+
+  /**
+   * Set visibility of a player and all associated elements (label, aim indicator, weapon, health bar)
+   */
+  setPlayerVisible(playerId: string, visible: boolean): void {
+    const playerGraphics = this.players.get(playerId);
+    if (playerGraphics) {
+      playerGraphics.setVisible(visible);
+    }
+
+    const label = this.playerLabels.get(playerId);
+    if (label) {
+      label.setVisible(visible);
+    }
+
+    const aimIndicator = this.aimIndicators.get(playerId);
+    if (aimIndicator) {
+      aimIndicator.setVisible(visible);
+    }
+
+    const weaponGraphics = this.weaponGraphics.get(playerId);
+    if (weaponGraphics) {
+      weaponGraphics.setVisible(visible);
+    }
+
+    const healthBar = this.healthBars.get(playerId);
+    if (healthBar) {
+      healthBar.setVisible(visible);
+    }
+  }
+
+  /**
+   * Instantly teleport a player to a new position, updating stored state and sprite.
+   * Bypasses the normal update() flow for this one-time jump.
+   */
+  teleportPlayer(playerId: string, position: { x: number; y: number }): void {
+    // Update stored state
+    const state = this.playerStates.get(playerId);
+    if (state) {
+      state.position = { ...position };
+    }
+
+    // Clear predicted state if this is the local player
+    if (playerId === this.localPlayerId) {
+      this.localPlayerPredictedState = null;
+    }
+
+    // Update sprite position
+    const playerGraphics = this.players.get(playerId);
+    if (playerGraphics) {
+      playerGraphics.setPosition(position.x, position.y);
+    }
+
+    // Update label position
+    const label = this.playerLabels.get(playerId);
+    if (label) {
+      label.setPosition(position.x, position.y - PLAYER.HEIGHT / 2 - 10);
+    }
+
+    // Update aim indicator
+    const aimIndicator = this.aimIndicators.get(playerId);
+    if (aimIndicator) {
+      const aimAngle = state?.aimAngle ?? 0;
+      const endX = position.x + Math.cos(aimAngle) * AIM_INDICATOR_LENGTH;
+      const endY = position.y + Math.sin(aimAngle) * AIM_INDICATOR_LENGTH;
+      aimIndicator.setTo(position.x, position.y, endX, endY);
+    }
+
+    // Update weapon graphics position
+    const weaponGraphics = this.weaponGraphics.get(playerId);
+    if (weaponGraphics) {
+      const aimAngle = state?.aimAngle ?? 0;
+      const weaponOffsetX = Math.cos(aimAngle) * 10;
+      const weaponOffsetY = Math.sin(aimAngle) * 10;
+      weaponGraphics.setPosition(position.x + weaponOffsetX, position.y + weaponOffsetY);
+    }
+
+    // Update health bar position
+    const healthBar = this.healthBars.get(playerId);
+    if (healthBar) {
+      const healthBarY = position.y - PLAYER.HEIGHT / 2 - 8;
+      healthBar.setPosition(position.x, healthBarY);
     }
   }
 
