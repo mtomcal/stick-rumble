@@ -10,7 +10,7 @@ Stick Rumble is a real-time multiplayer stick figure arena shooter demonstrating
 
 ## Project Status
 
-**Current State: Playable Alpha** — The game runs, players can connect, shoot each other, and matches end. But it's rough around the edges.
+**Current State: Playable Alpha** — The game runs with full combat, 5 weapon types, client-side prediction, and netcode optimizations. Core gameplay loop is solid.
 
 ### Roadmap
 
@@ -18,20 +18,23 @@ Stick Rumble is a real-time multiplayer stick figure arena shooter demonstrating
 |------|------|--------|-------------|
 | 1 | Foundation | **Complete** | Project setup, WebSocket connection, basic movement |
 | 2 | Core Combat | **Complete** | Shooting, hit detection, health, death/respawn, match flow |
-| 3 | Weapon Systems | **In Progress** | 5 weapon types, melee/ranged, sprint, dodge roll, sprites |
-| 4 | Netcode | Not Started | Client prediction, interpolation, lag compensation |
+| 3 | Weapon Systems | **Complete** | 5 weapon types, melee/ranged, sprint, dodge roll, sprites |
+| 4 | Netcode | **Complete** | Client prediction, interpolation, lag compensation, delta compression |
 | 5 | Matchmaking | Not Started | Lobbies, game modes, party system |
 | 6 | Progression | Not Started | Player accounts, XP, unlocks, cosmetics |
 | 7 | Maps | Not Started | Multiple arenas, destructibles, spawn balancing |
 | 8 | Mobile | Not Started | Touch controls, cross-platform play |
 | 9 | Polish | Not Started | Particles, animations, sound design, UI polish |
 
-### Current Focus: Epic 3 (36% complete)
+### What's Been Built (Epics 1-4)
 
-Building the weapon system with 5 distinct weapons:
-- **Done**: Weapon pickup system, basic melee, basic ranged, reload, sprint, dodge roll
-- **In Progress**: Character sprites, health bar UI, hit effects
-- **Remaining**: Polish and balance tuning
+**Combat**: 5 weapons (Pistol, AK47, Shotgun, Bat, Katana) with weapon pickups, reload mechanics, damage falloff, and melee swing animations.
+
+**Movement**: Sprint, dodge roll with invincibility frames, client-side prediction for instant-feeling controls, and server reconciliation for corrections.
+
+**Netcode**: Full client-side prediction pipeline, smooth interpolation for other players, delta compression for bandwidth optimization, and lag compensation for fair hit detection. Includes an artificial latency testing tool for development.
+
+**Visuals**: Procedural character and weapon sprites, health bars, hit effects, kill feed, and match end screens — all validated by visual regression tests.
 
 ### Known Rough Edges
 
@@ -39,16 +42,10 @@ This is an active development project. Current limitations:
 
 | Area | Issue | Planned Fix |
 |------|-------|-------------|
-| **Netcode** | No client-side prediction — movement feels laggy on high latency | Epic 4: Full prediction/reconciliation system |
-| **Visuals** | Primitive shapes, no real sprites yet | Epic 3 (Story 3.7A): Character & weapon sprites |
-| **Game Feel** | No screen shake, minimal hit feedback | Epic 3 (Story 3.7B) + Epic 9 polish pass |
 | **Multiplayer** | No lobby system — players auto-matched | Epic 5: Full matchmaking system |
-| **Balance** | AK47 overpowered, melee underwhelming | Active tuning in Epic 3 with damage falloff |
+| **Balance** | Weapon tuning ongoing | Continued iteration with playtesting |
 | **Mobile** | Desktop only, no touch support | Epic 8: Mobile cross-platform |
-
-### Why Ship Rough?
-
-Each epic completes with a **playtesting gate** — a serious play session that catches integration bugs automated tests miss. The rough edges are documented and prioritized, not ignored. This is how real-time multiplayer games get built: iteratively, with human feedback in the loop.
+| **Polish** | Minimal particles and screen effects | Epic 9: Full polish pass |
 
 ---
 
@@ -56,9 +53,10 @@ Each epic completes with a **playtesting gate** — a serious play session that 
 
 | Metric | Value |
 |--------|-------|
-| **Test Cases** | 1,400+ (1,082 client + 383 server) |
-| **Visual Regression Screenshots** | 40 baseline images |
-| **WebSocket Message Types** | 27 (20 server→client, 7 client→server) |
+| **Test Cases** | 2,000+ (1,340 client + 682 server) |
+| **Visual Regression Screenshots** | 44 baseline images |
+| **WebSocket Message Types** | 28 (22 server→client, 6 client→server) |
+| **Issues Tracked** | 122 (121 closed) |
 | **Concurrent AI Agents** | Up to 8 parallel workers |
 | **Test Coverage Target** | >90% statement coverage |
 
@@ -84,7 +82,7 @@ Each epic completes with a **playtesting gate** — a serious play session that 
 │  │  ┌─────────────┐  ┌─────────────┐  ┌──────────────────────┐  │   │
 │  │  │ Unit Tests  │  │ Integration │  │ Visual Regression    │  │   │
 │  │  │ (Vitest)    │  │ Tests       │  │ (Playwright)         │  │   │
-│  │  │ 1,400+      │  │ WebSocket   │  │ 40 screenshots       │  │   │
+│  │  │ 2,000+      │  │ WebSocket   │  │ 44 screenshots       │  │   │
 │  │  └─────────────┘  └─────────────┘  └──────────────────────┘  │   │
 │  └──────────────────────────────────────────────────────────────┘   │
 │                                                                      │
@@ -165,11 +163,13 @@ All game state lives on the server. Clients send inputs, server calculates resul
 
 ### Real-Time State Synchronization
 - **20Hz tick rate** for player positions
-- **Custom WebSocket protocol** with 27 message types
-- **Client-side prediction** for responsive controls
+- **Custom WebSocket protocol** with 28 message types
+- **Client-side prediction** with server reconciliation for responsive controls
+- **Delta compression** for bandwidth optimization
+- **Lag compensation** for fair hit detection across latencies
 
 ### Comprehensive Test Coverage
-- **Unit tests** verify business logic (1,400+ tests)
+- **Unit tests** verify business logic (2,000+ tests)
 - **Integration tests** validate WebSocket communication
 - **Visual regression tests** catch rendering bugs that unit tests miss
 - **Human playtesting** remains essential—real-time games require human perception for final validation
