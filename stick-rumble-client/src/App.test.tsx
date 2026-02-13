@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import App from './App';
 import type { PhaserGameProps } from './ui/common/PhaserGame';
@@ -14,13 +14,31 @@ vi.mock('./ui/common/PhaserGame', () => ({
   },
 }));
 
-// Mock MatchEndScreen component
+// Mock MatchEndScreen component - expose onPlayAgain
+let mockOnPlayAgain: (() => void) | undefined;
 vi.mock('./ui/match/MatchEndScreen', () => ({
-  MatchEndScreen: ({ onClose }: { onClose: () => void }) => (
-    <div data-testid="match-end-screen-mock">
-      <button onClick={onClose}>Close Match End</button>
-    </div>
-  ),
+  MatchEndScreen: ({ onClose, onPlayAgain }: { onClose: () => void; onPlayAgain: () => void }) => {
+    mockOnPlayAgain = onPlayAgain;
+    return (
+      <div data-testid="match-end-screen-mock">
+        <button onClick={onClose}>Close Match End</button>
+        <button onClick={onPlayAgain}>Play Again</button>
+      </div>
+    );
+  },
+}));
+
+// Mock DebugNetworkPanel component - expose callbacks
+let mockOnLatencyChange: ((latency: number) => void) | undefined;
+let mockOnPacketLossChange: ((packetLoss: number) => void) | undefined;
+let mockOnEnabledChange: ((enabled: boolean) => void) | undefined;
+vi.mock('./ui/debug/DebugNetworkPanel', () => ({
+  DebugNetworkPanel: ({ onLatencyChange, onPacketLossChange, onEnabledChange }: any) => {
+    mockOnLatencyChange = onLatencyChange;
+    mockOnPacketLossChange = onPacketLossChange;
+    mockOnEnabledChange = onEnabledChange;
+    return <div data-testid="debug-panel-mock" />;
+  },
 }));
 
 describe('App', () => {
@@ -72,13 +90,16 @@ describe('App', () => {
     const { container } = render(<App />);
 
     const appContainer = container.querySelector('.app-container');
-    expect(appContainer?.children).toHaveLength(2);
+    expect(appContainer?.children).toHaveLength(3);
 
     // First child should be h1
     expect(appContainer?.children[0].tagName).toBe('H1');
 
     // Second child should be the PhaserGame (mocked as div)
     expect(appContainer?.children[1].getAttribute('data-testid')).toBe('phaser-game-mock');
+
+    // Third child is the DebugNetworkPanel (mocked as div)
+    expect(appContainer?.children[2].getAttribute('data-testid')).toBe('debug-panel-mock');
   });
 
   describe('Match End Integration', () => {
@@ -209,16 +230,183 @@ describe('App', () => {
       // Ensure window.restartGame is undefined
       delete window.restartGame;
 
-      // Should not throw when window.restartGame is undefined
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      // Click Play Again with no window.restartGame
+      act(() => {
+        mockOnPlayAgain?.();
+      });
+
+      expect(warnSpy).toHaveBeenCalledWith('App: window.restartGame is not available');
+      warnSpy.mockRestore();
+    });
+
+    it('should call window.restartGame and clear match end data via Play Again button', () => {
+      const { rerender } = render(<App />);
+
+      const mockMatchData: MatchEndData = {
+        winners: ['player-1'],
+        finalScores: [{ playerId: 'player-1', kills: 0, deaths: 0, xp: 50 }],
+        reason: 'time_expired',
+      };
+
+      // Show match end screen
+      act(() => {
+        mockOnMatchEnd?.(mockMatchData, 'player-1');
+      });
+      rerender(<App />);
+
+      expect(screen.getByTestId('match-end-screen-mock')).toBeInTheDocument();
+
+      // Mock window.restartGame
+      const mockRestartGame = vi.fn();
+      window.restartGame = mockRestartGame;
+
+      // Click Play Again button
+      act(() => {
+        fireEvent.click(screen.getByText('Play Again'));
+      });
+
+      expect(mockRestartGame).toHaveBeenCalledTimes(1);
+      // Match end screen should be hidden after play again
+      expect(screen.queryByTestId('match-end-screen-mock')).toBeNull();
+
+      delete window.restartGame;
+    });
+  });
+
+  describe('Network Simulator callbacks', () => {
+    afterEach(() => {
+      delete window.setNetworkSimulatorLatency;
+      delete window.setNetworkSimulatorPacketLoss;
+      delete window.setNetworkSimulatorEnabled;
+      delete window.getNetworkSimulatorStats;
+      delete window.onNetworkSimulatorToggle;
+    });
+
+    it('should call window.setNetworkSimulatorLatency when latency changes', () => {
+      const mockSetLatency = vi.fn();
+      window.setNetworkSimulatorLatency = mockSetLatency;
+
+      render(<App />);
+
+      act(() => {
+        mockOnLatencyChange?.(50);
+      });
+
+      expect(mockSetLatency).toHaveBeenCalledWith(50);
+    });
+
+    it('should not crash when window.setNetworkSimulatorLatency is undefined', () => {
+      delete window.setNetworkSimulatorLatency;
+
+      render(<App />);
+
       expect(() => {
         act(() => {
-          // This simulates handlePlayAgain being called
-          // It should check for window.restartGame existence
-          if (window.restartGame) {
-            window.restartGame();
-          }
+          mockOnLatencyChange?.(50);
         });
       }).not.toThrow();
+    });
+
+    it('should call window.setNetworkSimulatorPacketLoss when packet loss changes', () => {
+      const mockSetPacketLoss = vi.fn();
+      window.setNetworkSimulatorPacketLoss = mockSetPacketLoss;
+
+      render(<App />);
+
+      act(() => {
+        mockOnPacketLossChange?.(0.1);
+      });
+
+      expect(mockSetPacketLoss).toHaveBeenCalledWith(0.1);
+    });
+
+    it('should not crash when window.setNetworkSimulatorPacketLoss is undefined', () => {
+      delete window.setNetworkSimulatorPacketLoss;
+
+      render(<App />);
+
+      expect(() => {
+        act(() => {
+          mockOnPacketLossChange?.(0.1);
+        });
+      }).not.toThrow();
+    });
+
+    it('should call window.setNetworkSimulatorEnabled when enabled changes', () => {
+      const mockSetEnabled = vi.fn();
+      window.setNetworkSimulatorEnabled = mockSetEnabled;
+
+      render(<App />);
+
+      act(() => {
+        mockOnEnabledChange?.(true);
+      });
+
+      expect(mockSetEnabled).toHaveBeenCalledWith(true);
+    });
+
+    it('should not crash when window.setNetworkSimulatorEnabled is undefined', () => {
+      delete window.setNetworkSimulatorEnabled;
+
+      render(<App />);
+
+      expect(() => {
+        act(() => {
+          mockOnEnabledChange?.(true);
+        });
+      }).not.toThrow();
+    });
+
+    it('should refresh stats via onNetworkSimulatorToggle when stats available', () => {
+      const mockStats = { enabled: true, latency: 100, packetLoss: 0.05 };
+      window.getNetworkSimulatorStats = vi.fn().mockReturnValue(mockStats);
+
+      render(<App />);
+
+      // Trigger the toggle callback
+      act(() => {
+        window.onNetworkSimulatorToggle?.();
+      });
+
+      expect(window.getNetworkSimulatorStats).toHaveBeenCalled();
+    });
+
+    it('should handle onNetworkSimulatorToggle when getNetworkSimulatorStats is undefined', () => {
+      delete window.getNetworkSimulatorStats;
+
+      render(<App />);
+
+      // Should not crash
+      expect(() => {
+        act(() => {
+          window.onNetworkSimulatorToggle?.();
+        });
+      }).not.toThrow();
+    });
+
+    it('should handle onNetworkSimulatorToggle when getNetworkSimulatorStats returns null', () => {
+      window.getNetworkSimulatorStats = vi.fn().mockReturnValue(null);
+
+      render(<App />);
+
+      // Should not crash
+      expect(() => {
+        act(() => {
+          window.onNetworkSimulatorToggle?.();
+        });
+      }).not.toThrow();
+    });
+
+    it('should clean up onNetworkSimulatorToggle on unmount', () => {
+      const { unmount } = render(<App />);
+
+      expect(window.onNetworkSimulatorToggle).toBeDefined();
+
+      unmount();
+
+      expect(window.onNetworkSimulatorToggle).toBeUndefined();
     });
   });
 });
