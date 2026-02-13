@@ -1424,5 +1424,323 @@ describe('GameSceneEventHandlers', () => {
       // Verify dodge roll manager was NOT called for non-local player
       expect(mockDodgeRollManager.endRoll).not.toHaveBeenCalled();
     });
+
+    it('should show melee hit effect when damage type is melee', () => {
+      eventHandlers.setupEventHandlers();
+
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const playerDamagedHandler = handlerRefs.get('player:damaged');
+
+      const data = {
+        victimId: 'other-player',
+        attackerId: 'attacker',
+        damage: 50,
+        newHealth: 50,
+        projectileId: 'proj-123',
+        damageType: 'melee',
+      };
+
+      playerDamagedHandler?.(data);
+
+      // Should show melee hit effect, not bullet impact
+      expect(mockHitEffectManager.showMeleeHit).toHaveBeenCalledWith(100, 200);
+      expect(mockHitEffectManager.showBulletImpact).not.toHaveBeenCalled();
+    });
+
+    it('should show bullet impact when damage type is not melee', () => {
+      eventHandlers.setupEventHandlers();
+
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const playerDamagedHandler = handlerRefs.get('player:damaged');
+
+      const data = {
+        victimId: 'other-player',
+        attackerId: 'attacker',
+        damage: 25,
+        newHealth: 75,
+        projectileId: 'proj-123',
+        damageType: 'ranged',
+      };
+
+      playerDamagedHandler?.(data);
+
+      // Should show bullet impact, not melee hit
+      expect(mockHitEffectManager.showBulletImpact).toHaveBeenCalledWith(100, 200);
+      expect(mockHitEffectManager.showMeleeHit).not.toHaveBeenCalled();
+    });
+
+    it('should not show hit effect when victim position is null', () => {
+      eventHandlers.setupEventHandlers();
+
+      // Mock getPlayerPosition to return null
+      mockPlayerManager.getPlayerPosition = vi.fn().mockReturnValue(null);
+
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const playerDamagedHandler = handlerRefs.get('player:damaged');
+
+      const data = {
+        victimId: 'other-player',
+        attackerId: 'attacker',
+        damage: 25,
+        newHealth: 75,
+        projectileId: 'proj-123',
+      };
+
+      playerDamagedHandler?.(data);
+
+      // Should not show any hit effect
+      expect(mockHitEffectManager.showBulletImpact).not.toHaveBeenCalled();
+      expect(mockHitEffectManager.showMeleeHit).not.toHaveBeenCalled();
+    });
+
+    it('should handle weapon:state with Bat melee weapon type', () => {
+      const mockShootingManager = {
+        updateWeaponState: vi.fn(),
+        setWeaponType: vi.fn(),
+      };
+
+      eventHandlers.setShootingManager(mockShootingManager as any);
+      eventHandlers.setupEventHandlers();
+
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const weaponStateHandler = handlerRefs.get('weapon:state');
+
+      const data = {
+        weaponType: 'Bat',
+        ammo: 0,
+        maxAmmo: 0,
+        isReloading: false,
+      };
+
+      weaponStateHandler?.(data);
+
+      expect(mockShootingManager.setWeaponType).toHaveBeenCalledWith('Bat');
+    });
+
+    it('should handle weapon:state with Katana melee weapon type', () => {
+      const mockShootingManager = {
+        updateWeaponState: vi.fn(),
+        setWeaponType: vi.fn(),
+      };
+
+      eventHandlers.setShootingManager(mockShootingManager as any);
+      eventHandlers.setupEventHandlers();
+
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const weaponStateHandler = handlerRefs.get('weapon:state');
+
+      const data = {
+        weaponType: 'Katana',
+        ammo: 0,
+        maxAmmo: 0,
+        isReloading: false,
+      };
+
+      weaponStateHandler?.(data);
+
+      expect(mockShootingManager.setWeaponType).toHaveBeenCalledWith('Katana');
+    });
+
+    it('should update weapon type for local player on weapon pickup', () => {
+      eventHandlers.setupEventHandlers();
+
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const pickupConfirmedHandler = handlerRefs.get('weapon:pickup_confirmed');
+
+      const data = {
+        playerId: 'player-1', // Local player
+        crateId: 'crate-1',
+        weaponType: 'Shotgun',
+      };
+
+      pickupConfirmedHandler?.(data);
+
+      expect(eventHandlers.getCurrentWeaponType()).toBe('Shotgun');
+    });
+
+    it('should not update weapon type for non-local player on weapon pickup', () => {
+      eventHandlers.setupEventHandlers();
+
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const pickupConfirmedHandler = handlerRefs.get('weapon:pickup_confirmed');
+
+      const data = {
+        playerId: 'other-player', // Not local player
+        crateId: 'crate-1',
+        weaponType: 'AK47',
+      };
+
+      pickupConfirmedHandler?.(data);
+
+      // Default weapon type should remain unchanged
+      expect(eventHandlers.getCurrentWeaponType()).toBe('pistol');
+    });
+
+    it('should handle player:death for non-local player', () => {
+      eventHandlers.setupEventHandlers();
+
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const playerDeathHandler = handlerRefs.get('player:death');
+
+      const data = {
+        victimId: 'other-player',
+        attackerId: 'player-1',
+      };
+
+      playerDeathHandler?.(data);
+
+      // Should NOT enter spectator mode for non-local player death
+      expect(mockGameSceneSpectator.enterSpectatorMode).not.toHaveBeenCalled();
+    });
+
+    it('should handle player:respawn for non-local player', () => {
+      eventHandlers.setupEventHandlers();
+
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const playerRespawnHandler = handlerRefs.get('player:respawn');
+
+      const data = {
+        playerId: 'other-player',
+        position: { x: 200, y: 300 },
+        health: 100,
+      };
+
+      playerRespawnHandler?.(data);
+
+      // Should NOT exit spectator mode for non-local player respawn
+      expect(mockGameSceneSpectator.exitSpectatorMode).not.toHaveBeenCalled();
+    });
+
+    it('should skip player:move after match has ended', () => {
+      eventHandlers.setupEventHandlers();
+
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const matchEndedHandler = handlerRefs.get('match:ended');
+      const playerMoveHandler = handlerRefs.get('player:move');
+
+      // End the match first
+      matchEndedHandler?.({
+        winners: ['player-1'],
+        finalScores: [{ playerId: 'player-1', kills: 5, deaths: 2, xp: 500 }],
+        reason: 'time_limit',
+      });
+
+      vi.clearAllMocks();
+
+      // Now try player:move - should be skipped
+      playerMoveHandler?.({
+        players: [{ id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } }],
+      });
+
+      expect(mockPlayerManager.updatePlayers).not.toHaveBeenCalled();
+    });
+
+    it('should handle projectile:spawn when local player ID not set', () => {
+      // Create event handlers without local player
+      const noLocalPlayerManager = {
+        ...mockPlayerManager,
+        getLocalPlayerId: vi.fn().mockReturnValue(null),
+      } as unknown as PlayerManager;
+
+      const testHandlers = new GameSceneEventHandlers(
+        mockWsClient,
+        noLocalPlayerManager,
+        mockProjectileManager,
+        () => mockHealthBarUI,
+        mockKillFeedUI,
+        mockGameSceneUI,
+        mockGameSceneSpectator,
+        vi.fn(),
+        mockWeaponCrateManager,
+        mockPickupPromptUI,
+        mockMeleeWeaponManager,
+        mockHitEffectManager
+      );
+
+      testHandlers.setupEventHandlers();
+
+      const handlerRefs = (testHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const projectileSpawnHandler = handlerRefs.get('projectile:spawn');
+
+      const data = {
+        id: 'proj-1',
+        ownerId: 'player-1',
+        position: { x: 100, y: 200 },
+        velocity: { x: 10, y: 0 },
+        damage: 25,
+      };
+
+      // Should return early without spawning
+      projectileSpawnHandler?.(data);
+
+      expect(mockProjectileManager.spawnProjectile).not.toHaveBeenCalled();
+    });
+
+    it('should handle player:move with isFullSnapshot=false (delta mode)', () => {
+      eventHandlers.setupEventHandlers();
+
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const playerMoveHandler = handlerRefs.get('player:move');
+
+      const data = {
+        players: [
+          { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+        ],
+        isFullSnapshot: false,
+      };
+
+      playerMoveHandler?.(data);
+
+      // Should call updatePlayers with isDelta=true
+      expect(mockPlayerManager.updatePlayers).toHaveBeenCalledWith(data.players, { isDelta: true });
+    });
+
+    it('should process queued weapon spawns on room:joined', () => {
+      // Create event handlers without local player initially
+      let localPlayerId: string | null = null;
+      const dynamicPlayerManager = {
+        ...mockPlayerManager,
+        getLocalPlayerId: vi.fn(() => localPlayerId),
+        setLocalPlayerId: vi.fn((id: string) => { localPlayerId = id; }),
+      } as unknown as PlayerManager;
+
+      const testHandlers = new GameSceneEventHandlers(
+        mockWsClient,
+        dynamicPlayerManager,
+        mockProjectileManager,
+        () => mockHealthBarUI,
+        mockKillFeedUI,
+        mockGameSceneUI,
+        mockGameSceneSpectator,
+        vi.fn(),
+        mockWeaponCrateManager,
+        mockPickupPromptUI,
+        mockMeleeWeaponManager,
+        mockHitEffectManager
+      );
+
+      testHandlers.setupEventHandlers();
+
+      const handlerRefs = (testHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const weaponSpawnedHandler = handlerRefs.get('weapon:spawned');
+      const roomJoinedHandler = handlerRefs.get('room:joined');
+
+      // Queue weapon spawns before room is joined
+      weaponSpawnedHandler?.({
+        crates: [
+          { id: 'crate-1', position: { x: 100, y: 200 }, weaponType: 'AK47', isAvailable: true },
+        ],
+      });
+
+      expect(mockWeaponCrateManager.spawnCrate).not.toHaveBeenCalled();
+
+      // Now join the room
+      roomJoinedHandler?.({ playerId: 'player-1', roomId: 'room-1' });
+
+      // Queued weapon spawns should have been processed
+      expect(mockWeaponCrateManager.spawnCrate).toHaveBeenCalledWith(
+        { id: 'crate-1', position: { x: 100, y: 200 }, weaponType: 'AK47', isAvailable: true }
+      );
+    });
   });
 });
