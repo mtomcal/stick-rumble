@@ -74,11 +74,11 @@ Ordered by drift risk — do highest risk first, batch low-risk/no-change specs 
 - [x] 5. client-architecture.md
 - [x] 6. server-architecture.md
 - [x] 7. hit-detection.md
-- [ ] 8. player.md
-- [ ] 9. graphics.md
-- [ ] 10. shooting.md
-- [ ] 11. weapons.md
-- [ ] 12. overview.md
+- [x] 8. player.md
+- [x] 9. graphics.md
+- [x] 10. shooting.md
+- [x] 11. weapons.md
+- [x] 12. overview.md
 - [ ] 13. README.md
 - [ ] 14. rooms.md
 - [ ] 15. match.md
