@@ -1,7 +1,7 @@
 # Hit Detection
 
-> **Spec Version**: 1.0.0
-> **Last Updated**: 2026-02-02
+> **Spec Version**: 1.1.0
+> **Last Updated**: 2026-02-15
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [shooting.md](shooting.md), [arena.md](arena.md), [messages.md](messages.md)
 > **Depended By**: [match.md](match.md), [client-architecture.md](client-architecture.md), [server-architecture.md](server-architecture.md)
 
@@ -14,7 +14,11 @@ The hit detection system is the collision detection and damage application layer
 **Why server-authoritative hit detection?**
 1. **Anti-cheat**: Clients cannot lie about hit registration
 2. **Consistency**: All players see the same hit/miss results
-3. **Fairness**: Latency compensation is applied uniformly
+3. **Fairness**: Lag compensation rewinds positions using each player's RTT
+
+The system supports two collision modes:
+- **Projectile collision** (Uzi, AK47, Shotgun): AABB point-vs-rectangle check each tick
+- **Hitscan collision** (Pistol): Ray-circle intersection with lag-compensated position rewinding
 
 The system runs at **60 Hz** (every 16.67ms) as part of the main game tick, checking all active projectiles against all alive players. When a hit is detected, damage is applied, messages are broadcast, and death/kill tracking is updated.
 
@@ -483,6 +487,81 @@ func (p *PlayerState) IsInvincibleFromRoll() bool {
     return elapsed.Seconds() < DodgeRollInvincibilityDuration
 }
 ```
+
+---
+
+### Hitscan Hit Detection (Pistol)
+
+Hitscan weapons use ray-circle collision with lag compensation, processed in `gameserver.go:processHitscanShot()`.
+
+**Why hitscan for Pistol?** The Pistol is configured as `isHitscan: true` in `weapon-configs.json`. Hitscan means the bullet hits instantly (no travel time), requiring a raycast from the shooter's position in the aim direction.
+
+**Algorithm:**
+
+```
+function processHitscanShot(shooterID, aimAngle, clientTimestamp):
+    // 1. Get shooter's RTT for lag compensation
+    shooterRTT = getPlayerRTT(shooterID)  // via PingTracker
+
+    // 2. Calculate rewind time (capped at 150ms)
+    rewindDuration = min(shooterRTT, 150ms)
+    queryTime = now() - rewindDuration
+
+    // 3. Raycast against all alive players at REWOUND positions
+    closestHit = nil
+    closestDistance = infinity
+
+    for each player (not shooter, alive, not invulnerable):
+        // Get where victim WAS at queryTime
+        victimPosition = positionHistory.GetPositionAt(playerID, queryTime)
+        if not found: use current position as fallback
+
+        // Ray-circle intersection
+        if raycastHit(shooterPos, aimAngle, victimPosition, radius=16px, maxRange):
+            if hitDistance < closestDistance:
+                closestHit = player
+                closestDistance = hitDistance
+
+    // 4. Apply damage to closest hit
+    if closestHit != nil:
+        applyDamage(closestHit, weaponDamage, shooterID)
+```
+
+**Ray-circle intersection** (`raycastHit()`):
+1. Project victim center onto ray direction vector
+2. If projection is negative or beyond max range: miss
+3. Calculate perpendicular distance from ray to victim center
+4. If distance ≤ radius (PlayerWidth/2 = 16px): hit
+
+**Why 150ms cap?** Prevents players with extremely high latency from "seeing the past" too far back. At 150ms, positions are at most 150ms stale — beyond that, the advantage becomes unfair to other players.
+
+### Lag Compensation via Position History
+
+The position history system records snapshots every physics tick and replays them for hit detection.
+
+**Recording (every tick at 60Hz):**
+```
+function recordPositionSnapshots():
+    for each player in world:
+        positionHistory.RecordSnapshot(player.ID, player.Position, now())
+```
+
+Called in `gameserver.go` tick loop. Stores 60 snapshots per player (1 second of history).
+
+**Querying (on hitscan shot):**
+```
+position = positionHistory.GetPositionAt(playerID, queryTime)
+```
+
+If queryTime falls between two recorded snapshots, the position is **linearly interpolated**:
+```
+t = (queryTime - before.timestamp) / (after.timestamp - before.timestamp)
+position = before.position + t * (after.position - before.position)
+```
+
+**Why only 1 second of history?** RTT is capped at 150ms, so 1 second provides ample margin. Storing more would waste memory and never be queried.
+
+See [server-architecture.md](server-architecture.md#lag-compensation-subsystem-epic-4) for the PositionHistory implementation details.
 
 ---
 
@@ -1050,3 +1129,4 @@ func TestProjectileOutOfBounds(t *testing.T) {
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification |
+| 1.1.0 | 2026-02-15 | Added Hitscan Hit Detection section (Pistol ray-circle collision). Added Lag Compensation via Position History section (RTT-based rewind, 150ms cap, linear interpolation). Updated overview to distinguish projectile vs hitscan collision modes. |
