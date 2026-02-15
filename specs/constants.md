@@ -1,7 +1,7 @@
 # Constants
 
-> **Spec Version**: 1.0.0
-> **Last Updated**: 2026-02-02
+> **Spec Version**: 1.1.0
+> **Last Updated**: 2026-02-15
 > **Depends On**: None (foundational spec)
 > **Depended By**: [arena.md](arena.md), [player.md](player.md), [movement.md](movement.md), [dodge-roll.md](dodge-roll.md), [weapons.md](weapons.md), [shooting.md](shooting.md), [melee.md](melee.md), [hit-detection.md](hit-detection.md), [match.md](match.md), [rooms.md](rooms.md), [networking.md](networking.md), [audio.md](audio.md), [ui.md](ui.md), [graphics.md](graphics.md)
 
@@ -103,18 +103,18 @@ const (
 | SPRINT_SPEED | 300 | px/s | 1.5x normal speed. Meaningful advantage for positioning, but with accuracy penalty. |
 | SPRINT_MULTIPLIER | 1.5 | ratio | Applied to weapon spread while sprinting. Encourages stop-and-shoot gameplay. |
 | ACCELERATION | 50 | px/s² | Reaches full speed in 4 seconds (200/50). Smooth start without feeling sluggish. |
-| DECELERATION | 50 | px/s² | Same as acceleration for symmetric feel. No "ice physics". |
+| DECELERATION | 1500 | px/s² | Near-instant stop (~0.13s from full speed). Prevents "ice physics" sliding; inputs feel crisp and responsive. |
 
 **Why 200 px/s**: At 60 FPS, player moves 3.33 px/frame. This is smooth pixel movement without subpixel jitter issues.
 
-**Why symmetric accel/decel**: Makes movement feel responsive and predictable. Asymmetry (e.g., faster stopping) felt unnatural in testing.
+**Why asymmetric accel/decel**: Acceleration is gradual (50 px/s²) for smooth ramp-up, but deceleration is near-instant (1500 px/s²) so players stop within ~0.13 seconds when releasing input. This prevents "sliding on ice" and makes directional changes feel crisp — critical for client-side prediction accuracy.
 
 **TypeScript:**
 ```typescript
 export const MOVEMENT = {
   SPEED: 200,
   ACCELERATION: 50,
-  DECELERATION: 50,
+  DECELERATION: 1500,
 } as const;
 ```
 
@@ -125,7 +125,7 @@ const (
     SprintSpeed            = 300.0
     SprintSpreadMultiplier = 1.5
     Acceleration           = 50.0
-    Deceleration           = 50.0
+    Deceleration           = 1500.0
 )
 ```
 
@@ -536,3 +536,4 @@ if (distance > maxRange * 0.5):
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification extracted from codebase |
+| 1.1.0 | 2026-02-15 | Updated DECELERATION from 50 to 1500 px/s² to match source code (changed during Epic 4 client-side prediction work). Updated rationale text and code snippets. |
