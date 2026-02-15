@@ -69,7 +69,7 @@ Ordered by drift risk — do highest risk first, batch low-risk/no-change specs 
 
 - [x] 1. constants.md
 - [x] 2. movement.md
-- [ ] 3. networking.md
+- [x] 3. networking.md
 - [ ] 4. messages.md
 - [ ] 5. client-architecture.md
 - [ ] 6. server-architecture.md
