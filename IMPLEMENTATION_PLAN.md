@@ -71,7 +71,7 @@ Ordered by drift risk — do highest risk first, batch low-risk/no-change specs 
 - [x] 2. movement.md
 - [x] 3. networking.md
 - [x] 4. messages.md
-- [ ] 5. client-architecture.md
+- [x] 5. client-architecture.md
 - [ ] 6. server-architecture.md
 - [ ] 7. hit-detection.md
 - [ ] 8. player.md
