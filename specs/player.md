@@ -1,7 +1,7 @@
 # Player
 
-> **Spec Version**: 1.0.0
-> **Last Updated**: 2026-02-02
+> **Spec Version**: 1.1.0
+> **Last Updated**: 2026-02-15
 > **Depends On**: [constants.md](constants.md), [arena.md](arena.md)
 > **Depended By**: [movement.md](movement.md), [dodge-roll.md](dodge-roll.md), [weapons.md](weapons.md), [shooting.md](shooting.md), [melee.md](melee.md), [hit-detection.md](hit-detection.md), [match.md](match.md), [graphics.md](graphics.md), [ui.md](ui.md)
 
@@ -85,10 +85,22 @@ type PlayerState struct {
     lastDamageTime         time.Time
     regenAccumulator       float64
     input                  InputState
+    inputSequence          uint64           // [NEW] Last processed input sequence for prediction reconciliation
     rollState              RollState
+    correctionStats        CorrectionStats  // [NEW] Anti-cheat movement validation stats
     clock                  Clock
     mu                     sync.RWMutex
 }
+
+// CorrectionStats tracks anti-cheat movement validation metrics per player
+type CorrectionStats struct {
+    TotalUpdates     int
+    TotalCorrections int
+    LastCorrectionAt time.Time
+}
+
+// GetCorrectionRate returns the ratio of corrections to total updates
+func (cs *CorrectionStats) GetCorrectionRate() float64
 ```
 
 ### PlayerState (Client)
@@ -951,3 +963,4 @@ func TestOverkillDamage(t *testing.T) {
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification extracted from codebase |
+| 1.1.0 | 2026-02-15 | Added `inputSequence` field for prediction reconciliation. Added `CorrectionStats` struct for anti-cheat movement validation tracking. |

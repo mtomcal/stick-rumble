@@ -1,7 +1,7 @@
 # Shooting
 
-> **Spec Version**: 1.0.0
-> **Last Updated**: 2026-02-02
+> **Spec Version**: 1.1.0
+> **Last Updated**: 2026-02-15
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [messages.md](messages.md)
 > **Depended By**: [hit-detection.md](hit-detection.md), [client-architecture.md](client-architecture.md), [server-architecture.md](server-architecture.md)
 
@@ -227,7 +227,8 @@ class ShootingManager {
 
 **Go (Server):**
 ```go
-func (gs *GameServer) PlayerShoot(playerID string, aimAngle float64) ShootResult {
+func (gs *GameServer) PlayerShoot(playerID string, aimAngle float64, clientTimestamp int64) ShootResult {
+    // clientTimestamp used for lag compensation on hitscan weapons — see hit-detection.md
     gs.mu.Lock()
     defer gs.mu.Unlock()
 
@@ -1045,3 +1046,4 @@ test "dead player cannot shoot":
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification with complete shooting mechanics |
+| 1.1.0 | 2026-02-15 | Added `clientTimestamp` parameter to `PlayerShoot()` for lag compensation on hitscan weapons. |
