@@ -87,8 +87,8 @@ Ordered by drift risk — do highest risk first, batch low-risk/no-change specs 
 - [x] 18. arena.md
 - [x] 19. ui.md
 - [x] 20. audio.md
-- [ ] 21. test-index.md
-- [ ] 22. spec-of-specs-plan.md
+- [x] 21. test-index.md
+- [x] 22. spec-of-specs-plan.md
 
 ## Discoveries
 

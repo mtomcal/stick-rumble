@@ -986,6 +986,38 @@ The spec suite is now ready for AI agents to implement Stick Rumble from scratch
 
 ---
 
+### 2026-02-15: Post-Epic 4 Spec Audit
+
+**Objective:** Audit all 21 specs against codebase after Epic 4 (Client-Side Prediction, Server Reconciliation, Interpolation, Delta Compression, Lag Compensation, Network Simulator) was implemented.
+
+**Changes made (12 specs updated, 9 verified unchanged):**
+
+| Spec | Changes Applied |
+|------|----------------|
+| constants.md | DECELERATION 50→1500 px/s² |
+| movement.md | Rewrote client-side prediction section (PredictionEngine, reconciliation, InterpolationEngine) |
+| networking.md | Added Delta Compression, Ping Tracking, Network Simulator, Input Sequence Numbers sections |
+| messages.md | Added `sequence` on input:state, `clientTimestamp` on player:shoot, state:snapshot/state:delta messages |
+| client-architecture.md | Added physics/, simulation/, ui/debug/ dirs; PredictionEngine, InterpolationEngine, GameSimulation, NetworkSimulator |
+| server-architecture.md | Added Lag Compensation subsystem (PingTracker, PositionHistory, DeltaTracker, NetworkSimulator, WeaponFactory) |
+| hit-detection.md | Added Hitscan Hit Detection and Lag Compensation via Position History sections |
+| player.md | Added inputSequence and CorrectionStats fields |
+| shooting.md | Added clientTimestamp parameter to PlayerShoot() |
+| rooms.md | Added PingTracker to Player struct |
+| ui.md | Added Debug Network Panel section |
+| README.md | Updated Quick Reference Table with 6 missing specs, corrected counts |
+| test-index.md | Added 15 Epic 4 Netcode test scenarios (total: 194) |
+
+**Specs verified unchanged (no drift):**
+- graphics.md, weapons.md, overview.md, match.md, dodge-roll.md, melee.md, arena.md, audio.md
+
+**Contract validation updated:**
+- WebSocket Messages: 6 Client→Server, 22 Server→Client (was 20)
+- events-schema: state:snapshot and state:delta added
+- DECELERATION constant: 1500 px/s² in both client and server
+
+---
+
 ## Final Validation Summary (2026-02-02)
 
 All contracts have been validated and are in sync:
