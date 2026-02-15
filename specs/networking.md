@@ -1,7 +1,7 @@
 # Networking
 
-> **Spec Version**: 1.0.0
-> **Last Updated**: 2026-02-02
+> **Spec Version**: 1.1.0
+> **Last Updated**: 2026-02-15
 > **Depends On**: [messages.md](messages.md), [constants.md](constants.md)
 > **Depended By**: [rooms.md](rooms.md), [client-architecture.md](client-architecture.md), [server-architecture.md](server-architecture.md)
 
@@ -31,6 +31,20 @@ The networking layer provides real-time bidirectional communication between the 
 | Browser WebSocket API | Native | Client WebSocket implementation |
 | Ajv | 8.x | Client-side JSON Schema validation |
 | @sinclair/typebox | 0.32.x | Schema definition and type inference |
+
+### File Locations
+
+| File | Purpose |
+|------|---------|
+| `stick-rumble-server/internal/network/websocket_handler.go` | WebSocket upgrade, message routing, ping/pong RTT |
+| `stick-rumble-server/internal/network/message_processor.go` | Per-message-type handlers, broadcast callbacks |
+| `stick-rumble-server/internal/network/broadcast_helper.go` | Player state broadcasts with delta compression |
+| `stick-rumble-server/internal/network/delta_tracker.go` | Per-client delta compression state tracking |
+| `stick-rumble-server/internal/network/network_simulator.go` | Server-side artificial latency/packet loss |
+| `stick-rumble-server/internal/game/ping_tracker.go` | RTT measurement (circular buffer of 5) |
+| `stick-rumble-server/internal/game/position_history.go` | Position rewind buffer for lag compensation |
+| `stick-rumble-client/src/game/network/WebSocketClient.ts` | Client WebSocket wrapper with reconnect |
+| `stick-rumble-client/src/game/network/NetworkSimulator.ts` | Client-side artificial latency/packet loss |
 
 ### Spec Dependencies
 
@@ -646,6 +660,155 @@ for msg := range sendChan {
 
 ---
 
+## Delta Compression
+
+The server tracks per-client state and only sends changes, reducing bandwidth for the 20 Hz broadcast.
+
+**Why delta compression?** Sending full state for 8 players × 20 Hz = 160 full messages/second per client. Most frames only 1-2 players change position. Delta compression cuts bandwidth by ~60-80%.
+
+### Message Types
+
+| Type | When Sent | Content |
+|------|-----------|---------|
+| `state:snapshot` | Every 1 second (or first update) | Full state: all players, projectiles, weapon crates |
+| `state:delta` | Every 50ms between snapshots | Only changed players, added/removed projectiles |
+
+Both message types include `lastProcessedSequence` — a map of playerID → input sequence number, used by clients for reconciliation (see [movement.md](movement.md#server-reconciliation)).
+
+### Change Detection Thresholds
+
+| Property | Threshold | Why |
+|----------|-----------|-----|
+| Position (x, y) | 0.1 px | Sub-pixel changes are invisible |
+| Velocity (vx, vy) | 0.1 px/s | Negligible motion |
+| Aim angle | 0.01 rad (~0.57°) | Imperceptible rotation |
+| Health | Any change | Always relevant |
+| Boolean flags | Any change | isDead, isInvulnerable, isRolling, isRegeneratingHealth |
+| Stats (kills, deaths, XP) | Any change | Always relevant |
+
+### Per-Client State Tracking
+
+```go
+type ClientState struct {
+    LastSnapshot       time.Time
+    LastPlayerStates   map[string]game.PlayerStateSnapshot
+    LastProjectileIDs  map[string]bool
+    LastWeaponCrateIDs map[string]bool
+}
+```
+
+`DeltaTracker` maintains a `ClientState` per connected client. On each broadcast cycle:
+
+1. Check `ShouldSendSnapshot(clientID)` — returns true if ≥1 second since last full snapshot
+2. If snapshot: send `state:snapshot` with all entities, reset client state
+3. If delta: compute changed players via `ComputePlayerDelta()`, compute added/removed projectiles via `ComputeProjectileDelta()`, send `state:delta`
+
+### Snapshot vs Delta Payload
+
+**`state:snapshot`:**
+```json
+{
+  "players": [{ "id": "...", "x": 100, "y": 200, "vx": 0, "vy": 0, "health": 100, ... }],
+  "projectiles": [{ "id": "...", "x": 500, "y": 300, ... }],
+  "weaponCrates": [{ "id": "...", "type": "uzi", "available": true, ... }],
+  "lastProcessedSequence": { "player1": 42, "player2": 38 },
+  "correctedPlayers": ["player1"]
+}
+```
+
+**`state:delta`:**
+```json
+{
+  "players": [{ "id": "...", "x": 101, "y": 200, ... }],
+  "projectilesAdded": [{ "id": "...", ... }],
+  "projectilesRemoved": ["proj-123"],
+  "lastProcessedSequence": { "player1": 43, "player2": 39 },
+  "correctedPlayers": []
+}
+```
+
+---
+
+## Ping Tracking
+
+RTT is measured using WebSocket ping/pong frames for lag compensation.
+
+**Why ping/pong?** WebSocket has built-in ping/pong support (RFC 6455). The server sends a ping every 2 seconds; the browser automatically responds with a pong. RTT = pong receive time − ping send time.
+
+### Implementation
+
+```go
+type PingTracker struct {
+    measurements [5]int64     // Last 5 RTT samples (milliseconds)
+    index        int          // Circular write position
+    count        int          // Samples recorded (max 5)
+}
+```
+
+- `RecordRTT(rtt)` — stores millisecond RTT in circular buffer
+- `GetRTT()` — returns average of all recorded measurements
+- Ping interval: 2 seconds (set in `websocket_handler.go`)
+- Log: `"Player %s RTT: %dms (avg: %dms)"`
+
+**Why 5 samples?** Averaging 5 measurements (10 seconds of pings) smooths out jitter while remaining responsive to network changes.
+
+### Integration with Lag Compensation
+
+The average RTT from `PingTracker.GetRTT()` is used by the hit detection system to rewind player positions. See [hit-detection.md](hit-detection.md) for the rewinding algorithm.
+
+---
+
+## Network Simulator
+
+Both server and client support artificial network conditions for testing prediction, reconciliation, and interpolation under degraded networks.
+
+### Server-Side (`network_simulator.go`)
+
+Configured via environment variables:
+
+| Variable | Range | Default | Purpose |
+|----------|-------|---------|---------|
+| `SIMULATE_LATENCY` | 0–300 ms | 0 (disabled) | Base one-way latency |
+| `SIMULATE_PACKET_LOSS` | 0–20% | 0 (disabled) | Random packet drop rate |
+
+**Jitter**: ±20ms random variation added to base latency.
+
+**Integration**: Wraps `conn.WriteMessage()` in the write goroutine. If enabled, messages are delayed via `time.AfterFunc()` and randomly dropped.
+
+### Client-Side (`NetworkSimulator.ts`)
+
+Mirrors server-side API:
+
+```typescript
+interface NetworkSimulatorStats {
+  enabled: boolean;
+  latency: number;
+  packetLoss: number;
+}
+```
+
+- `simulateSend(message, sendFn)` — delays outgoing messages
+- `simulateReceive(message, receiveFn)` — delays incoming messages
+- `calculateDelay()` — returns latency ± 20ms jitter
+- `shouldDropPacket()` — random drop based on loss percentage
+
+---
+
+## Input Sequence Numbers
+
+Every `input:state` message includes a `sequence` number for client-side prediction reconciliation.
+
+**Flow:**
+1. Client assigns incrementing sequence number to each input
+2. Server processes input and tracks `lastProcessedSequence` per player
+3. Server includes `lastProcessedSequence` map in every `state:snapshot` and `state:delta`
+4. Client discards input history entries with sequence ≤ `lastProcessedSequence`
+5. Client replays remaining (unprocessed) inputs on top of server state
+
+See [movement.md](movement.md#server-reconciliation) for the full reconciliation algorithm.
+
+---
+
 ## Implementation Notes
 
 ### TypeScript (Client)
@@ -980,3 +1143,4 @@ func TestGracefulShutdown(t *testing.T) {
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification |
+| 1.1.0 | 2026-02-15 | Added Delta Compression section (state:snapshot/state:delta, per-client tracking, change thresholds). Added Ping Tracking section (ping/pong RTT, circular buffer). Added Network Simulator section (server + client, env vars). Added Input Sequence Numbers section. Added File Locations table with new files (delta_tracker.go, ping_tracker.go, position_history.go, network_simulator.go, NetworkSimulator.ts, message_processor.go, broadcast_helper.go). |
