@@ -5,7 +5,7 @@ Launch an interactive visual debugging session for investigating rendering and g
 ## Context
 - Working on: [epic/feature area - to be filled in by user]
 - Test harness: http://localhost:5173/
-- Known bugs to investigate: [list from beads or your notes]
+- Known bugs to investigate: [list from your notes]
 
 ## Session Rules
 
@@ -21,7 +21,7 @@ Launch an interactive visual debugging session for investigating rendering and g
 
 4. **Checkpoints**: If user says "checkpoint", dump current state to the session log
 
-5. **Wrap up**: If user says "wrap up", summarize what's fixed, what's still broken, and update relevant beads
+5. **Wrap up**: If user says "wrap up", summarize what's fixed, what's still broken
 
 ## Session Workflow
 
@@ -42,7 +42,7 @@ Launch an interactive visual debugging session for investigating rendering and g
 │  "checkpoint"                │                              │
 │                              │  Writes current state to log │
 │  "wrap up"                   │                              │
-│                              │  Summarizes, updates beads   │
+│                              │  Summarizes findings         │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -67,7 +67,7 @@ When this skill is invoked:
 2. **Ask the user**:
    - What feature area they're debugging (e.g., melee weapons, projectiles, player rendering)
    - What they currently see in the test harness
-   - Any specific beads issues to reference
+   - Any specific issues to reference
 
 3. **Begin the debug loop** based on user observations
 
@@ -77,7 +77,7 @@ When this skill is invoked:
 ## Commands During Session
 
 - **"checkpoint"** - Save current progress to session log
-- **"wrap up"** - End session with summary and beads updates
+- **"wrap up"** - End session with summary
 - **"hypothesis: [text]"** - Record a specific hypothesis
 - **"try: [approach]"** - Request a specific debugging approach
 

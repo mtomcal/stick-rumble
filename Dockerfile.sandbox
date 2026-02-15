@@ -1,0 +1,48 @@
+FROM ubuntu:24.04
+
+# Base tools required by Claude Code, git, and project builds
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        git jq curl ca-certificates gnupg \
+        libicu74 libstdc++6 \
+        make \
+    && rm -rf /var/lib/apt/lists/*
+
+# Node.js 22 via NodeSource
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt-get install -y --no-install-recommends nodejs && \
+    rm -rf /var/lib/apt/lists/*
+
+# Go 1.24.1 via official tarball
+RUN curl -fsSL https://go.dev/dl/go1.24.1.linux-amd64.tar.gz | tar -C /usr/local -xz
+ENV PATH="/usr/local/go/bin:${PATH}"
+
+# Claude Code CLI
+RUN npm install -g @anthropic-ai/claude-code@2.1.42
+
+# Run as non-root user matching host UID (avoids permission issues on bind mounts)
+ARG USER_ID=1000
+ARG GROUP_ID=1000
+RUN if getent passwd $USER_ID >/dev/null; then userdel -r $(getent passwd $USER_ID | cut -d: -f1); fi && \
+    if getent group $GROUP_ID >/dev/null; then groupdel $(getent group $GROUP_ID | cut -d: -f1) 2>/dev/null || true; fi && \
+    groupadd -g $GROUP_ID loopuser && \
+    useradd -m -u $USER_ID -g $GROUP_ID loopuser
+
+# Pre-configure Claude Code to skip first-time theme picker
+RUN mkdir -p /home/loopuser/.claude && \
+    echo '{"theme":"dark"}' > /home/loopuser/.claude/settings.local.json && \
+    chown -R $USER_ID:$GROUP_ID /home/loopuser/.claude
+
+USER loopuser
+
+# Go module cache in home dir
+ENV GOPATH="/home/loopuser/go"
+ENV PATH="${GOPATH}/bin:${PATH}"
+
+# Git auth: use GH_TOKEN env var for HTTPS pushes (no SSH keys needed)
+RUN git config --global credential.https://github.com.helper \
+    '!f() { echo "protocol=https"; echo "host=github.com"; echo "username=x-access-token"; echo "password=$GH_TOKEN"; }; f'
+
+WORKDIR /workspace
+ENTRYPOINT []
+CMD ["bash"]

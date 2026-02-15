@@ -221,7 +221,6 @@ So that updates are deployed reliably and quickly.
 ### Story 9.5A: Backend Server Deployment to Cloud VPS
 
 **MOVED FROM EPIC 1:** Production deployment belongs in polish/launch epic.
-**NOTE:** Not yet added to Beads - will be added when Epic 8 is complete.
 
 As a developer,
 I want the backend Go server deployed to a cloud VPS with systemd service,
@@ -255,7 +254,6 @@ So that the game can be tested and played remotely in production.
 ### Story 9.5B: Frontend Deployment and SSL/TLS Configuration
 
 **MOVED FROM EPIC 1:** SSL/TLS configuration for production launch.
-**NOTE:** Not yet added to Beads - will be added when Epic 8 is complete.
 
 As a developer,
 I want the frontend deployed with SSL/TLS and configured to connect to the production backend,
