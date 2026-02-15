@@ -1,7 +1,7 @@
 # Stick Rumble Specification Suite
 
-> **Version**: 1.0.0
-> **Last Updated**: 2026-02-02
+> **Version**: 1.1.0
+> **Last Updated**: 2026-02-15
 > **Purpose**: Complete specification for recreating Stick Rumble from scratch
 
 ---
@@ -159,8 +159,8 @@ For an AI agent recreating Stick Rumble from scratch, read specs in this order:
 | [constants.md](constants.md) | All magic numbers with rationale (speeds, damage, timing) | ~650 |
 | [arena.md](arena.md) | 1920x1080 world, boundaries, spawn points, collision | ~450 |
 | [player.md](player.md) | 100 HP, 5s regen delay, 3s respawn, 2s invuln | ~550 |
-| [movement.md](movement.md) | 200/300 px/s walk/sprint, 50 px/s² accel/decel | ~520 |
-| [messages.md](messages.md) | 7 client→server, 19 server→client message types | ~950 |
+| [movement.md](movement.md) | 200/300 px/s walk/sprint, 50/1500 px/s² accel/decel | ~620 |
+| [messages.md](messages.md) | 6 client→server, 22 server→client message types | ~1100 |
 | [networking.md](networking.md) | WebSocket lifecycle, reconnect, graceful shutdown | ~980 |
 | [rooms.md](rooms.md) | 2-8 players, auto-matchmaking, broadcast patterns | ~420 |
 | [weapons.md](weapons.md) | Pistol, Uzi, AK47, Shotgun, Bat, Katana stats | ~750 |
@@ -169,7 +169,12 @@ For an AI agent recreating Stick Rumble from scratch, read specs in this order:
 | [melee.md](melee.md) | Range + arc detection, knockback, multi-hit | ~580 |
 | [dodge-roll.md](dodge-roll.md) | 400ms roll, 200ms i-frames, 3s cooldown | ~720 |
 | [match.md](match.md) | 20 kills or 7 minutes, WAITING→ACTIVE→ENDED | ~750 |
-| [client-architecture.md](client-architecture.md) | Phaser scenes, 8 manager classes, rendering | ~750 |
+| [client-architecture.md](client-architecture.md) | Phaser scenes, managers, prediction, interpolation | ~850 |
+| [server-architecture.md](server-architecture.md) | Dual-loop engine, lag compensation, delta compression | ~1200 |
+| [graphics.md](graphics.md) | Procedural stick figures, weapons, effects, death visuals | ~800 |
+| [audio.md](audio.md) | Positional audio, weapon sounds, UI feedback | ~500 |
+| [overview.md](overview.md) | Architecture philosophy, prediction/reconciliation patterns | ~300 |
+| [test-index.md](test-index.md) | Cross-reference of all test scenarios across specs | ~400 |
 
 ---
 
@@ -341,3 +346,4 @@ Test scenarios use the format `TS-{SPEC}-{NUMBER}`:
 |---------|------|---------|
 | 1.0.1 | 2026-02-02 | Added audio.md spec (19 specs complete) |
 | 1.0.0 | 2026-02-02 | Initial specification suite with 14 complete specs |
+| 1.1.0 | 2026-02-15 | Updated Quick Reference Table: added server-architecture, graphics, audio, overview, test-index specs. Updated movement.md line counts (deceleration change). Updated messages.md counts (6 client→server, 22 server→client). |

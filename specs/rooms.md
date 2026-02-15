@@ -1,7 +1,7 @@
 # Rooms
 
-> **Spec Version**: 1.0.0
-> **Last Updated**: 2026-02-02
+> **Spec Version**: 1.1.0
+> **Last Updated**: 2026-02-15
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [networking.md](networking.md), [messages.md](messages.md)
 > **Depended By**: [match.md](match.md), [server-architecture.md](server-architecture.md)
 
@@ -66,8 +66,9 @@ A minimal player representation used for room membership and message routing.
 **Go:**
 ```go
 type Player struct {
-    ID       string      // UUID assigned on connection
-    SendChan chan []byte // Buffered channel for outgoing messages
+    ID          string       // UUID assigned on connection
+    SendChan    chan []byte  // Buffered channel for outgoing messages
+    PingTracker *PingTracker // [NEW] Per-player RTT measurement for lag compensation
 }
 ```
 
@@ -859,3 +860,4 @@ test "tab reload joins existing room":
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification |
+| 1.1.0 | 2026-02-15 | Added `PingTracker` field to Player struct for per-player RTT measurement. See [networking.md](networking.md#ping-tracking) for implementation details. |

@@ -79,8 +79,8 @@ Ordered by drift risk — do highest risk first, batch low-risk/no-change specs 
 - [x] 10. shooting.md
 - [x] 11. weapons.md
 - [x] 12. overview.md
-- [ ] 13. README.md
-- [ ] 14. rooms.md
+- [x] 13. README.md
+- [x] 14. rooms.md
 - [ ] 15. match.md
 - [ ] 16. dodge-roll.md
 - [ ] 17. melee.md
