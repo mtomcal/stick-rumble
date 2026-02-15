@@ -1,7 +1,7 @@
 # Server Architecture
 
-> **Spec Version**: 1.0.0
-> **Last Updated**: 2026-02-02
+> **Spec Version**: 1.1.0
+> **Last Updated**: 2026-02-15
 > **Depends On**: [overview.md](overview.md), [constants.md](constants.md), [networking.md](networking.md), [rooms.md](rooms.md), [messages.md](messages.md)
 > **Depended By**: None (leaf spec)
 
@@ -52,8 +52,6 @@ stick-rumble-server/
 │   └── server/
 │       └── main.go           # Entry point, HTTP server, graceful shutdown
 └── internal/
-    ├── auth/                  # Authentication (future expansion)
-    ├── db/                    # Database layer (future expansion)
     ├── game/
     │   ├── clock.go           # Time abstraction for testing
     │   ├── constants.go       # Game constants
@@ -61,20 +59,25 @@ stick-rumble-server/
     │   ├── match.go           # Match lifecycle and win conditions
     │   ├── melee_attack.go    # Melee hit detection
     │   ├── physics.go         # Movement and collision
+    │   ├── ping_tracker.go    # [NEW] RTT measurement (circular buffer of 5)
     │   ├── player.go          # PlayerState and InputState
+    │   ├── position_history.go # [NEW] Position rewind buffer for lag compensation
     │   ├── projectile.go      # Projectile lifecycle
     │   ├── ranged_attack.go   # Ranged attack processing
     │   ├── room.go            # Room and RoomManager
     │   ├── weapon.go          # Weapon and WeaponState
     │   ├── weapon_config.go   # Weapon stat loading
     │   ├── weapon_crate.go    # Weapon spawn management
+    │   ├── weapon_factory.go  # [NEW] Weapon creation factory
     │   └── world.go           # World state and spawn points
     └── network/
-        ├── broadcast_helper.go     # Message broadcast utilities
+        ├── broadcast_helper.go     # Message broadcast with delta compression
+        ├── delta_tracker.go        # [NEW] Per-client delta compression state
         ├── message_processor.go    # Message routing and handlers
+        ├── network_simulator.go    # [NEW] Artificial latency/packet loss
         ├── schema_loader.go        # JSON schema loading
         ├── schema_validator.go     # Optional message validation
-        └── websocket_handler.go    # WebSocket connection lifecycle
+        └── websocket_handler.go    # WebSocket connection lifecycle + ping/pong
 ```
 
 **Why This Structure?**
@@ -136,9 +139,11 @@ Manages WebSocket connections and routes messages to the game server.
 type WebSocketHandler struct {
     roomManager       *RoomManager
     gameServer        *GameServer
-    timerInterval     time.Duration  // 1s for match timer broadcasts
-    validator         *SchemaValidator  // Incoming message validation
-    outgoingValidator *SchemaValidator  // Outgoing message validation
+    timerInterval     time.Duration      // 1s for match timer broadcasts
+    validator         *SchemaValidator   // Incoming message validation
+    outgoingValidator *SchemaValidator   // Outgoing message validation
+    deltaTracker      *DeltaTracker      // Per-client delta compression state
+    networkSimulator  *NetworkSimulator  // Artificial latency/packet loss (testing)
 }
 
 type Message struct {
@@ -441,14 +446,15 @@ func (h *WebSocketHandler) handleInputState(msg Message, playerID string) {
         AimAngle:   getFloat64(data, "aimAngle"),
         IsSprinting: getBool(data, "isSprinting"),
     }
+    sequence := getInt(data, "sequence")
 
     // 3. Sanitize aim angle (prevent NaN/Inf)
     if math.IsNaN(input.AimAngle) || math.IsInf(input.AimAngle, 0) {
         input.AimAngle = 0
     }
 
-    // 4. Update game server
-    h.gameServer.UpdatePlayerInput(playerID, input)
+    // 4. Update game server with sequence for prediction reconciliation
+    h.gameServer.UpdatePlayerInputWithSequence(playerID, input, sequence)
 }
 ```
 
@@ -463,9 +469,10 @@ func (h *WebSocketHandler) handlePlayerShoot(msg Message, playerID string) {
     }
 
     aimAngle := getFloat64(data, "aimAngle")
+    clientTimestamp := getInt64(data, "clientTimestamp")
 
-    // Attempt shoot via game server
-    result := h.gameServer.PlayerShoot(playerID, aimAngle)
+    // Attempt shoot via game server (clientTimestamp used for lag compensation)
+    result := h.gameServer.PlayerShoot(playerID, aimAngle, clientTimestamp)
 
     if result.Success {
         // Broadcast projectile spawn to all players
@@ -846,6 +853,62 @@ func sanitizePosition(pos Vector2) Vector2 {
 
 ---
 
+## Lag Compensation Subsystem (Epic 4)
+
+These components work together to ensure fair hit detection despite client latency.
+
+### PingTracker (`game/ping_tracker.go`)
+
+Measures per-player RTT using WebSocket ping/pong frames.
+
+- Circular buffer of 5 RTT measurements
+- `RecordRTT(rtt)` stores millisecond-precision measurements
+- `GetRTT()` returns moving average of all recorded samples
+- Ping sent every 2 seconds from `websocket_handler.go`
+
+### PositionHistory (`game/position_history.go`)
+
+Maintains 1-second rewind buffer for server-side hit detection with lag compensation.
+
+- Per-player circular buffer of 60 snapshots (1 second at 60Hz)
+- `RecordSnapshot(playerID, position, timestamp)` called each physics tick
+- `GetPositionAt(playerID, queryTime)` returns position at any past time
+- Linear interpolation between snapshots when exact timestamp doesn't exist
+- Returns `(Vector2{}, false)` if data is too old or too new
+
+### DeltaTracker (`network/delta_tracker.go`)
+
+Per-client delta compression state to reduce bandwidth.
+
+- Tracks last-sent state per client (players, projectiles, weapon crates)
+- Change detection thresholds: 0.1px position, 0.1 velocity, 0.01rad rotation
+- `ShouldSendSnapshot(clientID)` → true every 1 second
+- `ComputePlayerDelta()` → returns only changed players
+- `ComputeProjectileDelta()` → returns added/removed projectiles
+- Client removed on disconnect via `RemoveClient()`
+
+See [networking.md](networking.md#delta-compression) for wire format details.
+
+### NetworkSimulator (`network/network_simulator.go`)
+
+Artificial network conditions for testing netcode.
+
+- Reads `SIMULATE_LATENCY` (0–300ms) and `SIMULATE_PACKET_LOSS` (0–20%) env vars
+- `ShouldDropPacket()` → random check based on loss percentage
+- `GetDelay()` → base latency + ±20ms jitter
+- `SimulateSend(sendFn)` → wraps message send with delay/drop
+- Returns nil if neither env var is set (production default)
+
+### WeaponFactory (`game/weapon_factory.go`)
+
+Centralizes weapon creation with proper configuration.
+
+- Creates weapons from `weapon-configs.json` or hardcoded fallback
+- Validates weapon constraints (damage > 0, fire rate > 0, etc.)
+- Used by game server when players pick up weapon crates
+
+---
+
 ## Implementation Notes
 
 ### Clock Abstraction
@@ -1201,3 +1264,4 @@ func TestConcurrentAccess(t *testing.T) {
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification |
+| 1.1.0 | 2026-02-15 | Added Lag Compensation Subsystem section (PingTracker, PositionHistory, DeltaTracker, NetworkSimulator, WeaponFactory). Updated directory tree with 5 new files. Removed non-existent auth/ and db/ dirs. Added deltaTracker and networkSimulator to WebSocketHandler struct. Updated handleInputState with sequence field. Updated handlePlayerShoot with clientTimestamp for lag compensation. |
