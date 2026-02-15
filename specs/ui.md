@@ -1,7 +1,7 @@
 # UI System
 
-> **Spec Version**: 1.0.0
-> **Last Updated**: 2026-02-02
+> **Spec Version**: 1.1.0
+> **Last Updated**: 2026-02-15
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [match.md](match.md), [client-architecture.md](client-architecture.md), [graphics.md](graphics.md)
 > **Depended By**: [test-index.md](test-index.md)
 
@@ -875,6 +875,35 @@ export function MatchEndScreen({ matchData, localPlayerId, onClose, onPlayAgain 
 
 ---
 
+### Debug Network Panel (Epic 4)
+
+**File:** `src/ui/debug/DebugNetworkPanel.tsx`
+
+**Purpose:** React panel for controlling the client-side NetworkSimulator during development. Allows testing prediction, reconciliation, and interpolation under degraded network conditions.
+
+**Props:**
+```typescript
+interface DebugNetworkPanelProps {
+  isVisible: boolean;
+  onClose: () => void;
+  stats: NetworkSimulatorStats;
+  onLatencyChange: (latency: number) => void;
+  onPacketLossChange: (packetLoss: number) => void;
+  onEnabledChange: (enabled: boolean) => void;
+}
+```
+
+**Controls:**
+- **Enable/Disable**: Toggle network simulation on/off
+- **Latency slider**: 0–300ms base latency
+- **Packet Loss slider**: 0–20% random drop rate
+
+**Why a debug panel?** Testing netcode requires simulating poor network conditions. Without this, developers must use external tools (e.g., `tc`, Clumsy) to degrade the network. The panel provides in-game controls with instant feedback.
+
+See [networking.md](networking.md#network-simulator) for the underlying NetworkSimulator implementation.
+
+---
+
 ## Error Handling
 
 ### Missing Player for Damage Numbers
@@ -1219,3 +1248,4 @@ it('should sort scoreboard by kills descending, deaths ascending', () => {
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification |
+| 1.1.0 | 2026-02-15 | Added Debug Network Panel section (DebugNetworkPanel.tsx for testing netcode under degraded conditions). |
