@@ -1,7 +1,7 @@
 # Test Index
 
-> **Spec Version**: 1.0.0
-> **Last Updated**: 2026-02-02
+> **Spec Version**: 1.1.0
+> **Last Updated**: 2026-02-15
 > **Depends On**: All specs (cross-reference document)
 > **Depended By**: None (reference document)
 
@@ -29,11 +29,11 @@ When implementing from scratch, AI agents need to:
 
 | Metric | Value |
 |--------|-------|
-| **Total Test Scenarios** | 179 |
-| **Specs with Tests** | 19 |
-| **Average Tests per Spec** | 9.4 |
-| **Critical Priority Tests** | 65 |
-| **High Priority Tests** | 85 |
+| **Total Test Scenarios** | 194 |
+| **Specs with Tests** | 19 (+Epic 4 cross-spec) |
+| **Average Tests per Spec** | 9.7 |
+| **Critical Priority Tests** | 71 |
+| **High Priority Tests** | 94 |
 | **Medium Priority Tests** | 20 |
 | **Low Priority Tests** | 9 |
 
@@ -249,7 +249,7 @@ When implementing from scratch, AI agents need to:
 | TS-MOVE-006 | Unit | Critical | Position clamped to arena bounds |
 | TS-MOVE-007 | Unit | High | Sprint applies accuracy penalty |
 | TS-MOVE-008 | Unit | High | Acceleration is 50 px/s² |
-| TS-MOVE-009 | Unit | High | Deceleration is 50 px/s² |
+| TS-MOVE-009 | Unit | High | Deceleration is 1500 px/s² (near-instant stop) |
 | TS-MOVE-010 | Integration | Medium | Aim angle threshold prevents spam |
 
 ### Networking Tests (networking.md)
@@ -266,6 +266,26 @@ When implementing from scratch, AI agents need to:
 | TS-NET-008 | Integration | Critical | Player removed on disconnect |
 | TS-NET-009 | Unit | High | Input rate limited to 20 Hz |
 | TS-NET-010 | Integration | Medium | Bidirectional communication works |
+
+### Netcode Tests (Epic 4: movement.md, networking.md, hit-detection.md)
+
+| ID | Category | Priority | Description |
+|----|----------|----------|-------------|
+| TS-PRED-001 | Unit | Critical | PredictionEngine mirrors server physics output |
+| TS-PRED-002 | Unit | Critical | Reconcile replays only unprocessed inputs |
+| TS-PRED-003 | Unit | High | Instant correction when error exceeds 100px |
+| TS-PRED-004 | Unit | High | Smooth lerp for corrections under 100px |
+| TS-INTERP-001 | Unit | Critical | InterpolationEngine smooths 20 Hz updates to 60 FPS |
+| TS-INTERP-002 | Unit | High | Extrapolates up to 100ms on packet loss |
+| TS-INTERP-003 | Unit | High | Freezes position after 200ms without data |
+| TS-DELTA-001 | Unit | Critical | Delta compression sends only changed players |
+| TS-DELTA-002 | Unit | High | Full snapshot sent every 1 second |
+| TS-DELTA-003 | Unit | High | Position change below 0.1px threshold not sent |
+| TS-LAGCOMP-001 | Integration | Critical | Hitscan uses rewound positions for hit detection |
+| TS-LAGCOMP-002 | Unit | High | RTT capped at 150ms for rewind |
+| TS-LAGCOMP-003 | Unit | High | Position history interpolates between snapshots |
+| TS-NETSIM-001 | Unit | High | NetworkSimulator delays messages by configured latency |
+| TS-NETSIM-002 | Unit | High | NetworkSimulator drops packets at configured rate |
 
 ### Overview Tests (overview.md)
 
@@ -619,3 +639,4 @@ Use this checklist to track test implementation progress:
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification |
+| 1.1.0 | 2026-02-15 | Added 15 Epic 4 Netcode test scenarios (prediction, reconciliation, interpolation, delta compression, lag compensation, network simulator). Updated total from 179 to 194 tests. Fixed deceleration reference from 50 to 1500 px/s². |
