@@ -1,7 +1,7 @@
 # Movement
 
-> **Spec Version**: 1.0.0
-> **Last Updated**: 2026-02-02
+> **Spec Version**: 1.1.0
+> **Last Updated**: 2026-02-15
 > **Depends On**: [constants.md](constants.md), [arena.md](arena.md), [player.md](player.md)
 > **Depended By**: [dodge-roll.md](dodge-roll.md), [shooting.md](shooting.md), [hit-detection.md](hit-detection.md)
 
@@ -45,7 +45,7 @@ All movement constants are defined in [constants.md](constants.md). Key values:
 | SPRINT_SPEED | 300 | px/s | Sprint maximum speed |
 | SPRINT_MULTIPLIER | 1.5 | ratio | Sprint speed / normal speed |
 | ACCELERATION | 50 | px/s² | Rate of speed increase |
-| DECELERATION | 50 | px/s² | Rate of speed decrease |
+| DECELERATION | 1500 | px/s² | Rate of speed decrease (near-instant stop) |
 | SERVER_TICK_RATE | 60 | Hz | Physics update frequency |
 | CLIENT_UPDATE_RATE | 20 | Hz | Position broadcast frequency |
 | SPRINT_SPREAD_MULTIPLIER | 1.5 | ratio | Accuracy penalty while sprinting |
@@ -209,9 +209,11 @@ function normalize(v: Vector2): Vector2 {
 
 Movement uses an acceleration/deceleration model for smooth transitions.
 
-**Why symmetric accel/decel?** Both acceleration and deceleration use 50 px/s². Symmetric values create predictable "wall sliding" behavior and consistent stop timing. Asymmetric values (faster stopping) felt unnatural in testing.
+**Why asymmetric accel/decel?** Acceleration is gradual (50 px/s²) for smooth ramp-up, but deceleration is near-instant (1500 px/s²) so players stop within ~0.13 seconds when releasing input. This prevents "ice physics" sliding and is critical for accurate client-side prediction — fast deceleration means fewer frames of drift between predicted and authoritative states.
 
-**Why 50 px/s²?** At 50 px/s², reaching 200 px/s takes 4 seconds. This is intentionally slow—players feel the momentum but can still make quick direction changes.
+**Why 50 px/s² acceleration?** At 50 px/s², reaching 200 px/s takes 4 seconds. This is intentionally slow—players feel the momentum but can still make quick direction changes.
+
+**Why 1500 px/s² deceleration?** At full speed (200 px/s), the player stops in ~0.13 seconds (200/1500). This makes directional changes feel crisp and responsive — releasing a key immediately halts movement.
 
 **Speed Selection:**
 ```
@@ -551,56 +553,109 @@ private hasStateChanged(): boolean {
 
 ## Client-Side Prediction
 
-Clients predict movement locally for responsive controls.
+Clients predict movement locally for responsive controls using `PredictionEngine` (`src/game/physics/PredictionEngine.ts`).
 
-**Why prediction?** Round-trip latency (client → server → client) could be 50-200ms. Without prediction, controls would feel sluggish. Clients apply the same physics locally, then reconcile with server updates.
+**Why prediction?** Round-trip latency (client → server → client) could be 50-200ms. Without prediction, controls would feel sluggish. The client mirrors server physics locally and renders the predicted position immediately, then reconciles when server updates arrive.
 
-**Pseudocode:**
+### Prediction Pipeline
+
+Each client frame in `GameScene.update()`:
+
 ```
-// Each client frame:
-function clientUpdate(deltaTime):
-    input = captureInput()
-    sendInputToServer(input)
-
-    // Predict locally
-    predictedVelocity = calculateVelocity(localPlayer, input, deltaTime)
-    localPlayer.velocity = predictedVelocity
-
-    predictedPosition = localPlayer.position + predictedVelocity * deltaTime
-    localPlayer.position = clampToArena(predictedPosition)
-
-// On server position update:
-function onServerUpdate(serverState):
-    // Snap or interpolate to server position
-    localPlayer.position = serverState.position
-    localPlayer.velocity = serverState.velocity
+1. Capture input (WASD + mouse)
+2. Send input to server with sequence number
+3. Call PredictionEngine.predictPosition(lastServerPos, lastServerVel, input, dt)
+4. Render local player at predicted position
 ```
 
-**TypeScript:**
+**PredictionEngine.predictPosition()** mirrors server physics exactly:
+
 ```typescript
-function applyClientPrediction(player: PlayerState, input: InputState, deltaTime: number): void {
-  // Mirror server physics
-  const inputDir = getInputDirection(input);
-  const targetSpeed = input.isSprinting ? SPRINT_SPEED : MOVEMENT_SPEED;
+predictPosition(position, velocity, input, deltaTime):
+    // 1. Calculate normalized input direction from WASD
+    direction = getInputDirection(input)
 
-  if (inputDir.x !== 0 || inputDir.y !== 0) {
-    const targetVel = {
-      x: inputDir.x * targetSpeed,
-      y: inputDir.y * targetSpeed,
-    };
-    player.velocity = accelerateToward(player.velocity, targetVel, ACCELERATION, deltaTime);
-  } else {
-    player.velocity = decelerateToZero(player.velocity, DECELERATION, deltaTime);
-  }
+    // 2. Accelerate or decelerate
+    if direction != (0,0):
+        targetVel = direction * MOVEMENT.SPEED
+        newVel = accelerateToward(velocity, targetVel, ACCELERATION, dt)
+    else:
+        newVel = accelerateToward(velocity, (0,0), DECELERATION, dt)
 
-  const newPos = {
-    x: player.position.x + player.velocity.x * deltaTime,
-    y: player.position.y + player.velocity.y * deltaTime,
-  };
+    // 3. Cap velocity to max speed
+    if magnitude(newVel) > MOVEMENT.SPEED:
+        newVel = normalize(newVel) * MOVEMENT.SPEED
 
-  player.position = clampToArena(newPos);
-}
+    // 4. Integrate position
+    newPos = position + newVel * dt
+
+    return { position: newPos, velocity: newVel }
 ```
+
+**Critical invariant**: PredictionEngine uses identical math to the server's `Physics.UpdatePlayer()`. Any divergence causes visible corrections.
+
+### Server Reconciliation
+
+When the server sends a `player:move` update (20 Hz), the client reconciles predicted state with authoritative state in `GameSceneEventHandlers.ts`.
+
+**Reconciliation process:**
+
+```
+1. Server sends: { position, velocity, lastProcessedSequence }
+2. Client finds pending inputs with sequence > lastProcessedSequence
+3. Starting from server's authoritative position/velocity:
+   - Replay each pending input through PredictionEngine.predictPosition()
+4. Result = reconciled position (server truth + unprocessed predictions)
+5. If distance(reconciled, currentPredicted) >= 100px: instant teleport
+6. Otherwise: smooth lerp to reconciled position
+```
+
+**Why replay pending inputs?** The server state reflects inputs up to `lastProcessedSequence`. The client may have already predicted several frames ahead. Replaying unprocessed inputs on top of server state produces the correct predicted position.
+
+**Input history**: The client maintains a buffer of sent inputs with sequence numbers via `InputManager.getInputHistory()`. Inputs older than `lastProcessedSequence` are discarded during reconciliation.
+
+### Interpolation (Other Players)
+
+Non-local players are rendered using `InterpolationEngine` (`src/game/physics/InterpolationEngine.ts`) to smooth 20 Hz server updates into 60 FPS visuals.
+
+**Configuration:**
+
+| Constant | Value | Why |
+|----------|-------|-----|
+| BUFFER_SIZE | 10 | Sliding window of position snapshots |
+| BUFFER_DELAY_MS | 100 | Render 100ms in the past (2 server updates) |
+| FREEZE_THRESHOLD_MS | 200 | Stop extrapolating after 200ms of no data |
+| EXTRAPOLATION_MAX_MS | 100 | Max extrapolation time on packet loss |
+
+**Algorithm:**
+
+```
+renderTime = currentTime - BUFFER_DELAY_MS  // 100ms in the past
+
+// Find two snapshots bracketing renderTime
+prevSnapshot, nextSnapshot = findBracketingSnapshots(renderTime)
+
+// Linear interpolation between them
+t = (renderTime - prevSnapshot.time) / (nextSnapshot.time - prevSnapshot.time)
+interpolatedPos = lerp(prevSnapshot.position, nextSnapshot.position, t)
+
+// If no future snapshot: extrapolate using velocity (max 100ms)
+if renderTime > latestSnapshot.time:
+    extrapolationTime = min(renderTime - latestTime, EXTRAPOLATION_MAX_MS)
+    extrapolatedPos = lastPos + lastVel * extrapolationTime
+```
+
+**Why 100ms delay?** At 20 Hz updates (50ms apart), a 100ms buffer guarantees two snapshots are available for interpolation. This trades a small latency increase for smooth visuals.
+
+### File Locations
+
+| File | Purpose |
+|------|---------|
+| `src/game/physics/PredictionEngine.ts` | Client-side prediction (mirrors server physics) |
+| `src/game/physics/InterpolationEngine.ts` | Smooths other players' 20 Hz updates |
+| `src/game/simulation/physics.ts` | Pure math: accelerateToward, normalize, clamp |
+| `src/game/scenes/GameSceneEventHandlers.ts` | Server reconciliation logic |
+| `src/game/scenes/GameScene.ts` | Calls prediction/interpolation each frame |
 
 ---
 
@@ -736,10 +791,10 @@ func TestAccelerationToMaxSpeed(t *testing.T) {
 
 **Input:**
 - Release all keys
-- Run physics for 4 seconds
+- Run physics for ~0.15 seconds (9 ticks at 60 Hz)
 
 **Expected Output:**
-- Velocity approaches (0, 0)
+- Velocity approaches (0, 0) within ~0.13 seconds (200 px/s ÷ 1500 px/s²)
 
 ### TS-MOVE-003: Sprint increases speed to 300 px/s
 
@@ -902,3 +957,4 @@ func TestDiagonalNormalization(t *testing.T) {
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification extracted from codebase |
+| 1.1.0 | 2026-02-15 | Updated DECELERATION from 50→1500 px/s². Rewrote Client-Side Prediction section to document PredictionEngine, server reconciliation (with input sequence replay), and InterpolationEngine. Updated deceleration test scenario timing. Added file location table for new physics modules. |
