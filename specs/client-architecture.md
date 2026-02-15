@@ -1,7 +1,7 @@
 # Client Architecture
 
-> **Spec Version**: 1.0.0
-> **Last Updated**: 2026-02-02
+> **Spec Version**: 1.1.0
+> **Last Updated**: 2026-02-15
 > **Depends On**: [constants.md](constants.md), [messages.md](messages.md), [networking.md](networking.md), [player.md](player.md), [movement.md](movement.md), [weapons.md](weapons.md)
 > **Depended By**: [graphics.md](graphics.md), [ui.md](ui.md), [audio.md](audio.md)
 
@@ -234,7 +234,8 @@ stick-rumble-client/
 │       ├── scenes/
 │       │   ├── GameScene.ts              # Main game scene
 │       │   ├── GameSceneUI.ts            # UI rendering
-│       │   ├── GameSceneEventHandlers.ts # Message handlers
+│       │   ├── GameSceneEventHandlers.ts # Message handlers + reconciliation
+│       │   ├── GameSceneSpectator.ts     # Spectator mode
 │       │   └── MatchTimer.ts             # Timer component
 │       ├── entities/
 │       │   ├── PlayerManager.ts          # Player rendering
@@ -244,14 +245,28 @@ stick-rumble-client/
 │       │   ├── HitEffectManager.ts       # Object-pooled effects
 │       │   ├── ProceduralPlayerGraphics.ts
 │       │   ├── ProceduralWeaponGraphics.ts
+│       │   ├── RangedWeapon.ts           # Ranged weapon logic
+│       │   ├── MeleeWeapon.ts            # Melee weapon logic
 │       │   ├── HealthBar.ts
 │       │   └── Crosshair.ts
 │       ├── input/
-│       │   ├── InputManager.ts           # WASD + mouse
+│       │   ├── InputManager.ts           # WASD + mouse + sequence numbers
 │       │   ├── ShootingManager.ts        # Fire + reload
 │       │   └── DodgeRollManager.ts       # Roll cooldown
 │       ├── network/
-│       │   └── WebSocketClient.ts        # Connection wrapper
+│       │   ├── WebSocketClient.ts        # Connection wrapper
+│       │   ├── NetworkSimulator.ts       # Artificial latency/packet loss
+│       │   └── urlParams.ts              # URL parameter parsing
+│       ├── physics/                       # [NEW: Epic 4] Client-side netcode
+│       │   ├── PredictionEngine.ts       # Local player prediction (mirrors server physics)
+│       │   └── InterpolationEngine.ts    # Remote player interpolation (100ms buffer)
+│       ├── simulation/                    # [NEW: Epic 4] Pure logic (no Phaser)
+│       │   ├── GameSimulation.ts         # Deterministic game simulation
+│       │   ├── physics.ts               # Pure math: accelerate, normalize, clamp
+│       │   ├── types.ts                 # Simulation type definitions
+│       │   ├── InputRecorder.ts         # Input recording for replay/testing
+│       │   ├── ScenarioRunner.ts        # Deterministic scenario execution
+│       │   └── index.ts                 # Public exports
 │       ├── ui/
 │       │   ├── HealthBarUI.ts            # Top-left health
 │       │   ├── KillFeedUI.ts             # Top-right kills
@@ -263,6 +278,9 @@ stick-rumble-client/
 │       │   └── AudioManager.ts           # Positional audio
 │       └── utils/
 │           └── Clock.ts                  # Time abstraction
+├── src/ui/
+│   └── debug/                            # [NEW: Epic 4] Network debug tools
+│       └── DebugNetworkPanel.tsx         # React panel for network simulation
 └── tests/
     └── visual/                           # Playwright visual tests
 ```
@@ -1191,6 +1209,56 @@ setupEventHandlers(): void {
 
 ---
 
+### Client-Side Prediction & Interpolation (Epic 4)
+
+These subsystems were added during Epic 4 to improve multiplayer responsiveness.
+
+#### PredictionEngine (`game/physics/PredictionEngine.ts`)
+
+**Purpose:** Predict local player position before server confirmation for instant-feeling controls.
+
+- Mirrors server physics exactly: same acceleration/deceleration math
+- Takes position, velocity, input, and deltaTime; returns predicted position/velocity
+- Used by `GameScene.update()` each frame for local player
+- `reconcile()` method replays unprocessed inputs on top of server state
+- Correction threshold: 100px instant teleport, otherwise smooth lerp
+
+See [movement.md](movement.md#client-side-prediction) for the full algorithm.
+
+#### InterpolationEngine (`game/physics/InterpolationEngine.ts`)
+
+**Purpose:** Smooth 20 Hz server updates to 60 FPS for remote players.
+
+- Buffers last 10 position snapshots per player
+- Renders at `currentTime - 100ms` (2 server updates behind)
+- Linear interpolation between bracketing snapshots
+- Extrapolates up to 100ms on packet loss, then freezes at 200ms
+- Used by `PlayerManager.update()` each frame for non-local players
+
+See [movement.md](movement.md#interpolation-other-players) for configuration details.
+
+#### GameSimulation (`game/simulation/GameSimulation.ts`)
+
+**Purpose:** Pure-logic game simulation without Phaser dependencies. Enables fast deterministic testing.
+
+- Mirrors server-side `GameServer` pattern
+- Uses `physics.ts` for pure math functions (normalize, accelerateToward, clampToArena)
+- `types.ts` defines simulation-only types (SimulatedPlayerState, Projectile, HitEvent, etc.)
+- `InputRecorder.ts` and `ScenarioRunner.ts` enable replay-based testing
+
+#### NetworkSimulator (`game/network/NetworkSimulator.ts`)
+
+**Purpose:** Artificial latency and packet loss for testing netcode under degraded conditions.
+
+- Wraps send/receive with configurable delay and random drops
+- Latency: 0–300ms base + ±20ms jitter
+- Packet loss: 0–20%
+- Controlled via `DebugNetworkPanel` (React UI) at `src/ui/debug/DebugNetworkPanel.tsx`
+
+See [networking.md](networking.md#network-simulator) for server-side counterpart.
+
+---
+
 ### React-Phaser Bridge
 
 #### PhaserGame Component
@@ -1273,7 +1341,9 @@ const PhaserGame: React.FC<{ onMatchEnd: (data: MatchEndData, playerId: string) 
 │    ├─ Calculate aim angle from mouse position                │
 │    └─ Send input:state to server (if changed)                │
 ├─────────────────────────────────────────────────────────────┤
-│ 2. Local Visual Updates (before server response)             │
+│ 2. Client-Side Prediction (local player)                      │
+│    ├─ PredictionEngine.predictPosition(pos, vel, input, dt)  │
+│    ├─ PlayerManager.setLocalPlayerPredictedPosition()        │
 │    ├─ PlayerManager.updateLocalPlayerAim() - Rotate weapon   │
 │    └─ Crosshair.update() - Follow mouse                      │
 ├─────────────────────────────────────────────────────────────┤
@@ -1283,7 +1353,8 @@ const PhaserGame: React.FC<{ onMatchEnd: (data: MatchEndData, playerId: string) 
 │ 4. Proximity Checks                                          │
 │    └─ checkWeaponProximity() → Show/hide pickup prompt       │
 ├─────────────────────────────────────────────────────────────┤
-│ 5. Manager Updates                                           │
+│ 5. Interpolation + Manager Updates                            │
+│    ├─ PlayerManager.update(delta) - Interpolate remote players│
 │    ├─ DodgeRollManager.update(delta) - Cooldown tracking     │
 │    ├─ ProjectileManager.update(delta) - Move projectiles     │
 │    └─ MeleeWeaponManager.update(delta) - Animate swings      │
@@ -1302,7 +1373,9 @@ const PhaserGame: React.FC<{ onMatchEnd: (data: MatchEndData, playerId: string) 
 
 Async WebSocket Messages (any time):
 ┌─────────────────────────────────────────────────────────────┐
-│ On 'player:move' (20 Hz from server)                         │
+│ On 'state:snapshot' / 'state:delta' (20 Hz from server)      │
+│    ├─ InterpolationEngine.addSnapshot() - Buffer remote pos  │
+│    ├─ PredictionEngine.reconcile() - Replay pending inputs   │
 │    └─ PlayerManager.updatePlayers() - Sync all positions     │
 ├─────────────────────────────────────────────────────────────┤
 │ On 'projectile:spawn'                                        │
@@ -1698,3 +1771,4 @@ it('should follow local player with camera', () => {
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification |
+| 1.1.0 | 2026-02-15 | Added new directories: physics/, simulation/, ui/debug/. Added subsystem descriptions: PredictionEngine, InterpolationEngine, GameSimulation, NetworkSimulator, DebugNetworkPanel. Updated directory tree with new files (RangedWeapon.ts, MeleeWeapon.ts, GameSceneSpectator.ts, urlParams.ts). Updated rendering pipeline with prediction/interpolation steps. Updated async message flow for state:snapshot/state:delta. |
