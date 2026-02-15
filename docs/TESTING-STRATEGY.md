@@ -537,7 +537,7 @@ flowchart TB
     end
 
     subgraph AI["AI Agent Implementation"]
-        Parallel["Parallel Workers via Swarm"]
+        Parallel["AI Agent Implementation"]
         Tests["All Tests Pass"]
     end
 
@@ -547,7 +547,7 @@ flowchart TB
     end
 
     subgraph Fix["Bug Bash"]
-        Issues["New Beads Issues"]
+        Issues["Bug Fixes"]
         Agents["AI Agents Fix"]
         Retest["Playtest Again"]
     end
@@ -585,25 +585,9 @@ The workflow acknowledges this reality:
 1. **Automated tests** gate code quality and catch regressions
 2. **Visual tests** verify rendering correctness for testable scenarios
 3. **Epic completion** triggers a dedicated playtesting session
-4. **Player feedback** becomes new issues in Beads for the next cycle
+4. **Player feedback** becomes bug fixes for the next cycle
 
-```bash
-# After playtesting an epic reveals integration issues
-bd create --title "Weapon switch interrupts reload state" \
-  --description "Switching weapons during reload leaves player unable to fire" \
-  --priority P1
-
-bd create --title "Hit feedback missing on rapid fire" \
-  --description "When Uzi fires fast, some hits don't show damage numbers" \
-  --priority P2
-
-# AI agents fix the integration bugs
-/swarm:director issues=abc,def
-
-# Playtest again to verify fixes
-```
-
-This creates a **rhythm**: build epic → playtest → bug bash → playtest → ship. The AI handles the implementation volume; humans validate the integrated experience.
+The workflow follows a **rhythm**: build epic → playtest → bug bash → playtest → ship. AI handles the implementation volume; humans validate the integrated experience.
 
 ### The Honest Truth
 

@@ -56,8 +56,6 @@ This is an active development project. Current limitations:
 | **Test Cases** | 2,000+ (1,340 client + 682 server) |
 | **Visual Regression Screenshots** | 44 baseline images |
 | **WebSocket Message Types** | 28 (22 server→client, 6 client→server) |
-| **Issues Tracked** | 122 (121 closed) |
-| **Concurrent AI Agents** | Up to 8 parallel workers |
 | **Test Coverage Target** | >90% statement coverage |
 
 ---
@@ -83,14 +81,6 @@ This is an active development project. Current limitations:
 │  │  │ Unit Tests  │  │ Integration │  │ Visual Regression    │  │   │
 │  │  │ (Vitest)    │  │ Tests       │  │ (Playwright)         │  │   │
 │  │  │ 2,000+      │  │ WebSocket   │  │ 44 screenshots       │  │   │
-│  │  └─────────────┘  └─────────────┘  └──────────────────────┘  │   │
-│  └──────────────────────────────────────────────────────────────┘   │
-│                                                                      │
-│  ┌──────────────────────────────────────────────────────────────┐   │
-│  │                    AI DEVELOPMENT SYSTEM                      │   │
-│  │  ┌─────────────┐  ┌─────────────┐  ┌──────────────────────┐  │   │
-│  │  │ Beads       │  │ Swarm       │  │ Claude Code Agents   │  │   │
-│  │  │ (Issues)    │──│ (Orchestr.) │──│ (Up to 8 parallel)   │  │   │
 │  │  └─────────────┘  └─────────────┘  └──────────────────────┘  │   │
 │  └──────────────────────────────────────────────────────────────┘   │
 │                                                                      │
@@ -150,7 +140,6 @@ make test-visual
 | Document | Description |
 |----------|-------------|
 | [Architecture](docs/ARCHITECTURE.md) | System design, data flow, and component diagrams |
-| [Multi-Agent Workflow](docs/MULTI-AGENT-WORKFLOW.md) | AI orchestration system and parallel development |
 | [Testing Strategy](docs/TESTING-STRATEGY.md) | Validation infrastructure and visual regression |
 | [CLAUDE.md](CLAUDE.md) | AI agent instructions and project context |
 
@@ -173,11 +162,6 @@ All game state lives on the server. Clients send inputs, server calculates resul
 - **Integration tests** validate WebSocket communication
 - **Visual regression tests** catch rendering bugs that unit tests miss
 - **Human playtesting** remains essential—real-time games require human perception for final validation
-
-### Multi-Agent Development
-- **Beads** tracks issues and acceptance criteria
-- **Swarm** orchestrates parallel Claude Code agents
-- **Isolated worktrees** prevent agent conflicts
 
 ---
 
@@ -206,8 +190,7 @@ stick-rumble/
 │   ├── src/schemas/         # TypeScript definitions
 │   └── generated/           # JSON schemas for Go validation
 │
-├── docs/                    # Documentation
-└── .beads/                  # Issue tracking database
+└── docs/                    # Documentation
 ```
 
 ---
@@ -234,25 +217,6 @@ make typecheck        # TypeScript checking
 # Build
 make build            # Production build
 ```
-
----
-
-## AI Development Workflow
-
-This project uses a custom multi-agent system for parallel development:
-
-```bash
-# View available work
-bd ready
-
-# Spawn parallel workers
-/swarm:director
-
-# Implement single issue
-/beads:full-cycle id={issue-id}
-```
-
-See [Multi-Agent Workflow](docs/MULTI-AGENT-WORKFLOW.md) for details.
 
 ---
 

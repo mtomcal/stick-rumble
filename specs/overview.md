@@ -415,14 +415,9 @@ stick-rumble/
 │   ├── settings.json              # AI agent settings
 │   └── todos.json                 # Task tracking
 │
-├── .beads/                        # Issue tracking database
-│   ├── tasks/                     # Individual task files
-│   └── index.json                 # Task index
-│
 ├── docs/                          # Project documentation
 │   ├── ARCHITECTURE.md            # System design overview
 │   ├── TESTING-STRATEGY.md        # Testing approach
-│   ├── MULTI-AGENT-WORKFLOW.md    # Parallel AI agent orchestration
 │   ├── GDD.md                     # Game Design Document
 │   ├── epics/                     # Epic breakdown documents
 │   ├── archive/                   # Historical documentation

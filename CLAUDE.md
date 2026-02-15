@@ -292,56 +292,8 @@ Based on completed Epic 1 stories, all code must meet these standards:
 - No commented-out code or debug statements in commits
 
 ### Development Workflow
-- Issues are tracked using **Beads** (`bd` CLI) - see `.beads/` directory
-- Each issue has acceptance criteria and implementation notes
 - Follow TDD: Write tests first, then implement features
 - Code reviews happen before marking issues complete
-
-## AI Development Workflow
-
-This project uses **Beads** for issue tracking and **Swarm** for parallel AI agent execution.
-
-### Issue Tracking with Beads
-
-```bash
-# View available work
-bd ready
-
-# Show issue details
-bd show {id}
-
-# Update issue status
-bd update {id} --status in_progress
-
-# Close completed issue
-bd close {id} --reason "Implementation complete"
-
-# Sync changes to git
-bd sync
-```
-
-### Parallel Execution with Swarm
-
-Use `/swarm:director` to orchestrate parallel AI workers:
-- Spawns isolated git worktrees per worker
-- Monitors progress and rescues incomplete work
-- Creates PRs for completed issues
-- Cleans up merged worktrees
-
-### Available Commands
-
-- `/beads:create-tasks` - Create issues from epics/stories
-- `/beads:implement-task` - Implement a single issue with TDD
-- `/beads:full-cycle` - Full implementation cycle with reviews
-- `/beads:review` - Code review for an issue
-- `/swarm:director` - Orchestrate parallel workers
-
-### Workflow
-
-1. Create issues: `/beads:create-tasks`
-2. Single issue: `/beads:full-cycle id={id}`
-3. Parallel work: `/swarm:director`
-4. After PR merge: `/swarm:director action=cleanup`
 
 ## Common Workflows
 
