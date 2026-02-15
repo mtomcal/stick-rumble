@@ -1,7 +1,7 @@
 # Messages
 
-> **Spec Version**: 1.0.0
-> **Last Updated**: 2026-02-02
+> **Spec Version**: 1.1.0
+> **Last Updated**: 2026-02-15
 > **Depends On**: [constants.md](constants.md), [player.md](player.md)
 > **Depended By**: [networking.md](networking.md), [rooms.md](rooms.md), [weapons.md](weapons.md), [shooting.md](shooting.md), [melee.md](melee.md), [hit-detection.md](hit-detection.md), [match.md](match.md), [client-architecture.md](client-architecture.md), [server-architecture.md](server-architecture.md)
 
@@ -96,7 +96,7 @@ type Message struct {
 | `player:dodge_roll` | Initiate dodge roll | On-demand (player presses Space) |
 | `test` | Echo test message | Testing only |
 
-### Server → Client (20 types)
+### Server → Client (22 types)
 
 | Type | Description | Recipients |
 |------|-------------|------------|
@@ -120,6 +120,8 @@ type Message struct {
 | `melee:hit` | Melee connected | Room broadcast |
 | `roll:start` | Dodge roll began | Room broadcast |
 | `roll:end` | Dodge roll ended | Room broadcast |
+| `state:snapshot` | Full state (delta compression) | Per-client (1 Hz) |
+| `state:delta` | Incremental state changes | Per-client (20 Hz) |
 
 ---
 
@@ -149,6 +151,7 @@ interface InputStateData {
   right: boolean;       // D key pressed
   aimAngle: number;     // Aim angle in radians (0 to 2π)
   isSprinting: boolean; // Shift key pressed
+  sequence: number;     // Monotonically increasing sequence number (≥0)
 }
 ```
 
@@ -161,8 +164,11 @@ type InputStateData struct {
     Right       bool    `json:"right"`
     AimAngle    float64 `json:"aimAngle"`
     IsSprinting bool    `json:"isSprinting"`
+    Sequence    int     `json:"sequence"`
 }
 ```
+
+**Why `sequence`?** The sequence number enables client-side prediction reconciliation. The server echoes `lastProcessedSequence` in state broadcasts so the client knows which inputs have been applied server-side and can replay only unprocessed inputs. See [movement.md](movement.md#server-reconciliation).
 
 **Example:**
 ```json
@@ -175,16 +181,18 @@ type InputStateData struct {
     "left": false,
     "right": true,
     "aimAngle": 0.785,
-    "isSprinting": false
+    "isSprinting": false,
+    "sequence": 42
   }
 }
 ```
 
 **Server Processing:**
 1. Validate message against schema
-2. Store input in player's InputState
+2. Store input in player's InputState with sequence number
 3. Physics system reads input each tick (60 Hz)
-4. Ignored after `match:ended`
+4. Sequence tracked for `lastProcessedSequence` in broadcasts
+5. Ignored after `match:ended`
 
 ---
 
@@ -201,16 +209,20 @@ Request to fire the current weapon.
 **TypeScript:**
 ```typescript
 interface PlayerShootData {
-  aimAngle: number; // Aim angle in radians (0 to 2π)
+  aimAngle: number;        // Aim angle in radians (0 to 2π)
+  clientTimestamp: number;  // Client-side timestamp in ms when shot was fired (≥0)
 }
 ```
 
 **Go:**
 ```go
 type PlayerShootData struct {
-    AimAngle float64 `json:"aimAngle"`
+    AimAngle        float64 `json:"aimAngle"`
+    ClientTimestamp  int64   `json:"clientTimestamp"`
 }
 ```
+
+**Why `clientTimestamp`?** Used for server-side lag compensation. The server rewinds other players' positions to where they were at `clientTimestamp` before performing hit detection, compensating for network latency. See [hit-detection.md](hit-detection.md).
 
 **Example:**
 ```json
@@ -218,7 +230,8 @@ type PlayerShootData struct {
   "type": "player:shoot",
   "timestamp": 1704067200500,
   "data": {
-    "aimAngle": 1.571
+    "aimAngle": 1.571,
+    "clientTimestamp": 1704067200480
   }
 }
 ```
@@ -229,7 +242,7 @@ type PlayerShootData struct {
 3. Check fire rate cooldown
 4. Check ammo > 0
 5. Check not currently reloading
-6. If valid: create projectile, broadcast `projectile:spawn`, send `weapon:state`
+6. If valid: create projectile using `clientTimestamp` for lag compensation, broadcast `projectile:spawn`, send `weapon:state`
 7. If invalid: send `shoot:failed` with reason
 
 **Failure Reasons:**
@@ -535,6 +548,8 @@ interface PlayerState {
 
 interface PlayerMoveData {
   players: PlayerState[];
+  lastProcessedSequence?: Record<string, number>; // playerID → last processed input sequence
+  correctedPlayers?: string[];                     // playerIDs whose positions were server-corrected
 }
 ```
 
@@ -1370,6 +1385,107 @@ interface RollEndData {
 
 ---
 
+### `state:snapshot`
+
+Full game state for delta compression reset. Sent per-client (not broadcast).
+
+**Why per-client?** Each client has its own delta tracker. A snapshot resets that client's baseline, preventing state drift when deltas miss changes.
+
+**When Sent:** Every 1 second per connected client, or on first update after connect
+
+**Recipients:** Individual client
+
+**Data Schema:**
+
+**TypeScript:**
+```typescript
+interface ProjectileSnapshot {
+  id: string;
+  ownerId: string;
+  position: Position;
+  velocity: Velocity;
+}
+
+interface WeaponCrateSnapshot {
+  id: string;
+  position: Position;
+  weaponType: string;
+  isAvailable: boolean;
+}
+
+interface StateSnapshotData {
+  players: PlayerState[];
+  projectiles: ProjectileSnapshot[];
+  weaponCrates: WeaponCrateSnapshot[];
+  lastProcessedSequence?: Record<string, number>;
+  correctedPlayers?: string[];
+}
+```
+
+**Example:**
+```json
+{
+  "type": "state:snapshot",
+  "timestamp": 1704067201800,
+  "data": {
+    "players": [{ "id": "p1", "position": {"x": 100, "y": 200}, ... }],
+    "projectiles": [{ "id": "proj-1", "ownerId": "p1", "position": {"x": 500, "y": 300}, "velocity": {"x": 800, "y": 0} }],
+    "weaponCrates": [{ "id": "uzi-1", "position": {"x": 960, "y": 216}, "weaponType": "Uzi", "isAvailable": true }],
+    "lastProcessedSequence": { "p1": 42, "p2": 38 },
+    "correctedPlayers": []
+  }
+}
+```
+
+---
+
+### `state:delta`
+
+Incremental state update for bandwidth optimization. Only includes changed entities.
+
+**Why deltas?** Most 50ms broadcast windows have 0-2 players changing position. Sending only changes reduces bandwidth by ~60-80% compared to full snapshots.
+
+**When Sent:** Every 50ms (20 Hz) between snapshots, per-client
+
+**Recipients:** Individual client
+
+**Data Schema:**
+
+**TypeScript:**
+```typescript
+interface StateDeltaData {
+  players?: PlayerState[];           // Only players whose state changed
+  projectilesAdded?: ProjectileSnapshot[];  // Newly spawned projectiles
+  projectilesRemoved?: string[];     // IDs of destroyed projectiles
+  lastProcessedSequence?: Record<string, number>;
+  correctedPlayers?: string[];
+}
+```
+
+**Example:**
+```json
+{
+  "type": "state:delta",
+  "timestamp": 1704067201850,
+  "data": {
+    "players": [{ "id": "p1", "position": {"x": 103, "y": 200}, ... }],
+    "projectilesAdded": [],
+    "projectilesRemoved": ["proj-old"],
+    "lastProcessedSequence": { "p1": 43 },
+    "correctedPlayers": []
+  }
+}
+```
+
+**Client Handling:**
+1. Merge delta players into local state (update only listed players)
+2. Add new projectiles from `projectilesAdded`
+3. Remove projectiles listed in `projectilesRemoved`
+4. Use `lastProcessedSequence` for prediction reconciliation
+5. If `correctedPlayers` includes local player: apply server correction
+
+---
+
 ## Message Flow Diagrams
 
 ### Connection Flow
@@ -1655,3 +1771,4 @@ Client                          Server
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification extracted from codebase |
+| 1.1.0 | 2026-02-15 | Added `sequence` field to `input:state`. Added `clientTimestamp` field to `player:shoot`. Added `lastProcessedSequence` and `correctedPlayers` to `player:move`. Added new `state:snapshot` and `state:delta` message types for delta compression. Updated server→client count from 20 to 22. |
