@@ -81,12 +81,12 @@ Ordered by drift risk — do highest risk first, batch low-risk/no-change specs 
 - [x] 12. overview.md
 - [x] 13. README.md
 - [x] 14. rooms.md
-- [ ] 15. match.md
-- [ ] 16. dodge-roll.md
-- [ ] 17. melee.md
-- [ ] 18. arena.md
-- [ ] 19. ui.md
-- [ ] 20. audio.md
+- [x] 15. match.md
+- [x] 16. dodge-roll.md
+- [x] 17. melee.md
+- [x] 18. arena.md
+- [x] 19. ui.md
+- [x] 20. audio.md
 - [ ] 21. test-index.md
 - [ ] 22. spec-of-specs-plan.md
 
