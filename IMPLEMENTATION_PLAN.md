@@ -87,7 +87,7 @@ The specs in `specs/` were bulk-updated and then validated by a prior Ralph job.
 - [x] 45. overview.md — Fix message type counts (6 C→S, 22 S→C = 28 total)
 - [x] 46. overview.md — Fix spec file listing (missing 6 specs)
 - [x] 52. rooms.md — Fix AddPlayer Go code (RoomManager sends room:joined, not caller)
-- [ ] 54. rooms.md — Fix processPendingMessages (pending moves discarded, not replayed)
+- [x] 54. rooms.md — Fix processPendingMessages (pending moves discarded, not replayed)
 - [ ] 56. ui.md — Fix kill feed ordering (push+shift, not unshift+pop)
 - [ ] 57. ui.md — Fix hit marker shape (+ pattern, not X)
 - [ ] 58. ui.md — Fix match end screen title/format

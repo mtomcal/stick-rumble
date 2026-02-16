@@ -431,17 +431,19 @@ function queueMessage(type: string, data: unknown): void {
     // Similar for weapon:spawned
 }
 
-function processPendingMessages(): void {
-    // Process player moves
-    for (const move of this.pendingPlayerMoves) {
-        this.handlePlayerMove(move);
-    }
-    this.pendingPlayerMoves = [];
+// Inside room:joined handler:
+// Pending player:move messages are DISCARDED (stale, captured before room was created)
+this.pendingPlayerMoves = [];
 
-    // Process weapon spawns
-    for (const spawn of this.pendingWeaponSpawns) {
-        this.handleWeaponSpawned(spawn);
+// Pending weapon:spawned messages ARE replayed (crate positions are still valid)
+for (const pendingData of this.pendingWeaponSpawns) {
+    const weaponData = pendingData as WeaponSpawnedData;
+    if (weaponData.crates) {
+        for (const crateData of weaponData.crates) {
+            this.weaponCrateManager.spawnCrate(crateData);
+        }
     }
+}
     this.pendingWeaponSpawns = [];
 }
 ```
