@@ -306,23 +306,24 @@ export class KillFeedUI {
 - Visibility: Hidden for melee weapons (Bat, Katana)
 - Depth: 1000
 
-**Low Ammo Indicator:**
-- When current ≤ 20% of max → color changes to red (#ff0000)
-
 **Why hide for melee?** Melee weapons have unlimited attacks (magazineSize = 0). Showing "0/0" is confusing.
+
+> **Note:** There is no low-ammo color change logic. The ammo text stays white (#ffffff) regardless of ammo count.
 
 **TypeScript:**
 ```typescript
-function updateAmmoDisplay(currentAmmo: number, maxAmmo: number, isMelee: boolean): void {
-  if (isMelee) {
-    this.ammoText.setVisible(false);
-    return;
-  }
-  this.ammoText.setVisible(true);
-  this.ammoText.setText(`${currentAmmo}/${maxAmmo}`);
+updateAmmoDisplay(shootingManager: ShootingManager): void {
+  if (this.ammoText && shootingManager) {
+    const isMelee = shootingManager.isMeleeWeapon();
 
-  const ratio = currentAmmo / maxAmmo;
-  this.ammoText.setColor(ratio <= 0.2 ? '#ff0000' : '#ffffff');
+    if (isMelee) {
+      this.ammoText.setVisible(false);
+    } else {
+      this.ammoText.setVisible(true);
+      const [current, max] = shootingManager.getAmmoInfo();
+      this.ammoText.setText(`${current}/${max}`);
+    }
+  }
 }
 ```
 
@@ -1199,7 +1200,7 @@ it('should show kills in reverse chronological order', () => {
 
 **Expected Output:**
 - Modal visible
-- Winner text = "Player1 WINS!"
+- Winner text = "Winner: Player1"
 
 ---
 
