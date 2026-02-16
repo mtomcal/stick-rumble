@@ -716,12 +716,15 @@ const color = parseHexColor(config.visuals.muzzleFlashColor);
 
 **Factory Pattern:**
 ```go
-// Create weapons via factory (handles config loading)
-weapon := CreateWeaponByType("ak47")
+// CreateWeaponByType returns (*Weapon, error) — error for unknown weapon types
+weapon, err := CreateWeaponByType("ak47")
+if err != nil {
+    // "invalid weapon type: ..."
+}
 
-// Case-insensitive lookup
-weapon := CreateWeaponByType("AK47")  // Same result
-weapon := CreateWeaponByType("Ak47")  // Same result
+// Case-insensitive lookup (uses strings.ToLower internally)
+weapon, _ := CreateWeaponByType("AK47")  // Same result
+weapon, _ := CreateWeaponByType("Ak47")  // Same result
 ```
 
 **Thread Safety:**
