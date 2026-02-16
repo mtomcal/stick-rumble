@@ -1,6 +1,6 @@
 # Gemini Service
 
-> **Spec Version**: 1.0.0
+> **Spec Version**: 1.0.1
 > **Last Updated**: 2026-02-16
 > **Depends On**: [types-and-events.md](types-and-events.md), [config.md](config.md), [ui.md](ui.md)
 > **Depended By**: [ui.md](ui.md), [overview.md](overview.md)
@@ -391,3 +391,4 @@ There is no explicit rate limiting in the service itself. Rate limiting is achie
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-16 | Initial specification |
+| 1.0.1 | 2026-02-16 | Verified against source — all constants, API calls, error handling, and line references match |
