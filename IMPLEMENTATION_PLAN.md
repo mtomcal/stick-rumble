@@ -68,7 +68,7 @@ All spec files are at `docs/archive/20251125-055521-pre-bmm/specs/`.
 - [x] 4. config.md
 - [x] 5. player.md
 - [x] 6. main-scene.md
-- [ ] 7. combat.md
+- [x] 7. combat.md
 - [ ] 8. ai.md
 - [ ] 9. graphics.md
 - [ ] 10. pathfinder.md
