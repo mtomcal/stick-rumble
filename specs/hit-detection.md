@@ -697,9 +697,8 @@ handlePlayerDamaged(data: PlayerDamagedData) {
 }
 
 handleHitConfirmed(data: HitConfirmedData) {
-  // Play hitmarker sound/visual for local player
-  this.audioManager.playHitmarker();
-  this.ui.showHitmarker();
+  // Show visual hitmarker for local player (no audio yet — TODO for audio story)
+  this.ui.showHitMarker();
 }
 
 // player:death handler
@@ -1197,4 +1196,5 @@ func TestProjectileOutOfBounds(t *testing.T) {
 | 1.0.0 | 2026-02-02 | Initial specification |
 | 1.1.0 | 2026-02-15 | Added Hitscan Hit Detection section (Pistol ray-circle collision). Added Lag Compensation via Position History section (RTT-based rewind, 150ms cap, linear interpolation). Updated overview to distinguish projectile vs hitscan collision modes. |
 | 1.1.1 | 2026-02-16 | Fixed `checkHitDetection` code block — `onHit(hit)` takes HitEvent struct (not individual params), weapon damage via `gs.weaponStates` map (not `gs.world.GetPlayerWeapon`), projectiles via `gs.projectileManager` (not `gs.world.Projectiles`), players accessed directly under RLock. |
+| 1.1.3 | 2026-02-16 | Fixed client `handleHitConfirmed` — only calls `this.ui.showHitMarker()`, no `audioManager.playHitmarker()` (audio is TODO) |
 | 1.1.2 | 2026-02-16 | Fixed hitscan pseudocode — hitscan does NOT check `IsInvulnerable` or `IsInvincibleFromRoll()` (unlike projectile collision). Invulnerable/rolling players can be hit by hitscan. |
