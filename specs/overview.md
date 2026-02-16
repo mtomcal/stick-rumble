@@ -311,8 +311,8 @@ events-schema/
 ├── src/
 │   ├── schemas/
 │   │   ├── common.ts          # Position, Velocity, Message base
-│   │   ├── client-to-server.ts # Client→Server messages (7 types)
-│   │   └── server-to-client.ts # Server→Client messages (19 types)
+│   │   ├── client-to-server.ts # Client→Server messages (6 types)
+│   │   └── server-to-client.ts # Server→Client messages (22 types)
 │   ├── build-schemas.ts       # Generates JSON schemas for Go
 │   ├── validate-schemas.ts    # Validates schema integrity
 │   ├── check-schemas-up-to-date.ts # CI drift detection
