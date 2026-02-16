@@ -205,19 +205,23 @@ class ShootingManager {
         return true;
     }
 
-    shoot(aimAngle: number): boolean {
-        if (!this.canShoot()) {
+    shoot(): boolean {
+        if (!this.isEnabled || !this.canShoot()) {
             return false;
         }
 
-        // Optimistic cooldown tracking
-        this.lastShotTime = this.clock.now();
+        // Record shot time for cooldown and lag compensation
+        const shotTime = this.clock.now();
+        this.lastShotTime = shotTime;
 
-        // Send to server
+        // Send to server with client timestamp for lag compensation
         this.wsClient.send({
             type: 'player:shoot',
-            timestamp: this.clock.now(),
-            data: { aimAngle }
+            timestamp: shotTime,
+            data: {
+                aimAngle: this.aimAngle,      // Uses instance field, not param
+                clientTimestamp: shotTime,
+            }
         });
 
         return true;

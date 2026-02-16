@@ -81,7 +81,7 @@ The specs in `specs/` were bulk-updated and then validated by a prior Ralph job.
 - [x] 33. shooting.md — Fix PlayerShoot locking (weaponMu.RLock, not gs.mu.Lock)
 - [x] 35. shooting.md — Fix projectile creation (CreateProjectile, not NewProjectile+AddProjectile)
 - [x] 37. shooting.md — Fix CanShoot scope (also checks IsReloading and CurrentAmmo)
-- [ ] 38. shooting.md — Fix client shoot() signature (no params, uses this.aimAngle)
+- [x] 38. shooting.md — Fix client shoot() signature (no params, uses this.aimAngle)
 - [ ] 41. weapons.md — Fix Weapon struct (add IsHitscan field)
 - [ ] 43. weapons.md — Fix CreateWeaponByType return (returns error too)
 - [ ] 45. overview.md — Fix message type counts (6 C→S, 22 S→C = 28 total)
