@@ -395,7 +395,7 @@ function handleRoomJoined(message: Message): void {
     playerManager.setLocalPlayerId(data.playerId);
 
     // Reset health (respawn state)
-    this.currentHealth = 100;
+    this.localPlayerHealth = 100;
 
     // Reset match state
     this.matchEnded = false;
@@ -868,4 +868,5 @@ test "tab reload joins existing room":
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification |
 | 1.1.0 | 2026-02-15 | Added `PingTracker` field to Player struct for per-player RTT measurement. See [networking.md](networking.md#ping-tracking) for implementation details. |
+| 1.1.2 | 2026-02-16 | Fixed health property name — `localPlayerHealth` not `currentHealth` |
 | 1.1.1 | 2026-02-16 | Fixed `room:joined` data payload — server sends both `roomId` and `playerId` (was missing `roomId`). |

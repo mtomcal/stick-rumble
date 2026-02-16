@@ -129,7 +129,7 @@ The specs in `specs/` were bulk-updated and then validated by a prior Ralph job.
 - [x] 47. overview.md — Fix GDD.md path (docs/GDD.md, not root)
 - [x] 48. overview.md — Remove .claude/todos.json from folder tree
 - [x] 51. overview.md — Fix World struct (add clock, rng, rngMu fields, PlayerState type)
-- [ ] 55. rooms.md — Fix health property name (localPlayerHealth, not currentHealth)
+- [x] 55. rooms.md — Fix health property name (localPlayerHealth, not currentHealth)
 - [ ] 59. ui.md — Fix scoreboard player ID (full ID, no truncation)
 - [ ] 62. ui.md — Note connection status font size (14px)
 - [ ] 63. ui.md — Fix match timer boundary conditions (>= vs >)
