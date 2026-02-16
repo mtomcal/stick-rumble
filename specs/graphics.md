@@ -1,7 +1,7 @@
 # Graphics
 
-> **Spec Version**: 1.0.0
-> **Last Updated**: 2026-02-02
+> **Spec Version**: 2.0.0
+> **Last Updated**: 2026-02-16
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [arena.md](arena.md)
 > **Depended By**: [client-architecture.md](client-architecture.md), [test-index.md](test-index.md)
 
@@ -47,9 +47,15 @@ All graphics constants are documented here for single-source-of-truth. These val
 
 | Constant | Value | Description |
 |----------|-------|-------------|
+| FLOOR_GRID_DEPTH | -1 | Floor grid renders below all |
 | PLAYER_DEPTH | 50 | Stick figures render at this depth |
+| DEATH_CORPSE_DEPTH | 5 | Dead player corpses render below live players |
 | EFFECT_DEPTH | 60 | Hit effects render above players |
 | MELEE_ARC_DEPTH | 100 | Melee swing arcs render above effects |
+| HIT_MARKER_DEPTH | 1000 | Hit markers render above game objects |
+| HIT_INDICATOR_DEPTH | 1001 | Directional hit indicators render above markers |
+| MINIMAP_BG_DEPTH | 1999 | Minimap background |
+| MINIMAP_DYNAMIC_DEPTH | 2000 | Minimap dynamic elements |
 | UI_DEPTH | 1000+ | UI elements render above all game objects |
 
 ### Animation Timings
@@ -112,6 +118,8 @@ interface RenderedPlayer {
   rollStartTime?: number;  // When roll started (for animation)
   health: number;       // 0-100
   weaponType: string;   // Current weapon name
+  lastDamageTime?: number;       // Timestamp of last damage received (for hit indicators)
+  lastDamageSourceAngle?: number; // Angle from attacker (radians, for directional indicators)
 }
 ```
 
@@ -522,35 +530,33 @@ endX = playerX + cos(aimAngle) * 50
 endY = playerY + sin(aimAngle) * 50
 ```
 
-### Crosshair
+### Crosshair / Reticle
 
-**Why Dynamic Crosshair?**
-Shows current weapon spread, helping players understand accuracy mechanics.
+The crosshair is a **pre-generated texture** (not procedural per-frame). It consists of a ring with cardinal tick marks and a red center dot. There is NO dynamic spread circle.
 
-**Static Crosshair:**
-- Shape: 4 lines forming + sign
-- Size: 10px from center, 5px gap
-- Width: 2px
-- Color: White (0xffffff)
-- Position: Mouse cursor (scrollFactor = 0)
-- Depth: 1000
+**Texture Generation** (32×32, generated once in `preload()`):
 
-**Dynamic Spread Circle:**
-- Shape: Circle outline
-- Color: Red (0xff0000), 0.6 alpha
-- Width: 2px
-- Radius: currentSpread * PIXELS_PER_DEGREE + 5
-- PIXELS_PER_DEGREE = 2
+```typescript
+// TextureGenerator.ts — reticle texture
+const gfx = scene.make.graphics({ x: 0, y: 0 }, false);
+gfx.lineStyle(2, 0xffffff, 1);
+gfx.strokeCircle(16, 16, 10);           // Outer ring (radius 10)
 
-**Weapon Spread (in pixels):**
+gfx.beginPath();
+gfx.moveTo(16, 2); gfx.lineTo(16, 8);   // Top tick
+gfx.moveTo(16, 24); gfx.lineTo(16, 30); // Bottom tick
+gfx.moveTo(2, 16); gfx.lineTo(8, 16);   // Left tick
+gfx.moveTo(24, 16); gfx.lineTo(30, 16); // Right tick
+gfx.strokePath();
 
-| Weapon | Base Spread° | Pixels |
-|--------|-------------|--------|
-| Pistol | 0° | 0 |
-| Uzi | 5° | 10 |
-| AK47 | 3° | 6 |
-| Shotgun | 15° | 30 |
-| Melee | N/A | Hidden |
+gfx.fillStyle(0xff0000, 1);
+gfx.fillCircle(16, 16, 2);              // Red center dot
+gfx.generateTexture('reticle', 32, 32);
+```
+
+**Placement**: Sprite at cursor/aim position, depth 100, alpha 0.8.
+
+**Constants**: See [constants.md § Crosshair / Reticle Constants](constants.md#crosshair--reticle-constants).
 
 ### Weapon Crate Rendering
 
@@ -581,75 +587,46 @@ Draws attention to pickups, makes them feel valuable and interactive.
 
 ### Melee Swing Arc
 
-**Why Pie-Slice Arc?**
-Shows the attack cone visually, helping players aim melee attacks.
+The melee swing uses a **white stroke-only arc** (no pie-slice fill, no per-weapon colors) combined with a **weapon container rotation tween**.
 
-**Bat Swing:**
-- Range: 64 pixels
-- Arc: 90 degrees (π/2 radians)
-- Color: 0x8B4513 (brown)
-- Outline: 3px width, 0.8 alpha
-- Fill: 0.2 alpha (semi-transparent)
-
-**Katana Swing:**
-- Range: 80 pixels
-- Arc: 90 degrees
-- Color: 0xC0C0C0 (silver)
-- Outline: 3px width, 0.8 alpha
-- Fill: 0.2 alpha
-
-**Animation:**
-- Duration: 200ms total
-- Frames: 4
-- Frame duration: 50ms each
-- Depth: 100 (above players)
-
-**Pseudocode:**
-```
-function renderMeleeSwing(x, y, aimAngle, weapon):
-    arcRadians = weapon.arcDegrees * PI / 180
-    halfArc = arcRadians / 2
-    startAngle = aimAngle - halfArc
-    endAngle = aimAngle + halfArc
-
-    // Arc outline
-    graphics.lineStyle(3, weapon.color, 0.8)
-    graphics.arc(x, y, weapon.range, startAngle, endAngle)
-    graphics.strokePath()
-
-    // Filled pie slice
-    graphics.fillStyle(weapon.color, 0.2)
-    graphics.moveTo(x, y)
-    graphics.arc(x, y, weapon.range, startAngle, endAngle)
-    graphics.closePath()
-    graphics.fillPath()
-```
-
-**TypeScript:**
+**Arc Rendering**:
 ```typescript
-showSwingAnimation(aimAngle: number): void {
-  this.graphics.clear();
-
-  const arcRadians = (this.stats.arcDegrees * Math.PI) / 180;
-  const halfArc = arcRadians / 2;
-  const startAngle = aimAngle - halfArc;
-  const endAngle = aimAngle + halfArc;
-
-  // Arc outline
-  this.graphics.lineStyle(3, this.stats.color, 0.8);
-  this.graphics.beginPath();
-  this.graphics.arc(this.x, this.y, this.stats.range, startAngle, endAngle, false);
-  this.graphics.strokePath();
-
-  // Fill
-  this.graphics.fillStyle(this.stats.color, 0.2);
-  this.graphics.beginPath();
-  this.graphics.moveTo(this.x, this.y);
-  this.graphics.arc(this.x, this.y, this.stats.range, startAngle, endAngle, false);
-  this.graphics.closePath();
-  this.graphics.fillPath();
-}
+// Stroke-only arc — no fill, white color, all weapons
+const slash = this.add.graphics();
+slash.lineStyle(2, 0xffffff, 0.8);
+slash.beginPath();
+slash.arc(attacker.x, attacker.y, range, angle - 0.7, angle + 0.7, false);
+slash.strokePath();
+this.tweens.add({ targets: slash, alpha: 0, duration: 200, onComplete: () => slash.destroy() });
 ```
+
+**Weapon Container Swing Tween**:
+```typescript
+// 100ms yoyo rotation: -45° to +60°
+this.scene.tweens.add({
+    targets: this.weaponContainer,
+    angle: { from: this.weaponContainer.angle - 45, to: this.weaponContainer.angle + 60 },
+    duration: 100,
+    yoyo: true,
+    onComplete: () => {
+        this.isAttacking = false;
+        this.weaponContainer.setAngle(0);
+    }
+});
+```
+
+| Property | Value | Source |
+|----------|-------|--------|
+| Arc Color | 0xFFFFFF (white) | All weapons use white |
+| Arc Stroke | 2px | Thin, visible |
+| Arc Alpha | 0.8 | Slightly transparent |
+| Arc Angle | ±0.7 rad (~80°) | `constants.md` |
+| Arc Fade | 200ms | Quick dissolve |
+| Swing From | -45° | Wind-up behind player |
+| Swing To | +60° | Forward swing |
+| Swing Duration | 100ms | Fast yoyo tween |
+
+**Constants**: See [constants.md § Melee Visual Constants](constants.md#melee-visual-constants).
 
 ### Hit Effects
 
@@ -757,16 +734,270 @@ Fits the dodge roll theme (circular motion), provides intuitive "filling up" fee
 - Arc: Clockwise from top (-π/2) based on progress
 - Formula: `endAngle = -PI/2 + (progress * 2 * PI)`
 
-### Dead Player Rendering
+### Death Corpse Rendering
 
-**Why Stay Visible?**
-Players need to see where enemies died for tactical awareness (respawn locations).
+When a player dies, the live stick figure is destroyed and replaced with a static **splayed corpse** graphic. The corpse has 4 limbs extending outward and an offset head circle.
 
-**Visual Change:**
-- Color: Changed to 0x888888 (gray)
-- All body parts retain shape
-- No transparency change
-- No animation
+**Implementation**:
+```typescript
+// On death — create corpse graphic
+const deadGfx = scene.add.graphics();
+deadGfx.lineStyle(3, 0x444444, 1);
+const x = this.x;
+const y = this.y;
+const rot = this.rotation;
+
+// 4 splayed limbs at ±0.5 and ±2.5 radians from rotation
+deadGfx.moveTo(x, y);
+deadGfx.lineTo(x + Math.cos(rot + 0.5) * 20, y + Math.sin(rot + 0.5) * 20);
+deadGfx.moveTo(x, y);
+deadGfx.lineTo(x + Math.cos(rot - 0.5) * 20, y + Math.sin(rot - 0.5) * 20);
+deadGfx.moveTo(x, y);
+deadGfx.lineTo(x + Math.cos(rot + 2.5) * 20, y + Math.sin(rot + 2.5) * 20);
+deadGfx.moveTo(x, y);
+deadGfx.lineTo(x + Math.cos(rot - 2.5) * 20, y + Math.sin(rot - 2.5) * 20);
+deadGfx.strokePath();
+
+// Head offset along rotation axis
+deadGfx.fillStyle(0x444444);
+deadGfx.fillCircle(x + Math.cos(rot) * 25, y + Math.sin(rot) * 25, 10);
+
+// Fade out after 5 seconds
+scene.tweens.add({
+    targets: deadGfx,
+    alpha: 0,
+    duration: 2000,
+    delay: 5000,
+    onComplete: () => deadGfx.destroy()
+});
+```
+
+| Property | Value | Source |
+|----------|-------|--------|
+| Color | 0x444444 (dark gray) | `constants.md § Death Corpse Constants` |
+| Limb Width | 3px stroke | — |
+| Limb Length | 20px | — |
+| Limb Angles | ±0.5, ±2.5 rad from rotation | 4 splayed limbs |
+| Head Radius | 10px | Smaller than live (13px) |
+| Head Offset | 25px along rotation | — |
+| Visible Duration | 5000ms | — |
+| Fade Duration | 2000ms | After visible period |
+| Depth | 5 | Below live players |
+
+**Constants**: See [constants.md § Death Corpse Constants](constants.md#death-corpse-constants).
+
+### Blood Particles
+
+When a player takes damage, 5 blood particles burst from the impact point, spraying away from the damage source.
+
+**Implementation**:
+```typescript
+// On damage received
+for (let i = 0; i < 5; i++) {
+    const blood = this.add.circle(player.x, player.y, Phaser.Math.Between(2, 5), 0xcc0000);
+    const angle = Phaser.Math.Angle.Between(sourceX, sourceY, player.x, player.y) + (Math.random() - 0.5);
+    const speed = Phaser.Math.Between(50, 150);
+    const vec = this.physics.velocityFromRotation(angle, speed);
+
+    this.physics.add.existing(blood);
+    (blood.body as Phaser.Physics.Arcade.Body).setVelocity(vec.x, vec.y);
+    (blood.body as Phaser.Physics.Arcade.Body).setDrag(200);
+
+    this.tweens.add({
+        targets: blood, alpha: 0, scale: 0, duration: 500,
+        onComplete: () => blood.destroy()
+    });
+}
+```
+
+| Property | Value | Source |
+|----------|-------|--------|
+| Count | 5 per hit | `constants.md § Blood Particle Constants` |
+| Color | 0xCC0000 (dark red) | — |
+| Radius | 2-5px random | — |
+| Speed | 50-150 px/s random | — |
+| Direction | Away from damage source ±0.5 rad | — |
+| Drag | 200 px/s² | Natural deceleration |
+| Duration | 500ms fade + shrink | — |
+
+**Constants**: See [constants.md § Blood Particle Constants](constants.md#blood-particle-constants).
+
+### Healing Particles
+
+During health regeneration, small green particles occasionally float upward from the player, providing subtle visual feedback that healing is active.
+
+**Implementation**:
+```typescript
+// During health regen tick (15% chance per tick)
+if (Math.random() > 0.85) {
+    const part = this.add.circle(
+        player.x + (Math.random() - 0.5) * 25,
+        player.y + (Math.random() - 0.5) * 25,
+        2, 0x00ff00
+    );
+    this.tweens.add({
+        targets: part, y: part.y - 20, alpha: 0, duration: 600,
+        onComplete: () => part.destroy()
+    });
+}
+```
+
+| Property | Value | Source |
+|----------|-------|--------|
+| Color | 0x00FF00 (green) | `constants.md § Healing Particle Constants` |
+| Radius | 2px | — |
+| Spawn Chance | 15% per regen tick | — |
+| Spread | ±25px from center | Random offset |
+| Float Distance | 20px upward | — |
+| Duration | 600ms | Fade + float |
+
+**Constants**: See [constants.md § Healing Particle Constants](constants.md#healing-particle-constants).
+
+### Wall Spark
+
+When a bullet's barrel position is obstructed by a wall (barrel inside wall geometry), a spark effect appears instead of firing the bullet.
+
+**Implementation**:
+```typescript
+// When bullet spawn point is inside a wall
+const spark = this.add.circle(startPos.x, startPos.y, 3, 0xffff00);
+this.tweens.add({
+    targets: spark, alpha: 0, scale: 2, duration: 100,
+    onComplete: () => spark.destroy()
+});
+```
+
+| Property | Value |
+|----------|-------|
+| Color | 0xFFFF00 (yellow) |
+| Radius | 3px |
+| Scale Tween | 1.0 → 2.0 |
+| Duration | 100ms |
+
+### Gun Recoil
+
+When a ranged weapon fires, the weapon container kicks backward along the aim axis, then snaps back. This provides visceral feedback for each shot.
+
+**Implementation**:
+```typescript
+// On ranged weapon fire
+this.recoilOffset = 0;
+let recoilDist = -6;  // Default kickback
+if (this.weaponType === WeaponType.SHOTGUN) recoilDist = -10;  // Heavier kick
+
+this.scene.tweens.add({
+    targets: this,
+    recoilOffset: recoilDist,
+    duration: 50,
+    yoyo: true
+});
+
+// Applied during weapon container positioning:
+const recoilX = Math.cos(this.rotation) * this.recoilOffset;
+const recoilY = Math.sin(this.rotation) * this.recoilOffset;
+this.weaponContainer.setPosition(this.x + recoilX, this.y + recoilY);
+```
+
+| Property | Value | Source |
+|----------|-------|--------|
+| Default Recoil | -6px | `constants.md § Gun Recoil Constants` |
+| Shotgun Recoil | -10px | — |
+| Duration | 50ms yoyo | — |
+| Direction | Backward along aim axis | Opposite of rotation |
+
+**Constants**: See [constants.md § Gun Recoil Constants](constants.md#gun-recoil-constants).
+
+### Aim Sway
+
+The weapon container visually oscillates based on player movement state. This is NOT just visual — it affects actual projectile trajectory. See [shooting.md § Aim Sway](shooting.md#aim-sway) for gameplay impact.
+
+**Visual Application**:
+```typescript
+// In updateAttachments() — weapon follows aim + sway
+this.weaponContainer.setRotation(this.rotation + this.aimSway);
+```
+
+| State | Speed | Magnitude | Visual Effect |
+|-------|-------|-----------|---------------|
+| Moving (>10 px/s) | 0.008 rad/ms | ±0.15 rad (~8.6°) | Noticeable wobble |
+| Idle (≤10 px/s) | 0.002 rad/ms | ±0.03 rad (~1.7°) | Subtle breathing |
+
+**Constants**: See [constants.md § Aim Sway Constants](constants.md#aim-sway-constants).
+
+### Reload Animation
+
+During weapon reload, the weapon container pulses (fades and shrinks) to indicate the reload state.
+
+**Implementation**:
+```typescript
+this.scene.tweens.add({
+    targets: this.weaponContainer,
+    alpha: 0.5,
+    scaleX: 0.8,
+    scaleY: 0.8,
+    duration: 200,
+    yoyo: true,
+    repeat: 2,  // 3 total pulses (initial + 2 repeats)
+    onComplete: () => {
+        this.weaponContainer.setAlpha(1);
+        this.weaponContainer.setScale(1);
+    }
+});
+```
+
+| Property | Value | Source |
+|----------|-------|--------|
+| Alpha | 1.0 → 0.5 → 1.0 | `constants.md § Reload Animation Constants` |
+| Scale | 1.0 → 0.8 → 1.0 | — |
+| Pulse Duration | 200ms each | — |
+| Pulse Count | 3 total | yoyo with repeat: 2 |
+
+**Constants**: See [constants.md § Reload Animation Constants](constants.md#reload-animation-constants).
+
+### Directional Hit Indicators
+
+Chevron-shaped indicators appear around the player pointing toward the source of damage (both incoming and outgoing).
+
+**Texture** (16×16 chevron, pre-generated):
+```typescript
+const gfx = scene.make.graphics({ x: 0, y: 0 }, false);
+gfx.fillStyle(0xffffff, 1);
+gfx.beginPath();
+gfx.moveTo(0, 0);
+gfx.lineTo(16, 8);
+gfx.lineTo(0, 16);
+gfx.lineTo(4, 8);
+gfx.closePath();
+gfx.fillPath();
+gfx.generateTexture('hit_indicator', 16, 16);
+```
+
+**Outgoing Hit Indicator** (dealing damage):
+```typescript
+const angle = Phaser.Math.Angle.Between(player.x, player.y, target.x, target.y);
+const ix = player.x + Math.cos(angle) * 60;
+const iy = player.y + Math.sin(angle) * 60;
+const indicator = this.add.sprite(ix, iy, 'hit_indicator').setDepth(1001);
+indicator.setRotation(angle);
+indicator.setTint(kill ? 0xff0000 : 0xffffff);
+this.tweens.add({ targets: indicator, alpha: 0, scale: 1.5, duration: 200, onComplete: () => indicator.destroy() });
+```
+
+**Incoming Hit Indicator** (taking damage):
+```typescript
+// Same positioning but longer duration (400ms) and always red
+indicator.setTint(0xff0000);
+this.tweens.add({ targets: indicator, alpha: 0, scale: 1.5, duration: 400, onComplete: () => indicator.destroy() });
+```
+
+| Property | Outgoing | Incoming | Source |
+|----------|----------|----------|--------|
+| Distance | 60px from center | 60px from center | `constants.md` |
+| Color | White (normal) / Red (kill) | Always red | — |
+| Duration | 200ms | 400ms | — |
+| Depth | 1001 | 1001 | — |
+
+**Constants**: See [constants.md § Hit Indicator Constants](constants.md#hit-indicator-constants).
 
 ---
 
@@ -1009,17 +1240,19 @@ test "player renders all body parts":
 
 ---
 
-### TS-GFX-011: Player Fades on Death
+### TS-GFX-011: Death corpse renders with splayed limbs
 
 **Category**: Visual
-**Priority**: Medium
+**Priority**: High
 
-**Input:**
-- Player with isDead = true
+**Preconditions:**
+- Player dies
 
 **Expected Output:**
-- Player color changes to 0x888888 (gray)
-- Player remains visible
+- 4 limbs drawn at ±0.5 and ±2.5 rad from rotation
+- Head circle at 25px offset along rotation axis
+- Color is 0x444444 (dark gray)
+- Visible for 5000ms, then fades over 2000ms
 
 ---
 
@@ -1037,18 +1270,19 @@ test "player renders all body parts":
 
 ---
 
-### TS-GFX-013: Melee Swing Shows Arc
+### TS-GFX-013: Melee arc renders as white stroke-only
 
 **Category**: Visual
 **Priority**: High
 
-**Input:**
-- Bat swing at aimAngle = 0
+**Preconditions:**
+- Player performs melee attack
 
 **Expected Output:**
-- Arc from -45° to +45° (90° total)
-- Radius = 64 pixels
-- Brown color with semi-transparent fill
+- Arc is stroke-only (no fill), white color (0xFFFFFF)
+- Arc spans ±0.7 rad from aim direction
+- Weapon container rotates from -45° to +60° over 100ms (yoyo)
+- Arc fades in 200ms
 
 ---
 
@@ -1066,8 +1300,157 @@ test "player renders all body parts":
 
 ---
 
+### TS-GFX-015: Blood particles spawn on damage
+
+**Category**: Visual
+**Priority**: High
+
+**Preconditions:**
+- Player takes damage from a source
+
+**Expected Output:**
+- 5 particles spawn at player position
+- Particles are dark red (0xCC0000), radius 2-5px
+- Particles spray away from damage source at 50-150 px/s
+- Particles fade and shrink over 500ms
+
+---
+
+### TS-GFX-016: Healing particles appear during regen
+
+**Category**: Visual
+**Priority**: Medium
+
+**Preconditions:**
+- Player is regenerating health
+
+**Expected Output:**
+- Green particles (0x00FF00) occasionally appear (~15% chance per tick)
+- Particles float upward 20px and fade over 600ms
+
+---
+
+### TS-GFX-017: Wall spark on obstructed barrel
+
+**Category**: Visual
+**Priority**: Medium
+
+**Preconditions:**
+- Player fires with barrel position inside wall geometry
+
+**Expected Output:**
+- Yellow spark (0xFFFF00) appears at barrel position
+- Spark scales up 2× and fades over 100ms
+- No bullet is created
+
+---
+
+### TS-GFX-018: Gun recoil on ranged fire
+
+**Category**: Visual
+**Priority**: High
+
+**Preconditions:**
+- Player fires a ranged weapon
+
+**Expected Output:**
+- Weapon container kicks backward: -6px default, -10px shotgun
+- 50ms yoyo tween returns to original position
+
+---
+
+### TS-GFX-019: Aim sway visual oscillation
+
+**Category**: Visual
+**Priority**: High
+
+**Preconditions:**
+- Player is moving (speed > 10 px/s)
+
+**Expected Output:**
+- Weapon container rotation includes sway offset
+- Sway magnitude ~0.15 rad while moving
+- Sway magnitude ~0.03 rad while idle
+
+---
+
+### TS-GFX-020: Reload animation pulses
+
+**Category**: Visual
+**Priority**: Medium
+
+**Preconditions:**
+- Player initiates reload
+
+**Expected Output:**
+- Weapon container pulses 3 times (alpha 1→0.5→1, scale 1→0.8→1)
+- Each pulse takes 200ms
+- Container resets to alpha 1, scale 1 on completion
+
+---
+
+### TS-GFX-021: Directional hit indicator (outgoing)
+
+**Category**: Visual
+**Priority**: High
+
+**Preconditions:**
+- Player deals damage to a target
+
+**Expected Output:**
+- Chevron indicator appears 60px from player toward target
+- White tint for normal hit, red for kill
+- Fades over 200ms
+
+---
+
+### TS-GFX-022: Directional hit indicator (incoming)
+
+**Category**: Visual
+**Priority**: High
+
+**Preconditions:**
+- Player receives damage from a source
+
+**Expected Output:**
+- Red chevron indicator appears 60px from player toward source
+- Fades over 400ms (longer than outgoing)
+
+---
+
+### TS-GFX-023: Crosshair reticle texture
+
+**Category**: Visual
+**Priority**: Medium
+
+**Preconditions:**
+- Game scene loaded
+
+**Expected Output:**
+- Reticle sprite at cursor position, depth 100, alpha 0.8
+- Contains ring (radius 10), 4 cardinal ticks, red center dot
+- No dynamic spread circle
+
+---
+
+### TS-GFX-024: Death corpse fade timing
+
+**Category**: Visual
+**Priority**: Medium
+
+**Preconditions:**
+- Player death corpse rendered
+
+**Expected Output:**
+- Corpse remains fully visible (alpha 1) for 5000ms
+- Begins fade to alpha 0 over 2000ms after delay
+- Graphics object destroyed after fade completes
+
+---
+
 ## Changelog
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.0.0 | 2026-02-16 | Major overhaul: Ported all pre-BMM visual systems. Replaced crosshair with pre-generated reticle texture. Replaced melee arc with white stroke-only + container tween. Replaced dead player with splayed corpse. Added blood particles, healing particles, wall spark, gun recoil, aim sway, reload animation, directional hit indicators. Updated depth table. Added tests TS-GFX-015 through TS-GFX-024. |
 | 1.0.0 | 2026-02-02 | Initial specification |

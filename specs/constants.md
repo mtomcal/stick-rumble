@@ -1,7 +1,7 @@
 # Constants
 
-> **Spec Version**: 1.1.0
-> **Last Updated**: 2026-02-15
+> **Spec Version**: 1.2.0
+> **Last Updated**: 2026-02-16
 > **Depends On**: None (foundational spec)
 > **Depended By**: [arena.md](arena.md), [player.md](player.md), [movement.md](movement.md), [dodge-roll.md](dodge-roll.md), [weapons.md](weapons.md), [shooting.md](shooting.md), [melee.md](melee.md), [hit-detection.md](hit-detection.md), [match.md](match.md), [rooms.md](rooms.md), [networking.md](networking.md), [audio.md](audio.md), [ui.md](ui.md), [graphics.md](graphics.md)
 
@@ -304,8 +304,8 @@ Close-range melee with crowd control.
 | BAT_DAMAGE | 25 | HP | Same as pistol. **4 hits to kill**. |
 | BAT_FIRE_RATE | 2.0 | swings/s | 500ms between swings. Fast melee option. |
 | BAT_MAGAZINE_SIZE | 0 | - | Infinite swings. Melee never reloads. |
-| BAT_RANGE | 64 | px | 2 player widths. Must be in close quarters. |
-| BAT_ARC | 90 | degrees | 90° swing arc. Wide horizontal sweep. |
+| BAT_RANGE | 90 | px | Prototype-tested range. ~3 player widths. Generous reach for melee commitment. |
+| BAT_ARC | 80 | degrees | ±0.7 rad (~80°). Slightly tighter than 90° for more directional precision. |
 | BAT_KNOCKBACK | 40 | px | 1.25 player widths. Disrupts enemy positioning. |
 
 **Why 40px knockback**: Pushes enemy out of melee range (64px), forcing them to close distance again. Creates hit-and-run playstyle.
@@ -321,8 +321,8 @@ High damage, longer reach, no knockback. Commit to the kill.
 | KATANA_DAMAGE | 45 | HP | 100 HP ÷ 45 = **3 hits to kill** (technically 2.22). |
 | KATANA_FIRE_RATE | 1.25 | swings/s | 800ms between swings. Slower than bat. |
 | KATANA_MAGAZINE_SIZE | 0 | - | Infinite swings. |
-| KATANA_RANGE | 80 | px | 2.5 player widths. Longest melee reach. |
-| KATANA_ARC | 90 | degrees | Same arc as bat. |
+| KATANA_RANGE | 110 | px | Prototype-tested range. ~3.4 player widths. Longest melee reach rewards skill. |
+| KATANA_ARC | 80 | degrees | Same arc as bat. ±0.7 rad. |
 | KATANA_KNOCKBACK | 0 | px | No knockback. Victim stays in range for follow-up. |
 
 **Why no knockback**: Katana is the "commit" weapon. You either kill them in 3 hits or they escape/kill you. Bat is "poke and retreat."
@@ -382,6 +382,201 @@ Fixed positions for weapon crates. Coordinates based on arena percentages.
 | MUZZLE_FLASH_RADIUS | 8 | px | Small flash. Doesn't obscure aim. |
 | MUZZLE_FLASH_DURATION | 50 | ms | 3 frames at 60 FPS. Brief pop of light. |
 | PROJECTILE_DIAMETER | 4 | px | Visible but small. Encourages leading shots. |
+| DAMAGE_NUMBER_DURATION | 800 | ms | Float-up time before fade. Shorter than 1s for snappier feel. |
+| DAMAGE_NUMBER_FLOAT_Y | 50 | px | Vertical distance numbers float upward. |
+
+---
+
+## Melee Visual Constants
+
+| Constant | Value | Unit | Why |
+|----------|-------|------|-----|
+| MELEE_ARC_COLOR | 0xFFFFFF | hex | White stroke-only arc. Prototype used white for all weapons (no per-weapon colors). |
+| MELEE_ARC_STROKE_WIDTH | 2 | px | Thin stroke, visible but not obstructive. |
+| MELEE_ARC_ALPHA | 0.8 | ratio | Slightly transparent to not block view. |
+| MELEE_ARC_FADE_DURATION | 200 | ms | Quick fade after swing. |
+| MELEE_SWING_ANGLE_FROM | -45 | degrees | Container rotation start. Winds up behind player. |
+| MELEE_SWING_ANGLE_TO | 60 | degrees | Container rotation end. Full forward swing. |
+| MELEE_SWING_DURATION | 100 | ms | Fast 100ms yoyo tween. Snappy feel. |
+| MELEE_CAMERA_SHAKE_DURATION | 50 | ms | Brief screen shake on melee hit. |
+| MELEE_CAMERA_SHAKE_INTENSITY | 0.001 | ratio | Subtle shake. Felt but not disorienting. |
+
+---
+
+## Blood Particle Constants
+
+| Constant | Value | Unit | Why |
+|----------|-------|------|-----|
+| BLOOD_PARTICLE_COUNT | 5 | count | Per-hit burst. Enough for impact feel without clutter. |
+| BLOOD_COLOR | 0xCC0000 | hex | Dark red. Distinct from UI elements. |
+| BLOOD_RADIUS_MIN | 2 | px | Smallest particle size. |
+| BLOOD_RADIUS_MAX | 5 | px | Largest particle size. Variety in burst. |
+| BLOOD_SPEED_MIN | 50 | px/s | Slow particles linger near impact. |
+| BLOOD_SPEED_MAX | 150 | px/s | Fast particles spray outward. |
+| BLOOD_DRAG | 200 | px/s² | Decelerates particles naturally. |
+| BLOOD_DURATION | 500 | ms | Fade-out time. Brief but visible. |
+
+---
+
+## Healing Particle Constants
+
+| Constant | Value | Unit | Why |
+|----------|-------|------|-----|
+| HEALING_PARTICLE_COLOR | 0x00FF00 | hex | Green. Universal "healing" color. |
+| HEALING_PARTICLE_RADIUS | 2 | px | Small floating motes. |
+| HEALING_PARTICLE_CHANCE | 0.15 | ratio | 15% chance per regen tick. Subtle ambient effect. |
+| HEALING_PARTICLE_SPREAD | 25 | px | Random offset from player center. |
+| HEALING_PARTICLE_FLOAT | 20 | px | Vertical rise distance. |
+| HEALING_PARTICLE_DURATION | 600 | ms | Gentle float-up and fade. |
+
+---
+
+## Death Corpse Constants
+
+| Constant | Value | Unit | Why |
+|----------|-------|------|-----|
+| CORPSE_COLOR | 0x444444 | hex | Dark gray. Clearly "dead" not active. |
+| CORPSE_LIMB_WIDTH | 3 | px | Line thickness for splayed limbs. |
+| CORPSE_LIMB_LENGTH | 20 | px | Length of each of 4 limbs. |
+| CORPSE_LIMB_ANGLES | ±0.5, ±2.5 | rad | Four limbs splayed outward from rotation. |
+| CORPSE_HEAD_RADIUS | 10 | px | Smaller than living head (13px). |
+| CORPSE_HEAD_OFFSET | 25 | px | Distance along rotation axis from center. |
+| CORPSE_VISIBLE_DURATION | 5000 | ms | 5 seconds visible. Long enough to read the kill. |
+| CORPSE_FADE_DURATION | 2000 | ms | 2-second fade-out after visible period. |
+
+---
+
+## Camera Effects Constants
+
+| Constant | Value | Unit | Why |
+|----------|-------|------|-----|
+| CAMERA_SHAKE_DURATION | 50 | ms | Brief shake when dealing damage. |
+| CAMERA_SHAKE_INTENSITY | 0.001 | ratio | Subtle. Felt not seen. |
+| CAMERA_FLASH_DURATION | 100 | ms | Red flash when taking damage. |
+| CAMERA_FLASH_R | 128 | 0-255 | Half-intensity red. Not blinding. |
+| CAMERA_FLASH_G | 0 | 0-255 | No green component. |
+| CAMERA_FLASH_B | 0 | 0-255 | No blue component. |
+
+---
+
+## Crosshair / Reticle Constants
+
+| Constant | Value | Unit | Why |
+|----------|-------|------|-----|
+| RETICLE_TEXTURE_SIZE | 32 | px | 32x32 pre-generated texture. |
+| RETICLE_RING_RADIUS | 10 | px | Outer aiming ring. |
+| RETICLE_RING_STROKE | 2 | px | White stroke width. |
+| RETICLE_CENTER_DOT_COLOR | 0xFF0000 | hex | Red center dot for precision aiming. |
+| RETICLE_CENTER_DOT_RADIUS | 2 | px | Small precise dot. |
+| RETICLE_TICK_LENGTH | 6 | px | Cardinal direction tick marks (top/bottom/left/right). |
+| RETICLE_ALPHA | 0.8 | ratio | Slightly transparent to not obscure targets. |
+| RETICLE_DEPTH | 100 | z-index | Above all game objects. |
+
+---
+
+## Hit Indicator Constants
+
+| Constant | Value | Unit | Why |
+|----------|-------|------|-----|
+| HIT_INDICATOR_TEXTURE_SIZE | 16 | px | 16x16 chevron texture. |
+| HIT_INDICATOR_DISTANCE | 60 | px | Radius from player center. |
+| HIT_INDICATOR_OUTGOING_DURATION | 200 | ms | Short flash for outgoing damage. |
+| HIT_INDICATOR_INCOMING_DURATION | 400 | ms | Longer for incoming damage (more important to notice). |
+| HIT_INDICATOR_DEPTH | 1001 | z-index | Above most UI elements. |
+
+---
+
+## Hit Marker Constants
+
+| Constant | Value | Unit | Why |
+|----------|-------|------|-----|
+| HIT_MARKER_TEXTURE_SIZE | 20 | px | 20x20 white X texture. |
+| HIT_MARKER_STROKE_WIDTH | 3 | px | Bold X strokes. |
+| HIT_MARKER_NORMAL_SCALE | 1.2 | ratio | Slight enlargement for visibility. |
+| HIT_MARKER_KILL_SCALE | 2.0 | ratio | Double size + red tint for kill confirmation. |
+| HIT_MARKER_KILL_COLOR | 0xFF0000 | hex | Red tint on kill. |
+| HIT_MARKER_FADE_DURATION | 150 | ms | Quick fade. Snappy feedback. |
+| HIT_MARKER_DEPTH | 1000 | z-index | Above game, below indicators. |
+
+---
+
+## Gun Recoil Constants
+
+| Constant | Value | Unit | Why |
+|----------|-------|------|-----|
+| GUN_RECOIL_DEFAULT | -6 | px | Backward kick on fire. Subtle visual feedback. |
+| GUN_RECOIL_SHOTGUN | -10 | px | Heavier kick for shotgun. Matches weapon weight feel. |
+| GUN_RECOIL_DURATION | 50 | ms | Fast yoyo tween. Snap back to position. |
+
+---
+
+## Aim Sway Constants
+
+| Constant | Value | Unit | Why |
+|----------|-------|------|-----|
+| AIM_SWAY_MOVING_SPEED | 0.008 | rad/ms | Faster oscillation while moving. |
+| AIM_SWAY_MOVING_MAGNITUDE | 0.15 | rad | ~8.6° sway while moving. Significant accuracy penalty. |
+| AIM_SWAY_IDLE_SPEED | 0.002 | rad/ms | Slow breathing sway while still. |
+| AIM_SWAY_IDLE_MAGNITUDE | 0.03 | rad | ~1.7° sway while still. Nearly imperceptible. |
+
+**Formula**: Composite sine for natural feel:
+```
+aimSway = (sin(time * swaySpeed) + sin(time * swaySpeed * 0.7)) * swayMagnitude
+```
+
+---
+
+## Reload Animation Constants
+
+| Constant | Value | Unit | Why |
+|----------|-------|------|-----|
+| RELOAD_ANIM_ALPHA | 0.5 | ratio | Weapon fades to 50% during reload pulse. |
+| RELOAD_ANIM_SCALE | 0.8 | ratio | Weapon shrinks to 80% during pulse. |
+| RELOAD_ANIM_PULSE_DURATION | 200 | ms | Duration of each pulse. |
+| RELOAD_ANIM_PULSE_COUNT | 3 | count | Three pulses (yoyo × 2 repeat = 3 total). |
+
+---
+
+## Floor Grid Constants
+
+| Constant | Value | Unit | Why |
+|----------|-------|------|-----|
+| FLOOR_GRID_SPACING | 100 | px | Grid line every 100px. Helps judge distances. |
+| FLOOR_GRID_COLOR | 0xB0BEC5 | hex | Light blue-gray. Subtle, not distracting. |
+| FLOOR_GRID_ALPHA | 0.5 | ratio | Half-transparent. Background element. |
+| FLOOR_GRID_DEPTH | -1 | z-index | Below all game objects. |
+
+---
+
+## Minimap Constants
+
+| Constant | Value | Unit | Why |
+|----------|-------|------|-----|
+| MINIMAP_X | 20 | px | Top-left corner X offset. |
+| MINIMAP_Y | 20 | px | Top-left corner Y offset. |
+| MINIMAP_SCALE | 0.075 | ratio | World-to-minimap scale factor. 1600px world → 120px minimap. |
+| MINIMAP_SIZE | 120 | px | Derived: 1600 × 0.075 = 120. Compact but readable. |
+| MINIMAP_RADAR_RANGE | 600 | px | Enemies beyond 600px not shown. Encourages map awareness. |
+| MINIMAP_BG_DEPTH | 1999 | z-index | Static layer (walls, background). |
+| MINIMAP_DYNAMIC_DEPTH | 2000 | z-index | Dynamic layer (players, enemies). |
+| MINIMAP_PLAYER_DOT_RADIUS | 4 | px | Green dot. Slightly larger than enemies. |
+| MINIMAP_ENEMY_DOT_RADIUS | 3 | px | Red dot. Smaller than player. |
+
+---
+
+## Damage Number Constants
+
+| Constant | Value | Unit | Why |
+|----------|-------|------|-----|
+| DAMAGE_NUMBER_NORMAL_COLOR | #FFFFFF | hex | White for normal hits. |
+| DAMAGE_NUMBER_NORMAL_SIZE | 16 | px | Standard font size. |
+| DAMAGE_NUMBER_KILL_COLOR | #FF0000 | hex | Red for killing blow. |
+| DAMAGE_NUMBER_KILL_SIZE | 24 | px | Larger for emphasis. |
+| DAMAGE_NUMBER_REMOTE_SCALE | 0.7 | ratio | Dimmer/smaller for non-local-player damage. |
+| DAMAGE_NUMBER_REMOTE_ALPHA | 0.8 | ratio | Slightly transparent for remote hits. |
+| DAMAGE_NUMBER_STROKE_COLOR | #000000 | hex | Black outline for readability. |
+| DAMAGE_NUMBER_STROKE_WIDTH | 2 | px | Thin outline. |
+| DAMAGE_NUMBER_DEPTH | 1000 | z-index | Above game objects. |
 
 ---
 
@@ -538,3 +733,4 @@ if (distance > maxRange * 0.5):
 | 1.0.0 | 2026-02-02 | Initial specification extracted from codebase |
 | 1.1.0 | 2026-02-15 | Updated DECELERATION from 50 to 1500 px/s² to match source code (changed during Epic 4 client-side prediction work). Updated rationale text and code snippets. |
 | 1.1.1 | 2026-02-16 | Fixed HEALTH_BAR_WIDTH (40→32) and HEALTH_BAR_HEIGHT (6→4) to match HealthBar.ts source code. |
+| 1.2.0 | 2026-02-16 | Added 14 new constant tables for ported pre-BMM visual systems: melee visual, blood particles, healing particles, death corpse, camera effects, crosshair/reticle, hit indicators, hit markers, gun recoil, aim sway, reload animation, floor grid, minimap, damage numbers. Updated Bat range (64→90px), Katana range (80→110px), melee arc (90°→80°). |

@@ -1,7 +1,7 @@
 # UI System
 
-> **Spec Version**: 1.1.0
-> **Last Updated**: 2026-02-15
+> **Spec Version**: 1.2.0
+> **Last Updated**: 2026-02-16
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [match.md](match.md), [client-architecture.md](client-architecture.md), [graphics.md](graphics.md)
 > **Depended By**: [test-index.md](test-index.md)
 
@@ -52,12 +52,16 @@ All UI constants are defined here and referenced in [constants.md](constants.md#
 | HEALTH_BAR_WIDTH | 200 | px | HUD health bar width |
 | HEALTH_BAR_HEIGHT | 30 | px | HUD health bar height |
 | DODGE_ROLL_UI_RADIUS | 20 | px | Cooldown indicator radius |
-| DAMAGE_FLASH_ALPHA | 0.5 | ratio | Initial red flash opacity |
-| DAMAGE_FLASH_DURATION | 200 | ms | Flash fade-out time |
-| HIT_MARKER_SIZE | 15 | px | Hit confirmation line length |
-| HIT_MARKER_GAP | 10 | px | Hit marker gap from center |
+| CAMERA_FLASH_DURATION | 100 | ms | Camera flash on damage received |
+| CAMERA_FLASH_COLOR | RGB(128,0,0) | color | Dark red camera flash |
+| CAMERA_SHAKE_DURATION | 50 | ms | Camera shake on dealing damage |
+| CAMERA_SHAKE_INTENSITY | 0.001 | ratio | Camera shake magnitude |
+| HIT_MARKER_TEXTURE_SIZE | 20 | px | Hit marker X texture dimensions |
+| HIT_MARKER_NORMAL_SCALE | 1.2 | ratio | Normal hit marker scale |
+| HIT_MARKER_KILL_SCALE | 2.0 | ratio | Kill hit marker scale (red) |
+| HIT_MARKER_FADE | 150 | ms | Hit marker fade duration |
 | DAMAGE_NUMBER_FLOAT_DISTANCE | 50 | px | Float-up distance |
-| DAMAGE_NUMBER_DURATION | 1000 | ms | Animation duration |
+| DAMAGE_NUMBER_DURATION | 800 | ms | Animation duration |
 | MATCH_END_COUNTDOWN | 10 | s | Auto-restart countdown |
 
 ---
@@ -613,124 +617,191 @@ export class Crosshair {
 
 ---
 
-### Damage Flash Overlay
+### Damage Flash
 
-**Trigger**: `player:damaged` event for local player
+When the player takes damage, the camera flashes red. This replaces any screen-overlay approach with the native Phaser camera flash.
 
-**Visual Specification:**
-- Full-screen rectangle
-- Color: Red (#ff0000)
-- Initial alpha: 0.5
-- Animation: Fade to 0 over 200ms (Linear easing)
-- Depth: 999 (below other UI, above game)
-
-**Why full-screen?** Peripheral vision detects the flash even when focused on combat. More noticeable than small indicators.
-
-**TypeScript:**
+**Implementation**:
 ```typescript
-showDamageFlash(): void {
-  this.damageOverlay.setAlpha(0.5);
-  this.scene.tweens.add({
-    targets: this.damageOverlay,
-    alpha: 0,
-    duration: 200,
-    ease: 'Linear'
-  });
-}
+this.cameras.main.flash(100, 128, 0, 0);  // 100ms, RGB(128, 0, 0)
 ```
+
+| Property | Value | Source |
+|----------|-------|--------|
+| Duration | 100ms | `constants.md § Camera Effects Constants` |
+| Red | 128 | Half-intensity, not blinding |
+| Green | 0 | — |
+| Blue | 0 | — |
+
+**Constants**: See [constants.md § Camera Effects Constants](constants.md#camera-effects-constants).
 
 ---
 
-### Hit Marker (Confirmation)
+### Hit Marker
 
-**Trigger**: `hit:confirmed` event
+Hit markers appear at the reticle position when the player deals damage. They use a **pre-generated 20×20 X texture** with a kill variant.
 
-**Position**: Screen center (around crosshair)
-
-**Visual Specification:**
-- 4 white lines forming + pattern (crosshair: top, bottom, left, right)
-- Line length: 15px
-- Gap from center: 10px
-- Line width: 3px
-- Animation: Fade out over 200ms (Cubic.easeOut)
-- Depth: 1001
-
-**Why + pattern?** Instantly recognizable hit confirmation from FPS conventions. Overlays the crosshair position without obstructing view.
-
-**TypeScript:**
+**Texture Generation**:
 ```typescript
-showHitMarker(): void {
-  const camera = this.scene.cameras.main;
-  const centerX = camera.scrollX + camera.width / 2;
-  const centerY = camera.scrollY + camera.height / 2;
-  const lineLength = 15;
-  const gap = 10;
-
-  // 4 lines forming + pattern (top, bottom, left, right)
-  const lines = [
-    this.scene.add.line(0, 0, centerX, centerY - gap, centerX, centerY - gap - lineLength, 0xffffff),
-    this.scene.add.line(0, 0, centerX, centerY + gap, centerX, centerY + gap + lineLength, 0xffffff),
-    this.scene.add.line(0, 0, centerX - gap, centerY, centerX - gap - lineLength, centerY, 0xffffff),
-    this.scene.add.line(0, 0, centerX + gap, centerY, centerX + gap + lineLength, centerY, 0xffffff),
-  ];
-
-  // Note: No setScrollFactor(0) — lines are positioned in world coords
-  // using camera.scrollX/scrollY offsets, so they appear at screen center.
-  lines.forEach(line => {
-    line.setDepth(1001);
-    line.setLineWidth(3);
-  });
-
-  this.scene.tweens.add({
-    targets: lines,
-    alpha: 0,
-    duration: 200,
-    ease: 'Cubic.easeOut',
-    onComplete: () => lines.forEach(l => l.destroy())
-  });
-}
+const hitGfx = scene.make.graphics({ x: 0, y: 0 }, false);
+hitGfx.lineStyle(3, 0xffffff, 1);
+hitGfx.beginPath();
+hitGfx.moveTo(2, 2); hitGfx.lineTo(18, 18);
+hitGfx.moveTo(18, 2); hitGfx.lineTo(2, 18);
+hitGfx.strokePath();
+hitGfx.generateTexture('hitmarker', 20, 20);
 ```
+
+**Display**:
+```typescript
+const marker = this.add.sprite(reticle.x, reticle.y, 'hitmarker').setDepth(1000);
+if (kill) {
+    marker.setTint(0xff0000).setScale(2.0);   // Kill: red, 2× size
+} else {
+    marker.setTint(0xffffff).setScale(1.2);   // Normal: white, 1.2× size
+}
+this.tweens.add({
+    targets: marker, alpha: 0, scale: marker.scale * 0.5, duration: 150,
+    onComplete: () => marker.destroy()
+});
+```
+
+| Variant | Scale | Color | Duration |
+|---------|-------|-------|----------|
+| Normal Hit | 1.2× | White (0xFFFFFF) | 150ms fade |
+| Kill | 2.0× | Red (0xFF0000) | 150ms fade |
+
+**Constants**: See [constants.md § Hit Marker Constants](constants.md#hit-marker-constants).
 
 ---
 
-### Damage Numbers (Floating Text)
+### Damage Numbers
 
-**Trigger**: `player:damaged` event
+Floating damage numbers appear above hit targets. Three variants exist based on context.
 
-**Position**: Above victim's head, floats upward
-
-**Visual Specification:**
-- Text format: "-{damage}" (e.g., "-25")
-- Font: 24px bold, red (#ff0000)
-- Stroke: Black (#000000), 3px
-- Initial position: Victim Y - 30px
-- Animation: Float up 50px + fade out, 1000ms, Cubic.easeOut
-- Depth: Variable (in world space)
-
-**Why floating numbers?** Immediate feedback on damage dealt. Helps players understand weapon effectiveness.
-
-**TypeScript:**
+**Implementation**:
 ```typescript
-showDamageNumber(victimX: number, victimY: number, damage: number): void {
-  const text = this.scene.add.text(victimX, victimY - 30, `-${damage}`, {
-    fontSize: '24px',
-    fontStyle: 'bold',
-    color: '#ff0000',
-    stroke: '#000000',
-    strokeThickness: 3
-  });
-  text.setOrigin(0.5, 0.5);
+const text = this.add.text(x, y - 30, amount.toString(), {
+    fontSize: isCrit ? '24px' : '16px',
+    color: isCrit ? '#ff0000' : '#ffffff',
+    stroke: '#000000', strokeThickness: 2, fontFamily: 'Arial'
+}).setOrigin(0.5).setDepth(1000);
 
-  this.scene.tweens.add({
-    targets: text,
-    y: text.y - 50,
-    alpha: 0,
-    duration: 1000,
-    ease: 'Cubic.easeOut',
+this.tweens.add({
+    targets: text, y: y - 80, alpha: 0, duration: 800,
     onComplete: () => text.destroy()
-  });
-}
+});
 ```
+
+| Variant | Font Size | Color | Scale | Alpha | Use Case |
+|---------|-----------|-------|-------|-------|----------|
+| Normal | 16px | White (#FFFFFF) | 1.0 | 1.0 | Standard damage |
+| Kill | 24px | Red (#FF0000) | 1.0 | 1.0 | Killing blow |
+| Remote | 16px | White (#FFFFFF) | 0.7 | 0.8 | Non-local-player damage |
+
+| Property | Value | Source |
+|----------|-------|--------|
+| Duration | 800ms | `constants.md § Damage Number Constants` |
+| Float Distance | 50px upward | — |
+| Stroke | 2px black outline | — |
+| Depth | 1000 | — |
+
+**Constants**: See [constants.md § Damage Number Constants](constants.md#damage-number-constants).
+
+---
+
+### Camera Shake
+
+The camera shakes briefly when the local player deals damage (hit or melee strike).
+
+**Implementation**:
+```typescript
+this.cameras.main.shake(50, 0.001);
+```
+
+| Property | Value | Source |
+|----------|-------|--------|
+| Duration | 50ms | `constants.md § Camera Effects Constants` |
+| Intensity | 0.001 | Subtle, felt but not disorienting |
+
+**Constants**: See [constants.md § Camera Effects Constants](constants.md#camera-effects-constants).
+
+---
+
+### Minimap
+
+A minimap in the top-left corner shows the arena layout, player position, and nearby enemies within radar range.
+
+**Architecture**: Two graphics layers, both with `setScrollFactor(0)` (screen-fixed):
+1. **Static layer** (depth 1999): Arena boundary, walls — drawn once
+2. **Dynamic layer** (depth 2000): Player dot, enemy dots, radar ring — updated every frame
+
+**Static Layer** (drawn once in `setupMinimap()`):
+```typescript
+const scale = 0.075;
+const mapX = 20, mapY = 20;
+const mapSize = 1600 * scale;  // 120px
+
+// Background
+minimapStaticGraphics.fillStyle(0x000000, 0.7);
+minimapStaticGraphics.fillRect(mapX, mapY, mapSize, mapSize);
+minimapStaticGraphics.lineStyle(2, 0xffffff, 0.5);
+minimapStaticGraphics.strokeRect(mapX, mapY, mapSize, mapSize);
+
+// Walls
+minimapStaticGraphics.fillStyle(0x555555, 1);
+walls.forEach(wall => {
+    minimapStaticGraphics.fillRect(
+        mapX + wall.x * scale - (wall.width * scale) / 2,
+        mapY + wall.y * scale - (wall.height * scale) / 2,
+        wall.width * scale, wall.height * scale
+    );
+});
+```
+
+**Dynamic Layer** (updated every frame in `updateMinimap()`):
+```typescript
+// Enemy dots (within radar range only)
+enemies.forEach(enemy => {
+    const dist = Phaser.Math.Distance.Between(player.x, player.y, enemy.x, enemy.y);
+    if (dist <= 600) {  // MINIMAP_RADAR_RANGE
+        minimapGraphics.fillStyle(0xff0000, 1);
+        minimapGraphics.fillCircle(mapX + enemy.x * scale, mapY + enemy.y * scale, 3);
+    }
+});
+
+// Player dot
+minimapGraphics.fillStyle(0x00ff00, 1);
+minimapGraphics.fillCircle(mapX + player.x * scale, mapY + player.y * scale, 4);
+
+// Radar range ring
+minimapGraphics.lineStyle(1, 0x00ff00, 0.15);
+minimapGraphics.strokeCircle(mapX + player.x * scale, mapY + player.y * scale, 600 * scale);
+
+// Aim direction line
+minimapGraphics.lineStyle(1, 0x00ff00, 0.8);
+minimapGraphics.beginPath();
+minimapGraphics.moveTo(mapX + player.x * scale, mapY + player.y * scale);
+minimapGraphics.lineTo(
+    mapX + player.x * scale + Math.cos(player.rotation) * 10,
+    mapY + player.y * scale + Math.sin(player.rotation) * 10
+);
+minimapGraphics.strokePath();
+```
+
+| Property | Value | Source |
+|----------|-------|--------|
+| Position | (20, 20) top-left | `constants.md § Minimap Constants` |
+| Scale | 0.075 | 1600px → 120px |
+| Size | 120 × 120 px | Derived |
+| Radar Range | 600px | Enemies beyond this hidden |
+| Player Dot | 4px radius, green | — |
+| Enemy Dot | 3px radius, red | — |
+| Background | Black, alpha 0.7 | — |
+| Static Depth | 1999 | — |
+| Dynamic Depth | 2000 | — |
+
+**Constants**: See [constants.md § Minimap Constants](constants.md#minimap-constants).
 
 ---
 
@@ -1241,6 +1312,97 @@ it('should sort scoreboard by kills descending, deaths ascending', () => {
 
 ---
 
+### TS-UI-013: Camera flash on damage received
+
+**Category**: Visual
+**Priority**: High
+
+**Preconditions:**
+- Player takes damage
+
+**Expected Output:**
+- Camera flashes with RGB(128, 0, 0) for 100ms
+- No screen overlay rectangle (uses cameras.main.flash)
+
+### TS-UI-014: Hit marker normal variant
+
+**Category**: Visual
+**Priority**: High
+
+**Preconditions:**
+- Player deals non-lethal damage
+
+**Expected Output:**
+- White X texture at reticle position, scale 1.2×
+- Fades and shrinks over 150ms
+
+### TS-UI-015: Hit marker kill variant
+
+**Category**: Visual
+**Priority**: High
+
+**Preconditions:**
+- Player deals killing blow
+
+**Expected Output:**
+- Red X texture at reticle position, scale 2.0×
+- Fades and shrinks over 150ms
+
+### TS-UI-016: Damage number variants
+
+**Category**: Visual
+**Priority**: Medium
+
+**Preconditions:**
+- Damage dealt in various contexts
+
+**Expected Output:**
+- Normal: white 16px, full opacity
+- Kill: red 24px, full opacity
+- Remote: white 16px, 0.7× scale, 0.8 alpha
+- All float up 50px and fade over 800ms
+
+### TS-UI-017: Camera shake on dealing damage
+
+**Category**: Visual
+**Priority**: Medium
+
+**Preconditions:**
+- Player hits an enemy
+
+**Expected Output:**
+- Camera shakes for 50ms at 0.001 intensity
+
+### TS-UI-018: Minimap renders static layer
+
+**Category**: Visual
+**Priority**: Medium
+
+**Preconditions:**
+- Game scene loaded
+
+**Expected Output:**
+- Minimap at (20, 20), 120×120px
+- Black background with white border
+- Wall positions rendered at 0.075 scale
+- Static layer at depth 1999
+
+### TS-UI-019: Minimap radar range filters enemies
+
+**Category**: Visual
+**Priority**: Medium
+
+**Preconditions:**
+- Enemies at various distances from player
+
+**Expected Output:**
+- Enemies within 600px shown as red dots (radius 3)
+- Enemies beyond 600px NOT shown
+- Player shown as green dot (radius 4)
+- Radar range ring visible at 0.15 alpha
+
+---
+
 ## Changelog
 
 | Version | Date | Changes |
@@ -1255,3 +1417,4 @@ it('should sort scoreboard by kills descending, deaths ascending', () => {
 | 1.1.4 | 2026-02-16 | Added font size (14px) to connection status specification |
 | 1.1.3 | 2026-02-16 | Fixed kill feed player ID method — `slice(0, 8)` → `substring(0, 8)` to match source |
 | 1.1.2 | 2026-02-16 | Fixed match end screen test expected output — winner text is "Winner: Player1", not "Player1 WINS!" |
+| 1.2.0 | 2026-02-16 | Replaced damage flash overlay with camera flash. Replaced procedural hit marker with texture-based 20×20 X. Updated damage numbers with kill/remote variants. Added camera shake, minimap sections. Added tests TS-UI-013 through TS-UI-019. Ported from pre-BMM prototype. |

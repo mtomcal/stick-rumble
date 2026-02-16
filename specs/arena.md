@@ -1,7 +1,7 @@
 # Arena
 
-> **Spec Version**: 1.0.0
-> **Last Updated**: 2026-02-02
+> **Spec Version**: 1.1.0
+> **Last Updated**: 2026-02-16
 > **Depends On**: [constants.md](constants.md)
 > **Depended By**: [player.md](player.md), [movement.md](movement.md), [dodge-roll.md](dodge-roll.md), [weapons.md](weapons.md), [shooting.md](shooting.md), [hit-detection.md](hit-detection.md), [graphics.md](graphics.md)
 
@@ -542,6 +542,48 @@ func (wcm *WeaponCrateManager) InitializeDefaultSpawns() {
 
 ---
 
+## Floor Grid
+
+The arena floor displays a subtle grid overlay to help players judge distances and movement.
+
+### Specification
+
+| Property | Value | Source |
+|----------|-------|--------|
+| Grid Spacing | 100 px | `constants.md § Floor Grid Constants` |
+| Line Color | 0xB0BEC5 (light blue-gray) | `constants.md § Floor Grid Constants` |
+| Line Alpha | 0.5 | `constants.md § Floor Grid Constants` |
+| Depth | -1 | Below all game objects |
+
+### Implementation
+
+The floor grid is drawn once during scene creation using a `Phaser.GameObjects.Graphics` object:
+
+```typescript
+// Floor grid rendering (LevelGenerator.drawFloorGrid)
+const graphics = scene.add.graphics();
+graphics.lineStyle(1, 0xb0bec5, 0.5);
+for (let x = 0; x <= ARENA_WIDTH; x += 100) {
+  graphics.moveTo(x, 0);
+  graphics.lineTo(x, ARENA_HEIGHT);
+}
+for (let y = 0; y <= ARENA_HEIGHT; y += 100) {
+  graphics.moveTo(0, y);
+  graphics.lineTo(ARENA_WIDTH, y);
+}
+graphics.strokePath();
+graphics.setDepth(-1);
+```
+
+### Design Rationale
+
+- **100px spacing**: At 200 px/s movement speed, each grid cell takes 0.5 seconds to cross — intuitive distance reference
+- **Light blue-gray color**: Matches the `#cfd8dc` arena background without high contrast
+- **Alpha 0.5**: Visible enough to aid spatial awareness, transparent enough to not distract from gameplay
+- **Depth -1**: Renders below all game objects, walls, and entities
+
+---
+
 ## Spatial Queries
 
 ### Distance Calculation
@@ -965,11 +1007,25 @@ func TestCalculateDistance(t *testing.T) {
 
 **Why**: Validates pickup radius rejection
 
+### TS-ARENA-013: Floor grid renders at correct depth and spacing
+
+**Category**: Visual
+**Priority**: Medium
+
+**Preconditions:**
+- Arena scene loaded
+
+**Expected Output:**
+- Grid lines visible at 100px intervals
+- Grid renders below all game objects (depth -1)
+- Grid color is 0xB0BEC5 at alpha 0.5
+
 ---
 
 ## Changelog
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.1.0 | 2026-02-16 | Added Floor Grid section with 100px spacing, light blue-gray lines at depth -1. Added TS-ARENA-013 test. Ported from pre-BMM prototype. |
 | 1.0.3 | 2026-02-16 | Removed nonexistent `CheckAABBCollision` standalone Go function — AABB is inlined in `CheckProjectilePlayerCollision`. Removed nonexistent `IsInArena` — boundary checking done inline. Renamed `CanPickupWeapon` → `CheckPlayerCrateProximity` to match source. |
 | 1.0.0 | 2026-02-02 | Initial specification extracted from codebase |

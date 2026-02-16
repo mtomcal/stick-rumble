@@ -1,7 +1,7 @@
 # Stick Rumble Specification Suite
 
-> **Version**: 1.1.0
-> **Last Updated**: 2026-02-15
+> **Version**: 1.2.0
+> **Last Updated**: 2026-02-16
 > **Purpose**: Complete specification for recreating Stick Rumble from scratch
 
 ---
@@ -157,28 +157,28 @@ For an AI agent recreating Stick Rumble from scratch, read specs in this order:
 
 ## Quick Reference Table
 
-| Spec | Description | Lines |
-|------|-------------|-------|
-| [constants.md](constants.md) | All magic numbers with rationale (speeds, damage, timing) | ~540 |
-| [arena.md](arena.md) | 1920x1080 world, boundaries, spawn points, collision | ~970 |
-| [player.md](player.md) | 100 HP, 5s regen delay, 3s respawn, 2s invuln | ~960 |
-| [movement.md](movement.md) | 200/300 px/s walk/sprint, 50/1500 px/s² accel/decel | ~950 |
-| [messages.md](messages.md) | 6 client→server, 22 server→client message types | ~1810 |
-| [networking.md](networking.md) | WebSocket lifecycle, reconnect, graceful shutdown | ~1150 |
-| [rooms.md](rooms.md) | 2-8 players, auto-matchmaking, broadcast patterns | ~870 |
-| [weapons.md](weapons.md) | Pistol, Uzi, AK47, Shotgun, Bat, Katana stats | ~1070 |
-| [shooting.md](shooting.md) | Fire rate, ammo, reload, recoil, spread | ~1100 |
-| [hit-detection.md](hit-detection.md) | AABB collision, damage, death, expiration | ~1200 |
-| [melee.md](melee.md) | Range + arc detection, knockback, multi-hit | ~950 |
-| [dodge-roll.md](dodge-roll.md) | 400ms roll, 200ms i-frames, 3s cooldown | ~1150 |
-| [match.md](match.md) | 20 kills or 7 minutes, WAITING→ACTIVE→ENDED | ~1340 |
-| [client-architecture.md](client-architecture.md) | Phaser scenes, managers, prediction, interpolation | ~1790 |
-| [server-architecture.md](server-architecture.md) | Dual-loop engine, lag compensation, delta compression | ~1340 |
-| [graphics.md](graphics.md) | Procedural stick figures, weapons, effects, death visuals | ~1070 |
-| [ui.md](ui.md) | HUD elements, kill feed, scoreboard, match end screen | ~1260 |
-| [audio.md](audio.md) | Positional audio, weapon sounds, UI feedback | ~910 |
-| [overview.md](overview.md) | Architecture philosophy, prediction/reconciliation patterns | ~710 |
-| [test-index.md](test-index.md) | Cross-reference of all test scenarios across specs | ~650 |
+| Spec | Description | Lines | Version |
+|------|-------------|-------|---------|
+| [constants.md](constants.md) | All magic numbers with rationale (speeds, damage, timing) | ~540 | 1.2.0 |
+| [arena.md](arena.md) | 1920x1080 world, boundaries, spawn points, collision | ~970 | 1.1.0 |
+| [player.md](player.md) | 100 HP, 5s regen delay, 3s respawn, 2s invuln | ~960 | 1.2.0 |
+| [movement.md](movement.md) | 200/300 px/s walk/sprint, 50/1500 px/s² accel/decel | ~950 | 1.1.0 |
+| [messages.md](messages.md) | 6 client→server, 22 server→client message types | ~1810 | 1.1.0 |
+| [networking.md](networking.md) | WebSocket lifecycle, reconnect, graceful shutdown | ~1150 | 1.1.0 |
+| [rooms.md](rooms.md) | 2-8 players, auto-matchmaking, broadcast patterns | ~870 | 1.1.0 |
+| [weapons.md](weapons.md) | Pistol, Uzi, AK47, Shotgun, Bat, Katana stats | ~1070 | 1.1.0 |
+| [shooting.md](shooting.md) | Fire rate, ammo, reload, recoil, spread | ~1100 | 1.2.0 |
+| [hit-detection.md](hit-detection.md) | AABB collision, damage, death, expiration | ~1200 | 1.1.0 |
+| [melee.md](melee.md) | Range + arc detection, knockback, multi-hit | ~950 | 1.1.0 |
+| [dodge-roll.md](dodge-roll.md) | 400ms roll, 200ms i-frames, 3s cooldown | ~1150 | 1.1.0 |
+| [match.md](match.md) | 20 kills or 7 minutes, WAITING→ACTIVE→ENDED | ~1340 | 1.1.0 |
+| [client-architecture.md](client-architecture.md) | Phaser scenes, managers, prediction, interpolation | ~1790 | 1.1.0 |
+| [server-architecture.md](server-architecture.md) | Dual-loop engine, lag compensation, delta compression | ~1340 | 1.1.0 |
+| [graphics.md](graphics.md) | Procedural stick figures, weapons, effects, death visuals | ~1070 | 2.0.0 |
+| [ui.md](ui.md) | HUD elements, kill feed, scoreboard, match end screen | ~1260 | 1.2.0 |
+| [audio.md](audio.md) | Positional audio, weapon sounds, UI feedback | ~910 | 1.1.0 |
+| [overview.md](overview.md) | Architecture philosophy, prediction/reconciliation patterns | ~710 | 1.1.0 |
+| [test-index.md](test-index.md) | Cross-reference of all test scenarios across specs | ~650 | 1.2.0 |
 
 ---
 
@@ -241,6 +241,25 @@ Use this checklist when implementing Stick Rumble from scratch:
 - [ ] HUD (ammo, timer, kills, death)
 - [ ] Kill feed (top right)
 - [ ] Match end screen
+
+### Pre-BMM Visual Systems
+
+- [ ] Blood particles on damage (red particles with fade-out)
+- [ ] Healing particles during regen (green upward drift)
+- [ ] Death corpse with splayed limbs (replaces gray fade)
+- [ ] Pre-generated reticle texture (replaces spread circle crosshair)
+- [ ] White stroke-only melee arc (replaces pie-slice)
+- [ ] Weapon container swing tween for melee
+- [ ] Gun recoil visual (-6px default, -10px shotgun)
+- [ ] Aim sway (composite sine, affects trajectory)
+- [ ] Reload animation (3-pulse alpha/scale tween)
+- [ ] Directional hit indicators (chevron, outgoing 200ms / incoming 400ms)
+- [ ] Camera shake on dealing damage
+- [ ] Camera flash on receiving damage (replaces overlay)
+- [ ] Hit marker texture (20x20 X, kill variant)
+- [ ] Damage number variants (normal/kill/remote)
+- [ ] Floor grid (100px spacing, depth -1)
+- [ ] Minimap (120px, radar range 600px, dual-layer)
 
 ### Testing
 
@@ -348,8 +367,7 @@ Test scenarios use the format `TS-{SPEC}-{NUMBER}`:
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.0.1 | 2026-02-02 | Added audio.md spec (19 specs complete) |
-| 1.0.0 | 2026-02-02 | Initial specification suite with 14 complete specs |
+| 1.2.0 | 2026-02-16 | Updated spec versions for pre-BMM visual port. Added 16 new visual system checklist items. Updated 9 spec version references. |
 | 1.1.6 | 2026-02-16 | Fixed broken markdown bold formatting on line 3 of "Start Here" section |
 | 1.1.5 | 2026-02-16 | Updated all approximate line counts in Quick Reference Table to match actual |
 | 1.1.4 | 2026-02-16 | Removed (TODO) markers from complete specs: server-architecture.md, test-index.md |
@@ -357,3 +375,5 @@ Test scenarios use the format `TS-{SPEC}-{NUMBER}`:
 | 1.1.2 | 2026-02-16 | Added ui.md to Quick Reference Table |
 | 1.1.1 | 2026-02-16 | Fixed message count in Reading Order (28 total, not 26) |
 | 1.1.0 | 2026-02-15 | Updated Quick Reference Table: added server-architecture, graphics, audio, overview, test-index specs. Updated movement.md line counts (deceleration change). Updated messages.md counts (6 client→server, 22 server→client). |
+| 1.0.1 | 2026-02-02 | Added audio.md spec (19 specs complete) |
+| 1.0.0 | 2026-02-02 | Initial specification suite with 14 complete specs |

@@ -1,7 +1,7 @@
 # Shooting
 
-> **Spec Version**: 1.1.0
-> **Last Updated**: 2026-02-15
+> **Spec Version**: 1.2.0
+> **Last Updated**: 2026-02-16
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [messages.md](messages.md)
 > **Depended By**: [hit-detection.md](hit-detection.md), [client-architecture.md](client-architecture.md), [server-architecture.md](server-architecture.md)
 
@@ -359,6 +359,8 @@ func (ws *WeaponState) CanShoot() bool {
 
 Creating a new projectile with correct velocity.
 
+> **Note**: The aim sway offset (`aimSway`) is added to the shooter's rotation when calculating both the barrel position and the projectile velocity angle. See § Aim Sway above.
+
 **Pseudocode:**
 ```
 function createProjectile(ownerID, position, aimAngle, speed):
@@ -578,6 +580,58 @@ func ApplyRecoilToAngle(
 - **Horizontal random**: Adds unpredictability, prevents perfect tracking
 - **Max accumulation cap**: Prevents infinite climb, allows muscle memory
 - **Sprint penalty stacks**: Running + shooting is inherently inaccurate
+
+### Aim Sway
+
+Aim sway adds a continuous oscillation to weapon aim, simulating breathing and movement unsteadiness. This affects both the visual weapon rotation AND the actual projectile trajectory.
+
+#### Specification
+
+| Property | Moving | Idle | Source |
+|----------|--------|------|--------|
+| Sway Speed | 0.008 rad/ms | 0.002 rad/ms | `constants.md § Aim Sway Constants` |
+| Sway Magnitude | 0.15 rad (~8.6°) | 0.03 rad (~1.7°) | `constants.md § Aim Sway Constants` |
+| Speed Threshold | > 10 px/s (moving) | ≤ 10 px/s (idle) | — |
+
+#### Formula
+
+Sway uses a composite sine wave for natural, less predictable motion:
+
+```typescript
+// In StickFigure.preUpdate()
+this.swayTime += delta;
+const isMoving = body.speed > 10;
+const swaySpeed = isMoving ? 0.008 : 0.002;
+const swayMagnitude = isMoving ? 0.15 : 0.03;
+
+// Composite sine — two frequencies for organic feel
+this.aimSway = (Math.sin(this.swayTime * swaySpeed) + Math.sin(this.swayTime * swaySpeed * 0.7)) * swayMagnitude;
+```
+
+#### Effect on Projectiles
+
+When firing, the sway offset is added to the player's rotation to determine the actual projectile angle:
+
+```typescript
+// In getBarrelPosition()
+const vec = new Phaser.Math.Vector2(offset, 0);
+vec.rotate(this.rotation + this.aimSway);  // sway affects barrel direction
+
+// In fireBullet()
+let angle = shooter.rotation + (shooter.aimSway || 0);  // sway affects bullet angle
+```
+
+#### Design Rationale
+
+- **Moving penalty**: 0.15 rad (~8.6°) sway while moving makes run-and-gun inaccurate, rewarding stop-and-shoot gameplay
+- **Idle precision**: 0.03 rad (~1.7°) sway while stationary is nearly imperceptible — standing still is rewarded
+- **Composite sine**: Two overlapping frequencies (1.0× and 0.7×) prevent the sway from feeling robotic/predictable
+- **Affects trajectory**: Sway is not just visual — it changes where bullets actually go, creating meaningful gameplay impact
+
+#### Cross-References
+
+- Visual weapon rotation: [graphics.md § Aim Sway](graphics.md#aim-sway)
+- Constants: [constants.md § Aim Sway Constants](constants.md#aim-sway-constants)
 
 ### Shotgun Pellet Spread
 
@@ -1079,6 +1133,46 @@ test "dead player cannot shoot":
         result.reason == "no_player"
 ```
 
+### TS-SHOOT-013: Aim sway affects projectile trajectory
+
+**Category**: Unit
+**Priority**: High
+
+**Preconditions:**
+- Player is moving (speed > 10 px/s)
+- Aim sway is non-zero
+
+**Input:**
+- Player fires weapon
+
+**Expected Output:**
+- Projectile angle = player.rotation + player.aimSway (not just player.rotation)
+- Sway magnitude while moving is ±0.15 rad
+- Sway magnitude while idle is ±0.03 rad
+
+**Pseudocode:**
+```
+test "aim sway affects projectile trajectory":
+    setup:
+        player = createPlayer(position: (500, 500))
+        player.velocity.speed = 50  // Moving
+        weaponState = createWeaponState(ammo: 15, weapon: Pistol)
+    action:
+        // Simulate sway time advancement
+        player.swayTime = 1000
+        player.updateAimSway()  // Calculate current sway
+        result = playerShoot(player.id, aimAngle: 0)
+    assert:
+        result.projectile.angle == player.rotation + player.aimSway
+        abs(player.aimSway) <= 0.15  // Moving magnitude
+    action:
+        // Test idle sway
+        player.velocity.speed = 0  // Idle
+        player.updateAimSway()
+    assert:
+        abs(player.aimSway) <= 0.03  // Idle magnitude
+```
+
 ---
 
 ## Changelog
@@ -1092,3 +1186,4 @@ test "dead player cannot shoot":
 | 1.1.5 | 2026-02-16 | Fixed `IsExpired()` operator — uses `>=` not `>` for `ProjectileMaxLifetime` comparison |
 | 1.1.4 | 2026-02-16 | Fixed client `canShoot()` check order — reload → ammo → cooldown (was cooldown → reload → ammo) |
 | 1.1.3 | 2026-02-16 | Fixed `StartReload` — checks `IsReloading` + `CurrentAmmo >= MagazineSize` (not `IsMelee()`). |
+| 1.2.0 | 2026-02-16 | Added Aim Sway subsection with composite sine formula, moving/idle magnitudes, and effect on projectile trajectory. Added TS-SHOOT-013. Ported from pre-BMM prototype. |

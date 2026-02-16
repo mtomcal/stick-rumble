@@ -1,7 +1,7 @@
 # Player
 
-> **Spec Version**: 1.1.0
-> **Last Updated**: 2026-02-15
+> **Spec Version**: 1.2.0
+> **Last Updated**: 2026-02-16
 > **Depends On**: [constants.md](constants.md), [arena.md](arena.md)
 > **Depended By**: [movement.md](movement.md), [dodge-roll.md](dodge-roll.md), [weapons.md](weapons.md), [shooting.md](shooting.md), [melee.md](melee.md), [hit-detection.md](hit-detection.md), [match.md](match.md), [graphics.md](graphics.md), [ui.md](ui.md)
 
@@ -245,6 +245,11 @@ The health system manages player survivability through damage, death, and regene
 When a projectile or melee attack hits a player, damage is applied server-side.
 
 **Why reset regeneration on damage?** This creates meaningful combat decisions. Players cannot tank damage while passively healing; they must disengage to recover.
+
+**Visual Feedback on Damage:**
+- **Blood particles** spawn (5 particles, dark red, spray from impact angle) — see [graphics.md § Blood Particles](graphics.md#blood-particles)
+- **Camera flash** (100ms red) on receiving damage — see [ui.md § Damage Flash](ui.md#damage-flash)
+- **Directional hit indicator** shows damage source direction — see [graphics.md § Directional Hit Indicators](graphics.md#directional-hit-indicators)
 
 **Pseudocode:**
 ```
@@ -647,6 +652,8 @@ function getKDRatio(kills: number, deaths: number): number {
 
 4. **Death State Rendering**: Dead players fade out or show death animation. Do not render hitbox.
 
+   > **Death Visual**: When a player dies, their stick figure is replaced by a splayed corpse graphic (4 limbs at ±0.5 and ±2.5 radians from rotation, gray head offset 25px along rotation axis). The corpse remains visible for 5 seconds then fades over 2 seconds. See [graphics.md § Death Corpse Rendering](graphics.md#death-corpse-rendering) for full visual specification and [constants.md § Death Corpse Constants](constants.md#death-corpse-constants) for values.
+
 5. **Invulnerability Visual**: Show blinking or shield effect during 2-second invulnerability.
 
 ### Go (Server)
@@ -964,3 +971,4 @@ func TestOverkillDamage(t *testing.T) {
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification extracted from codebase |
 | 1.1.0 | 2026-02-15 | Added `inputSequence` field for prediction reconciliation. Added `CorrectionStats` struct for anti-cheat movement validation tracking. |
+| 1.2.0 | 2026-02-16 | Added cross-references to new death corpse rendering, blood particles, camera flash, and directional hit indicators from pre-BMM visual port. |
