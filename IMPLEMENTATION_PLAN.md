@@ -136,7 +136,7 @@ The specs in `specs/` were bulk-updated and then validated by a prior Ralph job.
 - [x] 64. ui.md — Fix reload circle opacity (1.0, not 0.6)
 - [x] 65. ui.md — Fix hit marker scrollFactor (world coords, not setScrollFactor(0))
 - [x] 66. ui.md — Add dual-source health bar update (player:move + player:damaged)
-- [ ] 70. dodge-roll.md — Fix roll:start audio scope (all players, not just local)
+- [x] 70. dodge-roll.md — Fix roll:start audio scope (all players, not just local)
 - [ ] 71. dodge-roll.md — Fix player:dodge_roll data payload (sends direction, not empty)
 - [ ] 72. dodge-roll.md — Fix error handling (logs warning, not silent)
 - [ ] 76. arena.md — Fix CanPickupWeapon function name (CheckPlayerCrateProximity)

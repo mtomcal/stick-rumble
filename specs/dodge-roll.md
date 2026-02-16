@@ -596,10 +596,14 @@ interface RollStartData {
 **Client handling:**
 ```typescript
 wsClient.on('roll:start', (data: RollStartData) => {
+  // Dodge roll manager only for local player
   if (data.playerId === this.localPlayerId) {
     this.dodgeRollManager.startRoll();
-    this.audioManager?.playDodgeRollSound();
   }
+
+  // Audio plays for ALL players' rolls (not just local)
+  this.audioManager?.playDodgeRollSound();
+
   // PlayerManager will show roll animation based on player.isRolling
 });
 ```
@@ -1139,4 +1143,5 @@ it('should show 50% progress at 1.5s', () => {
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification |
+| 1.0.2 | 2026-02-16 | Fixed roll:start audio scope — plays for ALL players' rolls, not just local player |
 | 1.0.1 | 2026-02-16 | Fixed UpdatePlayer return type — returns `UpdatePlayerResult` struct (with `RollCancelled` and `CorrectionNeeded` fields), not `bool`. Added `sanitizeVector2` calls to match source. |
