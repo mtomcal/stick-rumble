@@ -991,14 +991,14 @@ func (RealClock) Since(t time.Time) time.Duration {
 
 // For testing
 type ManualClock struct {
-    current time.Time
-    mu      sync.Mutex
+    currentTime time.Time
+    mu          sync.RWMutex
 }
 
-func (c *ManualClock) Advance(d time.Duration) {
-    c.mu.Lock()
-    c.current = c.current.Add(d)
-    c.mu.Unlock()
+func (mc *ManualClock) Advance(d time.Duration) {
+    mc.mu.Lock()
+    defer mc.mu.Unlock()
+    mc.currentTime = mc.currentTime.Add(d)
 }
 ```
 
@@ -1327,6 +1327,7 @@ func TestConcurrentAccess(t *testing.T) {
 | 1.1.2 | 2026-02-16 | Fixed setupCallbacks section — callbacks are registered as method references in the constructor (not a separate `setupCallbacks()` method), added `SetGetRTT` and `SetOnWeaponRespawn` registrations. |
 | 1.1.3 | 2026-02-16 | Replaced nonexistent `sanitizePosition` with actual `sanitizeVector2` from `physics.go:208` — NaN/Inf replaced with 0 (not arena center). |
 | 1.1.4 | 2026-02-16 | Fixed tick() deltaTime — uses real elapsed `now.Sub(lastTick).Seconds()` not fixed from tickRate. Logic is inline in loop, not separate `tick()` method. |
+| 1.1.8 | 2026-02-16 | Fixed ManualClock — `sync.Mutex` → `sync.RWMutex`, field `current` → `currentTime` to match clock.go |
 | 1.1.7 | 2026-02-16 | Added missing `PingTracker *PingTracker` field to Player struct |
 | 1.1.6 | 2026-02-16 | Fixed broadcastLoop and test code — `GetAllPlayerStates()` → `GetAllPlayers()` to match actual world.go method name |
 | 1.1.5 | 2026-02-16 | Fixed handleInputState — correct signature `(playerID string, data any)` not `(msg Message, playerID string)`, direct type assertions instead of `getBool`/`getFloat64`/`getInt` helpers, no NaN/Inf sanitization (schema validation guarantees types), validation returns early on failure (not non-blocking). |
