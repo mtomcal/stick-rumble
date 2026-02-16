@@ -133,20 +133,20 @@ The following discrepancies were found between this plan and the spec diff (c7dd
 > **Current state**: Not implemented. Server uses raw aimAngle from client. No oscillation.
 > **Design decision**: Client-only. Sway computed in client update loop, server receives sway-affected angle via `input:state`. No server changes needed.
 
-- [ ] **Add sway state**: `swayTime: number = 0`, `aimSway: number = 0` per player
-- [ ] **Compute sway each frame**: Detect speed > 10px/s for moving vs idle
-- [ ] **Moving params**: speed=0.008 rad/ms, magnitude=±0.15 rad
-- [ ] **Idle params**: speed=0.002 rad/ms, magnitude=±0.03 rad
-- [ ] **Formula**: `aimSway = (sin(time * speed) + sin(time * speed * 0.7)) * magnitude`
-- [ ] **Apply to weapon rotation**: `weaponGraphics.setRotation(aimAngle + aimSway)`
-- [ ] **Apply to projectile angle**: Fire with `aimAngle + aimSway` sent to server
-- [ ] **Apply to barrel position**: Include sway offset in barrel calculation
-- [ ] **Test TS-SHOOT-013**: Aim sway affects projectile trajectory
-- [ ] **Test TS-GFX-019**: Aim sway visual oscillation visible
-- [ ] **Spec validation**: Verify formula matches `constants.md` lines 369-376 exactly: speed 0.008/0.002, magnitude 0.15/0.03, threshold 10 px/s, composite sine `(sin(t*s) + sin(t*s*0.7)) * mag`. Verify `shooting.md` lines 1490-1518 — sway applied to both visual AND trajectory
-- [ ] **Assertion quality**: Tests compute expected sway output for known time/speed inputs using `toBeCloseTo()` with ≥2 decimal precision — not just `expect(sway).not.toBe(0)` or `toBeDefined()`
-- [ ] **Assertion quality**: Trajectory test verifies fired angle equals `aimAngle + computedSway` with `toBeCloseTo()`, not just "angle changed"
-- [ ] **Coverage gate**: Aim sway computation + application code paths ≥90% statements/lines/functions
+- [x] **Add sway state**: `swayTime: number = 0`, `aimSway: number = 0` per player
+- [x] **Compute sway each frame**: Detect speed > 10px/s for moving vs idle
+- [x] **Moving params**: speed=0.008 rad/ms, magnitude=±0.15 rad
+- [x] **Idle params**: speed=0.002 rad/ms, magnitude=±0.03 rad
+- [x] **Formula**: `aimSway = (sin(time * speed) + sin(time * speed * 0.7)) * magnitude`
+- [x] **Apply to weapon rotation**: `weaponGraphics.setRotation(aimAngle + aimSway)`
+- [x] **Apply to projectile angle**: Fire with `aimAngle + aimSway` sent to server
+- [x] **Apply to barrel position**: Include sway offset in barrel calculation
+- [x] **Test TS-SHOOT-013**: Aim sway affects projectile trajectory
+- [x] **Test TS-GFX-019**: Aim sway visual oscillation visible
+- [x] **Spec validation**: Verify formula matches `constants.md` lines 369-376 exactly: speed 0.008/0.002, magnitude 0.15/0.03, threshold 10 px/s, composite sine `(sin(t*s) + sin(t*s*0.7)) * mag`. Verify `shooting.md` lines 1490-1518 — sway applied to both visual AND trajectory
+- [x] **Assertion quality**: Tests compute expected sway output for known time/speed inputs using `toBeCloseTo()` with ≥2 decimal precision — not just `expect(sway).not.toBe(0)` or `toBeDefined()`
+- [x] **Assertion quality**: Trajectory test verifies fired angle equals `aimAngle + computedSway` with `toBeCloseTo()`, not just "angle changed"
+- [x] **Coverage gate**: Aim sway computation + application code paths ≥90% statements/lines/functions
 
 #### System 3b — Client: Blood Particles (GameSceneEventHandlers.ts)
 
@@ -444,3 +444,5 @@ Follow these steps for each system section:
 - [2026-02-16] **System 5 — createDamageFlashOverlay kept as no-op**: `GameScene.ts` still calls `this.gameSceneUI.createDamageFlashOverlay(width, height)` during scene setup. Rather than modifying GameScene.ts (which would expand the scope), `createDamageFlashOverlay` was converted to a no-op. The actual damage flash now uses `cameras.main.flash()` in `showDamageFlash()`.
 - [2026-02-16] **System 5 — Rectangle count changed in GameScene.connection.test.ts**: Removing the damageFlashOverlay rectangle reduced the total rectangle count from 5 to 4 in scene creation (arena bg, arena border, health bar bg, health bar fill). Updated the assertion in `GameScene.connection.test.ts`.
 - [2026-02-16] **System 5 — 6 test files needed showCameraShake mock**: Adding `showCameraShake()` to `GameSceneUI` required updating the mock in 6 test files: `GameSceneEventHandlers.test.ts`, `GameSceneEventHandlers.audio.test.ts`, `GameSceneEventHandlers.recoil.test.ts`, `GameSceneEventHandlers.reconciliation.test.ts`, `GameSceneUI.test.ts`, and `GameScene.connection.test.ts`.
+- [2026-02-16] **System 2 — Sway implemented via InputManager offset**: Rather than adding sway directly into PlayerManager's update of weapon rotation (which would affect remote players), sway is computed in `PlayerManager.update()` for the local player only, then applied via `InputManager.setAimSwayOffset()`. This ensures sway affects: (a) `getAimAngle()` for visual weapon rotation, (b) `input:state` aimAngle sent to server, (c) `player:shoot` aimAngle for projectile trajectory. All three angles are sway-affected consistently.
+- [2026-02-16] **System 2 — No new files created**: The plan mentioned "Maybe" for new files. No new files were needed — sway state lives in `PlayerManager.ts` (computation), with the offset applied in `InputManager.ts` (integration) and `GameScene.ts` (wiring).

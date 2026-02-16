@@ -333,6 +333,8 @@ export class GameScene extends Phaser.Scene {
 
     // Update input manager to send player input to server (only when not spectating)
     if (this.inputManager && this.spectator && !this.spectator.isActive()) {
+      // Apply aim sway offset before sending input to server
+      this.inputManager.setAimSwayOffset(this.playerManager.getLocalPlayerAimSway());
       this.inputManager.update();
 
       // Client-side prediction for local player (Story stick-rumble-nki)

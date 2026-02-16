@@ -646,4 +646,93 @@ describe('InputManager', () => {
       expect(inputManager.getAimAngle()).toBe(0);
     });
   });
+
+  describe('aim sway offset (TS-SHOOT-013)', () => {
+    beforeEach(() => {
+      inputManager.init();
+    });
+
+    it('should add sway offset to getAimAngle result', () => {
+      inputManager.setPlayerPosition(400, 300);
+
+      // Mouse to the right → raw angle ≈ 0
+      mockScene.mockActivePointer.x = 500;
+      mockScene.mockActivePointer.y = 300;
+      inputManager.update();
+
+      const rawAngle = inputManager.getAimAngle();
+      expect(rawAngle).toBeCloseTo(0, 2);
+
+      // Apply sway offset
+      inputManager.setAimSwayOffset(0.15);
+      expect(inputManager.getAimAngle()).toBeCloseTo(0 + 0.15, 2);
+    });
+
+    it('should include sway offset in input:state aimAngle sent to server', () => {
+      inputManager.setPlayerPosition(400, 300);
+
+      // Mouse to the right → raw angle ≈ 0
+      mockScene.mockActivePointer.x = 500;
+      mockScene.mockActivePointer.y = 300;
+
+      // Set sway before update so it's included in the sent state
+      inputManager.setAimSwayOffset(0.1);
+
+      // Press a key to trigger state change and send
+      mockScene.mockKeys.W.isDown = true;
+      inputManager.update();
+
+      const call = mockWsClient.send.mock.calls[0][0];
+      // aimAngle in sent data should include sway offset
+      expect(call.data.aimAngle).toBeCloseTo(0 + 0.1, 2);
+    });
+
+    it('should apply exact sway values matching spec constants', () => {
+      // Idle sway magnitude: 0.03 rad
+      inputManager.setAimSwayOffset(0.03);
+      inputManager.setPlayerPosition(400, 300);
+      mockScene.mockActivePointer.x = 500;
+      mockScene.mockActivePointer.y = 300;
+      inputManager.update();
+      expect(inputManager.getAimAngle()).toBeCloseTo(0.03, 5);
+
+      // Moving sway magnitude: 0.15 rad
+      inputManager.setAimSwayOffset(0.15);
+      expect(inputManager.getAimAngle()).toBeCloseTo(0.15, 5);
+
+      // Negative sway (oscillation goes both ways)
+      inputManager.setAimSwayOffset(-0.15);
+      expect(inputManager.getAimAngle()).toBeCloseTo(-0.15, 5);
+    });
+
+    it('should default to zero sway offset', () => {
+      inputManager.setPlayerPosition(400, 300);
+      mockScene.mockActivePointer.x = 500;
+      mockScene.mockActivePointer.y = 300;
+      inputManager.update();
+
+      // No setAimSwayOffset called → default 0
+      expect(inputManager.getAimAngle()).toBeCloseTo(0, 2);
+    });
+
+    it('should affect projectile angle by adding sway to shooting angle', () => {
+      inputManager.setPlayerPosition(400, 300);
+
+      // Mouse pointing up-right → raw angle ≈ -π/4
+      mockScene.mockActivePointer.x = 500;
+      mockScene.mockActivePointer.y = 200;
+      inputManager.update();
+
+      const rawAngle = inputManager.getAimAngle();
+      expect(rawAngle).toBeCloseTo(-Math.PI / 4, 2);
+
+      // Apply moving sway offset (+0.15 rad)
+      inputManager.setAimSwayOffset(0.15);
+      const swayedAngle = inputManager.getAimAngle();
+      expect(swayedAngle).toBeCloseTo(-Math.PI / 4 + 0.15, 2);
+
+      // The difference should be exactly the sway offset
+      expect(swayedAngle - rawAngle).toBeCloseTo(0.15, 5);
+    });
+  });
 });

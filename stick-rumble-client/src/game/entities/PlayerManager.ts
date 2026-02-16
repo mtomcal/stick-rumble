@@ -48,6 +48,9 @@ export class PlayerManager {
   private corpseGraphics: Map<string, Phaser.GameObjects.Graphics> = new Map();
   // Interpolation engine for smooth movement of other players (Story 4.3)
   private interpolationEngine: InterpolationEngine = new InterpolationEngine();
+  // Aim sway state for local player
+  private swayTime: number = 0;
+  private aimSway: number = 0;
   // Client-side predicted state for local player (Story stick-rumble-nki)
   private localPlayerPredictedState: {
     position: { x: number; y: number };
@@ -362,6 +365,19 @@ export class PlayerManager {
       return;
     }
 
+    // Compute aim sway for local player
+    if (this.localPlayerId) {
+      this.swayTime += delta;
+      const localState = this.playerStates.get(this.localPlayerId);
+      if (localState) {
+        const speed = Math.sqrt(localState.velocity.x ** 2 + localState.velocity.y ** 2);
+        const isMoving = speed > 10;
+        const swaySpeed = isMoving ? 0.008 : 0.002;
+        const swayMagnitude = isMoving ? 0.15 : 0.03;
+        this.aimSway = (Math.sin(this.swayTime * swaySpeed) + Math.sin(this.swayTime * swaySpeed * 0.7)) * swayMagnitude;
+      }
+    }
+
     for (const [playerId, playerGraphics] of this.players) {
       const state = this.playerStates.get(playerId);
       if (!state) {
@@ -649,6 +665,13 @@ export class PlayerManager {
       const isAimingLeft = normalizedAngle > 90 && normalizedAngle < 270;
       weaponGraphics.setFlipY(isAimingLeft);
     }
+  }
+
+  /**
+   * Get the current aim sway offset for the local player (in radians)
+   */
+  getLocalPlayerAimSway(): number {
+    return this.aimSway;
   }
 
   /**

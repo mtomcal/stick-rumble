@@ -1207,6 +1207,131 @@ describe('PlayerManager', () => {
     });
   });
 
+  describe('aim sway (TS-GFX-019)', () => {
+    it('should return 0 sway before any update', () => {
+      playerManager.setLocalPlayerId('local-player');
+      expect(playerManager.getLocalPlayerAimSway()).toBe(0);
+    });
+
+    it('should compute idle sway with speed=0.002, magnitude=0.03 when stationary', () => {
+      playerManager.setLocalPlayerId('local-player');
+      playerManager.updatePlayers([
+        { id: 'local-player', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ]);
+
+      // Advance by 500ms
+      const delta = 500;
+      playerManager.update(delta);
+
+      // Expected: (sin(500 * 0.002) + sin(500 * 0.002 * 0.7)) * 0.03
+      const t = 500;
+      const expected = (Math.sin(t * 0.002) + Math.sin(t * 0.002 * 0.7)) * 0.03;
+      expect(playerManager.getLocalPlayerAimSway()).toBeCloseTo(expected, 5);
+    });
+
+    it('should compute moving sway with speed=0.008, magnitude=0.15 when speed > 10', () => {
+      playerManager.setLocalPlayerId('local-player');
+      // Velocity magnitude = sqrt(8^2 + 8^2) = 11.3 > 10 threshold
+      playerManager.updatePlayers([
+        { id: 'local-player', position: { x: 100, y: 200 }, velocity: { x: 8, y: 8 } },
+      ]);
+
+      const delta = 500;
+      playerManager.update(delta);
+
+      const t = 500;
+      const expected = (Math.sin(t * 0.008) + Math.sin(t * 0.008 * 0.7)) * 0.15;
+      expect(playerManager.getLocalPlayerAimSway()).toBeCloseTo(expected, 5);
+    });
+
+    it('should use idle sway when speed is exactly 10 (threshold is >10)', () => {
+      playerManager.setLocalPlayerId('local-player');
+      // Velocity magnitude = sqrt(6^2 + 8^2) = 10.0 — not > 10, so idle
+      playerManager.updatePlayers([
+        { id: 'local-player', position: { x: 100, y: 200 }, velocity: { x: 6, y: 8 } },
+      ]);
+
+      const delta = 300;
+      playerManager.update(delta);
+
+      const t = 300;
+      const expected = (Math.sin(t * 0.002) + Math.sin(t * 0.002 * 0.7)) * 0.03;
+      expect(playerManager.getLocalPlayerAimSway()).toBeCloseTo(expected, 5);
+    });
+
+    it('should accumulate swayTime across multiple update calls', () => {
+      playerManager.setLocalPlayerId('local-player');
+      playerManager.updatePlayers([
+        { id: 'local-player', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ]);
+
+      // Two 250ms updates = 500ms total
+      playerManager.update(250);
+      playerManager.update(250);
+
+      const t = 500;
+      const expected = (Math.sin(t * 0.002) + Math.sin(t * 0.002 * 0.7)) * 0.03;
+      expect(playerManager.getLocalPlayerAimSway()).toBeCloseTo(expected, 5);
+    });
+
+    it('should use composite sine formula for non-periodic natural feel', () => {
+      playerManager.setLocalPlayerId('local-player');
+      playerManager.updatePlayers([
+        { id: 'local-player', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ]);
+
+      // Collect sway values at different times
+      const values: number[] = [];
+      for (let i = 0; i < 10; i++) {
+        playerManager.update(100);
+        values.push(playerManager.getLocalPlayerAimSway());
+      }
+
+      // Verify all values are within ±0.03 * 2 (two sine waves can sum to ±2)
+      for (const v of values) {
+        expect(Math.abs(v)).toBeLessThanOrEqual(0.03 * 2);
+      }
+
+      // Verify values are NOT all the same (oscillation happening)
+      const unique = new Set(values.map(v => v.toFixed(6)));
+      expect(unique.size).toBeGreaterThan(1);
+    });
+
+    it('should have larger sway magnitude when moving vs idle', () => {
+      // Test idle sway
+      playerManager.setLocalPlayerId('local-player');
+      playerManager.updatePlayers([
+        { id: 'local-player', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ]);
+      playerManager.update(200);
+      const idleSway = Math.abs(playerManager.getLocalPlayerAimSway());
+
+      // Create fresh manager for moving test
+      const mockScene2 = createMockScene();
+      const clock2 = new ManualClock();
+      const pm2 = new PlayerManager(mockScene2 as unknown as Phaser.Scene, clock2);
+      pm2.setLocalPlayerId('local-player');
+      pm2.updatePlayers([
+        { id: 'local-player', position: { x: 100, y: 200 }, velocity: { x: 50, y: 50 } },
+      ]);
+      pm2.update(200);
+      const movingSway = Math.abs(pm2.getLocalPlayerAimSway());
+
+      // Moving magnitude (0.15) is 5x idle magnitude (0.03)
+      // At same time, moving sway should be larger
+      expect(movingSway).toBeGreaterThan(idleSway);
+    });
+
+    it('should not compute sway when no local player ID is set', () => {
+      playerManager.updatePlayers([
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 50, y: 50 } },
+      ]);
+      playerManager.update(500);
+
+      expect(playerManager.getLocalPlayerAimSway()).toBe(0);
+    });
+  });
+
   describe('dodge roll and death state combination', () => {
     it('should maintain color while rolling for alive player', () => {
       playerManager.setLocalPlayerId('player-1');
