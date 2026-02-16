@@ -754,10 +754,11 @@ showDamageNumber(victimX: number, victimY: number, damage: number): void {
 - Overflow-y: auto
 
 #### Winner Section
-- Title: "MATCH ENDED" (36px bold, white)
-- Winner text: "{PlayerName} WINS!" or "TIE!"
-- Winner color: Gold (#ffd700)
-- Multiple winners: Comma-separated list
+- Single winner: "Winner: {PlayerName}"
+- Multiple winners: "Winners: {Name1}, {Name2}"
+- No winner: "No Winner"
+- Winner name color: Gold (#ffd700)
+- No separate "MATCH ENDED" title — the winner text IS the title (`<h2 class="match-end-title">`)
 
 #### Scoreboard Table
 
@@ -798,66 +799,52 @@ showDamageNumber(victimX: number, victimY: number, damage: number): void {
 
 **TypeScript (React):**
 ```tsx
-export function MatchEndScreen({ matchData, localPlayerId, onClose, onPlayAgain }: Props) {
+export function MatchEndScreen({ matchData, localPlayerId, onClose, onPlayAgain }: MatchEndScreenProps) {
   const [countdown, setCountdown] = useState(10);
+  const hasCalledPlayAgainRef = useRef(false);
 
+  // Countdown timer (separate effect from trigger)
   useEffect(() => {
+    if (countdown <= 0) return;
     const timer = setInterval(() => {
-      setCountdown(c => {
-        if (c <= 1) {
-          onPlayAgain();
-          return 0;
-        }
-        return c - 1;
-      });
+      setCountdown(prev => Math.max(0, prev - 1));
     }, 1000);
     return () => clearInterval(timer);
-  }, [onPlayAgain]);
+  }, [countdown]);
 
-  const isLocalWinner = matchData.winners.includes(localPlayerId);
-  const sortedScores = [...matchData.finalScores].sort((a, b) =>
-    b.kills - a.kills || a.deaths - b.deaths
+  // Trigger onPlayAgain when countdown reaches 0 (ref prevents double-call)
+  useEffect(() => {
+    if (countdown === 0 && !hasCalledPlayAgainRef.current) {
+      hasCalledPlayAgainRef.current = true;
+      onPlayAgain();
+    }
+  }, [countdown, onPlayAgain]);
+
+  const rankedPlayers = [...matchData.finalScores].sort((a, b) =>
+    b.kills !== a.kills ? b.kills - a.kills : a.deaths - b.deaths
   );
 
+  const renderWinners = () => {
+    if (matchData.winners.length === 0)
+      return <h2 className="match-end-title">No Winner</h2>;
+    if (matchData.winners.length === 1)
+      return <h2 className="match-end-title">Winner: <span className="winner-name">{matchData.winners[0]}</span></h2>;
+    return <h2 className="match-end-title">Winners: <span className="winner-name">{matchData.winners.join(', ')}</span></h2>;
+  };
+
   return (
-    <div className="match-end-backdrop" onClick={onClose}>
-      <div className="match-end-modal" onClick={e => e.stopPropagation()}>
+    <div className="match-end-backdrop" onClick={handleBackdropClick}>
+      <div className="match-end-modal" role="dialog" onClick={e => e.stopPropagation()}>
         <button className="close-button" onClick={onClose}>×</button>
-
-        <h1>MATCH ENDED</h1>
-        <h2 className="winner-text">
-          {matchData.winners.length === 0 ? 'No Winner' :
-           matchData.winners.length === 1 ? `${matchData.winners[0]} WINS!` :
-           `TIE: ${matchData.winners.join(', ')}`}
-        </h2>
-
-        <table className="scoreboard">
-          <thead>
-            <tr><th>#</th><th>Player</th><th>Kills</th><th>Deaths</th></tr>
-          </thead>
-          <tbody>
-            {sortedScores.map((score, i) => (
-              <tr key={score.playerId}
-                  className={score.playerId === localPlayerId ? 'local-player' : ''}>
-                <td>{i + 1}</td>
-                <td>{score.playerId.slice(0, 8)}</td>
-                <td>{score.kills}</td>
-                <td>{score.deaths}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <div className="countdown">Returning to lobby in {countdown}s</div>
-
-        <button className="play-again-button" onClick={onPlayAgain}>
-          Play Again
-        </button>
+        {renderWinners()}
+        {/* Rankings table, XP breakdown, countdown, play again button */}
       </div>
     </div>
   );
 }
 ```
+
+> **Note:** No "MATCH ENDED" heading — the winner text IS the title. Countdown uses a `useRef` guard to prevent calling `onPlayAgain` multiple times on re-render.
 
 ---
 

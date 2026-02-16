@@ -90,7 +90,7 @@ The specs in `specs/` were bulk-updated and then validated by a prior Ralph job.
 - [x] 54. rooms.md — Fix processPendingMessages (pending moves discarded, not replayed)
 - [x] 56. ui.md — Fix kill feed ordering (push+shift, not unshift+pop)
 - [x] 57. ui.md — Fix hit marker shape (+ pattern, not X)
-- [ ] 58. ui.md — Fix match end screen title/format
+- [x] 58. ui.md — Fix match end screen title/format
 - [ ] 60. ui.md — Fix ammo low-ammo color (no color change logic exists)
 - [ ] 61. ui.md — Fix connection status reconnecting UI (console only, no visible text)
 - [ ] 67. match.md — Fix client timer red threshold (< 60, not < 30)
