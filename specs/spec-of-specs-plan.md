@@ -11,62 +11,62 @@
 
 | Spec File | Status | Lines | Notes |
 |-----------|--------|-------|-------|
-| [README.md](README.md) | **Complete** | ~300 | Entry point with reading order and dependency graph |
-| [overview.md](overview.md) | **Complete** | ~400 | High-level architecture and design philosophy |
-| [constants.md](constants.md) | **Complete** | ~650 | Single source of truth for all magic numbers |
-| [arena.md](arena.md) | **Complete** | ~450 | Game world boundaries and spatial rules |
+| [README.md](README.md) | **Complete** | ~360 | Entry point with reading order and dependency graph |
+| [overview.md](overview.md) | **Complete** | ~710 | High-level architecture and design philosophy |
+| [constants.md](constants.md) | **Complete** | ~540 | Single source of truth for all magic numbers |
+| [arena.md](arena.md) | **Complete** | ~975 | Game world boundaries and spatial rules |
 
 ### Phase 2: Core Entities
 
 | Spec File | Status | Lines | Notes |
 |-----------|--------|-------|-------|
-| [player.md](player.md) | **Complete** | ~550 | Player entity state and lifecycle |
-| [movement.md](movement.md) | **Complete** | ~520 | Physics-based movement system |
+| [player.md](player.md) | **Complete** | ~966 | Player entity state and lifecycle |
+| [movement.md](movement.md) | **Complete** | ~946 | Physics-based movement system |
 
 ### Phase 3: Networking
 
 | Spec File | Status | Lines | Notes |
 |-----------|--------|-------|-------|
-| [messages.md](messages.md) | **Complete** | ~950 | Complete WebSocket message catalog |
-| [networking.md](networking.md) | **Complete** | ~980 | WebSocket protocol and connection lifecycle |
-| [rooms.md](rooms.md) | **Complete** | ~420 | Room management and matchmaking |
+| [messages.md](messages.md) | **Complete** | ~1810 | Complete WebSocket message catalog |
+| [networking.md](networking.md) | **Complete** | ~1150 | WebSocket protocol and connection lifecycle |
+| [rooms.md](rooms.md) | **Complete** | ~870 | Room management and matchmaking |
 
 ### Phase 4: Combat
 
 | Spec File | Status | Lines | Notes |
 |-----------|--------|-------|-------|
-| [weapons.md](weapons.md) | **Complete** | ~750 | Complete weapon definitions and switching |
-| [shooting.md](shooting.md) | **Complete** | ~650 | Ranged attack mechanics |
-| [hit-detection.md](hit-detection.md) | **Complete** | ~550 | Collision detection and damage application |
-| [melee.md](melee.md) | **Complete** | ~580 | Melee attack mechanics |
+| [weapons.md](weapons.md) | **Complete** | ~1070 | Complete weapon definitions and switching |
+| [shooting.md](shooting.md) | **Complete** | ~1090 | Ranged attack mechanics |
+| [hit-detection.md](hit-detection.md) | **Complete** | ~1200 | Collision detection and damage application |
+| [melee.md](melee.md) | **Complete** | ~950 | Melee attack mechanics |
 
 ### Phase 5: Advanced Mechanics
 
 | Spec File | Status | Lines | Notes |
 |-----------|--------|-------|-------|
-| [dodge-roll.md](dodge-roll.md) | **Complete** | ~720 | Dodge roll evasion mechanic |
-| [match.md](match.md) | **Complete** | ~750 | Match lifecycle and win conditions |
+| [dodge-roll.md](dodge-roll.md) | **Complete** | ~1150 | Dodge roll evasion mechanic |
+| [match.md](match.md) | **Complete** | ~1335 | Match lifecycle and win conditions |
 
 ### Phase 6: Client Implementation
 
 | Spec File | Status | Lines | Notes |
 |-----------|--------|-------|-------|
-| [client-architecture.md](client-architecture.md) | **Complete** | ~750 | Frontend structure and rendering pipeline |
-| [graphics.md](graphics.md) | **Complete** | ~750 | Procedural rendering specifications |
-| [ui.md](ui.md) | **Complete** | ~700 | HUD and interface elements |
-| [audio.md](audio.md) | **Complete** | ~550 | Sound effects and audio system |
+| [client-architecture.md](client-architecture.md) | **Complete** | ~1790 | Frontend structure and rendering pipeline |
+| [graphics.md](graphics.md) | **Complete** | ~1070 | Procedural rendering specifications |
+| [ui.md](ui.md) | **Complete** | ~1260 | HUD and interface elements |
+| [audio.md](audio.md) | **Complete** | ~905 | Sound effects and audio system |
 
 ### Phase 7: Server Implementation
 
 | Spec File | Status | Lines | Notes |
 |-----------|--------|-------|-------|
-| [server-architecture.md](server-architecture.md) | **Complete** | ~650 | Backend structure and game loop |
+| [server-architecture.md](server-architecture.md) | **Complete** | ~1330 | Backend structure and game loop |
 
 ### Phase 8: Verification
 
 | Spec File | Status | Lines | Notes |
 |-----------|--------|-------|-------|
-| [test-index.md](test-index.md) | **Complete** | ~750 | Cross-reference of all test scenarios (179 tests)
+| [test-index.md](test-index.md) | **Complete** | ~645 | Cross-reference of all test scenarios (179 tests)
 
 ---
 
@@ -75,7 +75,7 @@
 - **Total Specs**: 21
 - **Completed**: 21 (README.md, overview.md, constants.md, arena.md, player.md, movement.md, messages.md, networking.md, rooms.md, weapons.md, shooting.md, hit-detection.md, melee.md, dodge-roll.md, match.md, client-architecture.md, graphics.md, ui.md, audio.md, server-architecture.md, test-index.md)
 - **Pending**: 0
-- **Estimated Total Lines**: ~10,000
+- **Actual Total Lines**: ~22,130
 - **Total Test Scenarios**: 179
 
 ---
@@ -836,7 +836,7 @@
 All 21 specification documents have been created, covering:
 - 8 implementation phases
 - 179 test scenarios
-- ~10,000 lines of documentation
+- ~22,130 lines of documentation
 
 The spec suite is now ready for AI agents to implement Stick Rumble from scratch.
 
