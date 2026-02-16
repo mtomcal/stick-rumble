@@ -63,7 +63,7 @@ All spec files are at `docs/archive/20251125-055521-pre-bmm/specs/`.
 ## Progress Checklist
 
 - [x] 1. README.md
-- [ ] 2. overview.md
+- [x] 2. overview.md
 - [ ] 3. types-and-events.md
 - [ ] 4. config.md
 - [ ] 5. player.md
@@ -90,6 +90,9 @@ Add rows here when you find something the plan missed.
 |---|-----------|---------------|--------------|
 | 1 | `graphics.md` missing from README reading order, quick reference table, and dependency graph | README.md | Added graphics.md to all three sections in README.md |
 | 2 | Several source file line counts in README were wrong (Joystick.tsx: ~100→~193, MainScene.ts: ~890→~989, vite.config.ts: ~15→~23, tsconfig.json: ~20→~28) | README.md | Corrected all line counts |
+| 3 | Weapon stats are wrong across multiple specs — BAT dmg 30→60, KATANA dmg 45→100, cooldowns and ranges differ | overview.md, combat.md, player.md | Fixed in overview.md; combat.md pending |
+| 4 | Player speed is 350 px/s, not 250 px/s | overview.md, main-scene.md, player.md | Fixed in overview.md; others pending |
+| 5 | All event names were wrong (game-stats→player-update, enemy-killed→bot-killed, joystick-*→input-*) | overview.md, types-and-events.md, ui.md, input.md | Fixed in overview.md; others pending |
 
 ---
 
