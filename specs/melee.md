@@ -666,7 +666,7 @@ class MeleeWeaponManager {
 **Thread Safety:**
 - `PlayerState` methods (`GetPosition`, `SetPosition`, `TakeDamage`) are mutex-protected
 - `weaponStates` map accessed with `weaponMu` RWMutex
-- `world.GetAllPlayers()` returns snapshot under read lock
+- `world.players` map accessed directly under `world.mu.RLock()` to get mutable `*PlayerState` pointers
 
 **Attack Flow:**
 ```go
@@ -950,3 +950,4 @@ func TestPerformMeleeAttack_BatHitsSingleTarget(t *testing.T) {
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification |
+| 1.0.1 | 2026-02-16 | Fixed thread safety note — `world.players` accessed directly under `world.mu.RLock()`, not via `GetAllPlayers()` |
