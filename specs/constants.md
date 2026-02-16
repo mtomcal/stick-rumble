@@ -391,8 +391,8 @@ Fixed positions for weapon crates. Coordinates based on arena percentages.
 |----------|-------|------|-----|
 | KILL_FEED_MAX_ENTRIES | 5 | entries | Fits in corner without scrolling. |
 | KILL_FEED_FADE_TIME | 5000 | ms | 5 seconds visible. Long enough to process, short enough to clear. |
-| HEALTH_BAR_WIDTH | 40 | px | Fits above player head without overlap. |
-| HEALTH_BAR_HEIGHT | 6 | px | Thin bar. Readable without obstructing player. |
+| HEALTH_BAR_WIDTH | 32 | px | Matches player width (32px). Fits above player head without overlap. |
+| HEALTH_BAR_HEIGHT | 4 | px | Thin bar. Readable without obstructing player. |
 | DODGE_ROLL_UI_RADIUS | 20 | px | Circular cooldown indicator size. |
 
 ---
@@ -537,3 +537,4 @@ if (distance > maxRange * 0.5):
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification extracted from codebase |
 | 1.1.0 | 2026-02-15 | Updated DECELERATION from 50 to 1500 px/s² to match source code (changed during Epic 4 client-side prediction work). Updated rationale text and code snippets. |
+| 1.1.1 | 2026-02-16 | Fixed HEALTH_BAR_WIDTH (40→32) and HEALTH_BAR_HEIGHT (6→4) to match HealthBar.ts source code. |
