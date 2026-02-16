@@ -235,8 +235,7 @@ stick-rumble-client/
 │       │   ├── GameScene.ts              # Main game scene
 │       │   ├── GameSceneUI.ts            # UI rendering
 │       │   ├── GameSceneEventHandlers.ts # Message handlers + reconciliation
-│       │   ├── GameSceneSpectator.ts     # Spectator mode
-│       │   └── MatchTimer.ts             # Timer component
+│       │   └── GameSceneSpectator.ts     # Spectator mode
 │       ├── entities/
 │       │   ├── PlayerManager.ts          # Player rendering
 │       │   ├── ProjectileManager.ts      # Projectile lifecycle
@@ -277,7 +276,8 @@ stick-rumble-client/
 │       ├── audio/
 │       │   └── AudioManager.ts           # Positional audio
 │       └── utils/
-│           └── Clock.ts                  # Time abstraction
+│           ├── Clock.ts                  # Time abstraction
+│           └── xpCalculator.ts           # XP calculation logic
 ├── src/ui/
 │   └── debug/                            # [NEW: Epic 4] Network debug tools
 │       └── DebugNetworkPanel.tsx         # React panel for network simulation
@@ -1783,4 +1783,5 @@ it('should follow local player with camera', () => {
 | 1.0.0 | 2026-02-02 | Initial specification |
 | 1.1.0 | 2026-02-15 | Added new directories: physics/, simulation/, ui/debug/. Added subsystem descriptions: PredictionEngine, InterpolationEngine, GameSimulation, NetworkSimulator, DebugNetworkPanel. Updated directory tree with new files (RangedWeapon.ts, MeleeWeapon.ts, GameSceneSpectator.ts, urlParams.ts). Updated rendering pipeline with prediction/interpolation steps. Updated async message flow for state:snapshot/state:delta. |
 | 1.1.1 | 2026-02-16 | Fixed dodge roll visual — uses `setRotation` (360deg spin) + `setVisible` flicker (not `setAlpha(0.5)`) per `PlayerManager.ts:264-278`. |
+| 1.1.3 | 2026-02-16 | Fixed directory tree — removed nonexistent MatchTimer.ts, added xpCalculator.ts to utils/ |
 | 1.1.2 | 2026-02-16 | Fixed ShootingManager — separate `shoot()` and `meleeAttack()` methods (not single `shoot()` checking `isMelee`). Added `clientTimestamp` to shoot data. |
