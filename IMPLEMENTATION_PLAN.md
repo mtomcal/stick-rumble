@@ -71,7 +71,7 @@ The specs in `specs/` were bulk-updated and then validated by a prior Ralph job.
 - [x] 10. client-architecture.md — Fix dodge roll visual (rotation+flicker, not alpha)
 - [x] 11. client-architecture.md — Fix ShootingManager.shoot() vs meleeAttack() separation
 - [x] 16. server-architecture.md — Fix tick() deltaTime (real elapsed, not fixed from tickRate)
-- [ ] 18. server-architecture.md — Fix handleInputState (direct type assertions, no NaN sanitization)
+- [x] 18. server-architecture.md — Fix handleInputState (direct type assertions, no NaN sanitization)
 - [ ] 20. server-architecture.md — Fix Room.Broadcast (non-blocking select, not blocking channel)
 - [ ] 23. server-architecture.md — Fix main.go pattern (global singleton, not explicit handler)
 - [ ] 25. hit-detection.md — Fix Projectile SpawnPosition json tag (json:"-", not "spawnPosition")
@@ -270,6 +270,7 @@ Worker: when you find additional drift while fixing a finding, add a row here.
 | # | Spec | Discovery | Severity |
 |---|------|-----------|----------|
 | D1 | test-index.md | 14 specs still need cross-referencing against source spec test sections (arena, audio, client-architecture, constants, dodge-roll, graphics, hit-detection, melee, movement, networking, overview, player, ui, weapons). Priority/category mismatches likely exist. | MEDIUM |
+| D2 | server-architecture.md | handlePlayerShoot code block has wrong signature `(msg Message, playerID string)` vs actual `(playerID string, data any)`, uses `getFloat64`/`getInt64` helpers instead of direct type assertions, and `sendWeaponState` is called with 2 args `(playerID, result.WeaponState)` vs actual 1 arg `(playerID)`. | MEDIUM |
 
 ## Per-Item Process
 

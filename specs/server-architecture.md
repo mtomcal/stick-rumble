@@ -433,38 +433,42 @@ Each message type has a dedicated handler that validates input and calls GameSer
 
 **Go:**
 ```go
-func (h *WebSocketHandler) handleInputState(msg Message, playerID string) {
-    // 1. Validate message schema (optional, development only)
-    if h.validator != nil {
-        if err := h.validator.Validate("input-state-data", msg.Data); err != nil {
-            log.Printf("Validation error: %v", err)
-            // Continue processing - validation is non-blocking
-        }
-    }
-
-    // 2. Extract data from message
-    data, ok := msg.Data.(map[string]interface{})
-    if !ok {
+func (h *WebSocketHandler) handleInputState(playerID string, data any) {
+    // 1. Reject input if match has ended
+    room := h.roomManager.GetRoomByPlayerID(playerID)
+    if room != nil && room.Match.IsEnded() {
         return
     }
 
-    input := InputState{
-        Up:         getBool(data, "up"),
-        Down:       getBool(data, "down"),
-        Left:       getBool(data, "left"),
-        Right:      getBool(data, "right"),
-        AimAngle:   getFloat64(data, "aimAngle"),
-        IsSprinting: getBool(data, "isSprinting"),
-    }
-    sequence := getInt(data, "sequence")
-
-    // 3. Sanitize aim angle (prevent NaN/Inf)
-    if math.IsNaN(input.AimAngle) || math.IsInf(input.AimAngle, 0) {
-        input.AimAngle = 0
+    // 2. Validate data against JSON schema (returns early on failure)
+    if err := h.validator.Validate("input-state-data", data); err != nil {
+        log.Printf("Schema validation failed for input:state from %s: %v", playerID, err)
+        return
     }
 
-    // 4. Update game server with sequence for prediction reconciliation
-    h.gameServer.UpdatePlayerInputWithSequence(playerID, input, sequence)
+    // 3. Direct type assertions (no helper functions — schema validation guarantees types)
+    dataMap := data.(map[string]interface{})
+
+    input := game.InputState{
+        Up:          dataMap["up"].(bool),
+        Down:        dataMap["down"].(bool),
+        Left:        dataMap["left"].(bool),
+        Right:       dataMap["right"].(bool),
+        AimAngle:    dataMap["aimAngle"].(float64),
+        IsSprinting: dataMap["isSprinting"].(bool),
+    }
+
+    // 4. Extract sequence number (optional, for client-side prediction reconciliation)
+    var sequence uint64
+    if seqFloat, ok := dataMap["sequence"].(float64); ok {
+        sequence = uint64(seqFloat)
+    }
+
+    // 5. Update game server with input and sequence
+    success := h.gameServer.UpdatePlayerInputWithSequence(playerID, input, sequence)
+    if !success {
+        log.Printf("Failed to update input for player %s", playerID)
+    }
 }
 ```
 
@@ -1278,3 +1282,4 @@ func TestConcurrentAccess(t *testing.T) {
 | 1.1.2 | 2026-02-16 | Fixed setupCallbacks section — callbacks are registered as method references in the constructor (not a separate `setupCallbacks()` method), added `SetGetRTT` and `SetOnWeaponRespawn` registrations. |
 | 1.1.3 | 2026-02-16 | Replaced nonexistent `sanitizePosition` with actual `sanitizeVector2` from `physics.go:208` — NaN/Inf replaced with 0 (not arena center). |
 | 1.1.4 | 2026-02-16 | Fixed tick() deltaTime — uses real elapsed `now.Sub(lastTick).Seconds()` not fixed from tickRate. Logic is inline in loop, not separate `tick()` method. |
+| 1.1.5 | 2026-02-16 | Fixed handleInputState — correct signature `(playerID string, data any)` not `(msg Message, playerID string)`, direct type assertions instead of `getBool`/`getFloat64`/`getInt` helpers, no NaN/Inf sanitization (schema validation guarantees types), validation returns early on failure (not non-blocking). |
