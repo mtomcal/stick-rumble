@@ -271,6 +271,8 @@ When implementing from scratch, AI agents need to:
 
 ### Netcode Tests (Epic 4: movement.md, networking.md, hit-detection.md)
 
+> **Note:** These 15 test IDs are defined only in this index. They do not appear in any source spec's Test Scenarios section. They were added during Epic 4 spec updates as cross-spec coverage targets but have no corresponding source spec entries.
+
 | ID | Category | Priority | Description |
 |----|----------|----------|-------------|
 | TS-PRED-001 | Unit | Critical | PredictionEngine mirrors server physics output |
@@ -642,4 +644,4 @@ Use this checklist to track test implementation progress:
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification |
 | 1.1.0 | 2026-02-15 | Added 15 Epic 4 Netcode test scenarios (prediction, reconciliation, interpolation, delta compression, lag compensation, network simulator). Updated total from 179 to 194 tests. Fixed deceleration reference from 50 to 1500 px/s². |
-| 1.1.1 | 2026-02-16 | Fixed test priorities/categories for shooting.md, rooms.md, server-architecture.md, match.md, and messages.md to match source spec definitions. Corrected systematically inflated Critical counts. Removed phantom Low priority count (0 Low tests exist). |
+| 1.1.1 | 2026-02-16 | Fixed test priorities/categories for shooting.md, rooms.md, server-architecture.md, match.md, and messages.md to match source spec definitions. Corrected systematically inflated Critical counts. Removed phantom Low priority count (0 Low tests exist). Flagged 15 netcode test IDs as index-only (no source spec entries). |

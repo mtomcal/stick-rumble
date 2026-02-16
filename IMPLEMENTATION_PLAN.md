@@ -58,7 +58,7 @@ The specs in `specs/` were bulk-updated and then validated by a prior Ralph job.
 - [x] 88. test-index.md — Fix summary statistics totals (updated Critical/High/Medium/Low counts, removed phantom Low=9)
 - [x] 89. test-index.md — Fix category counts (Unit/Integration mismatches corrected for 5 specs)
 - [x] 91. test-index.md — Fix description scrambling (corrected shooting.md test descriptions to match source spec IDs)
-- [ ] 92. test-index.md — Remove or flag 15 netcode test IDs not in source specs
+- [x] 92. test-index.md — Remove or flag 15 netcode test IDs not in source specs
 - [ ] 97. SPEC-OF-SPECS.md — Fix DECELERATION constant (50 vs actual 1500 px/s^2)
 - [ ] 98. SPEC-OF-SPECS.md — Fix Server->Client message count (19 listed but 22 actual)
 
