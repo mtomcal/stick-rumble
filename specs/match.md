@@ -840,9 +840,13 @@ wsClient.on('match:timer', (data: { remainingSeconds: number }) => {
   const seconds = data.remainingSeconds % 60;
   timerDisplay.setText(`${minutes}:${seconds.toString().padStart(2, '0')}`);
 
-  // Visual warning when low
-  if (data.remainingSeconds < 30) {
-    timerDisplay.setColor('#FF0000');
+  // Visual warning colors based on remaining time
+  if (data.remainingSeconds < 60) {
+    timerDisplay.setColor('#ff0000');   // Red: under 1 minute
+  } else if (data.remainingSeconds < 120) {
+    timerDisplay.setColor('#ffff00');   // Yellow: under 2 minutes
+  } else {
+    timerDisplay.setColor('#ffffff');   // White: normal
   }
 });
 ```
