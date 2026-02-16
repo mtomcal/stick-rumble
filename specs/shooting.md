@@ -229,17 +229,18 @@ class ShootingManager {
 ```go
 func (gs *GameServer) PlayerShoot(playerID string, aimAngle float64, clientTimestamp int64) ShootResult {
     // clientTimestamp used for lag compensation on hitscan weapons — see hit-detection.md
-    gs.mu.Lock()
-    defer gs.mu.Unlock()
 
-    // Get player state
-    player, err := gs.world.GetPlayer(playerID)
-    if err != nil || !player.IsAlive() {
+    // Check if player exists (no IsAlive check — dead players not rejected here)
+    player, exists := gs.world.GetPlayer(playerID)
+    if !exists {
         return ShootResult{Success: false, Reason: ShootFailedNoPlayer}
     }
 
-    // Get weapon state
+    // Get weapon state (uses weaponMu, not gs.mu)
+    gs.weaponMu.RLock()
     ws := gs.weaponStates[playerID]
+    gs.weaponMu.RUnlock()
+
     if ws == nil {
         return ShootResult{Success: false, Reason: ShootFailedNoPlayer}
     }
@@ -250,7 +251,7 @@ func (gs *GameServer) PlayerShoot(playerID string, aimAngle float64, clientTimes
     }
 
     // Check ammo (triggers auto-reload if empty)
-    if ws.CurrentAmmo == 0 {
+    if ws.IsEmpty() {
         ws.StartReload()
         return ShootResult{Success: false, Reason: ShootFailedEmpty}
     }
@@ -260,13 +261,19 @@ func (gs *GameServer) PlayerShoot(playerID string, aimAngle float64, clientTimes
         return ShootResult{Success: false, Reason: ShootFailedCooldown}
     }
 
-    // Create projectile
-    pos := player.GetPosition()
-    proj := NewProjectile(playerID, ws.Weapon.Name, pos, aimAngle, ws.Weapon.ProjectileSpeed)
-    gs.projectileManager.AddProjectile(proj)
-
     // Record shot (decrement ammo, update cooldown)
     ws.RecordShot()
+
+    // Branch: Hitscan vs Projectile weapon
+    if ws.Weapon.IsHitscan {
+        return gs.processHitscanShot(playerID, player, ws.Weapon, aimAngle, clientTimestamp)
+    }
+
+    // Projectile weapon: create projectile (CreateProjectile creates + adds in one call)
+    pos := player.GetPosition()
+    proj := gs.projectileManager.CreateProjectile(
+        playerID, ws.Weapon.Name, pos, aimAngle, ws.Weapon.ProjectileSpeed,
+    )
 
     return ShootResult{Success: true, Projectile: proj}
 }
@@ -1048,3 +1055,4 @@ test "dead player cannot shoot":
 | 1.0.0 | 2026-02-02 | Initial specification with complete shooting mechanics |
 | 1.1.0 | 2026-02-15 | Added `clientTimestamp` parameter to `PlayerShoot()` for lag compensation on hitscan weapons. |
 | 1.1.1 | 2026-02-16 | Fixed `ShootResult.FailReason` → `ShootResult.Reason` to match `gameserver.go:22`. |
+| 1.1.2 | 2026-02-16 | Fixed `PlayerShoot` — only checks `!exists` (no `IsAlive` check), uses `weaponMu.RLock` (not `gs.mu.Lock`), uses `CreateProjectile` (not `NewProjectile+AddProjectile`), added hitscan branch. |
