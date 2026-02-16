@@ -2031,32 +2031,34 @@ For an AI agent recreating from scratch, implement in this order:
 
 ---
 
-## Estimated Total Length
+## Actual Total Length
 
-| Spec | Estimated Lines |
-|------|-----------------|
-| README.md | 250 |
-| overview.md | 350 |
-| constants.md | 225 |
-| messages.md | 700 |
-| arena.md | 250 |
-| player.md | 450 |
-| movement.md | 400 |
-| dodge-roll.md | 375 |
-| weapons.md | 550 |
-| shooting.md | 500 |
-| melee.md | 375 |
-| hit-detection.md | 475 |
-| match.md | 375 |
-| rooms.md | 325 |
-| networking.md | 425 |
-| client-architecture.md | 475 |
-| server-architecture.md | 425 |
-| audio.md | 325 |
-| graphics.md | 550 |
-| ui.md | 425 |
-| test-index.md | 350 |
-| **TOTAL** | **~8,575 lines** |
+| Spec | Lines |
+|------|-------|
+| README.md | 356 |
+| overview.md | 708 |
+| constants.md | 540 |
+| messages.md | 1808 |
+| arena.md | 1001 |
+| player.md | 966 |
+| movement.md | 946 |
+| dodge-roll.md | 1142 |
+| weapons.md | 1045 |
+| shooting.md | 1093 |
+| melee.md | 953 |
+| hit-detection.md | 1200 |
+| match.md | 1335 |
+| rooms.md | 871 |
+| networking.md | 1146 |
+| client-architecture.md | 1786 |
+| server-architecture.md | 1329 |
+| audio.md | 905 |
+| graphics.md | 1073 |
+| ui.md | 1243 |
+| test-index.md | 645 |
+| spec-of-specs-plan.md | 1064 |
+| SPEC-OF-SPECS.md | 2074 |
+| **TOTAL** | **~25,229 lines** |
 
 ---
 
