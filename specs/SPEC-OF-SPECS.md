@@ -483,7 +483,7 @@ Organized by category with tables:
    - `player:dodge_roll`
    - `test`
 
-3. **Server → Client Messages** (19 types)
+3. **Server → Client Messages** (22 types)
    Each message includes:
    - Type string
    - Full data schema with types
@@ -512,6 +512,8 @@ Organized by category with tables:
    - `melee:hit`
    - `roll:start`
    - `roll:end`
+   - `state:snapshot` (Epic 4: full player state for delta compression)
+   - `state:delta` (Epic 4: partial player state updates)
 
 4. **Message Flow Diagrams**
    - Connection sequence
