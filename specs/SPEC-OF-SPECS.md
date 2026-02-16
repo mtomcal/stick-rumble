@@ -32,6 +32,7 @@
    - [graphics.md](#graphicsmd)
    - [ui.md](#uimd)
    - [test-index.md](#test-indexmd)
+   - [spec-of-specs-plan.md](#spec-of-specs-planmd)
 4. [Cross-Reference Conventions](#cross-reference-conventions)
 5. [Versioning Policy](#versioning-policy)
 
@@ -1957,6 +1958,22 @@ Organized by category with tables:
    - By priority
 
 **Estimated Length**: 300-400 lines (depends on total test count)
+
+---
+
+### spec-of-specs-plan.md
+
+**Purpose**: Track progress on generating specification documents from this blueprint.
+
+**Required Content**:
+
+1. **Implementation Status** — Phase tables showing each spec file's completion status and line count
+2. **Progress Summary** — Total specs, completed count, total lines, total test scenarios
+3. **Completed Work Log** — Per-spec log of what was documented, sources analyzed, key findings
+4. **Contract Validation** — Records of cross-validation between specs, schemas, and source code
+5. **Final Validation Summary** — Current sync status of all contract types
+
+**Estimated Length**: ~1,000 lines (grows with each completed spec)
 
 ---
 
