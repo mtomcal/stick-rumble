@@ -92,7 +92,7 @@ The specs in `specs/` were bulk-updated and then validated by a prior Ralph job.
 - [x] 57. ui.md — Fix hit marker shape (+ pattern, not X)
 - [x] 58. ui.md — Fix match end screen title/format
 - [x] 60. ui.md — Fix ammo low-ammo color (no color change logic exists)
-- [ ] 61. ui.md — Fix connection status reconnecting UI (console only, no visible text)
+- [x] 61. ui.md — Fix connection status reconnecting UI (console only, no visible text)
 - [ ] 67. match.md — Fix client timer red threshold (< 60, not < 30)
 - [ ] 68. match.md — Fix client match end mechanism (window.onMatchEnd bridge, not showEndScreen)
 - [ ] 69. dodge-roll.md — Fix UpdatePlayer return type (UpdatePlayerResult struct, not bool)
