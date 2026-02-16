@@ -280,17 +280,19 @@ API URL: http://localhost:8080/ws
 **Game Server Pattern:**
 ```go
 type GameServer struct {
-    world              *World
-    physics            *Physics
-    projectileManager  *ProjectileManager
-    weaponCrateManager *WeaponCrateManager
-    weaponStates       map[string]*WeaponState
-    positionHistory    *PositionHistory
-    tickRate           time.Duration
-    updateRate         time.Duration
-    clock              Clock
-    broadcastFunc      func(playerStates []PlayerStateSnapshot)
-    // ... additional callback functions
+    world              *World              // All players, projectiles, crates
+    physics            *Physics            // Movement and collision calculations
+    projectileManager  *ProjectileManager  // Active projectile tracking
+    weaponCrateManager *WeaponCrateManager // Weapon crate lifecycle
+    weaponStates       map[string]*WeaponState // playerID → weapon state
+
+    tickRate   time.Duration // 16.67ms (60 Hz game loop)
+    updateRate time.Duration // 50ms (20 Hz state broadcast)
+
+    broadcastFunc func(playerStates []PlayerStateSnapshot) // Injected callback
+    onHit         func(hit HitEvent)                       // Hit event callback
+    onRespawn     func(playerID string, position Vector2)  // Respawn callback
+    // ... additional callbacks for reload, weapon pickup, roll end, etc.
 }
 ```
 
@@ -353,25 +355,30 @@ The fundamental rule: **Never trust data from clients.**
 Every client action is validated server-side:
 
 ```go
-// Example: Shoot validation
-func (gs *GameServer) PlayerShoot(playerID, aimAngle, clientTimestamp) ShootResult {
+// Example: Shoot validation (simplified from gameserver.go:336)
+func (gs *GameServer) PlayerShoot(playerID string, aimAngle float64, clientTimestamp int64) ShootResult {
+    // 1. Player exists (no IsDead check — only existence is verified)
     player, exists := gs.world.GetPlayer(playerID)
-
-    // 1. Player exists
     if !exists {
         return ShootResult{Success: false, Reason: "no_player"}
     }
 
-    // 2. Get weapon state from separate map
+    // 2. Weapon state from separate map (not player struct)
+    gs.weaponMu.RLock()
     ws := gs.weaponStates[playerID]
+    gs.weaponMu.RUnlock()
+    if ws == nil {
+        return ShootResult{Success: false, Reason: "no_player"}
+    }
 
     // 3. Not currently reloading
     if ws.IsReloading {
         return ShootResult{Success: false, Reason: "reloading"}
     }
 
-    // 4. Has ammo
+    // 4. Has ammo (auto-reload on empty)
     if ws.IsEmpty() {
+        ws.StartReload()
         return ShootResult{Success: false, Reason: "empty"}
     }
 
@@ -380,9 +387,9 @@ func (gs *GameServer) PlayerShoot(playerID, aimAngle, clientTimestamp) ShootResu
         return ShootResult{Success: false, Reason: "cooldown"}
     }
 
-    // All checks passed - record shot and create projectile or process hitscan
+    // All checks passed - record shot and create projectile
     ws.RecordShot()
-    return gs.createProjectileOrHitscan(player, ws.Weapon, aimAngle)
+    // ... hitscan or projectile path
 }
 ```
 
@@ -422,7 +429,7 @@ When enabled, the server validates every outgoing message against JSON schemas g
 ```
 stick-rumble/
 ├── .claude/                       # Claude Code configuration
-│   └── settings.json              # AI agent settings
+│   └── commands/                  # Custom slash commands
 │
 ├── docs/                          # Project documentation
 │   ├── ARCHITECTURE.md            # System design overview
@@ -437,8 +444,8 @@ stick-rumble/
 ├── specs/                         # Detailed specifications (this folder)
 │   ├── README.md                  # Spec index and reading order
 │   ├── SPEC-OF-SPECS.md           # Specification structure template
-│   ├── spec-of-specs-plan.md      # Spec validation plan
-│   ├── test-index.md              # Test scenario index
+│   ├── spec-of-specs-plan.md      # Spec creation plan and work log
+│   ├── test-index.md              # Cross-spec test scenario index
 │   ├── overview.md                # This file
 │   ├── constants.md               # All magic numbers
 │   ├── arena.md                   # World boundaries
@@ -453,11 +460,11 @@ stick-rumble/
 │   ├── rooms.md                   # Matchmaking
 │   ├── messages.md                # WebSocket messages
 │   ├── networking.md              # Connection lifecycle
-│   ├── graphics.md                # Rendering and visual effects
-│   ├── audio.md                   # Sound effects and audio
-│   ├── ui.md                      # User interface
 │   ├── client-architecture.md     # Phaser scenes and managers
-│   └── server-architecture.md     # Go server structure
+│   ├── server-architecture.md     # Go server internals and game loop
+│   ├── ui.md                      # HUD, kill feed, scoreboard, timers
+│   ├── graphics.md                # Rendering and visual effects
+│   └── audio.md                   # Sound effects and audio system
 │
 ├── stick-rumble-client/           # Frontend application (see above)
 │
@@ -565,15 +572,15 @@ Key patterns used throughout the server:
 type World struct {
     players map[string]*PlayerState
     clock   Clock
-    rng     *rand.Rand
+    rng     *rand.Rand   // Random number generator for spawn points
     mu      sync.RWMutex
-    rngMu   sync.Mutex
+    rngMu   sync.Mutex   // Protects rng access (rand.Rand is not thread-safe)
 }
 
-func (w *World) GetPlayer(id string) (*PlayerState, bool) {
+func (w *World) GetPlayer(playerID string) (*PlayerState, bool) {
     w.mu.RLock()
     defer w.mu.RUnlock()
-    player, exists := w.players[id]
+    player, exists := w.players[playerID]
     return player, exists
 }
 
@@ -694,6 +701,12 @@ func (s *Server) Serve(ctx context.Context) error {
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification |
+| 1.0.1 | 2026-02-16 | Fixed GameServer struct — replaced nonexistent Room/Match/ticker/broadcaster fields with actual callbacks and duration configs from `gameserver.go`. |
+| 1.0.2 | 2026-02-16 | Fixed anti-cheat PlayerShoot pseudocode — no `IsDead` check (only `!exists`), weapon state via `gs.weaponStates` map (not `player.Weapon`). |
+| 1.0.6 | 2026-02-16 | Fixed World struct — added `clock`, `rng`, `rngMu` fields; map type `*PlayerState` not `*Player`; `GetPlayer` returns `(*PlayerState, bool)` |
+| 1.0.5 | 2026-02-16 | Removed nonexistent `.claude/todos.json` and `settings.json` from folder tree (actual: `.claude/commands/`) |
+| 1.0.4 | 2026-02-16 | Removed nonexistent root-level `GDD.md` from folder tree (only exists at `docs/GDD.md`) |
+| 1.0.3 | 2026-02-16 | Added 6 missing specs to folder tree: `server-architecture.md`, `ui.md`, `graphics.md`, `audio.md`, `test-index.md`, `spec-of-specs-plan.md`. |
 
 ---
 

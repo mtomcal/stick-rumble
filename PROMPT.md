@@ -1,10 +1,14 @@
-Each iteration, pick the next unchecked spec from IMPLEMENTATION_PLAN.md and verify it against the archived source code in docs/archive/20251125-055521-pre-bmm/. Read the spec, read the source file(s) it documents, and fix any inaccuracies in the spec so it truthfully describes what the code does.
+Read IMPLEMENTATION_PLAN.md and pick the next unchecked finding from the fix checklist. Read the spec file, read the source code it references, then edit the spec to match reality. One finding per iteration, then stop.
 
 IMPORTANT:
 
 check the course corrections section FIRST every iteration — follow any active corrections before doing anything else.
-you may ONLY edit files inside docs/archive/20251125-055521-pre-bmm/specs/ — never touch source code files.
-do NOT edit PROMPT.md.
-update IMPLEMENTATION_PLAN.md when you finish each item (check it off) and when you discover something the plan missed (add to Discoveries table).
-commit your work at the end of every iteration with a message like "docs: verify {spec-name} against archived source".
-output `/done` when all checklist items are checked off.
+only edit spec files in specs/ — do NOT edit any source code.
+do NOT edit PROMPT.md, ORCHESTRATOR.md, or loop.sh.
+update IMPLEMENTATION_PLAN.md progress checklist when a finding is fixed.
+if you discover additional drift while fixing a finding, add it to the Discoveries section in IMPLEMENTATION_PLAN.md.
+do exactly ONE checklist item per iteration, then stop.
+commit your work at the end of every iteration.
+use commit message format: "docs: Fix {spec-name} — {brief description of what was corrected}"
+After committing, push to the remote with "git push -u origin ralph/spec-fixes" every iteration.
+output `/done` when all findings are fixed.

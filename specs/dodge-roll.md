@@ -1,7 +1,7 @@
 # Dodge Roll
 
-> **Spec Version**: 1.0.1
-> **Last Updated**: 2026-02-16
+> **Spec Version**: 1.0.0
+> **Last Updated**: 2026-02-02
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [movement.md](movement.md), [arena.md](arena.md), [messages.md](messages.md)
 > **Depended By**: [hit-detection.md](hit-detection.md), [graphics.md](graphics.md), [ui.md](ui.md)
 
@@ -177,8 +177,8 @@ The dodge roll follows a simple state machine:
 ```
 function handleDodgeRollRequest(player):
     if not player.canDodgeRoll():
-        log("Player cannot dodge roll")
-        return  // Log and ignore invalid request
+        log.Printf("Player %s cannot dodge roll")
+        return
 
     direction = calculateRollDirection(player.input)
     player.startDodgeRoll(direction)
@@ -337,8 +337,14 @@ function updatePlayerPhysics(player, deltaTime):
 
 **Go (Server):**
 ```go
+// UpdatePlayerResult contains the result of updating a player's physics
+type UpdatePlayerResult struct {
+    RollCancelled    bool // True if dodge roll was cancelled due to wall collision
+    CorrectionNeeded bool // True if the movement required correction (anti-cheat flag)
+}
+
 // UpdatePlayer updates a player's physics state
-// Returns UpdatePlayerResult with RollCancelled and CorrectionNeeded flags
+// Returns UpdatePlayerResult with correction information
 func (p *Physics) UpdatePlayer(player *PlayerState, deltaTime float64) UpdatePlayerResult {
     result := UpdatePlayerResult{
         RollCancelled:    false,
@@ -352,6 +358,7 @@ func (p *Physics) UpdatePlayer(player *PlayerState, deltaTime float64) UpdatePla
             X: rollState.RollDirection.X * DodgeRollVelocity,
             Y: rollState.RollDirection.Y * DodgeRollVelocity,
         }
+        rollVel = sanitizeVector2(rollVel, "UpdatePlayer roll velocity")
         player.SetVelocity(rollVel)
     } else {
         // Normal movement handling...
@@ -369,11 +376,22 @@ func (p *Physics) UpdatePlayer(player *PlayerState, deltaTime float64) UpdatePla
     clampedPos := clampToArena(newPos)
 
     // Check if position was clamped during a roll (wall collision)
-    if player.IsRolling() && (clampedPos.X != newPos.X || clampedPos.Y != newPos.Y) {
+    isRolling := player.IsRolling()
+    if isRolling && (clampedPos.X != newPos.X || clampedPos.Y != newPos.Y) {
         player.EndDodgeRoll()
         result.RollCancelled = true
     }
 
+    clampedPos = sanitizeVector2(clampedPos, "UpdatePlayer position")
+
+    // Anti-cheat validation
+    validation := p.ValidatePlayerMovement(oldPos, clampedPos, currentVel, deltaTime, isRolling, input.IsSprinting)
+    if !validation.Valid {
+        result.CorrectionNeeded = true
+        player.RecordCorrection()
+    }
+
+    player.RecordMovementUpdate()
     player.SetPosition(clampedPos)
     return result
 }
@@ -548,15 +566,16 @@ interface PlayerDodgeRollMessage {
   type: 'player:dodge_roll';
   timestamp: number;
   data: {
-    direction: { x: number; y: number }; // Client-calculated direction (server ignores this)
+    direction: { x: number; y: number };  // Normalized roll direction vector
   };
 }
 ```
 
-**Why direction is sent but ignored:**
-- Client sends calculated direction for potential future use
-- Server calculates direction independently from current input state (WASD, aim angle)
-- Prevents client from sending arbitrary directions (server authority enforced)
+> **Note:** The formal TypeBox schema (`createTypedMessageSchemaNoData`) defines this as having no data payload, but the actual client implementation (`GameScene.ts:286-290`) sends `data: { direction: rollDirection }` computed from WASD input or aim angle. The server extracts the direction from the data payload.
+
+**Direction calculation:**
+1. If WASD keys pressed → normalized WASD direction vector
+2. If stationary → aim angle direction (cos/sin)
 
 ### Server → Client: roll:start
 
@@ -581,11 +600,12 @@ interface RollStartData {
 **Client handling:**
 ```typescript
 wsClient.on('roll:start', (data: RollStartData) => {
+  // Dodge roll manager only for local player
   if (data.playerId === this.localPlayerId) {
     this.dodgeRollManager.startRoll();
   }
 
-  // Play whoosh sound for all players (not just local player)
+  // Audio plays for ALL players' rolls (not just local)
   this.audioManager?.playDodgeRollSound();
 
   // PlayerManager will show roll animation based on player.isRolling
@@ -631,14 +651,11 @@ wsClient.on('roll:end', (data: RollEndData) => {
 
 **Trigger**: Player sends `player:dodge_roll` when cannot roll
 **Detection**: `CanDodgeRoll()` returns false
-**Response**: Request ignored, log message emitted on server
+**Response**: Logs warning (`"Player %s cannot dodge roll (cooldown or dead)"`) and returns early
 **Client Notification**: None (client should have predicted this)
 **Recovery**: Player must wait for cooldown or death/respawn
 
-**Why ignore with log:**
-- No client error message needed - client tracks cooldown locally
-- Server logs invalid request for debugging/monitoring
-- Server is authoritative; client prediction may occasionally desync
+**Why log (not silent):** Helps debug timing issues during development. The log is cheap and useful for identifying client prediction desync.
 
 ### Player Not Found
 
@@ -1126,5 +1143,8 @@ it('should show 50% progress at 1.5s', () => {
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.0.1 | 2026-02-16 | Fix spec drift: pseudocode now logs on invalid roll (matches server), test pseudocode uses UpdatePlayerResult struct |
 | 1.0.0 | 2026-02-02 | Initial specification |
+| 1.0.4 | 2026-02-16 | Fixed error handling — invalid roll logs warning (not silently ignored) per `message_processor.go:442` |
+| 1.0.3 | 2026-02-16 | Fixed player:dodge_roll payload — client sends `data: { direction }`, not empty (schema and implementation diverge) |
+| 1.0.2 | 2026-02-16 | Fixed roll:start audio scope — plays for ALL players' rolls, not just local player |
+| 1.0.1 | 2026-02-16 | Fixed UpdatePlayer return type — returns `UpdatePlayerResult` struct (with `RollCancelled` and `CorrectionNeeded` fields), not `bool`. Added `sanitizeVector2` calls to match source. |

@@ -68,25 +68,25 @@ The core weapon definition structure containing all stats and behavior parameter
 
 **TypeScript:**
 ```typescript
+interface ProjectileVisuals {
+  color: string;              // Hex color for projectile circle
+  diameter: number;           // Projectile circle diameter (px)
+  tracerColor: string;        // Hex color for tracer trail
+  tracerWidth: number;        // Tracer line width (px)
+}
+
+interface WeaponVisuals {
+  muzzleFlashColor: string;   // Hex color for muzzle flash
+  muzzleFlashSize: number;    // Muzzle flash radius (px)
+  muzzleFlashDuration: number; // Muzzle flash duration (ms)
+  projectile: ProjectileVisuals; // Projectile rendering config
+}
+
 interface RecoilConfig {
   verticalPerShot: number;    // Degrees of vertical climb per shot
   horizontalPerShot: number;  // Degrees of horizontal spread (±random)
   recoveryTime: number;       // Seconds to fully recover from recoil
   maxAccumulation: number;    // Maximum accumulated recoil in degrees
-}
-
-interface ProjectileVisuals {
-  color: string;              // Projectile color (hex string)
-  diameter: number;           // Projectile size in pixels
-  tracerColor: string;        // Tracer trail color (hex string)
-  tracerWidth: number;        // Tracer line width in pixels
-}
-
-interface WeaponVisuals {
-  muzzleFlashColor: string;   // Muzzle flash color (hex string)
-  muzzleFlashSize: number;    // Muzzle flash size in pixels
-  muzzleFlashDuration: number; // Muzzle flash duration in milliseconds
-  projectile: ProjectileVisuals; // Projectile visual config
 }
 
 interface WeaponConfig {
@@ -101,7 +101,6 @@ interface WeaponConfig {
   knockbackDistance: number;  // Knockback push distance (Bat only)
   recoil: RecoilConfig | null; // Recoil pattern (null = no recoil)
   spreadDegrees: number;      // Movement inaccuracy (degrees ± while moving)
-  isHitscan: boolean;         // Instant-hit weapon (lag compensated) vs projectile
   visuals: WeaponVisuals;     // Client-side rendering config
 }
 ```
@@ -128,7 +127,7 @@ type Weapon struct {
     ArcDegrees        float64        // Swing arc in degrees (melee) or pellet spread (shotgun)
     KnockbackDistance float64        // Knockback distance in pixels (Bat only)
     Recoil            *RecoilPattern // Recoil pattern (nil for no recoil)
-    SpreadDegrees     float64        // Movement spread in degrees
+    SpreadDegrees     float64        // Movement spread in degrees (+/- while moving, 0 for stationary)
     IsHitscan         bool           // Instant-hit weapon (lag compensated) vs projectile
 }
 
@@ -651,7 +650,13 @@ All weapon stats are stored in `weapon-configs.json` at the project root.
       "visuals": {
         "muzzleFlashColor": "0xffdd00",
         "muzzleFlashSize": 8,
-        "muzzleFlashDuration": 50
+        "muzzleFlashDuration": 50,
+        "projectile": {
+          "color": "0xffff00",
+          "diameter": 4,
+          "tracerColor": "0xffff00",
+          "tracerWidth": 2
+        }
       }
     }
     // ... other weapons
@@ -731,12 +736,15 @@ const color = parseHexColor(config.visuals.muzzleFlashColor);
 
 **Factory Pattern:**
 ```go
-// Create weapons via factory (handles config loading)
+// CreateWeaponByType returns (*Weapon, error) — error for unknown weapon types
 weapon, err := CreateWeaponByType("ak47")
+if err != nil {
+    // "invalid weapon type: ..."
+}
 
-// Case-insensitive lookup
-weapon, err := CreateWeaponByType("AK47")  // Same result
-weapon, err := CreateWeaponByType("Ak47")  // Same result
+// Case-insensitive lookup (uses strings.ToLower internally)
+weapon, _ := CreateWeaponByType("AK47")  // Same result
+weapon, _ := CreateWeaponByType("Ak47")  // Same result
 ```
 
 **Thread Safety:**
@@ -1054,3 +1062,5 @@ func TestKnockbackBoundaryClamping(t *testing.T) {
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification |
+| 1.0.2 | 2026-02-16 | Added `ProjectileVisuals` and `WeaponVisuals` interfaces to TypeScript section, added `projectile` sub-field to JSON example |
+| 1.0.1 | 2026-02-16 | Fixed Uzi visual config — muzzleFlashSize=8 (not 6), muzzleFlashDuration=50 (not 30) per `weaponConfig.ts:199-200`. |

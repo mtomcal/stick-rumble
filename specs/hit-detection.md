@@ -1,7 +1,7 @@
 # Hit Detection
 
-> **Spec Version**: 1.1.1
-> **Last Updated**: 2026-02-16
+> **Spec Version**: 1.1.0
+> **Last Updated**: 2026-02-15
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [shooting.md](shooting.md), [arena.md](arena.md), [messages.md](messages.md)
 > **Depended By**: [match.md](match.md), [client-architecture.md](client-architecture.md), [server-architecture.md](server-architecture.md)
 
@@ -74,7 +74,7 @@ type Projectile struct {
     WeaponType    string    `json:"weaponType"`    // Weapon that created it
     Position      Vector2   `json:"position"`      // Current position (X, Y)
     Velocity      Vector2   `json:"velocity"`      // Velocity vector (X, Y)
-    SpawnPosition Vector2   `json:"-"`             // Where projectile was created (not serialized)
+    SpawnPosition Vector2   `json:"-"`             // Where projectile was created (server-only, not serialized)
     CreatedAt     time.Time `json:"-"`             // Timestamp for lifetime check
     Active        bool      `json:"-"`             // Is projectile still active?
 }
@@ -170,17 +170,28 @@ function checkHitDetection():
 ```go
 func (gs *GameServer) checkHitDetection() {
     projectiles := gs.projectileManager.GetActiveProjectiles()
+    if len(projectiles) == 0 {
+        return
+    }
 
-    // Get all players (thread-safe copy)
-    players := gs.world.GetAllPlayerPointers()
+    // Get all players under read lock
+    gs.world.mu.RLock()
+    players := make([]*PlayerState, 0, len(gs.world.players))
+    for _, player := range gs.world.players {
+        players = append(players, player)
+    }
+    gs.world.mu.RUnlock()
 
     hits := gs.physics.CheckAllProjectileCollisions(projectiles, players)
 
     for _, hit := range hits {
+        gs.weaponMu.RLock()
         weaponState := gs.weaponStates[hit.AttackerID]
+        gs.weaponMu.RUnlock()
         if weaponState == nil {
             continue
         }
+
         damage := weaponState.Weapon.Damage
 
         victim, exists := gs.world.GetPlayer(hit.VictimID)
@@ -191,7 +202,9 @@ func (gs *GameServer) checkHitDetection() {
 
         gs.projectileManager.RemoveProjectile(hit.ProjectileID)
 
-        gs.onHit(hit)
+        if gs.onHit != nil {
+            gs.onHit(hit)  // Passes entire HitEvent struct
+        }
     }
 }
 ```
@@ -354,42 +367,37 @@ func (p *PlayerState) TakeDamage(amount int) {
 
 ### Death Trigger
 
-Death is triggered when a player's health reaches 0 or below.
-
-**Why separate death from damage?**
-- Clean separation of concerns
-- Allows overkill damage tracking (future feature)
-- Easier to add death prevention mechanics later
+Death is triggered when a player's health reaches 0 or below. The death logic is **inline in `onHit`**, not a separate method.
 
 **Pseudocode:**
 ```
-function triggerDeath(victim, attackerID):
-    victim.isDead = true
-    victim.deathTime = now()
-    victim.deaths++
+// Inside onHit callback, after applying damage:
+if victimState.Health <= 0:
+    markPlayerDead(victimID)
 
-    attacker = getPlayer(attackerID)
+    attacker = world.GetPlayer(attackerID)
     attacker.kills++
     attacker.xp += KILL_XP_REWARD  // 100 XP
+
+    victim = world.GetPlayer(victimID)
+    victim.deaths++
 
     broadcast player:death { victimId, attackerId }
     broadcast player:kill_credit { killerId, victimId, killerKills, killerXP }
 
-    scheduleRespawn(victim, RESPAWN_DELAY)  // 3000ms
+    match.AddKill(attackerID)
+    if match.CheckKillTarget():
+        match.EndMatch("kill_target")
+        broadcast match:ended
 ```
 
-**Go:**
-
-Death handling is performed inline within the `onHit()` callback in `message_processor.go`. When `victimState.Health <= 0` after damage application, the following occurs:
-
+**Go (inline in onHit):**
 ```go
-// In MessageProcessor.onHit() - inline death handling
+// Inside func (h *WebSocketHandler) onHit(hit game.HitEvent):
 if victimState.Health <= 0 {
-    // Mark player as dead
     h.gameServer.MarkPlayerDead(hit.VictimID)
 
-    // Update stats: increment attacker kills and victim deaths
-    // NOTE: Must use GetWorld().GetPlayer() to get pointer, not GetPlayerState() which returns a copy!
+    // Must use GetWorld().GetPlayer() to get pointer — GetPlayerState() returns a copy
     attacker, attackerExists := h.gameServer.GetWorld().GetPlayer(hit.AttackerID)
     if attackerExists && attacker != nil {
         attacker.IncrementKills()
@@ -400,10 +408,32 @@ if victimState.Health <= 0 {
         victim.IncrementDeaths()
     }
 
-    // Broadcast player:death message
-    // ... (broadcast death and kill_credit messages)
+    // Broadcast player:death
+    deathData := map[string]interface{}{
+        "victimId":   hit.VictimID,
+        "attackerId": hit.AttackerID,
+    }
+    // ... marshal and room.Broadcast(deathBytes, "")
+
+    // Broadcast player:kill_credit
+    killCreditData := map[string]interface{}{
+        "killerId":    hit.AttackerID,
+        "victimId":    hit.VictimID,
+        "killerKills": attacker.Kills,
+        "killerXP":    attacker.XP,
+    }
+    // ... marshal and room.Broadcast(creditBytes, "")
+
+    // Track kill in match and check win conditions
+    room.Match.AddKill(hit.AttackerID)
+    if room.Match.CheckKillTarget() {
+        room.Match.EndMatch("kill_target")
+        h.broadcastMatchEnded(room, h.gameServer.GetWorld())
+    }
 }
 ```
+
+> **Note:** There is no separate `handleDeath` method. Death handling is inline in the `onHit` callback on `WebSocketHandler`. The `GetWorld().GetPlayer()` call is necessary to get a mutable pointer — `GetPlayerState()` returns a copy.
 
 ### Projectile Expiration
 
@@ -511,6 +541,10 @@ function processHitscanShot(shooterID, aimAngle, clientTimestamp):
     closestDistance = infinity
 
     for each player (not shooter, alive):
+        // NOTE: Hitscan does NOT check IsInvulnerable or IsInvincibleFromRoll(),
+        // unlike projectile collision (physics.go:262-268). Invulnerable/rolling
+        // players CAN be hit by hitscan weapons.
+
         // Get where victim WAS at queryTime
         victimPosition = positionHistory.GetPositionAt(playerID, queryTime)
         if not found: use current position as fallback
@@ -663,19 +697,29 @@ handlePlayerDamaged(data: PlayerDamagedData) {
 }
 
 handleHitConfirmed(data: HitConfirmedData) {
-  // Show hitmarker visual for local player
+  // Show visual hitmarker for local player (no audio yet — TODO for audio story)
   this.ui.showHitMarker();
-  // TODO: Audio feedback (ding sound) - deferred to audio story
 }
 
-handlePlayerDeath(data: PlayerDeathData) {
-  // If local player died, hide sprite and enter spectator mode
-  if (data.victimId === this.playerManager.getLocalPlayerId()) {
-    this.playerManager.setPlayerVisible(data.victimId, false);
+// player:death handler
+const playerDeathHandler = (data: unknown) => {
+  const messageData = data as PlayerDeathData;
+
+  // If LOCAL player died, hide sprite and enter spectator mode
+  if (messageData.victimId === this.playerManager.getLocalPlayerId()) {
+    this.playerManager.setPlayerVisible(messageData.victimId, false);
     this.spectator.enterSpectatorMode();
   }
-  // Note: Kill feed updates are handled separately in player:kill_credit handler
-}
+};
+
+// player:kill_credit handler (separate from death — adds to kill feed)
+const playerKillCreditHandler = (data: unknown) => {
+  const messageData = data as PlayerKillCreditData;
+  this.killFeedUI.addKill(
+    messageData.killerId.substring(0, 8),
+    messageData.victimId.substring(0, 8)
+  );
+};
 ```
 
 ### Go (Server)
@@ -683,8 +727,10 @@ handlePlayerDeath(data: PlayerDeathData) {
 Hit detection is part of the game loop in `gameserver.go`:
 
 ```go
-func (gs *GameServer) tick() {
-    // 1. Update all players (movement, physics)
+func (gs *GameServer) tickLoop(ctx context.Context) {
+    // ... ticker setup, deltaTime calculation ...
+
+    // 1. Update all players (physics/movement)
     gs.updateAllPlayers(deltaTime)
 
     // 2. Record position snapshots for lag compensation
@@ -693,7 +739,7 @@ func (gs *GameServer) tick() {
     // 3. Update all projectiles
     gs.projectileManager.Update(deltaTime)
 
-    // 4. Check for projectile-player collisions (hit detection)
+    // 4. Check for projectile-player collisions (hit detection) ← HERE
     gs.checkHitDetection()
 
     // 5. Check for reload completions
@@ -711,10 +757,12 @@ func (gs *GameServer) tick() {
     // 9. Update health regeneration
     gs.updateHealthRegeneration(deltaTime)
 
-    // 10. Check for weapon crate respawns
+    // 10. Check for weapon respawns
     gs.checkWeaponRespawns()
 }
 ```
+
+> **Note:** The tick loop runs all 10 steps sequentially each tick. Input processing happens earlier via `handleInputState` which calls `UpdatePlayerInputWithSequence` — it is not a step in the tick loop itself.
 
 **Performance considerations:**
 - Projectile list is typically small (0-20 active)
@@ -1147,4 +1195,6 @@ func TestProjectileOutOfBounds(t *testing.T) {
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification |
 | 1.1.0 | 2026-02-15 | Added Hitscan Hit Detection section (Pistol ray-circle collision). Added Lag Compensation via Position History section (RTT-based rewind, 150ms cap, linear interpolation). Updated overview to distinguish projectile vs hitscan collision modes. |
-| 1.1.1 | 2026-02-16 | Fixed checkHitDetection() Go code to use projectileManager API instead of world.Projectiles. Added missing step 10 (checkWeaponRespawns) to tick loop. |
+| 1.1.1 | 2026-02-16 | Fixed `checkHitDetection` code block — `onHit(hit)` takes HitEvent struct (not individual params), weapon damage via `gs.weaponStates` map (not `gs.world.GetPlayerWeapon`), projectiles via `gs.projectileManager` (not `gs.world.Projectiles`), players accessed directly under RLock. |
+| 1.1.3 | 2026-02-16 | Fixed client `handleHitConfirmed` — only calls `this.ui.showHitMarker()`, no `audioManager.playHitmarker()` (audio is TODO) |
+| 1.1.2 | 2026-02-16 | Fixed hitscan pseudocode — hitscan does NOT check `IsInvulnerable` or `IsInvincibleFromRoll()` (unlike projectile collision). Invulnerable/rolling players can be hit by hitscan. |

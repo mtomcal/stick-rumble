@@ -840,13 +840,13 @@ wsClient.on('match:timer', (data: { remainingSeconds: number }) => {
   const seconds = data.remainingSeconds % 60;
   timerDisplay.setText(`${minutes}:${seconds.toString().padStart(2, '0')}`);
 
-  // Visual warning when low
+  // Visual warning colors based on remaining time
   if (data.remainingSeconds < 60) {
-    timerDisplay.setColor('#ff0000'); // Red
+    timerDisplay.setColor('#ff0000');   // Red: under 1 minute
   } else if (data.remainingSeconds < 120) {
-    timerDisplay.setColor('#ffff00'); // Yellow
+    timerDisplay.setColor('#ffff00');   // Yellow: under 2 minutes
   } else {
-    timerDisplay.setColor('#ffffff'); // White
+    timerDisplay.setColor('#ffffff');   // White: normal
   }
 });
 ```
@@ -854,20 +854,28 @@ wsClient.on('match:timer', (data: { remainingSeconds: number }) => {
 ### Match End Handling
 
 ```typescript
-// On match:ended message
-wsClient.on('match:ended', (data: MatchEndedData) => {
-  matchEnded = true;
+// In GameSceneEventHandlers.ts — match:ended handler
+const matchEndedHandler = (data: unknown) => {
+  const messageData = data as MatchEndedData;
 
-  // Disable input
-  inputManager?.disable();
-  shootingManager?.disable();
+  // Set flag to stop processing player:move messages
+  this.matchEnded = true;
 
-  // Delegate to React UI via bridge callback
-  if (window.onMatchEnd) {
-    window.onMatchEnd(data, localPlayerId);
+  // Freeze gameplay by disabling input
+  if (this.inputManager) {
+    // ... disable input handlers
   }
-});
+
+  // Bridge to React via window.onMatchEnd (React renders MatchEndScreen)
+  const localPlayerId = this.playerManager.getLocalPlayerId();
+  if (localPlayerId && window.onMatchEnd) {
+    window.onMatchEnd(messageData as MatchEndData, localPlayerId);
+  }
+};
+this.wsClient.on('match:ended', matchEndedHandler);
 ```
+
+> **Note:** There is no `showEndScreen()` in Phaser. Match end display is handled by React via `window.onMatchEnd` — a bridge function set up by the React `PhaserGame` component. React renders the `MatchEndScreen` modal overlay.
 
 **WHY set matchEnded flag**:
 - Prevents processing `player:move` messages after match ends
