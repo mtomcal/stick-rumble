@@ -2071,3 +2071,12 @@ After reviewing this spec-of-specs:
 ---
 
 *This document serves as the blueprint for complete Stick Rumble specification documentation.*
+
+---
+
+## Changelog
+
+| Version | Date | Changes |
+|---------|------|---------|
+| 1.0.0 | 2026-02-16 | Initial blueprint document |
+| 1.0.1 | 2026-02-16 | Internal consistency verified — structure, cross-references, templates, and versioning policy are self-consistent |

@@ -78,7 +78,7 @@ All spec files are at `docs/archive/20251125-055521-pre-bmm/specs/`.
 - [x] 14. input.md
 - [x] 15. ui.md
 - [x] 16. gemini-service.md
-- [ ] 17. SPEC-OF-SPECS.md
+- [x] 17. SPEC-OF-SPECS.md
 
 ---
 
