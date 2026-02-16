@@ -177,7 +177,8 @@ The dodge roll follows a simple state machine:
 ```
 function handleDodgeRollRequest(player):
     if not player.canDodgeRoll():
-        return  // Silently ignore invalid request
+        log.Printf("Player %s cannot dodge roll")
+        return
 
     direction = calculateRollDirection(player.input)
     player.startDodgeRoll(direction)
@@ -650,14 +651,11 @@ wsClient.on('roll:end', (data: RollEndData) => {
 
 **Trigger**: Player sends `player:dodge_roll` when cannot roll
 **Detection**: `CanDodgeRoll()` returns false
-**Response**: Request silently ignored
+**Response**: Logs warning (`"Player %s cannot dodge roll (cooldown or dead)"`) and returns early
 **Client Notification**: None (client should have predicted this)
 **Recovery**: Player must wait for cooldown or death/respawn
 
-**Why silent ignore:**
-- No error message needed - client tracks cooldown locally
-- Prevents spam of error messages if player mashes SPACE
-- Server is authoritative; client prediction may occasionally desync
+**Why log (not silent):** Helps debug timing issues during development. The log is cheap and useful for identifying client prediction desync.
 
 ### Player Not Found
 
@@ -1146,6 +1144,7 @@ it('should show 50% progress at 1.5s', () => {
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification |
+| 1.0.4 | 2026-02-16 | Fixed error handling — invalid roll logs warning (not silently ignored) per `message_processor.go:442` |
 | 1.0.3 | 2026-02-16 | Fixed player:dodge_roll payload — client sends `data: { direction }`, not empty (schema and implementation diverge) |
 | 1.0.2 | 2026-02-16 | Fixed roll:start audio scope — plays for ALL players' rolls, not just local player |
 | 1.0.1 | 2026-02-16 | Fixed UpdatePlayer return type — returns `UpdatePlayerResult` struct (with `RollCancelled` and `CorrectionNeeded` fields), not `bool`. Added `sanitizeVector2` calls to match source. |
