@@ -52,6 +52,7 @@ describe('GameSceneEventHandlers - Audio Integration', () => {
       getPlayerPosition: vi.fn().mockReturnValue({ x: 100, y: 200 }),
       getPlayerAimAngle: vi.fn().mockReturnValue(0),
       updatePlayerWeapon: vi.fn(),
+      triggerWeaponRecoil: vi.fn(),
     } as unknown as PlayerManager;
 
     mockProjectileManager = {

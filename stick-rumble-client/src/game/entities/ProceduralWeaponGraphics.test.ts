@@ -14,6 +14,9 @@ describe('ProceduralWeaponGraphics', () => {
           setRotation: vi.fn(),
         })),
       },
+      tweens: {
+        add: vi.fn(),
+      },
     } as unknown as Phaser.Scene;
 
     container = {
@@ -199,6 +202,76 @@ describe('ProceduralWeaponGraphics', () => {
       weapon.setFlipY(false);
 
       expect(container.scaleY).toBe(1);
+    });
+  });
+
+  describe('TS-GFX-018: Gun recoil on ranged fire', () => {
+    it('should initialize recoilOffset to 0', () => {
+      const weapon = new ProceduralWeaponGraphics(scene, 100, 100, 'Pistol');
+      expect(weapon.recoilOffset).toBe(0);
+    });
+
+    it('should create tween with recoilOffset target of -6 for default weapons', () => {
+      const weapon = new ProceduralWeaponGraphics(scene, 100, 100, 'Pistol');
+      weapon.triggerRecoil();
+
+      expect(scene.tweens.add).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targets: weapon,
+          recoilOffset: -6,
+          duration: 50,
+          yoyo: true,
+        })
+      );
+    });
+
+    it('should create tween with recoilOffset target of -10 for Shotgun', () => {
+      const weapon = new ProceduralWeaponGraphics(scene, 100, 100, 'Shotgun');
+      weapon.triggerRecoil();
+
+      expect(scene.tweens.add).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targets: weapon,
+          recoilOffset: -10,
+          duration: 50,
+          yoyo: true,
+        })
+      );
+    });
+
+    it('should use -6 recoil for Uzi weapon', () => {
+      const weapon = new ProceduralWeaponGraphics(scene, 100, 100, 'Uzi');
+      weapon.triggerRecoil();
+
+      const tweenConfig = (scene.tweens.add as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      expect(tweenConfig.recoilOffset).toBe(-6);
+    });
+
+    it('should use -6 recoil for AK47 weapon', () => {
+      const weapon = new ProceduralWeaponGraphics(scene, 100, 100, 'AK47');
+      weapon.triggerRecoil();
+
+      const tweenConfig = (scene.tweens.add as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      expect(tweenConfig.recoilOffset).toBe(-6);
+    });
+
+    it('should reset recoilOffset to 0 before starting tween', () => {
+      const weapon = new ProceduralWeaponGraphics(scene, 100, 100, 'Pistol');
+      weapon.recoilOffset = -3; // Simulate mid-tween
+
+      weapon.triggerRecoil();
+
+      // recoilOffset should be reset to 0 before tween starts
+      expect(weapon.recoilOffset).toBe(0);
+    });
+
+    it('should use exactly 50ms duration with yoyo true', () => {
+      const weapon = new ProceduralWeaponGraphics(scene, 100, 100, 'Pistol');
+      weapon.triggerRecoil();
+
+      const tweenConfig = (scene.tweens.add as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      expect(tweenConfig.duration).toBe(50);
+      expect(tweenConfig.yoyo).toBe(true);
     });
   });
 });

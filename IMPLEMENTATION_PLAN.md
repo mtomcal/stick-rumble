@@ -182,14 +182,14 @@ The following discrepancies were found between this plan and the spec diff (c7dd
 
 > **Current state**: `ScreenShake.ts` only does camera shake, no weapon container movement.
 
-- [ ] **Add recoilOffset property**: `recoilOffset: number = 0` per weapon
-- [ ] **On fire event**: Tween recoilOffset to -6px (default) or -10px (shotgun)
-- [ ] **Tween config**: 50ms duration, yoyo: true
-- [ ] **Apply offset**: `cos(rotation) * recoilOffset`, `sin(rotation) * recoilOffset` in weapon position update
-- [ ] **Test TS-GFX-018**: Gun recoil on ranged fire
-- [ ] **Spec validation**: Verify against `constants.md` lines 359-361 — default=-6, shotgun=-10, duration=50, yoyo=true. Verify offset formula matches `graphics.md` lines 818-820: `x += cos(rotation) * recoilOffset`, `y += sin(rotation) * recoilOffset`
-- [ ] **Assertion quality**: Tests assert tween target value is exactly -6 (default) or -10 (shotgun), duration exactly 50, yoyo is `true` — not bare `toHaveBeenCalled()` on `tweens.add`
-- [ ] **Coverage gate**: Recoil tween creation + offset application code path ≥90% statements/lines/functions
+- [x] **Add recoilOffset property**: `recoilOffset: number = 0` per weapon
+- [x] **On fire event**: Tween recoilOffset to -6px (default) or -10px (shotgun)
+- [x] **Tween config**: 50ms duration, yoyo: true
+- [x] **Apply offset**: `cos(rotation) * recoilOffset`, `sin(rotation) * recoilOffset` in weapon position update
+- [x] **Test TS-GFX-018**: Gun recoil on ranged fire
+- [x] **Spec validation**: Verify against `constants.md` lines 359-361 — default=-6, shotgun=-10, duration=50, yoyo=true. Verify offset formula matches `graphics.md` lines 818-820: `x += cos(rotation) * recoilOffset`, `y += sin(rotation) * recoilOffset`
+- [x] **Assertion quality**: Tests assert tween target value is exactly -6 (default) or -10 (shotgun), duration exactly 50, yoyo is `true` — not bare `toHaveBeenCalled()` on `tweens.add`
+- [x] **Coverage gate**: Recoil tween creation + offset application code path ≥90% statements/lines/functions
 
 ---
 
@@ -452,3 +452,6 @@ Follow these steps for each system section:
 - [2026-02-16] **System 3c — Placed in PlayerManager.update() not HealthBarUI**: HealthBarUI is a HUD element with scrollFactor=0, unsuitable for spawning world-position particles. Healing particles are spawned in `PlayerManager.update()` which has access to player world positions via renderPosition.
 - [2026-02-16] **System 3c — Particles spawn for all regenerating players**: Implementation creates healing particles for both local and remote players when isRegenerating is true, matching spec's intent of visible feedback for any healing player.
 - [2026-02-16] **System 3c — Test uses absolute y not relative**: Spec shows `y: part.y - 20` (relative) in tween config. Implementation uses `particle.y - 20` as absolute target because Phaser circle objects store their position as plain numbers (not Phaser's `'-=20'` string syntax). Tests assert the computed absolute value.
+- [2026-02-16] **System 6a — Plan spec line refs wrong**: Plan said "constants.md lines 359-361" for gun recoil constants, but those lines are about time limits and kill rewards. Actual gun recoil constants at lines 503-509: GUN_RECOIL_DEFAULT=-6, GUN_RECOIL_SHOTGUN=-10, GUN_RECOIL_DURATION=50.
+- [2026-02-16] **System 6a — Recoil on ProceduralWeaponGraphics not PlayerManager**: The spec shows `this.recoilOffset` on a weapon class. Placed `recoilOffset` property and `triggerRecoil()` method on `ProceduralWeaponGraphics`, which Phaser can tween directly. `PlayerManager.triggerWeaponRecoil(playerId)` delegates to the weapon graphics instance.
+- [2026-02-16] **System 6a — Recoil triggered for all players**: Gun recoil visual is triggered for both local and remote players on `projectile:spawn`, so all firing weapons show the kickback animation.

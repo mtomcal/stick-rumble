@@ -48,6 +48,7 @@ describe('GameSceneEventHandlers - Client-Side Reconciliation', () => {
       getPlayerPosition: vi.fn().mockReturnValue({ x: 490, y: 490 }), // Close to server position (500, 500)
       getPlayerAimAngle: vi.fn().mockReturnValue(0),
       updatePlayerWeapon: vi.fn(),
+      triggerWeaponRecoil: vi.fn(),
       applyReconciledPosition: vi.fn(),
       setLocalPlayerPredictedPosition: vi.fn(),
       getPlayerState: vi.fn().mockReturnValue({ position: { x: 500, y: 500 }, velocity: { x: 0, y: 0 } }),

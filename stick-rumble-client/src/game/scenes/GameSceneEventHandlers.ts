@@ -314,6 +314,9 @@ export class GameSceneEventHandlers {
 
       const isLocalPlayer = messageData.ownerId === this.playerManager.getLocalPlayerId();
 
+      // Trigger gun recoil visual on the firing player's weapon
+      this.playerManager.triggerWeaponRecoil(messageData.ownerId);
+
       // Trigger screen shake for local player's weapon fire (Story 3.3 Polish)
       if (this.screenShake && isLocalPlayer) {
         this.screenShake.shakeOnWeaponFire(this.currentWeaponType);

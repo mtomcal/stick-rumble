@@ -8,6 +8,7 @@ import Phaser from 'phaser';
  */
 export class ProceduralWeaponGraphics {
   public weaponType: string;
+  public recoilOffset: number = 0;
   private scene: Phaser.Scene;
   private container: Phaser.GameObjects.Container;
 
@@ -156,6 +157,20 @@ export class ProceduralWeaponGraphics {
    */
   setFlipY(flip: boolean): void {
     this.container.scaleY = flip ? -1 : 1;
+  }
+
+  /**
+   * Trigger gun recoil animation (backward kick along aim axis)
+   */
+  triggerRecoil(): void {
+    this.recoilOffset = 0;
+    const recoilDist = this.weaponType.toLowerCase() === 'shotgun' ? -10 : -6;
+    this.scene.tweens.add({
+      targets: this,
+      recoilOffset: recoilDist,
+      duration: 50,
+      yoyo: true,
+    });
   }
 
   /**

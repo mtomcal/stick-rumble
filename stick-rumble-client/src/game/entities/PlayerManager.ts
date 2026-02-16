@@ -438,15 +438,17 @@ export class PlayerManager {
         );
       }
 
-      // Update weapon graphics position
+      // Update weapon graphics position (including recoil offset)
       const weaponGraphics = this.weaponGraphics.get(playerId);
       if (weaponGraphics) {
         const aimAngle = state.aimAngle ?? 0;
         const weaponOffsetX = Math.cos(aimAngle) * 10;
         const weaponOffsetY = Math.sin(aimAngle) * 10;
+        const recoilX = Math.cos(aimAngle) * weaponGraphics.recoilOffset;
+        const recoilY = Math.sin(aimAngle) * weaponGraphics.recoilOffset;
         weaponGraphics.setPosition(
-          renderPosition.x + weaponOffsetX,
-          renderPosition.y + weaponOffsetY
+          renderPosition.x + weaponOffsetX + recoilX,
+          renderPosition.y + weaponOffsetY + recoilY
         );
       }
 
@@ -714,6 +716,16 @@ export class PlayerManager {
     );
 
     return velocityMagnitude > MOVEMENT_THRESHOLD;
+  }
+
+  /**
+   * Trigger gun recoil animation on a player's weapon
+   */
+  triggerWeaponRecoil(playerId: string): void {
+    const weaponGraphics = this.weaponGraphics.get(playerId);
+    if (weaponGraphics) {
+      weaponGraphics.triggerRecoil();
+    }
   }
 
   /**

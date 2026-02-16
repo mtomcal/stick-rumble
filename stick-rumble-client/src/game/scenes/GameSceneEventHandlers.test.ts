@@ -39,6 +39,7 @@ describe('GameSceneEventHandlers', () => {
       getPlayerPosition: vi.fn().mockReturnValue({ x: 100, y: 200 }),
       getPlayerAimAngle: vi.fn().mockReturnValue(0),
       updatePlayerWeapon: vi.fn(),
+      triggerWeaponRecoil: vi.fn(),
     } as unknown as PlayerManager;
 
     mockProjectileManager = {
@@ -1815,6 +1816,40 @@ describe('GameSceneEventHandlers', () => {
       expect(mockWeaponCrateManager.spawnCrate).toHaveBeenCalledWith(
         { id: 'crate-1', position: { x: 100, y: 200 }, weaponType: 'AK47', isAvailable: true }
       );
+    });
+  });
+
+  describe('gun recoil on projectile:spawn', () => {
+    it('should trigger weapon recoil for the firing player on projectile:spawn', () => {
+      eventHandlers.setupEventHandlers();
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const projectileSpawnHandler = handlerRefs.get('projectile:spawn');
+
+      projectileSpawnHandler?.({
+        id: 'proj-1',
+        ownerId: 'player-1',
+        position: { x: 100, y: 200 },
+        velocity: { x: 10, y: 0 },
+        damage: 25,
+      });
+
+      expect(mockPlayerManager.triggerWeaponRecoil).toHaveBeenCalledWith('player-1');
+    });
+
+    it('should trigger weapon recoil for remote players too', () => {
+      eventHandlers.setupEventHandlers();
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const projectileSpawnHandler = handlerRefs.get('projectile:spawn');
+
+      projectileSpawnHandler?.({
+        id: 'proj-2',
+        ownerId: 'player-2',
+        position: { x: 300, y: 400 },
+        velocity: { x: -10, y: 0 },
+        damage: 25,
+      });
+
+      expect(mockPlayerManager.triggerWeaponRecoil).toHaveBeenCalledWith('player-2');
     });
   });
 });
