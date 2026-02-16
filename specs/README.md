@@ -71,11 +71,11 @@ For an AI agent recreating Stick Rumble from scratch, read specs in this order:
 
 ### Phase 7: Server Implementation
 
-18. **[server-architecture.md](server-architecture.md)** - Game loop, concurrency (TODO)
+18. **[server-architecture.md](server-architecture.md)** - Game loop, concurrency
 
 ### Phase 8: Verification
 
-19. **[test-index.md](test-index.md)** - All test scenarios cross-reference (TODO)
+19. **[test-index.md](test-index.md)** - All test scenarios cross-reference
 
 ---
 
@@ -350,6 +350,7 @@ Test scenarios use the format `TS-{SPEC}-{NUMBER}`:
 |---------|------|---------|
 | 1.0.1 | 2026-02-02 | Added audio.md spec (19 specs complete) |
 | 1.0.0 | 2026-02-02 | Initial specification suite with 14 complete specs |
+| 1.1.4 | 2026-02-16 | Removed (TODO) markers from complete specs: server-architecture.md, test-index.md |
 | 1.1.3 | 2026-02-16 | Added graphics.md, ui.md, audio.md to Key Dependencies table |
 | 1.1.2 | 2026-02-16 | Added ui.md to Quick Reference Table |
 | 1.1.1 | 2026-02-16 | Fixed message count in Reading Order (28 total, not 26) |
