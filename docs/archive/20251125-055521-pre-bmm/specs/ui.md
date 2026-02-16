@@ -1,6 +1,6 @@
 # React UI & HUD
 
-> **Spec Version**: 1.0.0
+> **Spec Version**: 1.0.1
 > **Last Updated**: 2026-02-16
 > **Depends On**: [types-and-events.md](types-and-events.md), [overview.md](overview.md), [config.md](config.md), [input.md](input.md)
 > **Depended By**: [README.md](README.md)
@@ -220,7 +220,7 @@ Rendered when `gameStarted === false`. Full-screen overlay with:
 |---------|-------|---------|
 | Title | `text-5xl md:text-7xl font-bold text-red-600 pixel-font` | "STICK RUMBLE" |
 | Subtitle | `text-xl text-gray-400` | "AI REVENGE" |
-| Button | `px-8 py-4 bg-white text-black font-bold text-xl rounded pixel-font` | "ENTER ARENA" |
+| Button | `px-8 py-4 bg-white text-black font-bold text-xl rounded hover:bg-gray-200 transition pixel-font` | "ENTER ARENA" |
 | Instructions | `text-sm text-gray-600` | "WASD to Move \| Mouse to Aim/Shoot / Or use Touch Joysticks / 'R' to Reload" |
 
 - Background: `bg-black bg-opacity-90`
@@ -238,7 +238,7 @@ Rendered when `gameOver === true`. Full-screen overlay with:
 | Title | `text-5xl text-white font-bold` | "YOU DIED" |
 | Score icon | Trophy (lucide-react), `text-yellow-500` | Final score value |
 | Kills icon | Skull (lucide-react), `text-red-500` | Kill count + " Kills" |
-| Button | `px-6 py-3 border-2 border-white text-white font-bold pixel-font` | "TRY AGAIN" |
+| Button | `px-6 py-3 border-2 border-white text-white font-bold hover:bg-white hover:text-black transition pixel-font` | "TRY AGAIN" |
 
 - Background: `bg-black bg-opacity-80 backdrop-blur-sm`
 - Score and kills displayed side by side with 8-unit gap
@@ -651,3 +651,4 @@ The minimap is rendered entirely within Phaser's `MainScene` using `Phaser.GameO
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-16 | Initial specification |
+| 1.0.1 | 2026-02-16 | Verified against source — fixed missing hover/transition classes on start and death screen buttons |

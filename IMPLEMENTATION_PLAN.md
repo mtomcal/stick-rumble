@@ -74,9 +74,9 @@ All spec files are at `docs/archive/20251125-055521-pre-bmm/specs/`.
 - [x] 10. pathfinder.md
 - [x] 11. level-generator.md
 - [x] 12. texture-generator.md
-- [ ] 13. rendering.md
-- [ ] 14. input.md
-- [ ] 15. ui.md
+- [x] 13. rendering.md
+- [x] 14. input.md
+- [x] 15. ui.md
 - [ ] 16. gemini-service.md
 - [ ] 17. SPEC-OF-SPECS.md
 
