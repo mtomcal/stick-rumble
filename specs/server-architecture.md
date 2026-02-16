@@ -671,85 +671,119 @@ The server handles SIGTERM and SIGINT for clean shutdown.
 
 **Pseudocode:**
 ```
+function startServer(ctx):
+    port = env("PORT") or "8080"
+
+    mux = http.NewServeMux()
+    mux.HandleFunc("/health", healthHandler)
+    mux.HandleFunc("/ws", network.HandleWebSocket)  // global singleton
+
+    // Start game server (global handler)
+    network.StartGlobalHandler(ctx)
+
+    // Start HTTP server in goroutine
+    go server.ListenAndServe()
+
+    // Wait for ctx cancellation or server error
+    select:
+        case server error → return error
+        case ctx.Done() →
+            network.StopGlobalHandler()
+            server.Shutdown(30s timeout)
+
 function main():
     ctx, cancel = context.WithCancel(context.Background())
 
     // Start shutdown listener
     go func():
-        signals = waitForSignal(SIGTERM, SIGINT)
-        log.Print("Shutdown signal received")
-        cancel()  // Trigger shutdown
+        signals = waitForSignal(SIGINT, SIGTERM)
+        cancel()
 
-    // Start game loops
-    gameServer.Start(ctx)
+    // Start server in background
+    go startServer(ctx)
 
-    // Start HTTP server
-    server.ListenAndServe()
-
-    // Wait for shutdown
-    <- ctx.Done()
-
-    // Graceful shutdown with timeout
-    shutdownCtx, _ = context.WithTimeout(context.Background(), 30s)
-    server.Shutdown(shutdownCtx)
-
-    // Wait for game loops to finish
-    gameServer.Stop()
+    // Wait for signal or server completion
+    select:
+        case signal → cancel(); wait for server
+        case server done → exit
 ```
 
 **Go:**
 ```go
-func main() {
-    ctx, cancel := context.WithCancel(context.Background())
+func startServer(ctx context.Context) error {
+    port := os.Getenv("PORT")
+    if port == "" {
+        port = "8080"
+    }
 
-    // Signal handling
-    sigChan := make(chan os.Signal, 1)
-    signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
+    mux := http.NewServeMux()
+    mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+        w.WriteHeader(http.StatusOK)
+        w.Write([]byte("OK"))
+    })
+    mux.HandleFunc("/ws", network.HandleWebSocket) // global singleton
 
-    go func() {
-        sig := <-sigChan
-        log.Printf("Received signal: %v", sig)
-        cancel()
-    }()
-
-    // Initialize components
-    handler := network.NewWebSocketHandler()
-    handler.GameServer.Start(ctx)
-
-    // HTTP server
     server := &http.Server{
-        Addr:         ":" + getPort(),
+        Addr:         ":" + port,
+        Handler:      mux,
         ReadTimeout:  15 * time.Second,
         WriteTimeout: 15 * time.Second,
         IdleTimeout:  60 * time.Second,
     }
 
-    http.HandleFunc("/ws", handler.HandleWebSocket)
-    http.HandleFunc("/health", healthHandler)
+    network.StartGlobalHandler(ctx)
 
-    // Start server in goroutine
+    serverErrors := make(chan error, 1)
     go func() {
-        if err := server.ListenAndServe(); err != http.ErrServerClosed {
-            log.Fatal(err)
+        log.Printf("Starting server on port %s", port)
+        if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+            serverErrors <- err
         }
     }()
 
-    // Wait for shutdown signal
-    <-ctx.Done()
+    select {
+    case err := <-serverErrors:
+        return err
+    case <-ctx.Done():
+        shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+        defer cancel()
+        log.Println("Shutting down server...")
+        network.StopGlobalHandler()
+        if err := server.Shutdown(shutdownCtx); err != nil {
+            log.Printf("Server shutdown error: %v", err)
+            return err
+        }
+        log.Println("Server stopped")
+        return nil
+    }
+}
 
-    // Graceful shutdown
-    shutdownCtx, shutdownCancel := context.WithTimeout(
-        context.Background(),
-        30*time.Second,
-    )
-    defer shutdownCancel()
+func main() {
+    ctx, cancel := context.WithCancel(context.Background())
+    defer cancel()
 
-    server.Shutdown(shutdownCtx)
-    handler.GameServer.Stop()
+    sigChan := make(chan os.Signal, 1)
+    signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
-    log.Println("Server stopped gracefully")
+    serverDone := make(chan error, 1)
+    go func() {
+        serverDone <- startServer(ctx)
+    }()
+
+    select {
+    case sig := <-sigChan:
+        log.Printf("Received signal: %v", sig)
+        cancel()
+        <-serverDone
+    case err := <-serverDone:
+        if err != nil {
+            log.Fatalf("Server error: %v", err)
+        }
+    }
 }
 ```
+
+> **Note:** The server uses a **global singleton** pattern — `network.HandleWebSocket`, `network.StartGlobalHandler`, and `network.StopGlobalHandler` are package-level functions that delegate to a lazily-initialized global `WebSocketHandler`. There is no explicit `handler := network.NewWebSocketHandler()` in `main.go`.
 
 **Why 30-Second Timeout?**
 
