@@ -728,21 +728,42 @@ const playerKillCreditHandler = (data: unknown) => {
 Hit detection is part of the game loop in `gameserver.go`:
 
 ```go
-func (gs *GameServer) tick() {
-    // 1. Process input
-    gs.processAllInputs()
+func (gs *GameServer) tickLoop(ctx context.Context) {
+    // ... ticker setup, deltaTime calculation ...
 
-    // 2. Update physics (positions, projectiles)
-    gs.updateAllPlayers()
-    gs.world.Projectiles.UpdateAll(gs.getDeltaTime())
+    // 1. Update all players (physics/movement)
+    gs.updateAllPlayers(deltaTime)
 
-    // 3. Check collisions
-    gs.checkHitDetection()  // ← Hit detection happens here
+    // 2. Record position snapshots for lag compensation
+    gs.recordPositionSnapshots(now)
 
-    // 4. Check game end conditions
-    gs.checkMatchEnd()
+    // 3. Update all projectiles
+    gs.projectileManager.Update(deltaTime)
+
+    // 4. Check for projectile-player collisions (hit detection) ← HERE
+    gs.checkHitDetection()
+
+    // 5. Check for reload completions
+    gs.checkReloads()
+
+    // 6. Check for respawns
+    gs.checkRespawns()
+
+    // 7. Check for dodge roll duration completion
+    gs.checkRollDuration()
+
+    // 8. Update invulnerability status
+    gs.updateInvulnerability()
+
+    // 9. Update health regeneration
+    gs.updateHealthRegeneration(deltaTime)
+
+    // 10. Check for weapon respawns
+    gs.checkWeaponRespawns()
 }
 ```
+
+> **Note:** The tick loop runs all 10 steps sequentially each tick. Input processing happens earlier via `handleInputState` which calls `UpdatePlayerInputWithSequence` — it is not a step in the tick loop itself.
 
 **Performance considerations:**
 - Projectile list is typically small (0-20 active)
