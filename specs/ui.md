@@ -241,53 +241,53 @@ export class HealthBarUI {
 **Pseudocode:**
 ```
 function addKill(killerName, victimName):
+    // Remove oldest (front of array) if at max capacity
+    if kills.length >= 5:
+        oldest = kills.shift()
+        oldest.destroy()
+
     entry = createText("{killerName} killed {victimName}")
-    entry.position = (rightEdge, 100)
-    entries.unshift(entry)
+    kills.push(entry)  // Add to end of array
 
-    if entries.length > 5:
-        removeOldest(entries.pop())
-
-    updatePositions()
     scheduleRemoval(entry, 5000ms)
 
 function fadeOutKill(entry):
     tween(entry.alpha, 0, 1000ms)
     onComplete: removeEntry(entry)
-    updatePositions()
-
-function updatePositions():
-    for i, entry in entries:
-        entry.y = 100 + (i * 25)
 ```
 
 **TypeScript:**
 ```typescript
 export class KillFeedUI {
-  private entries: Phaser.GameObjects.Text[] = [];
+  private kills: KillEntry[] = [];  // Oldest at index 0, newest at end
   private readonly MAX_KILLS = 5;
   private readonly FADE_DELAY = 5000;
-  private readonly FADE_DURATION = 1000;
-  private readonly SPACING = 25;
+  private readonly KILL_SPACING = 25;
 
   addKill(killerName: string, victimName: string): void {
-    const text = this.scene.add.text(
-      this.scene.cameras.main.width - 10,
-      100,
-      `${killerName} killed ${victimName}`,
-      { fontSize: '16px', fontStyle: 'bold', color: '#ffffff', stroke: '#000000', strokeThickness: 2 }
-    );
-    text.setOrigin(1, 0);
-    text.setScrollFactor(0);
-    text.setDepth(1000);
-
-    this.entries.unshift(text);
-    if (this.entries.length > this.MAX_KILLS) {
-      this.entries.pop()?.destroy();
+    // Remove oldest kill if at max capacity
+    if (this.kills.length >= this.MAX_KILLS) {
+      const oldestKill = this.kills.shift();  // Remove from front
+      if (oldestKill) {
+        this.container.remove(oldestKill.text);
+        oldestKill.text.destroy();
+      }
     }
-    this.updatePositions();
 
-    this.scene.time.delayedCall(this.FADE_DELAY, () => this.fadeOutKill(text));
+    const yPosition = this.kills.length * this.KILL_SPACING;
+    const killText = this.scene.add.text(
+      0, yPosition,
+      `${killerName} killed ${victimName}`,
+      { fontSize: '16px', fontStyle: 'bold', color: '#ffffff',
+        stroke: '#000000', strokeThickness: 2,
+        backgroundColor: '#000000', padding: { x: 8, y: 4 } }
+    );
+    killText.setOrigin(1, 0);
+    this.container.add(killText);
+
+    this.kills.push({ text: killText, timestamp: Date.now() });  // Add to end
+
+    this.scene.time.delayedCall(this.FADE_DELAY, () => this.fadeOutKill(killEntry));
   }
 }
 ```
@@ -1249,3 +1249,4 @@ it('should sort scoreboard by kills descending, deaths ascending', () => {
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification |
 | 1.1.0 | 2026-02-15 | Added Debug Network Panel section (DebugNetworkPanel.tsx for testing netcode under degraded conditions). |
+| 1.1.1 | 2026-02-16 | Fixed kill feed ordering — actual uses `push` (add to end) + `shift` (remove oldest from front), not `unshift` + `pop`. Uses KillEntry objects with container, not raw text with setScrollFactor. |
