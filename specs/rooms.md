@@ -1,7 +1,7 @@
 # Rooms
 
-> **Spec Version**: 1.1.0
-> **Last Updated**: 2026-02-15
+> **Spec Version**: 1.2.0
+> **Last Updated**: 2026-02-16
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [networking.md](networking.md), [messages.md](messages.md)
 > **Depended By**: [match.md](match.md), [server-architecture.md](server-architecture.md)
 
@@ -96,6 +96,7 @@ type Room struct {
 ```typescript
 // Client only knows its own player ID after room:joined
 interface RoomJoinedData {
+    roomId: string;
     playerId: string;
 }
 ```
@@ -144,7 +145,7 @@ function addPlayer(player):
             room.addPlayer(player)
             room.match.registerPlayer(player)
             playerToRoom[player.id] = room.id
-            send room:joined to player
+            sendRoomJoinedMessage(player, room)  // Sends room:joined inside AddPlayer
             return room
 
     // Normal flow: add to waiting list
@@ -165,8 +166,8 @@ function addPlayer(player):
         playerToRoom[player1.id] = room.id
         playerToRoom[player2.id] = room.id
 
-        send room:joined { playerId: player1.id } to player1
-        send room:joined { playerId: player2.id } to player2
+        sendRoomJoinedMessage(player1, room)  // Sends room:joined inside AddPlayer
+        sendRoomJoinedMessage(player2, room)  // Sends room:joined inside AddPlayer
 
         return room
 
@@ -186,7 +187,8 @@ func (rm *RoomManager) AddPlayer(player *Player) *Room {
                 if err := room.AddPlayer(player); err == nil {
                     room.Match.RegisterPlayer(player.ID)
                     rm.playerToRoom[player.ID] = room.ID
-                    // Send room:joined (done by caller)
+                    // Send room:joined (sendRoomJoinedMessage called below)
+                    rm.sendRoomJoinedMessage(player, room)
                     return room
                 }
             }
@@ -212,6 +214,10 @@ func (rm *RoomManager) AddPlayer(player *Player) *Room {
         rm.rooms[room.ID] = room
         rm.playerToRoom[player1.ID] = room.ID
         rm.playerToRoom[player2.ID] = room.ID
+
+        // Send room:joined messages to both players
+        rm.sendRoomJoinedMessage(player1, room)
+        rm.sendRoomJoinedMessage(player2, room)
 
         return room
     }
@@ -380,24 +386,39 @@ The client doesn't maintain room state explicitly. It only knows its own player 
 
 **TypeScript:**
 ```typescript
-function handleRoomJoined(message: Message): void {
-    const data = message.data as RoomJoinedData;
-
-    // Clear stale state from previous match
-    playerManager.destroy();
-
-    // Set local player identity
-    playerManager.setLocalPlayerId(data.playerId);
-
-    // Reset health (respawn state)
-    this.currentHealth = 100;
+// room:joined handler (inside setupEventHandlers)
+const roomJoinedHandler = (data: unknown) => {
+    const messageData = data as RoomJoinedData;
 
     // Reset match state
     this.matchEnded = false;
 
-    // Process queued messages that arrived before room:joined
-    this.processPendingMessages();
-}
+    // Clear stale state from previous match
+    this.playerManager.destroy();
+
+    // Set local player identity
+    if (messageData.playerId) {
+        this.playerManager.setLocalPlayerId(messageData.playerId);
+
+        // Reset health and health bar
+        this.localPlayerHealth = 100;
+        this.getHealthBarUI().updateHealth(this.localPlayerHealth, 100, false);
+
+        // Clear queued player:move messages - they are stale
+        this.pendingPlayerMoves = [];
+
+        // Process queued weapon:spawned messages
+        for (const pendingData of this.pendingWeaponSpawns) {
+            const weaponData = pendingData as WeaponSpawnedData;
+            if (weaponData.crates) {
+                for (const crateData of weaponData.crates) {
+                    this.weaponCrateManager.spawnCrate(crateData);
+                }
+            }
+        }
+        this.pendingWeaponSpawns = [];
+    }
+};
 ```
 
 **Why destroy before setting local player?**
@@ -407,37 +428,34 @@ function handleRoomJoined(message: Message): void {
 
 ### Pending Message Queue
 
-Messages may arrive before `room:joined` due to network timing. The client queues these.
+Messages may arrive before `room:joined` due to network timing. The client queues these inline within each handler -- there is no separate `queueMessage` method.
+
+- **`player:move`**: Queued in the `playerMoveHandler` if no local player ID is set yet. On `room:joined`, pending player moves are **discarded** (not processed) because they contain stale data from before the room was created. The next `player:move` from the server will have the correct player list.
+- **`weapon:spawned`**: Queued in the `weaponSpawnedHandler` if no local player ID is set yet. On `room:joined`, pending weapon spawns **are processed** because weapon crate positions remain valid across reconnections.
 
 **TypeScript:**
 ```typescript
-// Queue pending messages if room not joined yet
-private pendingPlayerMoves: PlayerMoveData[] = [];
-private pendingWeaponSpawns: WeaponSpawnedData[] = [];
-private readonly MAX_PENDING_MESSAGES = 10;
+// Queuing is done inline in each handler, not in a separate method.
+// Both queues use unknown[] and a hardcoded limit of 10.
+private pendingPlayerMoves: unknown[] = [];
+private pendingWeaponSpawns: unknown[] = [];
 
-function queueMessage(type: string, data: unknown): void {
-    if (type === 'player:move') {
-        if (this.pendingPlayerMoves.length >= MAX_PENDING_MESSAGES) {
-            this.pendingPlayerMoves.shift(); // Drop oldest
-        }
-        this.pendingPlayerMoves.push(data as PlayerMoveData);
+// Example: inside playerMoveHandler
+if (!this.playerManager.getLocalPlayerId()) {
+    if (this.pendingPlayerMoves.length >= 10) {
+        this.pendingPlayerMoves.shift(); // Drop oldest
     }
-    // Similar for weapon:spawned
+    this.pendingPlayerMoves.push(data);
+    return;
 }
 
-function processPendingMessages(): void {
-    // Process player moves
-    for (const move of this.pendingPlayerMoves) {
-        this.handlePlayerMove(move);
+// Example: inside weaponSpawnedHandler
+if (!this.playerManager.getLocalPlayerId()) {
+    if (this.pendingWeaponSpawns.length >= 10) {
+        this.pendingWeaponSpawns.shift(); // Drop oldest
     }
-    this.pendingPlayerMoves = [];
-
-    // Process weapon spawns
-    for (const spawn of this.pendingWeaponSpawns) {
-        this.handleWeaponSpawned(spawn);
-    }
-    this.pendingWeaponSpawns = [];
+    this.pendingWeaponSpawns.push(data);
+    return;
 }
 ```
 
@@ -445,6 +463,11 @@ function processPendingMessages(): void {
 - Prevents unbounded memory growth
 - 10 is enough for normal race conditions
 - FIFO drop ensures freshest data
+
+**Why discard pending player moves?**
+- Player moves captured before room creation reference stale player IDs
+- The server sends a fresh `player:move` immediately after `room:joined`
+- Processing stale moves could create duplicate sprites
 
 ---
 
@@ -861,3 +884,4 @@ test "tab reload joins existing room":
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification |
 | 1.1.0 | 2026-02-15 | Added `PingTracker` field to Player struct for per-player RTT measurement. See [networking.md](networking.md#ping-tracking) for implementation details. |
+| 1.2.0 | 2026-02-16 | Fixed spec drift: updated Client Room Handling to match actual handler signature and order (matchEnded reset before destroy, added healthBarUI update call). Rewrote Pending Message Queue section to reflect inline queuing (no `queueMessage` method), `unknown[]` types, hardcoded limit of 10, and the fact that pending player moves are discarded (not processed) on `room:joined`. |

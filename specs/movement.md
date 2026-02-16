@@ -568,7 +568,7 @@ Each client frame in `GameScene.update()`:
 4. Render local player at predicted position
 ```
 
-**PredictionEngine.predictPosition()** mirrors server physics exactly:
+**PredictionEngine.predictPosition()** approximates server physics with known asymmetries:
 
 ```typescript
 predictPosition(position, velocity, input, deltaTime):
@@ -577,13 +577,13 @@ predictPosition(position, velocity, input, deltaTime):
 
     // 2. Accelerate or decelerate
     if direction != (0,0):
-        targetVel = direction * MOVEMENT.SPEED
+        targetVel = direction * MOVEMENT.SPEED  // ⚠️ ASYMMETRY: Always 200 px/s (ignores sprint)
         newVel = accelerateToward(velocity, targetVel, ACCELERATION, dt)
     else:
         newVel = accelerateToward(velocity, (0,0), DECELERATION, dt)
 
     // 3. Cap velocity to max speed
-    if magnitude(newVel) > MOVEMENT.SPEED:
+    if magnitude(newVel) > MOVEMENT.SPEED:  // ⚠️ ASYMMETRY: Client caps, server doesn't
         newVel = normalize(newVel) * MOVEMENT.SPEED
 
     // 4. Integrate position
@@ -592,7 +592,13 @@ predictPosition(position, velocity, input, deltaTime):
     return { position: newPos, velocity: newVel }
 ```
 
-**Critical invariant**: PredictionEngine uses identical math to the server's `Physics.UpdatePlayer()`. Any divergence causes visible corrections.
+**Known asymmetries between client and server physics:**
+
+1. **Velocity capping** (`PredictionEngine.ts:152-157`): Client caps velocity magnitude to `MOVEMENT.SPEED` (200 px/s). Server physics (`physics.go`) does NOT cap velocity during movement—it only validates speed in anti-cheat logic after position update.
+
+2. **Sprint handling** (`PredictionEngine.ts:126`): Client prediction always uses `MOVEMENT.SPEED` (200 px/s) for target velocity, ignoring `isSprinting` flag. Server correctly uses `SprintSpeed` (300 px/s) when `input.IsSprinting` is true (`physics.go:69-72`).
+
+**Consequence**: These asymmetries cause prediction errors during sprinting. Server reconciliation corrects these errors every 50ms (20 Hz updates).
 
 ### Server Reconciliation
 
@@ -692,23 +698,14 @@ Time     Velocity (px/s)   Position (y)   Notes
 
 ### Extreme Delta Time
 
-**Trigger**: Game lag causes deltaTime > 1 second
-**Detection**: Check deltaTime before physics update
-**Response**: Cap deltaTime at 0.1s (100ms)
-**Why**: Prevents teleportation due to lag spikes
+**Current Implementation**: No delta time capping is performed. Both server and client use raw delta time values directly.
 
-**Go:**
-```go
-func sanitizeDeltaTime(dt float64) float64 {
-    if dt > 0.1 {
-        return 0.1  // Cap at 100ms
-    }
-    if dt <= 0 {
-        return 0.01667  // Default to 60 Hz
-    }
-    return dt
-}
-```
+- **Server** (`gameserver.go:136`): Uses `now.Sub(lastTick).Seconds()` without capping
+- **Client** (`GameScene.ts:327`): Uses `delta / 1000` without capping
+
+**Risk**: Extremely large delta times (>1 second) due to lag could cause teleportation or physics instability.
+
+**Mitigation**: Ticker-based game loops naturally limit delta time variance under normal conditions.
 
 ---
 
@@ -957,4 +954,4 @@ func TestDiagonalNormalization(t *testing.T) {
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification extracted from codebase |
-| 1.1.0 | 2026-02-15 | Updated DECELERATION from 50→1500 px/s². Rewrote Client-Side Prediction section to document PredictionEngine, server reconciliation (with input sequence replay), and InterpolationEngine. Updated deceleration test scenario timing. Added file location table for new physics modules. |
+| 1.1.0 | 2026-02-15 | Updated DECELERATION from 50→1500 px/s². Rewrote Client-Side Prediction section to document PredictionEngine, server reconciliation (with input sequence replay), and InterpolationEngine. Updated deceleration test scenario timing. Added file location table for new physics modules. Documented known client/server asymmetries (velocity capping, sprint handling). Removed nonexistent `sanitizeDeltaTime` function; documented that raw delta time is used on both server and client. |

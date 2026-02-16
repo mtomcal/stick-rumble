@@ -1,7 +1,7 @@
 # Dodge Roll
 
-> **Spec Version**: 1.0.0
-> **Last Updated**: 2026-02-02
+> **Spec Version**: 1.0.1
+> **Last Updated**: 2026-02-16
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [movement.md](movement.md), [arena.md](arena.md), [messages.md](messages.md)
 > **Depended By**: [hit-detection.md](hit-detection.md), [graphics.md](graphics.md), [ui.md](ui.md)
 
@@ -177,7 +177,8 @@ The dodge roll follows a simple state machine:
 ```
 function handleDodgeRollRequest(player):
     if not player.canDodgeRoll():
-        return  // Silently ignore invalid request
+        log("Player cannot dodge roll")
+        return  // Log and ignore invalid request
 
     direction = calculateRollDirection(player.input)
     player.startDodgeRoll(direction)
@@ -337,9 +338,12 @@ function updatePlayerPhysics(player, deltaTime):
 **Go (Server):**
 ```go
 // UpdatePlayer updates a player's physics state
-// Returns true if a dodge roll was cancelled due to wall collision
-func (p *Physics) UpdatePlayer(player *PlayerState, deltaTime float64) bool {
-    rollCancelled := false
+// Returns UpdatePlayerResult with RollCancelled and CorrectionNeeded flags
+func (p *Physics) UpdatePlayer(player *PlayerState, deltaTime float64) UpdatePlayerResult {
+    result := UpdatePlayerResult{
+        RollCancelled:    false,
+        CorrectionNeeded: false,
+    }
 
     if player.IsRolling() {
         rollState := player.GetRollState()
@@ -367,11 +371,11 @@ func (p *Physics) UpdatePlayer(player *PlayerState, deltaTime float64) bool {
     // Check if position was clamped during a roll (wall collision)
     if player.IsRolling() && (clampedPos.X != newPos.X || clampedPos.Y != newPos.Y) {
         player.EndDodgeRoll()
-        rollCancelled = true
+        result.RollCancelled = true
     }
 
     player.SetPosition(clampedPos)
-    return rollCancelled
+    return result
 }
 ```
 
@@ -540,17 +544,19 @@ Sent when the player presses SPACE to request a dodge roll.
 
 **Schema:**
 ```typescript
-// No data payload - server uses current input state for direction
 interface PlayerDodgeRollMessage {
   type: 'player:dodge_roll';
   timestamp: number;
+  data: {
+    direction: { x: number; y: number }; // Client-calculated direction (server ignores this)
+  };
 }
 ```
 
-**Why no direction in message:**
-- Server already has the player's input state (WASD, aim angle)
-- Prevents client from sending arbitrary directions (cheat prevention)
-- Reduces message size
+**Why direction is sent but ignored:**
+- Client sends calculated direction for potential future use
+- Server calculates direction independently from current input state (WASD, aim angle)
+- Prevents client from sending arbitrary directions (server authority enforced)
 
 ### Server → Client: roll:start
 
@@ -577,8 +583,11 @@ interface RollStartData {
 wsClient.on('roll:start', (data: RollStartData) => {
   if (data.playerId === this.localPlayerId) {
     this.dodgeRollManager.startRoll();
-    this.audioManager?.playDodgeRollSound();
   }
+
+  // Play whoosh sound for all players (not just local player)
+  this.audioManager?.playDodgeRollSound();
+
   // PlayerManager will show roll animation based on player.isRolling
 });
 ```
@@ -622,13 +631,13 @@ wsClient.on('roll:end', (data: RollEndData) => {
 
 **Trigger**: Player sends `player:dodge_roll` when cannot roll
 **Detection**: `CanDodgeRoll()` returns false
-**Response**: Request silently ignored
+**Response**: Request ignored, log message emitted on server
 **Client Notification**: None (client should have predicted this)
 **Recovery**: Player must wait for cooldown or death/respawn
 
-**Why silent ignore:**
-- No error message needed - client tracks cooldown locally
-- Prevents spam of error messages if player mashes SPACE
+**Why ignore with log:**
+- No client error message needed - client tracks cooldown locally
+- Server logs invalid request for debugging/monitoring
 - Server is authoritative; client prediction may occasionally desync
 
 ### Player Not Found
@@ -869,9 +878,9 @@ test "Wall collision ends roll early":
     player.position = (1880, 500)
     player.startDodgeRoll((1, 0))
 
-    rollCancelled = physics.updatePlayer(player, 0.1)
+    result = physics.updatePlayer(player, 0.1)
 
-    assert rollCancelled == true
+    assert result.rollCancelled == true
     assert player.isRolling() == false
     assert player.position.x == 1904  // Clamped to right boundary
 ```
@@ -1117,4 +1126,5 @@ it('should show 50% progress at 1.5s', () => {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.0.1 | 2026-02-16 | Fix spec drift: pseudocode now logs on invalid roll (matches server), test pseudocode uses UpdatePlayerResult struct |
 | 1.0.0 | 2026-02-02 | Initial specification |

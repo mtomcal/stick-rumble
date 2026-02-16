@@ -391,8 +391,8 @@ Fixed positions for weapon crates. Coordinates based on arena percentages.
 |----------|-------|------|-----|
 | KILL_FEED_MAX_ENTRIES | 5 | entries | Fits in corner without scrolling. |
 | KILL_FEED_FADE_TIME | 5000 | ms | 5 seconds visible. Long enough to process, short enough to clear. |
-| HEALTH_BAR_WIDTH | 40 | px | Fits above player head without overlap. |
-| HEALTH_BAR_HEIGHT | 6 | px | Thin bar. Readable without obstructing player. |
+| HEALTH_BAR_WIDTH | 32 | px | Fits above player head without overlap. |
+| HEALTH_BAR_HEIGHT | 4 | px | Thin bar. Readable without obstructing player. |
 | DODGE_ROLL_UI_RADIUS | 20 | px | Circular cooldown indicator size. |
 
 ---

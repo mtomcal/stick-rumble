@@ -30,7 +30,7 @@ The networking layer provides real-time bidirectional communication between the 
 | gorilla/websocket | v1.5.3 | Server WebSocket implementation (Go) |
 | Browser WebSocket API | Native | Client WebSocket implementation |
 | Ajv | 8.x | Client-side JSON Schema validation |
-| @sinclair/typebox | 0.32.x | Schema definition and type inference |
+| @sinclair/typebox | ^0.34.27 | Schema definition and type inference |
 
 ### File Locations
 

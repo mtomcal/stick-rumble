@@ -841,8 +841,12 @@ wsClient.on('match:timer', (data: { remainingSeconds: number }) => {
   timerDisplay.setText(`${minutes}:${seconds.toString().padStart(2, '0')}`);
 
   // Visual warning when low
-  if (data.remainingSeconds < 30) {
-    timerDisplay.setColor('#FF0000');
+  if (data.remainingSeconds < 60) {
+    timerDisplay.setColor('#ff0000'); // Red
+  } else if (data.remainingSeconds < 120) {
+    timerDisplay.setColor('#ffff00'); // Yellow
+  } else {
+    timerDisplay.setColor('#ffffff'); // White
   }
 });
 ```
@@ -858,16 +862,9 @@ wsClient.on('match:ended', (data: MatchEndedData) => {
   inputManager?.disable();
   shootingManager?.disable();
 
-  // Display results
-  const isWinner = data.winners.includes(localPlayerId);
-  const isTie = data.winners.length > 1;
-
-  if (isTie) {
-    showEndScreen('TIE!', data.finalScores);
-  } else if (isWinner) {
-    showEndScreen('YOU WIN!', data.finalScores);
-  } else {
-    showEndScreen('YOU LOSE', data.finalScores);
+  // Delegate to React UI via bridge callback
+  if (window.onMatchEnd) {
+    window.onMatchEnd(data, localPlayerId);
   }
 });
 ```

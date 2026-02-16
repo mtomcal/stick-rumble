@@ -233,61 +233,77 @@ export class HealthBarUI {
 - Depth: 1000
 
 **Behavior:**
-1. New kill → add entry at top
-2. If > 5 entries → remove oldest (FIFO)
-3. After 5 seconds → fade out over 1 second
-4. On fade complete → remove and reposition remaining entries
+1. New kill → add entry at bottom of list (push)
+2. If >= 5 entries → remove oldest from top (FIFO via shift)
+3. After 5 seconds → fade out over 1 second (Linear easing)
+4. On fade complete → splice entry from tracking array, destroy, and reposition remaining entries
 
 **Pseudocode:**
 ```
 function addKill(killerName, victimName):
+    // Remove oldest kill if at max capacity (FIFO)
+    if entries.length >= 5:
+        oldest = entries.shift()
+        container.remove(oldest.text)
+        oldest.text.destroy()
+
     entry = createText("{killerName} killed {victimName}")
-    entry.position = (rightEdge, 100)
-    entries.unshift(entry)
+    entry.position = (0, entries.length * 25)  // relative to container
+    container.add(entry)
+    entries.push(entry)
 
-    if entries.length > 5:
-        removeOldest(entries.pop())
-
-    updatePositions()
     scheduleRemoval(entry, 5000ms)
 
 function fadeOutKill(entry):
-    tween(entry.alpha, 0, 1000ms)
-    onComplete: removeEntry(entry)
-    updatePositions()
+    tween(entry.text.alpha, 0, 1000ms, Linear)
+    onComplete:
+        splice entry from entries array
+        container.remove(entry.text)
+        entry.text.destroy()
+        updatePositions()
 
 function updatePositions():
     for i, entry in entries:
-        entry.y = 100 + (i * 25)
+        entry.text.y = i * 25
 ```
 
 **TypeScript:**
 ```typescript
 export class KillFeedUI {
-  private entries: Phaser.GameObjects.Text[] = [];
+  private container: Phaser.GameObjects.Container;
+  private kills: KillEntry[] = [];  // KillEntry = { text, timestamp }
   private readonly MAX_KILLS = 5;
   private readonly FADE_DELAY = 5000;
   private readonly FADE_DURATION = 1000;
-  private readonly SPACING = 25;
+  private readonly KILL_SPACING = 25;
 
   addKill(killerName: string, victimName: string): void {
-    const text = this.scene.add.text(
-      this.scene.cameras.main.width - 10,
-      100,
-      `${killerName} killed ${victimName}`,
-      { fontSize: '16px', fontStyle: 'bold', color: '#ffffff', stroke: '#000000', strokeThickness: 2 }
-    );
-    text.setOrigin(1, 0);
-    text.setScrollFactor(0);
-    text.setDepth(1000);
-
-    this.entries.unshift(text);
-    if (this.entries.length > this.MAX_KILLS) {
-      this.entries.pop()?.destroy();
+    // Remove oldest kill if at max capacity (FIFO)
+    if (this.kills.length >= this.MAX_KILLS) {
+      const oldestKill = this.kills.shift();
+      if (oldestKill) {
+        this.container.remove(oldestKill.text);
+        oldestKill.text.destroy();
+      }
     }
-    this.updatePositions();
 
-    this.scene.time.delayedCall(this.FADE_DELAY, () => this.fadeOutKill(text));
+    const yPosition = this.kills.length * this.KILL_SPACING;
+    const killText = this.scene.add.text(
+      0,
+      yPosition,
+      `${killerName} killed ${victimName}`,
+      {
+        fontSize: '16px', fontStyle: 'bold', color: '#ffffff',
+        stroke: '#000000', strokeThickness: 2,
+        backgroundColor: '#000000', padding: { x: 8, y: 4 }
+      }
+    );
+    killText.setOrigin(1, 0);
+
+    this.container.add(killText);
+    this.kills.push({ text: killText, timestamp: Date.now() });
+
+    this.scene.time.delayedCall(this.FADE_DELAY, () => this.fadeOutKill(killEntry));
   }
 }
 ```
@@ -306,9 +322,6 @@ export class KillFeedUI {
 - Visibility: Hidden for melee weapons (Bat, Katana)
 - Depth: 1000
 
-**Low Ammo Indicator:**
-- When current ≤ 20% of max → color changes to red (#ff0000)
-
 **Why hide for melee?** Melee weapons have unlimited attacks (magazineSize = 0). Showing "0/0" is confusing.
 
 **TypeScript:**
@@ -320,9 +333,6 @@ function updateAmmoDisplay(currentAmmo: number, maxAmmo: number, isMelee: boolea
   }
   this.ammoText.setVisible(true);
   this.ammoText.setText(`${currentAmmo}/${maxAmmo}`);
-
-  const ratio = currentAmmo / maxAmmo;
-  this.ammoText.setColor(ratio <= 0.2 ? '#ff0000' : '#ffffff');
 }
 ```
 
@@ -351,7 +361,7 @@ Three complementary indicators for reload state:
 
 **Visual Specification:**
 - Radius: 20px
-- Line style: 3px, green (#00ff00)
+- Line style: 3px, green (#00ff00), 1.0 alpha (fully opaque)
 - Arc: Starts at 270° (top), sweeps clockwise
 - Depth: 1002
 
@@ -407,8 +417,8 @@ function updateReloadUI(isReloading, isEmpty, reloadProgress, isMelee):
 **Color Coding:**
 | Remaining Time | Color | Why |
 |----------------|-------|-----|
-| > 120 seconds | White (#ffffff) | Normal, plenty of time |
-| 60-120 seconds | Yellow (#ffff00) | Match winding down |
+| >= 120 seconds | White (#ffffff) | Normal, plenty of time |
+| 60-119 seconds | Yellow (#ffff00) | Match winding down (60s is yellow, 120s is white) |
 | < 60 seconds | Red (#ff0000) | Final minute urgency |
 
 **Pseudocode:**
@@ -418,12 +428,12 @@ function updateMatchTimer(remainingSeconds):
     seconds = remainingSeconds % 60
     text = "{minutes}:{seconds.toString().padStart(2, '0')}"
 
-    if remainingSeconds > 120:
-        color = WHITE
-    else if remainingSeconds > 60:
+    if remainingSeconds < 60:
+        color = RED
+    else if remainingSeconds < 120:
         color = YELLOW
     else:
-        color = RED
+        color = WHITE
 
     timerText.setText(text)
     timerText.setColor(color)
@@ -434,12 +444,15 @@ function updateMatchTimer(remainingSeconds):
 updateMatchTimer(remainingSeconds: number): void {
   const minutes = Math.floor(remainingSeconds / 60);
   const seconds = remainingSeconds % 60;
-  this.timerText.setText(`${minutes}:${seconds.toString().padStart(2, '0')}`);
+  this.matchTimerText.setText(`${minutes}:${seconds.toString().padStart(2, '0')}`);
 
-  const color = remainingSeconds > 120 ? '#ffffff'
-              : remainingSeconds > 60 ? '#ffff00'
-              : '#ff0000';
-  this.timerText.setColor(color);
+  if (remainingSeconds < 60) {
+    this.matchTimerText.setColor('#ff0000');   // Red
+  } else if (remainingSeconds < 120) {
+    this.matchTimerText.setColor('#ffff00');   // Yellow
+  } else {
+    this.matchTimerText.setColor('#ffffff');   // White
+  }
 }
 ```
 
@@ -482,25 +495,30 @@ function updateProgress(progress):  // 0.0 to 1.0
 ```typescript
 export class DodgeRollCooldownUI {
   private graphics: Phaser.GameObjects.Graphics;
+  private x: number;
+  private y: number;
+  private radius: number = 20;
 
   updateProgress(progress: number): void {
+    progress = Math.max(0, Math.min(1, progress));
     this.graphics.clear();
 
     if (progress >= 1.0) {
       this.graphics.fillStyle(0x00ff00, 0.8);
-      this.graphics.fillCircle(0, 0, 20);
+      this.graphics.fillCircle(this.x, this.y, this.radius);
     } else {
       // Background
       this.graphics.fillStyle(0x666666, 0.5);
-      this.graphics.fillCircle(0, 0, 20);
+      this.graphics.fillCircle(this.x, this.y, this.radius);
 
-      // Progress arc
-      this.graphics.lineStyle(4, 0x00ff00, 0.6);
-      const startAngle = Phaser.Math.DegToRad(-90);
+      // Progress arc (filled, not stroked)
+      const startAngle = -Math.PI / 2; // -90° (top)
       const endAngle = startAngle + (progress * Math.PI * 2);
       this.graphics.beginPath();
-      this.graphics.arc(0, 0, 18, startAngle, endAngle);
-      this.graphics.strokePath();
+      this.graphics.arc(this.x, this.y, this.radius, startAngle, endAngle, false);
+      this.graphics.closePath();
+      this.graphics.fillStyle(0x00ff00, 0.6);
+      this.graphics.fillPath();
     }
   }
 }
@@ -644,33 +662,38 @@ showDamageFlash(): void {
 **Position**: Screen center (around crosshair)
 
 **Visual Specification:**
-- 4 white lines forming X pattern
+- 4 white lines forming + pattern (top, bottom, left, right)
 - Line length: 15px
 - Gap from center: 10px
 - Line width: 3px
 - Animation: Fade out over 200ms (Cubic.easeOut)
 - Depth: 1001
 
-**Why X pattern?** Instantly recognizable hit confirmation from FPS conventions. Small enough not to obstruct view.
+**Why + pattern?** Instantly recognizable hit confirmation from FPS conventions. Small enough not to obstruct view.
 
 **TypeScript:**
 ```typescript
 showHitMarker(): void {
-  const cx = this.scene.cameras.main.width / 2;
-  const cy = this.scene.cameras.main.height / 2;
+  // Use world coordinates (camera.scrollX/Y) instead of setScrollFactor(0)
+  const camera = this.scene.cameras.main;
+  const centerX = camera.scrollX + camera.width / 2;
+  const centerY = camera.scrollY + camera.height / 2;
   const gap = 10;
   const len = 15;
 
   const lines = [
-    this.scene.add.line(0, 0, cx - gap, cy - gap, cx - gap - len, cy - gap - len, 0xffffff),
-    this.scene.add.line(0, 0, cx + gap, cy - gap, cx + gap + len, cy - gap - len, 0xffffff),
-    this.scene.add.line(0, 0, cx - gap, cy + gap, cx - gap - len, cy + gap + len, 0xffffff),
-    this.scene.add.line(0, 0, cx + gap, cy + gap, cx + gap + len, cy + gap + len, 0xffffff),
+    // Top line (vertical)
+    this.scene.add.line(0, 0, centerX, centerY - gap, centerX, centerY - gap - len, 0xffffff),
+    // Bottom line (vertical)
+    this.scene.add.line(0, 0, centerX, centerY + gap, centerX, centerY + gap + len, 0xffffff),
+    // Left line (horizontal)
+    this.scene.add.line(0, 0, centerX - gap, centerY, centerX - gap - len, centerY, 0xffffff),
+    // Right line (horizontal)
+    this.scene.add.line(0, 0, centerX + gap, centerY, centerX + gap + len, centerY, 0xffffff),
   ];
 
   lines.forEach(line => {
     line.setLineWidth(3);
-    line.setScrollFactor(0);
     line.setDepth(1001);
   });
 
@@ -752,10 +775,9 @@ showDamageNumber(victimX: number, victimY: number, damage: number): void {
 - Overflow-y: auto
 
 #### Winner Section
-- Title: "MATCH ENDED" (36px bold, white)
-- Winner text: "{PlayerName} WINS!" or "TIE!"
+- Winner text: "Winner: {PlayerName}" or "Winners: {names}" (comma-separated) or "No Winner"
 - Winner color: Gold (#ffd700)
-- Multiple winners: Comma-separated list
+- No separate "MATCH ENDED" h1 (winner text serves as title)
 
 #### Scoreboard Table
 
@@ -822,11 +844,10 @@ export function MatchEndScreen({ matchData, localPlayerId, onClose, onPlayAgain 
       <div className="match-end-modal" onClick={e => e.stopPropagation()}>
         <button className="close-button" onClick={onClose}>×</button>
 
-        <h1>MATCH ENDED</h1>
         <h2 className="winner-text">
           {matchData.winners.length === 0 ? 'No Winner' :
-           matchData.winners.length === 1 ? `${matchData.winners[0]} WINS!` :
-           `TIE: ${matchData.winners.join(', ')}`}
+           matchData.winners.length === 1 ? `Winner: ${matchData.winners[0]}` :
+           `Winners: ${matchData.winners.join(', ')}`}
         </h2>
 
         <table className="scoreboard">
@@ -838,7 +859,7 @@ export function MatchEndScreen({ matchData, localPlayerId, onClose, onPlayAgain 
               <tr key={score.playerId}
                   className={score.playerId === localPlayerId ? 'local-player' : ''}>
                 <td>{i + 1}</td>
-                <td>{score.playerId.slice(0, 8)}</td>
+                <td>{score.playerId}</td>
                 <td>{score.kills}</td>
                 <td>{score.deaths}</td>
               </tr>
@@ -866,10 +887,11 @@ export function MatchEndScreen({ matchData, localPlayerId, onClose, onPlayAgain 
 **Visual Specification:**
 - Connected: "Connected! WASD=move, Click=shoot, R=reload, E=pickup, SPACE=dodge"
   - Color: Green (#00ff00)
+  - Font size: 14px
 - Failed: "Failed to connect to server"
   - Color: Red (#ff0000)
-- Reconnecting: "Reconnecting... (attempt X/3)"
-  - Color: Yellow (#ffff00)
+  - Font size: 14px
+- Reconnecting: Logged to console only, no visible UI
 
 **Why detailed connected message?** First-time players need control hints. Experienced players ignore it.
 
@@ -987,6 +1009,9 @@ this.wsClient.on('match:timer', (data) => {
 
 this.wsClient.on('player:damaged', (data) => {
   if (data.victimId === this.localPlayerId) {
+    // Update health bar immediately from damage event (supplements player:move updates)
+    this.localPlayerHealth = data.newHealth;
+    this.healthBarUI.updateHealth(this.localPlayerHealth, 100, false); // Not regenerating when damaged
     this.ui.showDamageFlash();
   }
   this.ui.showDamageNumber(this.playerManager, data.victimId, data.damage);
@@ -1048,19 +1073,19 @@ it('should display correct health bar width and color', () => {
 
 **Expected Output:**
 - 2 entries visible
-- First entry (top): "Player3 killed Player4"
-- Second entry: "Player1 killed Player2"
+- First entry (top): "Player1 killed Player2" (oldest, added first)
+- Second entry (bottom): "Player3 killed Player4" (newest, added last)
 
 **TypeScript (Vitest):**
 ```typescript
-it('should show kills in reverse chronological order', () => {
+it('should show kills in chronological order (oldest at top)', () => {
   killFeedUI.addKill('Player1', 'Player2');
   killFeedUI.addKill('Player3', 'Player4');
 
   const entries = killFeedUI.getEntries();
   expect(entries).toHaveLength(2);
-  expect(entries[0].text).toBe('Player3 killed Player4');
-  expect(entries[1].text).toBe('Player1 killed Player2');
+  expect(entries[0].text).toBe('Player1 killed Player2');
+  expect(entries[1].text).toBe('Player3 killed Player4');
 });
 ```
 
@@ -1131,7 +1156,7 @@ it('should show kills in reverse chronological order', () => {
 
 **Expected Output:**
 - Timer shows "2:00"
-- Color = Yellow (#ffff00)
+- Color = White (#ffffff) (120 is at the boundary; `< 120` is false so it falls to white)
 
 ---
 
@@ -1210,7 +1235,7 @@ it('should show kills in reverse chronological order', () => {
 
 **Expected Output:**
 - Modal visible
-- Winner text = "Player1 WINS!"
+- Winner text = "Winner: Player1"
 
 ---
 

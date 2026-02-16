@@ -1,6 +1,7 @@
 # Spec-of-Specs: Stick Rumble Documentation Blueprint
 
-> **Version**: 1.0.0
+> **Version**: 1.1.0
+> **Last Updated**: 2026-02-16
 > **Purpose**: This document defines the structure, content requirements, and templates for all specification files in `specs/`.
 > **Target Audience**: AI agents recreating Stick Rumble from scratch with zero existing code.
 
@@ -32,6 +33,7 @@
    - [graphics.md](#graphicsmd)
    - [ui.md](#uimd)
    - [test-index.md](#test-indexmd)
+   - [spec-of-specs-plan.md](#spec-of-specs-planmd)
 4. [Cross-Reference Conventions](#cross-reference-conventions)
 5. [Versioning Policy](#versioning-policy)
 
@@ -406,7 +408,7 @@ Organized by category with tables:
    - SPRINT_SPEED: 300 px/s
    - SPRINT_MULTIPLIER: 1.5
    - ACCELERATION: 50 px/s²
-   - DECELERATION: 50 px/s²
+   - DECELERATION: 1500 px/s²
 
 4. **Dodge Roll Constants**
    - DURATION: 400 ms
@@ -466,7 +468,7 @@ Organized by category with tables:
    }
    ```
 
-2. **Client → Server Messages** (7 types)
+2. **Client → Server Messages** (6 types)
    Each message includes:
    - Type string
    - Full data schema with types
@@ -474,16 +476,15 @@ Organized by category with tables:
    - Rate limit (if any)
    - Example JSON
 
-   Messages:
+   Messages (formally defined with schemas):
    - `input:state`
    - `player:shoot`
    - `player:reload`
    - `weapon:pickup_attempt`
    - `player:melee_attack`
    - `player:dodge_roll`
-   - `test`
 
-3. **Server → Client Messages** (19 types)
+3. **Server → Client Messages** (22 types)
    Each message includes:
    - Type string
    - Full data schema with types
@@ -512,6 +513,8 @@ Organized by category with tables:
    - `melee:hit`
    - `roll:start`
    - `roll:end`
+   - `state:snapshot`
+   - `state:delta`
 
 4. **Message Flow Diagrams**
    - Connection sequence
@@ -639,7 +642,7 @@ Organized by category with tables:
    - Direction from input (normalized)
    - Speed selection (200 or 300 px/s)
    - Acceleration model (50 px/s²)
-   - Deceleration model (50 px/s²)
+   - Deceleration model (1500 px/s²)
 
 3. **Position Update**
    - velocity * deltaTime
@@ -892,18 +895,18 @@ Organized by category with tables:
    - `dead` - Player is dead
 
 **Test Scenarios**:
-- TS-SHOOT-001: Successful shot creates projectile
-- TS-SHOOT-002: Shot decrements ammo
-- TS-SHOOT-003: Empty magazine returns shoot:failed
-- TS-SHOOT-004: Cooldown enforced between shots
-- TS-SHOOT-005: Reloading blocks shooting
-- TS-SHOOT-006: Dead player cannot shoot
-- TS-SHOOT-007: Spread applied to projectile angle
-- TS-SHOOT-008: Recoil accumulates on rapid fire
-- TS-SHOOT-009: Recoil recovers over time
-- TS-SHOOT-010: Sprint increases spread by 1.5x
-- TS-SHOOT-011: Reload restores full ammo
-- TS-SHOOT-012: Reload takes correct duration
+- TS-SHOOT-001: Successful Shot Creates Projectile
+- TS-SHOOT-002: Shot Decrements Ammo
+- TS-SHOOT-003: Empty Magazine Returns shoot:failed
+- TS-SHOOT-004: Fire Rate Cooldown Enforced
+- TS-SHOOT-005: Reloading Blocks Shooting
+- TS-SHOOT-006: Projectile Velocity From Aim Angle
+- TS-SHOOT-007: Projectile Expires After Lifetime
+- TS-SHOOT-008: Reload Completes And Restores Ammo
+- TS-SHOOT-009: Shotgun Creates 8 Pellets
+- TS-SHOOT-010: Sprint Applies Accuracy Penalty
+- TS-SHOOT-011: Vertical Recoil Accumulates
+- TS-SHOOT-012: Dead Player Cannot Shoot
 
 **Estimated Length**: 450-550 lines
 
@@ -1824,7 +1827,7 @@ Organized by category with tables:
 
    Format: "MM:SS"
        - Font: 32px monospace
-       - Color: #FFFFFF (normal), #FF0000 (< 30 seconds)
+       - Color: #FFFFFF (normal), #FFFF00 (< 120 seconds), #FF0000 (< 60 seconds)
 
    Alignment: Center
    ```
@@ -1913,7 +1916,7 @@ Organized by category with tables:
 - TS-UI-004: Ammo counter updates on shoot
 - TS-UI-005: Reload indicator shows during reload
 - TS-UI-006: Timer counts down correctly
-- TS-UI-007: Timer turns red under 30 seconds
+- TS-UI-007: Timer turns red under 60 seconds
 - TS-UI-008: Score updates on kill
 - TS-UI-009: Pickup prompt appears near crates
 - TS-UI-010: Dodge cooldown shows progress
@@ -1955,7 +1958,32 @@ Organized by category with tables:
    - By category
    - By priority
 
-**Estimated Length**: 300-400 lines (depends on total test count)
+**Estimated Length**: 642 lines
+
+---
+
+### spec-of-specs-plan.md
+
+**Purpose**: Planning document that outlines the spec verification process and tracks progress.
+
+**Required Content**:
+
+1. **Verification Methodology**
+   - How specs are validated against actual codebase
+   - Categories of drift (HIGH, MEDIUM, LOW priority)
+   - Resolution process
+
+2. **Verification Progress**
+   - List of all specs with verification status
+   - Issues found and their resolution status
+   - Timestamps of verification passes
+
+3. **Meta Information**
+   - Version history of the spec suite
+   - Contributors and reviewers
+   - Maintenance guidelines
+
+**Estimated Length**: 1,064 lines
 
 ---
 
@@ -2032,30 +2060,31 @@ For an AI agent recreating from scratch, implement in this order:
 
 ## Estimated Total Length
 
-| Spec | Estimated Lines |
-|------|-----------------|
-| README.md | 250 |
-| overview.md | 350 |
-| constants.md | 225 |
-| messages.md | 700 |
-| arena.md | 250 |
-| player.md | 450 |
-| movement.md | 400 |
-| dodge-roll.md | 375 |
-| weapons.md | 550 |
-| shooting.md | 500 |
-| melee.md | 375 |
-| hit-detection.md | 475 |
-| match.md | 375 |
-| rooms.md | 325 |
-| networking.md | 425 |
-| client-architecture.md | 475 |
-| server-architecture.md | 425 |
-| audio.md | 325 |
-| graphics.md | 550 |
-| ui.md | 425 |
-| test-index.md | 350 |
-| **TOTAL** | **~8,575 lines** |
+| Spec | Actual Lines |
+|------|--------------|
+| README.md | 353 |
+| overview.md | 700 |
+| constants.md | 539 |
+| messages.md | 1,812 |
+| arena.md | 985 |
+| player.md | 966 |
+| movement.md | 957 |
+| dodge-roll.md | 1,130 |
+| weapons.md | 1,056 |
+| shooting.md | 1,095 |
+| melee.md | 953 |
+| hit-detection.md | 1,150 |
+| match.md | 1,327 |
+| rooms.md | 887 |
+| networking.md | 1,146 |
+| client-architecture.md | 1,807 |
+| server-architecture.md | 1,294 |
+| audio.md | 905 |
+| graphics.md | 1,073 |
+| ui.md | 1,249 |
+| test-index.md | 642 |
+| spec-of-specs-plan.md | 1,064 |
+| **TOTAL** | **~24,924 lines** |
 
 ---
 
@@ -2067,6 +2096,15 @@ After reviewing this spec-of-specs:
 2. Generate each spec file following this blueprint
 3. Review generated specs for accuracy against codebase
 4. Iterate on any gaps or corrections
+
+---
+
+## Changelog
+
+| Version | Date | Changes |
+|---------|------|---------|
+| 1.0.0 | 2026-02-02 | Initial specification blueprint |
+| 1.1.0 | 2026-02-16 | Spec drift corrections: Updated DECELERATION from 50 to 1500 px/s², corrected Server→Client message count from 19 to 22 (added state:snapshot and state:delta), updated Client→Server count from 7 to 6 (removed informal `test` message), corrected match timer color threshold from <30s to <60s for red, updated shooting test descriptions to match actual spec, updated line count estimates to actual values (~24,924 total), added spec-of-specs-plan.md to table of contents |
 
 ---
 
