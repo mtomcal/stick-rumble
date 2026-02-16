@@ -450,6 +450,21 @@ export class GameSceneUI {
   }
 
   /**
+   * Show wall spark effect when barrel is obstructed by wall geometry.
+   * Yellow circle that scales up and fades out.
+   */
+  showWallSpark(x: number, y: number): void {
+    const spark = this.scene.add.circle(x, y, 3, 0xffff00);
+    this.scene.tweens.add({
+      targets: spark,
+      alpha: 0,
+      scale: 2,
+      duration: 100,
+      onComplete: () => spark.destroy(),
+    });
+  }
+
+  /**
    * Cleanup all resources
    */
   destroy(): void {

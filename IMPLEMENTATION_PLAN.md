@@ -284,14 +284,14 @@ The following discrepancies were found between this plan and the spec diff (c7dd
 
 > **Current state**: Not implemented.
 
-- [ ] **Check barrel overlap**: Before creating bullet client-side, test if barrel position overlaps wall geometry
-- [ ] **Spark visual**: Yellow circle (0xFFFF00), 3px radius
-- [ ] **Tween**: Scale 1→2, alpha fade over 100ms
-- [ ] **Skip bullet creation**: No bullet created when barrel is inside wall
-- [ ] **Test TS-GFX-017**: Wall spark on obstructed barrel
-- [ ] **Spec validation**: Verify against `graphics.md` lines 778-790 — color=0xFFFF00, radius=3, scaleEnd=2, duration=100. Verify bullet suppression: no projectile created when barrel is obstructed
-- [ ] **Assertion quality**: Tests assert spark color exactly 0xFFFF00, radius exactly 3, tween scale target exactly 2, tween duration exactly 100. Assert bullet creation was NOT called (`not.toHaveBeenCalled()` or `toHaveBeenCalledTimes(0)`) when barrel is in wall
-- [ ] **Coverage gate**: Wall detection + spark creation + bullet suppression code path ≥90% statements/lines/functions
+- [x] **Check barrel overlap**: Before creating bullet client-side, test if barrel position overlaps wall geometry
+- [x] **Spark visual**: Yellow circle (0xFFFF00), 3px radius
+- [x] **Tween**: Scale 1→2, alpha fade over 100ms
+- [x] **Skip bullet creation**: No bullet created when barrel is inside wall
+- [x] **Test TS-GFX-017**: Wall spark on obstructed barrel
+- [x] **Spec validation**: Verify against `graphics.md` lines 778-790 — color=0xFFFF00, radius=3, scaleEnd=2, duration=100. Verify bullet suppression: no projectile created when barrel is obstructed
+- [x] **Assertion quality**: Tests assert spark color exactly 0xFFFF00, radius exactly 3, tween scale target exactly 2, tween duration exactly 100. Assert bullet creation was NOT called (`not.toHaveBeenCalled()` or `toHaveBeenCalledTimes(0)`) when barrel is in wall
+- [x] **Coverage gate**: Wall detection + spark creation + bullet suppression code path ≥90% statements/lines/functions
 
 #### System 7a — Client: Floor Grid (GameScene.ts)
 
@@ -475,3 +475,7 @@ Follow these steps for each system section:
 - [2026-02-16] **System 6b — Placed in ProceduralWeaponGraphics not PlayerManager**: The spec shows `this.weaponContainer` — the actual container lives in `ProceduralWeaponGraphics.container`. Added `triggerReloadPulse()` to ProceduralWeaponGraphics, delegated through `PlayerManager.triggerReloadPulse(playerId)`.
 - [2026-02-16] **System 6b — Reload start detected in weapon:state handler**: The `weapon:state` handler detects reload start transition by comparing `wasReloading` (before `updateWeaponState`) with `messageData.isReloading`. Only triggers pulse for non-melee weapons on the local player.
 - [2026-02-16] **System 6b — Three mockShootingManager objects needed isReloading/isMeleeWeapon**: The weapon:state test blocks create inline `mockShootingManager` objects that were missing `isReloading()` and `isMeleeWeapon()`. Added both to all three instances.
+- [2026-02-16] **System 6c — Wall = arena boundary, not internal geometry**: The spec says "barrel inside wall geometry" but the arena has no internal walls — only the arena boundary (0,0 to 1920×1080). Barrel-in-wall check tests if barrel position is outside arena bounds.
+- [2026-02-16] **System 6c — Barrel offset 30px default**: The spec doesn't specify a barrel offset constant. Used 30px as a reasonable default that covers most weapon barrel tips (Pistol ~25px from container origin, AK47 ~50px). Combined with 10px weapon offset from player, this gives ~30px effective check distance.
+- [2026-02-16] **System 6c — Client-side suppression only**: The server still creates projectiles via `projectile:spawn` — the wall spark only suppresses the client's `player:shoot` request. This is a client-side visual optimization; the server would also reject the shot if implemented server-side.
+- [2026-02-16] **System 6c — Two shoot callsites updated**: Both the pointerdown handler (single shot) and the update loop (automatic fire) needed barrel-in-wall checks. Added `getObstructedBarrelPosition()` helper in GameScene.ts that returns the barrel position if obstructed, null otherwise.

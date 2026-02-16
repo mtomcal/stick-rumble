@@ -29,6 +29,7 @@ describe('GameSceneUI', () => {
   let createdGraphics: any[];
   let mockMakeGraphics: any;
   let mockSprite: any;
+  let mockCircle: any;
 
   beforeEach(() => {
     createdTexts = [];
@@ -83,6 +84,11 @@ describe('GameSceneUI', () => {
       destroy: vi.fn(),
     };
 
+    // Create mock circle for wall spark
+    mockCircle = {
+      destroy: vi.fn(),
+    };
+
     // Create mock scene
     mockScene = {
       sys: {
@@ -107,6 +113,7 @@ describe('GameSceneUI', () => {
         rectangle: vi.fn().mockReturnValue(mockDamageFlashOverlay),
         line: vi.fn().mockReturnValue(mockLine),
         sprite: vi.fn().mockReturnValue(mockSprite),
+        circle: vi.fn().mockReturnValue(mockCircle),
         graphics: vi.fn().mockImplementation(() => {
           const graphics = {
             fillStyle: vi.fn().mockReturnThis(),
@@ -1107,6 +1114,70 @@ describe('GameSceneUI', () => {
       expect(() => {
         emptyUI.destroy();
       }).not.toThrow();
+    });
+  });
+
+  describe('TS-GFX-017: Wall spark on obstructed barrel', () => {
+    it('should create yellow circle at barrel position with radius 3', () => {
+      ui.showWallSpark(50, 60);
+
+      expect(mockScene.add.circle).toHaveBeenCalledWith(50, 60, 3, 0xffff00);
+    });
+
+    it('should create tween with alpha 0 and scale 2', () => {
+      ui.showWallSpark(100, 200);
+
+      expect(mockScene.tweens.add).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targets: mockCircle,
+          alpha: 0,
+          scale: 2,
+        })
+      );
+    });
+
+    it('should use exactly 100ms duration', () => {
+      ui.showWallSpark(100, 200);
+
+      expect(mockScene.tweens.add).toHaveBeenCalledWith(
+        expect.objectContaining({
+          duration: 100,
+        })
+      );
+    });
+
+    it('should destroy spark on tween complete', () => {
+      ui.showWallSpark(100, 200);
+
+      // tweens.add mock calls onComplete immediately
+      expect(mockCircle.destroy).toHaveBeenCalled();
+    });
+
+    it('should use exact color 0xFFFF00', () => {
+      ui.showWallSpark(0, 0);
+
+      const callArgs = (mockScene.add.circle as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(callArgs[3]).toBe(0xffff00);
+    });
+
+    it('should use exact radius 3', () => {
+      ui.showWallSpark(0, 0);
+
+      const callArgs = (mockScene.add.circle as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(callArgs[2]).toBe(3);
+    });
+
+    it('should have complete tween config with all spec values', () => {
+      ui.showWallSpark(100, 200);
+
+      expect(mockScene.tweens.add).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targets: mockCircle,
+          alpha: 0,
+          scale: 2,
+          duration: 100,
+        })
+      );
     });
   });
 });

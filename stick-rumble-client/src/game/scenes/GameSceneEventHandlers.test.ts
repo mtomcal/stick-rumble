@@ -92,6 +92,7 @@ describe('GameSceneEventHandlers', () => {
       showDamageNumber: vi.fn(),
       showHitMarker: vi.fn(),
       showHitIndicator: vi.fn(),
+      showWallSpark: vi.fn(),
       showCameraShake: vi.fn(),
       updateMatchTimer: vi.fn(),
     } as unknown as GameSceneUI;

@@ -219,7 +219,12 @@ export class GameScene extends Phaser.Scene {
                   }
                 }
               } else {
-                this.shootingManager.shoot();
+                const obstructed = this.getObstructedBarrelPosition(aimAngle);
+                if (obstructed) {
+                  this.ui.showWallSpark(obstructed.x, obstructed.y);
+                } else {
+                  this.shootingManager.shoot();
+                }
               }
             }
           });
@@ -373,7 +378,12 @@ export class GameScene extends Phaser.Scene {
       // Handle automatic fire for automatic weapons when pointer held
       if (this.isPointerHeld && this.shootingManager && !this.shootingManager.isMeleeWeapon() && this.shootingManager.isAutomatic()) {
         this.shootingManager.setAimAngle(currentAimAngle);
-        this.shootingManager.shoot();
+        const obstructed = this.getObstructedBarrelPosition(currentAimAngle);
+        if (obstructed) {
+          this.ui.showWallSpark(obstructed.x, obstructed.y);
+        } else {
+          this.shootingManager.shoot();
+        }
       }
 
       // Check for nearby weapon crates
@@ -440,6 +450,25 @@ export class GameScene extends Phaser.Scene {
         this.ui.setCrosshairSpectating(false);
       }
     }
+  }
+
+  /**
+   * Check if the weapon barrel position is inside arena wall geometry.
+   * Returns the barrel position if obstructed, or null if clear.
+   */
+  private getObstructedBarrelPosition(aimAngle: number): { x: number; y: number } | null {
+    const playerPos = this.playerManager.getLocalPlayerPosition();
+    if (!playerPos) return null;
+
+    const barrelOffset = 30;
+    const barrelX = playerPos.x + Math.cos(aimAngle) * barrelOffset;
+    const barrelY = playerPos.y + Math.sin(aimAngle) * barrelOffset;
+
+    if (barrelX < 0 || barrelX > ARENA.WIDTH || barrelY < 0 || barrelY > ARENA.HEIGHT) {
+      return { x: barrelX, y: barrelY };
+    }
+
+    return null;
   }
 
   /**
