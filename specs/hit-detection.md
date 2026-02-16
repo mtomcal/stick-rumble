@@ -74,7 +74,7 @@ type Projectile struct {
     WeaponType    string    `json:"weaponType"`    // Weapon that created it
     Position      Vector2   `json:"position"`      // Current position (X, Y)
     Velocity      Vector2   `json:"velocity"`      // Velocity vector (X, Y)
-    SpawnPosition Vector2   `json:"spawnPosition"` // Where projectile was created
+    SpawnPosition Vector2   `json:"-"`             // Where projectile was created (server-only, not serialized)
     CreatedAt     time.Time `json:"-"`             // Timestamp for lifetime check
     Active        bool      `json:"-"`             // Is projectile still active?
 }
