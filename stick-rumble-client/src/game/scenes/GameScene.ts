@@ -78,6 +78,20 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0, 0)
       .setStrokeStyle(2, 0xffffff);
 
+    // Draw floor grid
+    const gridGraphics = this.add.graphics();
+    gridGraphics.lineStyle(1, 0xb0bec5, 0.5);
+    for (let x = 0; x <= ARENA.WIDTH; x += 100) {
+      gridGraphics.moveTo(x, 0);
+      gridGraphics.lineTo(x, ARENA.HEIGHT);
+    }
+    for (let y = 0; y <= ARENA.HEIGHT; y += 100) {
+      gridGraphics.moveTo(0, y);
+      gridGraphics.lineTo(ARENA.WIDTH, y);
+    }
+    gridGraphics.strokePath();
+    gridGraphics.setDepth(-1);
+
     // Add title (fixed to screen)
     const titleText = this.add.text(10, 10, 'Stick Rumble - WASD to move', {
       fontSize: '18px',

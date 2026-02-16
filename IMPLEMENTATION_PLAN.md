@@ -297,16 +297,16 @@ The following discrepancies were found between this plan and the spec diff (c7dd
 
 > **Current state**: `GameScene.ts` only draws background rectangle and border. No grid.
 
-- [ ] **Draw in create()**: After background rectangle
-- [ ] **Grid spacing**: 100px covering entire arena
-- [ ] **Line style**: 1px, color 0xB0BEC5, alpha 0.5
-- [ ] **Draw vertical lines**: `for x = 0 to ARENA.WIDTH step 100`
-- [ ] **Draw horizontal lines**: `for y = 0 to ARENA.HEIGHT step 100`
-- [ ] **Depth**: -1 (below everything)
-- [ ] **Test TS-ARENA-013**: Floor grid renders at correct depth and spacing
-- [ ] **Spec validation**: Verify against `constants.md` lines 396-399 and `arena.md` lines 133-137 — spacing=100, color=0xB0BEC5, alpha=0.5, lineWidth=1, depth=-1. Verify grid covers full arena (lines from 0 to ARENA.WIDTH/HEIGHT)
-- [ ] **Assertion quality**: Tests assert `lineStyle` called with exact `(1, 0xB0BEC5, 0.5)`, assert `setDepth(-1)`, assert correct number of vertical lines (`ARENA.WIDTH / 100 + 1`) and horizontal lines (`ARENA.HEIGHT / 100 + 1`) — not just `graphics.strokePath.toHaveBeenCalled()`
-- [ ] **Coverage gate**: Grid drawing code path ≥90% statements/lines/functions
+- [x] **Draw in create()**: After background rectangle
+- [x] **Grid spacing**: 100px covering entire arena
+- [x] **Line style**: 1px, color 0xB0BEC5, alpha 0.5
+- [x] **Draw vertical lines**: `for x = 0 to ARENA.WIDTH step 100`
+- [x] **Draw horizontal lines**: `for y = 0 to ARENA.HEIGHT step 100`
+- [x] **Depth**: -1 (below everything)
+- [x] **Test TS-ARENA-013**: Floor grid renders at correct depth and spacing
+- [x] **Spec validation**: Verify against `constants.md` lines 396-399 and `arena.md` lines 133-137 — spacing=100, color=0xB0BEC5, alpha=0.5, lineWidth=1, depth=-1. Verify grid covers full arena (lines from 0 to ARENA.WIDTH/HEIGHT)
+- [x] **Assertion quality**: Tests assert `lineStyle` called with exact `(1, 0xB0BEC5, 0.5)`, assert `setDepth(-1)`, assert correct number of vertical lines (`ARENA.WIDTH / 100 + 1`) and horizontal lines (`ARENA.HEIGHT / 100 + 1`) — not just `graphics.strokePath.toHaveBeenCalled()`
+- [x] **Coverage gate**: Grid drawing code path ≥90% statements/lines/functions
 
 #### System 7b — Client: Minimap (GameSceneUI.ts or new MinimapUI)
 
@@ -479,3 +479,6 @@ Follow these steps for each system section:
 - [2026-02-16] **System 6c — Barrel offset 30px default**: The spec doesn't specify a barrel offset constant. Used 30px as a reasonable default that covers most weapon barrel tips (Pistol ~25px from container origin, AK47 ~50px). Combined with 10px weapon offset from player, this gives ~30px effective check distance.
 - [2026-02-16] **System 6c — Client-side suppression only**: The server still creates projectiles via `projectile:spawn` — the wall spark only suppresses the client's `player:shoot` request. This is a client-side visual optimization; the server would also reject the shot if implemented server-side.
 - [2026-02-16] **System 6c — Two shoot callsites updated**: Both the pointerdown handler (single shot) and the update loop (automatic fire) needed barrel-in-wall checks. Added `getObstructedBarrelPosition()` helper in GameScene.ts that returns the barrel position if obstructed, null otherwise.
+- [2026-02-16] **System 7a — Plan spec line refs wrong**: Plan said "constants.md lines 396-399" for floor grid constants, but those lines are about melee arc/swing/camera shake. Actual floor grid constants at lines 540-547.
+- [2026-02-16] **System 7a — mockGraphics needed moveTo/lineTo**: The shared `createMockScene()` mockGraphics object was missing `moveTo` and `lineTo` methods. Added both with `.mockReturnThis()` for grid line drawing.
+- [2026-02-16] **System 7a — Vertical line count is 20 not 21**: `for x = 0; x <= 1920; x += 100` iterates x=0,100,...,1900 = 20 values. Initial test counted `moveTo` calls with `y===0` which also matched the first horizontal line's `moveTo(0, 0)`. Fixed to count `lineTo` calls with `y===1080` (definitively vertical lines).
