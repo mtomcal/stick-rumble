@@ -291,7 +291,7 @@ Use this checklist when implementing Stick Rumble from scratch:
 
 1. **Read [constants.md](constants.md)** to understand all game values
 2. **Read [arena.md](arena.md)** to understand the game world
-3. **Read [player.md](player.md)** and [movement.md](movement.md)** for player mechanics
+3. **Read [player.md](player.md)** and **[movement.md](movement.md)** for player mechanics
 4. **Read [messages.md](messages.md)** to understand the communication protocol
 5. **Continue through the Reading Order** above
 
@@ -350,6 +350,7 @@ Test scenarios use the format `TS-{SPEC}-{NUMBER}`:
 |---------|------|---------|
 | 1.0.1 | 2026-02-02 | Added audio.md spec (19 specs complete) |
 | 1.0.0 | 2026-02-02 | Initial specification suite with 14 complete specs |
+| 1.1.6 | 2026-02-16 | Fixed broken markdown bold formatting on line 3 of "Start Here" section |
 | 1.1.5 | 2026-02-16 | Updated all approximate line counts in Quick Reference Table to match actual |
 | 1.1.4 | 2026-02-16 | Removed (TODO) markers from complete specs: server-architecture.md, test-index.md |
 | 1.1.3 | 2026-02-16 | Added graphics.md, ui.md, audio.md to Key Dependencies table |
