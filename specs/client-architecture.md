@@ -449,9 +449,9 @@ function update(time, delta):
 
         checkWeaponProximity()
 
-    dodgeRollManager.update(delta)
+    dodgeRollManager.update()       // no params
     projectileManager.update(delta)
-    meleeWeaponManager.update(delta)
+    meleeWeaponManager.update()     // no params
 
     updateReloadUI()
     updateCrosshair()
@@ -1783,6 +1783,7 @@ it('should follow local player with camera', () => {
 | 1.0.0 | 2026-02-02 | Initial specification |
 | 1.1.0 | 2026-02-15 | Added new directories: physics/, simulation/, ui/debug/. Added subsystem descriptions: PredictionEngine, InterpolationEngine, GameSimulation, NetworkSimulator, DebugNetworkPanel. Updated directory tree with new files (RangedWeapon.ts, MeleeWeapon.ts, GameSceneSpectator.ts, urlParams.ts). Updated rendering pipeline with prediction/interpolation steps. Updated async message flow for state:snapshot/state:delta. |
 | 1.1.1 | 2026-02-16 | Fixed dodge roll visual — uses `setRotation` (360deg spin) + `setVisible` flicker (not `setAlpha(0.5)`) per `PlayerManager.ts:264-278`. |
+| 1.1.5 | 2026-02-16 | Fixed update() pseudocode — `dodgeRollManager.update()` and `meleeWeaponManager.update()` take no params |
 | 1.1.4 | 2026-02-16 | Fixed camera follow — uses `startFollow()` set once (not per-frame lerp in update). Removed `followLocalPlayer()` from update loop. |
 | 1.1.3 | 2026-02-16 | Fixed directory tree — removed nonexistent MatchTimer.ts, added xpCalculator.ts to utils/ |
 | 1.1.2 | 2026-02-16 | Fixed ShootingManager — separate `shoot()` and `meleeAttack()` methods (not single `shoot()` checking `isMelee`). Added `clientTimestamp` to shoot data. |

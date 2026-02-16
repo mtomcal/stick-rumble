@@ -118,7 +118,7 @@ The specs in `specs/` were bulk-updated and then validated by a prior Ralph job.
 - [x] 9. messages.md — Clarify InputState sequence field extraction
 - [x] 12. client-architecture.md — Fix directory tree (no MatchTimer.ts, add xpCalculator.ts)
 - [x] 13. client-architecture.md — Fix camera follow (startFollow once, not per-frame lerp)
-- [ ] 14. client-architecture.md — Fix update() method signatures (no delta param)
+- [x] 14. client-architecture.md — Fix update() method signatures (no delta param)
 - [ ] 17. server-architecture.md — Fix broadcastLoop method name (GetAllPlayers, not GetAllPlayerStates)
 - [ ] 21. server-architecture.md — Add PingTracker field to Player struct
 - [ ] 22. server-architecture.md — Fix ManualClock mutex type (RWMutex, not Mutex)
