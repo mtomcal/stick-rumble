@@ -406,7 +406,7 @@ Organized by category with tables:
    - SPRINT_SPEED: 300 px/s
    - SPRINT_MULTIPLIER: 1.5
    - ACCELERATION: 50 px/s²
-   - DECELERATION: 50 px/s²
+   - DECELERATION: 1500 px/s²
 
 4. **Dodge Roll Constants**
    - DURATION: 400 ms
@@ -639,7 +639,7 @@ Organized by category with tables:
    - Direction from input (normalized)
    - Speed selection (200 or 300 px/s)
    - Acceleration model (50 px/s²)
-   - Deceleration model (50 px/s²)
+   - Deceleration model (1500 px/s²)
 
 3. **Position Update**
    - velocity * deltaTime
