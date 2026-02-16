@@ -644,28 +644,30 @@ showDamageFlash(): void {
 **Position**: Screen center (around crosshair)
 
 **Visual Specification:**
-- 4 white lines forming X pattern
+- 4 white lines forming + pattern (crosshair: top, bottom, left, right)
 - Line length: 15px
 - Gap from center: 10px
 - Line width: 3px
 - Animation: Fade out over 200ms (Cubic.easeOut)
 - Depth: 1001
 
-**Why X pattern?** Instantly recognizable hit confirmation from FPS conventions. Small enough not to obstruct view.
+**Why + pattern?** Instantly recognizable hit confirmation from FPS conventions. Overlays the crosshair position without obstructing view.
 
 **TypeScript:**
 ```typescript
 showHitMarker(): void {
-  const cx = this.scene.cameras.main.width / 2;
-  const cy = this.scene.cameras.main.height / 2;
+  const camera = this.scene.cameras.main;
+  const centerX = camera.scrollX + camera.width / 2;
+  const centerY = camera.scrollY + camera.height / 2;
+  const lineLength = 15;
   const gap = 10;
-  const len = 15;
 
+  // 4 lines forming + pattern (top, bottom, left, right)
   const lines = [
-    this.scene.add.line(0, 0, cx - gap, cy - gap, cx - gap - len, cy - gap - len, 0xffffff),
-    this.scene.add.line(0, 0, cx + gap, cy - gap, cx + gap + len, cy - gap - len, 0xffffff),
-    this.scene.add.line(0, 0, cx - gap, cy + gap, cx - gap - len, cy + gap + len, 0xffffff),
-    this.scene.add.line(0, 0, cx + gap, cy + gap, cx + gap + len, cy + gap + len, 0xffffff),
+    this.scene.add.line(0, 0, centerX, centerY - gap, centerX, centerY - gap - lineLength, 0xffffff),
+    this.scene.add.line(0, 0, centerX, centerY + gap, centerX, centerY + gap + lineLength, 0xffffff),
+    this.scene.add.line(0, 0, centerX - gap, centerY, centerX - gap - lineLength, centerY, 0xffffff),
+    this.scene.add.line(0, 0, centerX + gap, centerY, centerX + gap + lineLength, centerY, 0xffffff),
   ];
 
   lines.forEach(line => {

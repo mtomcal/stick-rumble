@@ -89,7 +89,7 @@ The specs in `specs/` were bulk-updated and then validated by a prior Ralph job.
 - [x] 52. rooms.md — Fix AddPlayer Go code (RoomManager sends room:joined, not caller)
 - [x] 54. rooms.md — Fix processPendingMessages (pending moves discarded, not replayed)
 - [x] 56. ui.md — Fix kill feed ordering (push+shift, not unshift+pop)
-- [ ] 57. ui.md — Fix hit marker shape (+ pattern, not X)
+- [x] 57. ui.md — Fix hit marker shape (+ pattern, not X)
 - [ ] 58. ui.md — Fix match end screen title/format
 - [ ] 60. ui.md — Fix ammo low-ammo color (no color change logic exists)
 - [ ] 61. ui.md — Fix connection status reconnecting UI (console only, no visible text)
