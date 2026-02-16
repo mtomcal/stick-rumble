@@ -209,8 +209,9 @@ function tickLoop(ctx):
         select:
             case <- ctx.Done():
                 return  // Shutdown signal
-            case <- ticker.C:
-                deltaTime = 16.67ms
+            case now <- ticker.C:
+                deltaTime = now - lastTick  // Real elapsed, not fixed 16.67ms
+                lastTick = now
 
                 // 1. Update all player positions
                 for player in world.players:
@@ -278,8 +279,11 @@ func (gs *GameServer) runTickLoop(ctx context.Context) {
     }
 }
 
-func (gs *GameServer) tick() {
-    deltaTime := float64(gs.tickRate) / float64(time.Second)
+// Note: No separate tick() method — logic is inline in runTickLoop
+// deltaTime uses real elapsed time, not fixed from tickRate
+case now := <-ticker.C:
+    deltaTime := now.Sub(lastTick).Seconds()
+    lastTick = now
 
     // Update physics for all players
     gs.world.ForEachPlayer(func(p *PlayerState) {
@@ -1273,3 +1277,4 @@ func TestConcurrentAccess(t *testing.T) {
 | 1.1.1 | 2026-02-16 | Fixed GameServer struct — corrected callback signatures to match `gameserver.go:27-72`: `broadcastFunc` takes `[]PlayerStateSnapshot` not `[]PlayerState`, `onReloadComplete` takes only `playerID` (no WeaponState), `onHit` takes `HitEvent` struct not individual params, `onRespawn` has no `health` param, `onWeaponRespawn` takes `*WeaponCrate`. Added missing fields: `weaponMu`, `positionHistory`, `clock`, `getRTT`, `onMatchTimer`, `onCheckTimeLimit`, `onWeaponPickup`. |
 | 1.1.2 | 2026-02-16 | Fixed setupCallbacks section — callbacks are registered as method references in the constructor (not a separate `setupCallbacks()` method), added `SetGetRTT` and `SetOnWeaponRespawn` registrations. |
 | 1.1.3 | 2026-02-16 | Replaced nonexistent `sanitizePosition` with actual `sanitizeVector2` from `physics.go:208` — NaN/Inf replaced with 0 (not arena center). |
+| 1.1.4 | 2026-02-16 | Fixed tick() deltaTime — uses real elapsed `now.Sub(lastTick).Seconds()` not fixed from tickRate. Logic is inline in loop, not separate `tick()` method. |
