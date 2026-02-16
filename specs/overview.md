@@ -445,6 +445,8 @@ stick-rumble/
 ├── specs/                         # Detailed specifications (this folder)
 │   ├── README.md                  # Spec index and reading order
 │   ├── SPEC-OF-SPECS.md           # Specification structure template
+│   ├── spec-of-specs-plan.md      # Spec creation plan and work log
+│   ├── test-index.md              # Cross-spec test scenario index
 │   ├── overview.md                # This file
 │   ├── constants.md               # All magic numbers
 │   ├── arena.md                   # World boundaries
@@ -459,7 +461,11 @@ stick-rumble/
 │   ├── rooms.md                   # Matchmaking
 │   ├── messages.md                # WebSocket messages
 │   ├── networking.md              # Connection lifecycle
-│   └── client-architecture.md     # Phaser scenes and managers
+│   ├── client-architecture.md     # Phaser scenes and managers
+│   ├── server-architecture.md     # Go server internals and game loop
+│   ├── ui.md                      # HUD, kill feed, scoreboard, timers
+│   ├── graphics.md                # Rendering and visual effects
+│   └── audio.md                   # Sound effects and audio system
 │
 ├── stick-rumble-client/           # Frontend application (see above)
 │
@@ -695,6 +701,7 @@ func (s *Server) Serve(ctx context.Context) error {
 | 1.0.0 | 2026-02-02 | Initial specification |
 | 1.0.1 | 2026-02-16 | Fixed GameServer struct — replaced nonexistent Room/Match/ticker/broadcaster fields with actual callbacks and duration configs from `gameserver.go`. |
 | 1.0.2 | 2026-02-16 | Fixed anti-cheat PlayerShoot pseudocode — no `IsDead` check (only `!exists`), weapon state via `gs.weaponStates` map (not `player.Weapon`). |
+| 1.0.3 | 2026-02-16 | Added 6 missing specs to folder tree: `server-architecture.md`, `ui.md`, `graphics.md`, `audio.md`, `test-index.md`, `spec-of-specs-plan.md`. |
 
 ---
 
