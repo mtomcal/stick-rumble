@@ -1,6 +1,7 @@
 # Spec-of-Specs: Stick Rumble Documentation Blueprint
 
-> **Version**: 1.0.0
+> **Version**: 1.1.0
+> **Last Updated**: 2026-02-16
 > **Purpose**: This document defines the structure, content requirements, and templates for all specification files in `specs/`.
 > **Target Audience**: AI agents recreating Stick Rumble from scratch with zero existing code.
 
@@ -2087,6 +2088,15 @@ After reviewing this spec-of-specs:
 2. Generate each spec file following this blueprint
 3. Review generated specs for accuracy against codebase
 4. Iterate on any gaps or corrections
+
+---
+
+## Changelog
+
+| Version | Date | Changes |
+|---------|------|---------|
+| 1.1.0 | 2026-02-16 | Added spec-of-specs-plan.md to ToC and file specs; added Last Updated and Changelog; fixed C→S count to 6, S→C to 22; updated line count estimates to actual; fixed shooting test scenario descriptions; fixed UI timer thresholds |
+| 1.0.0 | 2026-02-02 | Initial blueprint for all 21 specification documents |
 
 ---
 
