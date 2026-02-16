@@ -494,34 +494,17 @@ func (h *WebSocketHandler) handlePlayerShoot(msg Message, playerID string) {
 
 ### Event Callbacks
 
-The network layer registers callbacks with GameServer to receive events:
+The network layer registers callbacks with GameServer directly in the constructor (`websocket_handler.go:74-90`), passing method references rather than wrapping in anonymous functions:
 
 **Go:**
 ```go
-func (h *WebSocketHandler) setupCallbacks() {
-    h.gameServer.SetOnReloadComplete(func(playerID string, state WeaponState) {
-        h.sendWeaponState(playerID, state)
-    })
-
-    h.gameServer.SetOnHit(func(attackerID, victimID string, damage, newHealth int) {
-        // Broadcast damage to all players in room
-        h.broadcastPlayerDamaged(victimID, attackerID, damage, newHealth)
-        // Send hit confirmation to attacker only
-        h.sendHitConfirmed(attackerID, victimID)
-
-        if newHealth <= 0 {
-            h.processDeath(victimID, attackerID)
-        }
-    })
-
-    h.gameServer.SetOnRespawn(func(playerID string, pos Vector2, health int) {
-        h.broadcastPlayerRespawn(playerID, pos, health)
-    })
-
-    h.gameServer.SetOnRollEnd(func(playerID string, reason string) {
-        h.broadcastRollEnd(playerID, reason)
-    })
-}
+// In NewWebSocketHandler() constructor — not a separate setupCallbacks() method
+handler.gameServer.SetOnReloadComplete(handler.onReloadComplete)
+handler.gameServer.SetOnHit(handler.onHit)
+handler.gameServer.SetOnRespawn(handler.onRespawn)
+handler.gameServer.SetOnWeaponRespawn(handler.onWeaponRespawn)
+handler.gameServer.SetOnRollEnd(handler.broadcastRollEnd)
+handler.gameServer.SetGetRTT(handler.getPlayerRTT)
 ```
 
 **Why Callbacks (Not Direct Calls)?**
@@ -1272,3 +1255,4 @@ func TestConcurrentAccess(t *testing.T) {
 | 1.0.0 | 2026-02-02 | Initial specification |
 | 1.1.0 | 2026-02-15 | Added Lag Compensation Subsystem section (PingTracker, PositionHistory, DeltaTracker, NetworkSimulator, WeaponFactory). Updated directory tree with 5 new files. Removed non-existent auth/ and db/ dirs. Added deltaTracker and networkSimulator to WebSocketHandler struct. Updated handleInputState with sequence field. Updated handlePlayerShoot with clientTimestamp for lag compensation. |
 | 1.1.1 | 2026-02-16 | Fixed GameServer struct — corrected callback signatures to match `gameserver.go:27-72`: `broadcastFunc` takes `[]PlayerStateSnapshot` not `[]PlayerState`, `onReloadComplete` takes only `playerID` (no WeaponState), `onHit` takes `HitEvent` struct not individual params, `onRespawn` has no `health` param, `onWeaponRespawn` takes `*WeaponCrate`. Added missing fields: `weaponMu`, `positionHistory`, `clock`, `getRTT`, `onMatchTimer`, `onCheckTimeLimit`, `onWeaponPickup`. |
+| 1.1.2 | 2026-02-16 | Fixed setupCallbacks section — callbacks are registered as method references in the constructor (not a separate `setupCallbacks()` method), added `SetGetRTT` and `SetOnWeaponRespawn` registrations. |
