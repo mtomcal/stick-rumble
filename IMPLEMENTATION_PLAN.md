@@ -37,9 +37,9 @@ The specs in `specs/` were bulk-updated and then validated by a prior Ralph job.
 
 **What to Check:** Code blocks with wrong struct fields, function signatures, or constant values. Verify the spec's code snippet matches the actual source line-for-line.
 
-- [ ] 1. constants.md — Health bar dimensions (HEALTH_BAR_WIDTH=40/HEIGHT=6 vs actual 32/4)
-- [ ] 2. movement.md — Remove nonexistent `sanitizeDeltaTime` function docs
-- [ ] 5. messages.md — Fix PlayerState Go struct (wrong field names, missing fields)
+- [x] 1. constants.md — Health bar dimensions (HEALTH_BAR_WIDTH=40/HEIGHT=6 vs actual 32/4)
+- [x] 2. movement.md — Remove nonexistent `sanitizeDeltaTime` function docs
+- [x] 5. messages.md — Fix PlayerState Go struct (wrong field names, missing fields)
 - [ ] 6. messages.md — Add missing `weaponType` note for projectile:spawn Go broadcast
 - [ ] 7. messages.md — Fix weapon:pickup_confirmed nextRespawnTime (Unix timestamp, not ms duration)
 - [ ] 15. server-architecture.md — Fix GameServer callback signatures (broadcastFunc, onReloadComplete, onHit, onRespawn)
