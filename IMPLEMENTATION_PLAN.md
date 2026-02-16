@@ -46,7 +46,7 @@ The specs in `specs/` were bulk-updated and then validated by a prior Ralph job.
 - [x] 19. server-architecture.md — Fix setupCallbacks method references and signatures
 - [x] 24. server-architecture.md — Remove nonexistent `sanitizePosition` function docs
 - [x] 26. hit-detection.md — Fix checkHitDetection onHit call signature (HitEvent struct, not individual params)
-- [ ] 28. hit-detection.md — Fix hitscan invulnerability check (doesn't check IsInvulnerable/IsInvincibleFromRoll)
+- [x] 28. hit-detection.md — Fix hitscan invulnerability check (doesn't check IsInvulnerable/IsInvincibleFromRoll)
 - [ ] 32. shooting.md — Fix ShootResult.FailReason to .Reason
 - [ ] 34. shooting.md — Fix PlayerShoot alive check (only checks !exists, not IsAlive)
 - [ ] 36. shooting.md — Fix StartReload IsMelee check (actually checks IsReloading + full magazine)
