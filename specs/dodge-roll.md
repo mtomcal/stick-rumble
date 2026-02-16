@@ -336,10 +336,19 @@ function updatePlayerPhysics(player, deltaTime):
 
 **Go (Server):**
 ```go
+// UpdatePlayerResult contains the result of updating a player's physics
+type UpdatePlayerResult struct {
+    RollCancelled    bool // True if dodge roll was cancelled due to wall collision
+    CorrectionNeeded bool // True if the movement required correction (anti-cheat flag)
+}
+
 // UpdatePlayer updates a player's physics state
-// Returns true if a dodge roll was cancelled due to wall collision
-func (p *Physics) UpdatePlayer(player *PlayerState, deltaTime float64) bool {
-    rollCancelled := false
+// Returns UpdatePlayerResult with correction information
+func (p *Physics) UpdatePlayer(player *PlayerState, deltaTime float64) UpdatePlayerResult {
+    result := UpdatePlayerResult{
+        RollCancelled:    false,
+        CorrectionNeeded: false,
+    }
 
     if player.IsRolling() {
         rollState := player.GetRollState()
@@ -348,6 +357,7 @@ func (p *Physics) UpdatePlayer(player *PlayerState, deltaTime float64) bool {
             X: rollState.RollDirection.X * DodgeRollVelocity,
             Y: rollState.RollDirection.Y * DodgeRollVelocity,
         }
+        rollVel = sanitizeVector2(rollVel, "UpdatePlayer roll velocity")
         player.SetVelocity(rollVel)
     } else {
         // Normal movement handling...
@@ -365,13 +375,24 @@ func (p *Physics) UpdatePlayer(player *PlayerState, deltaTime float64) bool {
     clampedPos := clampToArena(newPos)
 
     // Check if position was clamped during a roll (wall collision)
-    if player.IsRolling() && (clampedPos.X != newPos.X || clampedPos.Y != newPos.Y) {
+    isRolling := player.IsRolling()
+    if isRolling && (clampedPos.X != newPos.X || clampedPos.Y != newPos.Y) {
         player.EndDodgeRoll()
-        rollCancelled = true
+        result.RollCancelled = true
     }
 
+    clampedPos = sanitizeVector2(clampedPos, "UpdatePlayer position")
+
+    // Anti-cheat validation
+    validation := p.ValidatePlayerMovement(oldPos, clampedPos, currentVel, deltaTime, isRolling, input.IsSprinting)
+    if !validation.Valid {
+        result.CorrectionNeeded = true
+        player.RecordCorrection()
+    }
+
+    player.RecordMovementUpdate()
     player.SetPosition(clampedPos)
-    return rollCancelled
+    return result
 }
 ```
 
@@ -869,9 +890,9 @@ test "Wall collision ends roll early":
     player.position = (1880, 500)
     player.startDodgeRoll((1, 0))
 
-    rollCancelled = physics.updatePlayer(player, 0.1)
+    result = physics.updatePlayer(player, 0.1)
 
-    assert rollCancelled == true
+    assert result.rollCancelled == true
     assert player.isRolling() == false
     assert player.position.x == 1904  // Clamped to right boundary
 ```
@@ -1118,3 +1139,4 @@ it('should show 50% progress at 1.5s', () => {
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification |
+| 1.0.1 | 2026-02-16 | Fixed UpdatePlayer return type — returns `UpdatePlayerResult` struct (with `RollCancelled` and `CorrectionNeeded` fields), not `bool`. Added `sanitizeVector2` calls to match source. |
