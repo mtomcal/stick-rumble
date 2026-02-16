@@ -199,19 +199,19 @@ The following discrepancies were found between this plan and the spec diff (c7dd
 
 > **Current state**: `Crosshair.ts` draws white + sign (10px, 5px gap) + red spread circle (radius = spread * 2px/deg).
 
-- [ ] **Generate reticle texture**: `make.graphics()` + `generateTexture('reticle', 32, 32)`
-- [ ] **Ring**: radius 10, 2px white stroke
-- [ ] **4 cardinal tick marks**: 6px each
-- [ ] **Red center dot**: 0xFF0000, radius 2
-- [ ] **Replace procedural crosshair**: Use Sprite with 'reticle' texture
-- [ ] **Remove spread circle logic**: Delete dynamic spread rendering entirely
-- [ ] **Set depth 100, alpha 0.8**
-- [ ] **Position at cursor/aim point each frame**
-- [ ] **Test TS-GFX-023**: Crosshair reticle texture renders correctly
-- [ ] **Spec validation**: Verify against `constants.md` lines 318-325 — size=32×32, ringRadius=10, ringStroke=2, dotColor=0xFF0000, dotRadius=2, tickLength=6, depth=100, alpha=0.8. Confirm spread circle completely removed (no `spread` or `spreadRadius` references in Crosshair.ts)
-- [ ] **Assertion quality**: Tests assert `generateTexture` called with exact `('reticle', 32, 32)`, assert `strokeCircle` with exact `(16, 16, 10)`, assert `fillCircle` with exact `(16, 16, 2)` and color `0xFF0000`, depth exactly 100, alpha exactly 0.8 — not bare `toHaveBeenCalled()`
-- [ ] **Coverage gate**: Crosshair.ts ≥90% statements/lines/functions
-- [ ] **Visual test**: Read screenshot to confirm reticle appearance
+- [x] **Generate reticle texture**: `make.graphics()` + `generateTexture('reticle', 32, 32)`
+- [x] **Ring**: radius 10, 2px white stroke
+- [x] **4 cardinal tick marks**: 6px each
+- [x] **Red center dot**: 0xFF0000, radius 2
+- [x] **Replace procedural crosshair**: Use Sprite with 'reticle' texture
+- [x] **Remove spread circle logic**: Delete dynamic spread rendering entirely
+- [x] **Set depth 100, alpha 0.8**
+- [x] **Position at cursor/aim point each frame**
+- [x] **Test TS-GFX-023**: Crosshair reticle texture renders correctly
+- [x] **Spec validation**: Verified against `constants.md` lines 462-473 — size=32×32, ringRadius=10, ringStroke=2, dotColor=0xFF0000, dotRadius=2, tickLength=6, depth=100, alpha=0.8. Confirmed no `spread` or `spreadRadius` references remain in Crosshair.ts. Plan line refs were wrong (said 318-325, actual 462-473)
+- [x] **Assertion quality**: Tests assert `generateTexture('reticle', 32, 32)`, `strokeCircle(16, 16, 10)`, `fillCircle(16, 16, 2)` with color `0xFF0000`, depth exactly 100, alpha exactly 0.8, all 4 cardinal tick mark coordinates — no bare `toHaveBeenCalled()`
+- [x] **Coverage gate**: Crosshair.ts ≥90% statements/lines/functions
+- [ ] **Visual test**: Read screenshot to confirm reticle appearance — DEFERRED (HUMAN ONLY equivalent)
 
 #### System 4b — Client: Hit Marker → X Texture (GameSceneUI.ts)
 
@@ -455,3 +455,6 @@ Follow these steps for each system section:
 - [2026-02-16] **System 6a — Plan spec line refs wrong**: Plan said "constants.md lines 359-361" for gun recoil constants, but those lines are about time limits and kill rewards. Actual gun recoil constants at lines 503-509: GUN_RECOIL_DEFAULT=-6, GUN_RECOIL_SHOTGUN=-10, GUN_RECOIL_DURATION=50.
 - [2026-02-16] **System 6a — Recoil on ProceduralWeaponGraphics not PlayerManager**: The spec shows `this.recoilOffset` on a weapon class. Placed `recoilOffset` property and `triggerRecoil()` method on `ProceduralWeaponGraphics`, which Phaser can tween directly. `PlayerManager.triggerWeaponRecoil(playerId)` delegates to the weapon graphics instance.
 - [2026-02-16] **System 6a — Recoil triggered for all players**: Gun recoil visual is triggered for both local and remote players on `projectile:spawn`, so all firing weapons show the kickback animation.
+- [2026-02-16] **System 4a — Complete Crosshair.ts rewrite**: Replaced per-frame procedural Graphics-based crosshair (white + sign, red spread circle) with pre-generated 32×32 reticle texture (ring, 4 cardinal ticks, red center dot) displayed as a Sprite. Removed all spread-related code (WEAPON_SPREAD constants, spreadRadius, drawSpreadIndicator, SPREAD_LERP_SPEED, PIXELS_PER_DEGREE). `getCurrentSpreadRadius()` now always returns 0. Public interface preserved for backward compatibility.
+- [2026-02-16] **System 4a — Plan spec line refs wrong**: Plan said "constants.md lines 318-325" for reticle constants, but those lines are about hit indicators. Actual reticle constants at lines 462-473: RETICLE_TEXTURE_SIZE=32, RING_RADIUS=10, RING_STROKE=2, etc.
+- [2026-02-16] **System 4a — GameScene.test.setup.ts did NOT need updating**: Despite the new `scene.make.graphics` call in Crosshair's constructor, the shared `createMockScene()` did not need changes because GameScene tests don't directly instantiate Crosshair — they go through GameSceneUI which is mocked at a higher level.
