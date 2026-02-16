@@ -94,8 +94,9 @@ type Room struct {
 
 **TypeScript (Client doesn't track room state explicitly):**
 ```typescript
-// Client only knows its own player ID after room:joined
+// Client receives both roomId and playerId after room:joined
 interface RoomJoinedData {
+    roomId: string;
     playerId: string;
 }
 ```
@@ -165,8 +166,8 @@ function addPlayer(player):
         playerToRoom[player1.id] = room.id
         playerToRoom[player2.id] = room.id
 
-        send room:joined { playerId: player1.id } to player1
-        send room:joined { playerId: player2.id } to player2
+        send room:joined { roomId: room.id, playerId: player1.id } to player1
+        send room:joined { roomId: room.id, playerId: player2.id } to player2
 
         return room
 
@@ -861,3 +862,4 @@ test "tab reload joins existing room":
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification |
 | 1.1.0 | 2026-02-15 | Added `PingTracker` field to Player struct for per-player RTT measurement. See [networking.md](networking.md#ping-tracking) for implementation details. |
+| 1.1.1 | 2026-02-16 | Fixed `room:joined` data payload — server sends both `roomId` and `playerId` (was missing `roomId`). |
