@@ -570,14 +570,18 @@ Key patterns used throughout the server:
 ```go
 // 1. RWMutex for concurrent access
 type World struct {
+    players map[string]*PlayerState
+    clock   Clock
+    rng     *rand.Rand   // Random number generator for spawn points
     mu      sync.RWMutex
-    players map[string]*Player
+    rngMu   sync.Mutex   // Protects rng access (rand.Rand is not thread-safe)
 }
 
-func (w *World) GetPlayer(id string) *Player {
+func (w *World) GetPlayer(playerID string) (*PlayerState, bool) {
     w.mu.RLock()
     defer w.mu.RUnlock()
-    return w.players[id]
+    player, exists := w.players[playerID]
+    return player, exists
 }
 
 // 2. Channel-based broadcasting
@@ -699,6 +703,7 @@ func (s *Server) Serve(ctx context.Context) error {
 | 1.0.0 | 2026-02-02 | Initial specification |
 | 1.0.1 | 2026-02-16 | Fixed GameServer struct — replaced nonexistent Room/Match/ticker/broadcaster fields with actual callbacks and duration configs from `gameserver.go`. |
 | 1.0.2 | 2026-02-16 | Fixed anti-cheat PlayerShoot pseudocode — no `IsDead` check (only `!exists`), weapon state via `gs.weaponStates` map (not `player.Weapon`). |
+| 1.0.6 | 2026-02-16 | Fixed World struct — added `clock`, `rng`, `rngMu` fields; map type `*PlayerState` not `*Player`; `GetPlayer` returns `(*PlayerState, bool)` |
 | 1.0.5 | 2026-02-16 | Removed nonexistent `.claude/todos.json` and `settings.json` from folder tree (actual: `.claude/commands/`) |
 | 1.0.4 | 2026-02-16 | Removed nonexistent root-level `GDD.md` from folder tree (only exists at `docs/GDD.md`) |
 | 1.0.3 | 2026-02-16 | Added 6 missing specs to folder tree: `server-architecture.md`, `ui.md`, `graphics.md`, `audio.md`, `test-index.md`, `spec-of-specs-plan.md`. |
