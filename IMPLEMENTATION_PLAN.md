@@ -1,165 +1,297 @@
-# Spec Validation Plan
+# Spec Drift Fix Plan
 
 > Reference file for the worker loop. Read this at the START of each iteration to know what to do.
 
 ## Context
 
-The specs in `specs/` were just bulk-updated by a previous Ralph job to match the current codebase. This validation pass reads each spec and its corresponding source code to verify accuracy. No edits — just flag remaining drift.
+The specs in `specs/` were bulk-updated and then validated by a prior Ralph job. That validation found 104 drift findings (39 HIGH, 37 MEDIUM, 28 LOW). This job fixes them all by editing specs to match the actual source code.
 
-## Validation Checklist
+### Context Table
 
-- [x] 1. constants.md
-- [x] 2. movement.md
-- [x] 3. networking.md
-- [x] 4. messages.md
-- [x] 5. client-architecture.md
-- [x] 6. server-architecture.md
-- [x] 7. hit-detection.md
-- [x] 8. player.md
-- [x] 9. graphics.md
-- [x] 10. shooting.md
-- [x] 11. weapons.md
-- [x] 12. overview.md
-- [x] 13. rooms.md
-- [x] 14. ui.md
-- [x] 15. match.md
-- [x] 16. dodge-roll.md
-- [x] 17. melee.md
-- [x] 18. arena.md
-- [x] 19. audio.md
-- [x] 20. README.md
-- [x] 21. test-index.md
-- [x] 22. spec-of-specs-plan.md
-- [x] 23. SPEC-OF-SPECS.md
+| # | Spec File | Findings | Key Source Files |
+|---|-----------|----------|------------------|
+| 1 | constants.md | 1 | `stick-rumble-client/src/game/entities/HealthBar.ts` |
+| 2 | movement.md | 2 | `stick-rumble-server/internal/game/physics.go`, `gameserver.go`, `PredictionEngine.ts`, `GameScene.ts` |
+| 3 | networking.md | 1 | `events-schema/package.json` |
+| 4 | messages.md | 7 | `player.go`, `broadcast_helper.go`, `message_processor.go`, `server-to-client.ts` |
+| 5 | client-architecture.md | 5 | `PlayerManager.ts`, `ShootingManager.ts`, `GameScene.ts`, `GameSceneUI.ts` |
+| 6 | server-architecture.md | 10 | `gameserver.go`, `message_processor.go`, `websocket_handler.go`, `room.go`, `clock.go`, `main.go` |
+| 7 | hit-detection.md | 7 | `projectile.go`, `gameserver.go`, `physics.go`, `GameSceneEventHandlers.ts` |
+| 8 | shooting.md | 9 | `gameserver.go`, `weapon.go`, `ShootingManager.ts` |
+| 9 | weapons.md | 4 | `weapon.go`, `weapon-configs.json`, `weapon_factory.go`, `weaponConfig.ts` |
+| 10 | overview.md | 7 | `client-to-server.ts`, `server-to-client.ts`, `gameserver.go`, `world.go` |
+| 11 | rooms.md | 4 | `room.go`, `GameSceneEventHandlers.ts`, `server-to-client.ts` |
+| 12 | ui.md | 12 | `KillFeedUI.ts`, `GameSceneUI.ts`, `MatchEndScreen.tsx`, `WebSocketClient.ts`, `GameScene.ts` |
+| 13 | match.md | 2 | `GameSceneUI.ts`, `GameSceneEventHandlers.ts` |
+| 14 | dodge-roll.md | 4 | `physics.go`, `GameSceneEventHandlers.ts`, `GameScene.ts`, `message_processor.go` |
+| 15 | melee.md | 1 | `gameserver.go`, `world.go` |
+| 16 | arena.md | 7 | `weapon_crate.go`, `world.go`, `physics.go` |
+| 17 | README.md | 6 | N/A (cross-references to other specs) |
+| 18 | test-index.md | 7 | Cross-references to all spec test sections |
+| 19 | spec-of-specs-plan.md | 4 | N/A (historical plan doc) |
+| 20 | SPEC-OF-SPECS.md | 8 | `constants.ts`, `server-to-client.ts`, `client-to-server.ts` |
 
-## Findings
+## Fix Checklist
+
+### Tier 1 — HIGH severity (factually incorrect, fix first)
+
+**What to Check:** Code blocks with wrong struct fields, function signatures, or constant values. Verify the spec's code snippet matches the actual source line-for-line.
+
+- [ ] 1. constants.md — Health bar dimensions (HEALTH_BAR_WIDTH=40/HEIGHT=6 vs actual 32/4)
+- [ ] 2. movement.md — Remove nonexistent `sanitizeDeltaTime` function docs
+- [ ] 5. messages.md — Fix PlayerState Go struct (wrong field names, missing fields)
+- [ ] 6. messages.md — Add missing `weaponType` note for projectile:spawn Go broadcast
+- [ ] 7. messages.md — Fix weapon:pickup_confirmed nextRespawnTime (Unix timestamp, not ms duration)
+- [ ] 15. server-architecture.md — Fix GameServer callback signatures (broadcastFunc, onReloadComplete, onHit, onRespawn)
+- [ ] 19. server-architecture.md — Fix setupCallbacks method references and signatures
+- [ ] 24. server-architecture.md — Remove nonexistent `sanitizePosition` function docs
+- [ ] 26. hit-detection.md — Fix checkHitDetection onHit call signature (HitEvent struct, not individual params)
+- [ ] 28. hit-detection.md — Fix hitscan invulnerability check (doesn't check IsInvulnerable/IsInvincibleFromRoll)
+- [ ] 32. shooting.md — Fix ShootResult.FailReason to .Reason
+- [ ] 34. shooting.md — Fix PlayerShoot alive check (only checks !exists, not IsAlive)
+- [ ] 36. shooting.md — Fix StartReload IsMelee check (actually checks IsReloading + full magazine)
+- [ ] 42. weapons.md — Fix Uzi visual config values (muzzleFlashSize=8, duration=50)
+- [ ] 49. overview.md — Fix GameServer struct (no Room/Match/ticker/broadcaster fields)
+- [ ] 50. overview.md — Fix anti-cheat PlayerShoot pseudocode (no IsDead check, weaponStates map)
+- [ ] 53. rooms.md — Fix room:joined data payload (includes roomId from server)
+- [ ] 87. test-index.md — Fix priority counts per spec (systematically inflated Critical counts)
+- [ ] 88. test-index.md — Fix summary statistics totals
+- [ ] 89. test-index.md — Fix category counts (Unit/Integration/Visual mismatches)
+- [ ] 91. test-index.md — Fix description scrambling (wrong IDs mapped to descriptions)
+- [ ] 92. test-index.md — Remove or flag 15 netcode test IDs not in source specs
+- [ ] 97. SPEC-OF-SPECS.md — Fix DECELERATION constant (50 vs actual 1500 px/s^2)
+- [ ] 98. SPEC-OF-SPECS.md — Fix Server->Client message count (19 listed but 22 actual)
+
+### Tier 2 — MEDIUM severity (missing info or misleading)
+
+**What to Check:** Prose descriptions that contradict source behavior, missing fields/params, wrong method names. Verify the spec's narrative matches actual control flow.
+
+- [ ] 3. movement.md — Fix client-side prediction asymmetries (velocity cap, sprint speed)
+- [ ] 8. messages.md — Fix player:damaged melee path (missing projectileId)
+- [ ] 10. client-architecture.md — Fix dodge roll visual (rotation+flicker, not alpha)
+- [ ] 11. client-architecture.md — Fix ShootingManager.shoot() vs meleeAttack() separation
+- [ ] 16. server-architecture.md — Fix tick() deltaTime (real elapsed, not fixed from tickRate)
+- [ ] 18. server-architecture.md — Fix handleInputState (direct type assertions, no NaN sanitization)
+- [ ] 20. server-architecture.md — Fix Room.Broadcast (non-blocking select, not blocking channel)
+- [ ] 23. server-architecture.md — Fix main.go pattern (global singleton, not explicit handler)
+- [ ] 25. hit-detection.md — Fix Projectile SpawnPosition json tag (json:"-", not "spawnPosition")
+- [ ] 27. hit-detection.md — Fix death trigger (inline in onHit, not separate handleDeath method)
+- [ ] 30. hit-detection.md — Fix client handlePlayerDeath (setVisible+spectator, not death animation)
+- [ ] 31. hit-detection.md — Fix tick() method (9 steps, not 4)
+- [ ] 33. shooting.md — Fix PlayerShoot locking (weaponMu.RLock, not gs.mu.Lock)
+- [ ] 35. shooting.md — Fix projectile creation (CreateProjectile, not NewProjectile+AddProjectile)
+- [ ] 37. shooting.md — Fix CanShoot scope (also checks IsReloading and CurrentAmmo)
+- [ ] 38. shooting.md — Fix client shoot() signature (no params, uses this.aimAngle)
+- [ ] 41. weapons.md — Fix Weapon struct (add IsHitscan field)
+- [ ] 43. weapons.md — Fix CreateWeaponByType return (returns error too)
+- [ ] 45. overview.md — Fix message type counts (6 C→S, 22 S→C = 28 total)
+- [ ] 46. overview.md — Fix spec file listing (missing 6 specs)
+- [ ] 52. rooms.md — Fix AddPlayer Go code (RoomManager sends room:joined, not caller)
+- [ ] 54. rooms.md — Fix processPendingMessages (pending moves discarded, not replayed)
+- [ ] 56. ui.md — Fix kill feed ordering (push+shift, not unshift+pop)
+- [ ] 57. ui.md — Fix hit marker shape (+ pattern, not X)
+- [ ] 58. ui.md — Fix match end screen title/format
+- [ ] 60. ui.md — Fix ammo low-ammo color (no color change logic exists)
+- [ ] 61. ui.md — Fix connection status reconnecting UI (console only, no visible text)
+- [ ] 67. match.md — Fix client timer red threshold (< 60, not < 30)
+- [ ] 68. match.md — Fix client match end mechanism (window.onMatchEnd bridge, not showEndScreen)
+- [ ] 69. dodge-roll.md — Fix UpdatePlayer return type (UpdatePlayerResult struct, not bool)
+- [ ] 73. melee.md — Fix PlayerMeleeAttack (direct world.players access, not GetAllPlayers)
+- [ ] 74. arena.md — Fix NewWeaponCrateManager (map, computed positions, different ID format)
+- [ ] 75. arena.md — Fix getBalancedSpawnPointLocked signature (excludePlayerID param)
+- [ ] 77. arena.md — Fix NaN recovery (sanitizeVector2 uses 0, not arena center)
+- [ ] 79. arena.md — Fix dodge roll Go code (inline in UpdatePlayer, not separate method)
+- [ ] 81. README.md — Fix message count (28 total, not 26)
+- [ ] 83. README.md — Add ui.md to Quick Reference Table
+- [ ] 84. README.md — Add graphics.md, ui.md, audio.md to Key Dependencies table
+- [ ] 99. SPEC-OF-SPECS.md — Fix client→server `test` message (no formal schema)
+- [ ] 100. SPEC-OF-SPECS.md — Fix estimated total length (24,924 actual, not 8,575)
+- [ ] 101. SPEC-OF-SPECS.md — Fix shooting test scenario descriptions
+- [ ] 102. SPEC-OF-SPECS.md — Fix UI timer red threshold (< 60, not < 30)
+- [ ] 90. test-index.md — Fix client-architecture.md test count (10, not 8)
+
+### Tier 3 — LOW severity (cosmetic, minor)
+
+**What to Check:** Version numbers, line counts, file paths, formatting, operator typos. Quick cross-reference against source or filesystem.
+
+- [ ] 4. networking.md — Fix typebox version (0.34.x, not 0.32.x)
+- [ ] 9. messages.md — Clarify InputState sequence field extraction
+- [ ] 12. client-architecture.md — Fix directory tree (no MatchTimer.ts, add xpCalculator.ts)
+- [ ] 13. client-architecture.md — Fix camera follow (startFollow once, not per-frame lerp)
+- [ ] 14. client-architecture.md — Fix update() method signatures (no delta param)
+- [ ] 17. server-architecture.md — Fix broadcastLoop method name (GetAllPlayers, not GetAllPlayerStates)
+- [ ] 21. server-architecture.md — Add PingTracker field to Player struct
+- [ ] 22. server-architecture.md — Fix ManualClock mutex type (RWMutex, not Mutex)
+- [ ] 29. hit-detection.md — Fix client handleHitConfirmed (no audio, only showHitMarker)
+- [ ] 39. shooting.md — Fix client canShoot() check order (reload, ammo, cooldown)
+- [ ] 40. shooting.md — Fix IsExpired operator (>= not >)
+- [ ] 44. weapons.md — Add projectile sub-field to WeaponVisuals interface
+- [ ] 47. overview.md — Fix GDD.md path (docs/GDD.md, not root)
+- [ ] 48. overview.md — Remove .claude/todos.json from folder tree
+- [ ] 51. overview.md — Fix World struct (add clock, rng, rngMu fields, PlayerState type)
+- [ ] 55. rooms.md — Fix health property name (localPlayerHealth, not currentHealth)
+- [ ] 59. ui.md — Fix scoreboard player ID (full ID, no truncation)
+- [ ] 62. ui.md — Note connection status font size (14px)
+- [ ] 63. ui.md — Fix match timer boundary conditions (>= vs >)
+- [ ] 64. ui.md — Fix reload circle opacity (1.0, not 0.6)
+- [ ] 65. ui.md — Fix hit marker scrollFactor (world coords, not setScrollFactor(0))
+- [ ] 66. ui.md — Add dual-source health bar update (player:move + player:damaged)
+- [ ] 70. dodge-roll.md — Fix roll:start audio scope (all players, not just local)
+- [ ] 71. dodge-roll.md — Fix player:dodge_roll data payload (sends direction, not empty)
+- [ ] 72. dodge-roll.md — Fix error handling (logs warning, not silent)
+- [ ] 76. arena.md — Fix CanPickupWeapon function name (CheckPlayerCrateProximity)
+- [ ] 78. arena.md — Remove nonexistent isInArena function docs
+- [ ] 80. arena.md — Remove nonexistent CheckAABBCollision standalone Go function
+- [ ] 82. README.md — Remove TODO markers from complete specs
+- [ ] 85. README.md — Fix approximate line counts
+- [ ] 86. README.md — Fix broken markdown bold formatting
+- [ ] 93. spec-of-specs-plan.md — Fix line count estimates
+- [ ] 94. spec-of-specs-plan.md — Fix work log message counts
+- [ ] 95. spec-of-specs-plan.md — Fix work log test priority counts
+- [ ] 96. spec-of-specs-plan.md — Fix final validation summary counts
+- [ ] 103. SPEC-OF-SPECS.md — Add spec-of-specs-plan.md to table of contents
+- [ ] 104. SPEC-OF-SPECS.md — Add changelog/update date
+
+## Findings Reference
+
+The full 104 findings with exact source citations are below. Worker: use these to know exactly what to change in each spec.
 
 | # | Spec | Finding | Severity |
 |---|------|---------|----------|
-| 1 | constants.md §UI Constants | Spec says HEALTH_BAR_WIDTH=40px and HEALTH_BAR_HEIGHT=6px, but `stick-rumble-client/src/game/entities/HealthBar.ts:11-12` has width=32 and height=4. | HIGH |
-| 2 | movement.md §Error Handling | Spec documents a `sanitizeDeltaTime` function (lines 702-711) that caps deltaTime to 0.1s and defaults <=0 to 0.01667. This function does not exist anywhere in the codebase — no delta time capping is performed on server (`gameserver.go:155` uses raw delta) or client (`GameScene.ts:325` uses raw `delta/1000`). | HIGH |
-| 3 | movement.md §Client-Side Prediction | Spec states "PredictionEngine uses identical math to the server's Physics.UpdatePlayer()" (line 595), but there are two asymmetries: (a) client `PredictionEngine.ts:152-157` caps velocity magnitude to `MOVEMENT.SPEED`, server `physics.go` does not; (b) client prediction ignores `isSprinting` (always uses 200 px/s), while server uses `SprintSpeed=300` when sprinting. | MEDIUM |
-| 4 | networking.md §Technology Dependencies | Spec says `@sinclair/typebox` version is `0.32.x` (line 33), but actual version in `events-schema/package.json` and `stick-rumble-client/package.json` is `^0.34.27`. | LOW |
-| 5 | messages.md §PlayerState Go struct | Spec (lines 557-561) shows Go `PlayerMoveData` with a simple `Players []PlayerState` struct containing fields `rotation`, `maxHealth`, `isDead`, `isSprinting`. Actual Go `PlayerStateSnapshot` (`player.go:47-62`) uses different field names and structure: `aimAngle` instead of `rotation` (json tag "aimAngle" not "rotation"), no `maxHealth` field, no `isDead` boolean (uses `deathTime *time.Time` instead), no `isSprinting` field. Also includes extra fields not in spec: `isInvulnerable`, `invulnerabilityEnd`, `deathTime`, `kills`, `deaths`, `xp`, `isRegenerating`. | HIGH |
-| 6 | messages.md §projectile:spawn | Spec (lines 620-627) and TypeBox schema (`server-to-client.ts:142-151`) both include `weaponType` field in `projectile:spawn`. But `broadcast_helper.go:271-276` only sends `id`, `ownerId`, `position`, `velocity` — `weaponType` is missing from the Go broadcast. | HIGH |
-| 7 | messages.md §weapon:pickup_confirmed nextRespawnTime | Spec (line 1205) and TypeBox schema say `nextRespawnTime` is "Time until the crate respawns (milliseconds)". But `broadcast_helper.go:488` sends `respawnTime.Unix()` which is a Unix epoch timestamp in seconds, not a duration in milliseconds. | HIGH |
-| 8 | messages.md §player:damaged from melee | Spec (lines 806-812) and TypeBox schema require `projectileId` field in `player:damaged`. The projectile-hit code path (message_processor.go:117) includes it, but the melee damage path (`broadcast_helper.go:669-674`) omits `projectileId` entirely, sending only `victimId`, `attackerId`, `damage`, `newHealth`. | MEDIUM |
-| 9 | messages.md §InputState Go struct | Spec (lines 160-168) shows a Go `InputStateData` struct with `Sequence int` field. The actual Go `InputState` struct (`player.go:14-22`) has no `sequence` field — it is extracted separately in `message_processor.go:39-42` and stored as a private `inputSequence` field on `PlayerState`. Not wrong but misleadingly implies sequence is part of InputState. | LOW |
-| 10 | client-architecture.md §Dodge Roll Visual | Spec (line 585-586) says dodge roll uses `player.setAlpha(0.5)` for transparency. Actual code (`PlayerManager.ts:265-278`) uses 360° rotation animation + flickering visibility toggle (`setVisible()` with 200ms period), not alpha transparency. | MEDIUM |
-| 11 | client-architecture.md §ShootingManager.shoot() | Spec (lines 922-930) says `shoot()` checks `weaponState.isMelee` and sends either `'player:melee_attack'` or `'player:shoot'`. Actual code has separate methods: `shoot()` (line 86) only sends `'player:shoot'`, and `meleeAttack()` (line 250) sends `'player:melee_attack'`. | MEDIUM |
-| 12 | client-architecture.md §Directory Tree | Spec (line 239) lists `MatchTimer.ts` as a separate file in `scenes/`. This file does not exist — MatchTimer functionality is inline in `GameSceneUI.ts:35,260`. Also missing `xpCalculator.ts` from `utils/` directory listing. | LOW |
-| 13 | client-architecture.md §update() camera follow | Spec (lines 459, 483) shows `followLocalPlayer()` called per-frame in update(). Actual code uses Phaser's `startFollow()` API (set once in `startCameraFollowIfNeeded()` at `GameScene.ts:472-493`), not a per-frame lerp call. The 0.1 lerp factor is passed to `startFollow()`, not manually applied. | LOW |
-| 14 | client-architecture.md §update() method signatures | Spec (lines 452-454, 476-478) shows `dodgeRollManager.update(delta)` and `meleeWeaponManager.update(delta)` taking delta parameter. Both actual methods take no parameters: `DodgeRollManager.update()` at line 69 and `MeleeWeaponManager.update()` at line 86. | LOW |
-| 15 | server-architecture.md §GameServer struct | Spec (line 111) shows `broadcastFunc func([]PlayerState)` but actual (`gameserver.go:40`) is `func(playerStates []PlayerStateSnapshot)`. Spec (line 114) shows `onReloadComplete func(playerID string, state WeaponState)` but actual (`gameserver.go:43`) is `func(playerID string)` — no WeaponState parameter. Spec (line 115) shows `onHit func(attackerID, victimID string, damage int, newHealth int)` but actual (`gameserver.go:46`) is `func(hit HitEvent)` — takes a struct instead of individual params. Spec (line 116) shows `onRespawn func(playerID string, pos Vector2, health int)` but actual (`gameserver.go:52`) is `func(playerID string, position Vector2)` — no health parameter. | HIGH |
-| 16 | server-architecture.md §tick() deltaTime | Spec (line 276) shows `deltaTime := float64(gs.tickRate) / float64(time.Second)` (fixed from tickRate). Actual (`gameserver.go:136-137`) computes real elapsed time: `deltaTime := now.Sub(lastTick).Seconds()`. | MEDIUM |
-| 17 | server-architecture.md §broadcastLoop | Spec (line 364) shows `gs.world.GetAllPlayerStates()`. Actual method name (`gameserver.go:187`) is `gs.world.GetAllPlayers()`. | LOW |
-| 18 | server-architecture.md §handleInputState | Spec (lines 441-448) shows helper functions `getBool(data, "up")`, `getFloat64(data, "aimAngle")`, `getInt(data, "sequence")`. Actual (`message_processor.go:29-42`) uses direct type assertions `dataMap["up"].(bool)`, `dataMap["aimAngle"].(float64)`, `dataMap["sequence"].(float64)`. Also spec (lines 452-454) shows NaN/Inf sanitization of `input.AimAngle` inside handleInputState; actual code does not sanitize aim angle there. | MEDIUM |
-| 19 | server-architecture.md §setupCallbacks | Spec (lines 495-518) shows an explicit `setupCallbacks()` method with inline closures matching the wrong signatures (e.g., `func(playerID string, state WeaponState)` for reload, `func(attackerID, victimID string, damage, newHealth int)` for hits). Actual (`websocket_handler.go:74-90`) registers method references directly (e.g., `handler.onReloadComplete`, `handler.onHit`) with different signatures (see finding #15). | HIGH |
-| 20 | server-architecture.md §Room.Broadcast | Spec (lines 642-657) shows blocking channel send `player.SendChan <- msg` with recover from panic. Actual (`room.go:114-120`) uses non-blocking `select` with `default` case (drops message if full), plus recover. The spec's Error Handling §Channel Full (lines 779-786) correctly describes non-blocking, but the code example in §Concurrency contradicts it. | MEDIUM |
-| 21 | server-architecture.md §Player struct | Spec (lines 593-596) shows `type Player struct { ID string; SendChan chan []byte }`. Actual (`room.go:15-19`) includes `PingTracker *PingTracker` field, omitted from the spec struct definition. | LOW |
-| 22 | server-architecture.md §ManualClock mutex | Spec (line 936) shows `mu sync.Mutex`. Actual (`clock.go:41`) is `mu sync.RWMutex`. | LOW |
-| 23 | server-architecture.md §main.go pattern | Spec (lines 709-710) shows `handler := network.NewWebSocketHandler()` and `handler.GameServer.Start(ctx)`. Actual (`main.go:34,46`) uses `network.HandleWebSocket` (package-level func) and `network.StartGlobalHandler(ctx)` — a global singleton pattern, not explicit handler instantiation. | MEDIUM |
-| 24 | server-architecture.md §sanitizePosition | Spec (lines 836-844) documents a `sanitizePosition(pos Vector2)` function that replaces NaN/Inf with arena center. This function does not exist anywhere in the server codebase. | HIGH |
-| 25 | hit-detection.md §Projectile struct | Spec (line 77) shows `SpawnPosition` with `json:"spawnPosition"` tag. Actual (`projectile.go:18`) has `SpawnPosition Vector2 json:"-"` — field is excluded from JSON serialization, not exposed as `spawnPosition`. | MEDIUM |
-| 26 | hit-detection.md §checkHitDetection onHit call | Spec (line 186) shows `gs.onHit(hit.AttackerID, hit.VictimID, damage, hit.ProjectileID)` with individual parameters. Actual (`gameserver.go:597`) calls `gs.onHit(hit)` passing the entire `HitEvent` struct. The spec's code also shows damage lookup and `victim.TakeDamage()` inline in `checkHitDetection`, which does match actual (`gameserver.go:574-593`), but the callback signature is wrong. | HIGH |
-| 27 | hit-detection.md §Death Trigger Go code | Spec (lines 375-406) shows a separate `handleDeath` method on `MessageProcessor`. Actual death handling is inline within `onHit()` in `message_processor.go:172-262`, not a separate method. Also, spec shows `h.gameServer.GetPlayerState()` returning a pointer used for stat updates, but actual code uses `h.gameServer.GetWorld().GetPlayer()` to get the mutable pointer (snapshot is read-only). | MEDIUM |
-| 28 | hit-detection.md §Hitscan invulnerability check | Spec pseudocode (line 514) says hitscan skips "not invulnerable" players. Actual `processHitscanShot()` (`gameserver.go:746-749`) only checks `victimID == shooterID` and `!victim.IsAlive()` — does NOT check `IsInvulnerable` or `IsInvincibleFromRoll()` for hitscan targets. Invulnerable/rolling players can be hit by hitscan weapons. | HIGH |
-| 29 | hit-detection.md §Client handleHitConfirmed | Spec (line 668) shows `this.audioManager.playHitmarker()`. Actual (`GameSceneEventHandlers.ts:416`) only calls `this.ui.showHitMarker()` — no audio playback, only a TODO comment for future audio. | LOW |
-| 30 | hit-detection.md §Client handlePlayerDeath | Spec (lines 675-676) shows `victim.playDeathAnimation()` and `killFeed.addEntry()`. Actual (`GameSceneEventHandlers.ts:428-431`) hides the player sprite via `setPlayerVisible(false)` and enters spectator mode — no death animation method exists. Kill feed is handled in the separate `player:kill_credit` handler, not `player:death`. | MEDIUM |
-| 31 | hit-detection.md §tick() method | Spec (lines 686-699) shows a simplified tick with 4 steps: `processAllInputs`, `updateAllPlayers`, `checkHitDetection`, `checkMatchEnd`. Actual (`gameserver.go:139-168`) has 9 steps: `updateAllPlayers`, `recordPositionSnapshots`, `projectileManager.Update`, `checkHitDetection`, `checkReloads`, `checkRespawns`, `checkRollDuration`, `updateInvulnerability`, `updateHealthRegeneration`, `checkWeaponRespawns`. No `processAllInputs` or `checkMatchEnd` calls exist in tick. Also shows `gs.world.Projectiles.UpdateAll()` but actual is `gs.projectileManager.Update()`. | MEDIUM |
-| 32 | shooting.md §ShootResult struct | Spec (line 75) shows field `FailReason string`. Actual (`gameserver.go:22`) is `Reason string`. All spec code examples (lines 238, 249, 255, 260) use `FailReason` but actual uses `Reason`. | HIGH |
-| 33 | shooting.md §PlayerShoot locking | Spec (line 232-233) shows `gs.mu.Lock(); defer gs.mu.Unlock()` around entire PlayerShoot. Actual (`gameserver.go:336-392`) has no `gs.mu` lock — only `gs.weaponMu.RLock()` for weapon state access. | MEDIUM |
-| 34 | shooting.md §PlayerShoot alive check | Spec (line 237) shows `!player.IsAlive()` check at entry. Actual (`gameserver.go:338-341`) only checks `!exists`, NOT `!player.IsAlive()`. Dead players are not explicitly rejected in `PlayerShoot`. | HIGH |
-| 35 | shooting.md §PlayerShoot projectile creation | Spec (lines 265-266) shows `proj := NewProjectile(...)` then `gs.projectileManager.AddProjectile(proj)`. Actual (`gameserver.go:380-386`) uses `gs.projectileManager.CreateProjectile(...)` which creates and adds in one call. `AddProjectile` method does not exist. | MEDIUM |
-| 36 | shooting.md §StartReload IsMelee check | Spec (line 442) shows `StartReload` checking `ws.Weapon.IsMelee()`. Actual (`weapon.go:139-152`) checks `ws.IsReloading` and `ws.CurrentAmmo >= ws.Weapon.MagazineSize` (full magazine) — does NOT check `IsMelee()`. | HIGH |
-| 37 | shooting.md §CanShoot scope | Spec (lines 300-307) shows `CanShoot()` as fire-rate-only check. Actual (`weapon.go:104-127`) also checks `IsReloading` and `CurrentAmmo` for ranged weapons, with melee bypass logic. The spec's `PlayerShoot` flow (lines 248-261) correctly shows separate reload/ammo checks before `CanShoot`, but the Go code block for `CanShoot()` is incomplete. | MEDIUM |
-| 38 | shooting.md §Client shoot() signature | Spec (line 208) shows `shoot(aimAngle: number)` taking aimAngle as parameter. Actual (`ShootingManager.ts:86`) `shoot()` takes no parameters — uses `this.aimAngle` set via `setAimAngle()`. Also actual sends `clientTimestamp` in data (line 101), not shown in spec. | MEDIUM |
-| 39 | shooting.md §Client canShoot() order | Spec (lines 187-205) checks cooldown first, then reload, then ammo. Actual (`ShootingManager.ts:135-153`) checks reload first, then ammo, then cooldown — reversed order from spec. | LOW |
-| 40 | shooting.md §IsExpired operator | Spec (line 391) shows `time.Since(p.CreatedAt) > ProjectileMaxLifetime` (strict greater-than). Actual (`projectile.go:57`) uses `>=` (greater-than-or-equal). | LOW |
-| 41 | weapons.md §Weapon struct | Spec (lines 104-117) shows Go `Weapon` struct without `IsHitscan` field. Actual (`weapon.go:53`) has `IsHitscan bool` field used for lag-compensated hitscan vs projectile branching (`gameserver.go:373`). Similarly, spec TypeScript `WeaponConfig` (lines 78-91) omits `isHitscan`, but `weapon-configs.json` includes `"isHitscan": true` for Pistol. | MEDIUM |
-| 42 | weapons.md §Uzi Visual Config | Spec (line 220) says Uzi muzzleFlashSize=6px and muzzleFlashDuration=30ms. Actual `weapon-configs.json` (lines 78-79) has muzzleFlashSize=8 and muzzleFlashDuration=50. | HIGH |
-| 43 | weapons.md §CreateWeaponByType return | Spec (lines 718-723) shows `weapon := CreateWeaponByType("ak47")` with single return value. Actual (`weapon_factory.go:165`) signature is `func CreateWeaponByType(weaponType string) (*Weapon, error)` — returns an error as second value. | MEDIUM |
-| 44 | weapons.md §WeaponVisuals missing projectile sub-field | Spec's `WeaponConfig` TypeScript interface (line 90) shows `visuals: WeaponVisuals` but never defines the `projectile: ProjectileVisuals` nested structure. Actual (`weaponConfig.ts:13-18`) has `WeaponVisuals` containing `projectile: ProjectileVisuals` with fields `color`, `diameter`, `tracerColor`, `tracerWidth`. The spec's Visual Configuration table (lines 217-222) lists these values but doesn't reflect them in the TypeScript interface definition. | LOW |
-| 45 | overview.md §Message Type Counts | Spec (line 306) says "Client→Server messages (7 types)" but actual `client-to-server.ts` defines 6 types: `input:state`, `player:shoot`, `player:reload`, `weapon:pickup_attempt`, `player:melee_attack`, `player:dodge_roll`. Spec (line 307) says "Server→Client messages (19 types)" but actual `server-to-client.ts` defines 22 types (missing from count: `melee:hit`, `roll:start`, `roll:end`, `state:snapshot`, `state:delta`; 17 listed + 5 unlisted = 22). | MEDIUM |
-| 46 | overview.md §Spec File Listing | Spec (lines 428-445) lists spec files but omits 6 that actually exist: `audio.md`, `graphics.md`, `ui.md`, `test-index.md`, `spec-of-specs-plan.md`, `server-architecture.md`. | MEDIUM |
-| 47 | overview.md §Folder Tree GDD.md | Spec (line 455) shows `GDD.md` at project root. File only exists at `docs/GDD.md`, not at root. | LOW |
-| 48 | overview.md §Folder Tree .claude/todos.json | Spec (line 416) shows `.claude/todos.json` in folder tree. This file does not exist. | LOW |
-| 49 | overview.md §GameServer Pattern | Spec (lines 282-288) shows `GameServer` struct with direct fields `Room *Room`, `Match *Match`, `ticker *time.Ticker`, `broadcaster *time.Ticker`. Actual (`gameserver.go:27-72`) has no `Room`, `Match`, `ticker`, or `broadcaster` fields — uses callback functions (`broadcastFunc`, `onMatchTimer`, `onCheckTimeLimit`) instead of direct references, and `tickRate`/`updateRate` durations instead of tickers. | HIGH |
-| 50 | overview.md §Anti-Cheat PlayerShoot pseudocode | Spec (line 355) shows `player == nil || player.IsDead` check. Actual (`gameserver.go:338-341`) only checks `!exists` (player not found), does NOT check `IsDead`/`IsAlive`. Dead players are not rejected from shooting. Also spec uses `Reason` field name which is correct, but shows `player.Weapon.IsReloading` and `player.Weapon.CurrentAmmo` — actual code accesses weapon state via separate `weaponStates` map, not through player struct. | HIGH |
-| 51 | overview.md §World struct | Spec (lines 551-554) shows `type World struct { mu sync.RWMutex; players map[string]*Player }`. Actual (`world.go:10-16`) has additional fields `clock Clock`, `rng *rand.Rand`, `rngMu sync.Mutex`, and map value type is `*PlayerState` not `*Player`. | LOW |
-| 52 | rooms.md §AddPlayer Go code | Spec (lines 178-220) shows `room:joined` sent "by caller" in tab-reload path (comment line 189) and not sent at all in the 2-player creation path. Actual (`room.go:189,229-230`) calls `rm.sendRoomJoinedMessage()` inside `AddPlayer` for both paths — RoomManager sends `room:joined`, not the caller. | MEDIUM |
-| 53 | rooms.md §room:joined data payload | Spec (line 98-100) shows `RoomJoinedData { playerId: string }` only. Actual `sendRoomJoinedMessage` (`room.go:244-245`) sends `{ "roomId": room.ID, "playerId": player.ID }` — the `roomId` field is sent by the server but undocumented in the spec (and absent from the TypeBox schema at `server-to-client.ts:36-41`). | MEDIUM |
-| 54 | rooms.md §Client processPendingMessages | Spec (lines 429-441) shows a `processPendingMessages()` method that processes both `pendingPlayerMoves` and `pendingWeaponSpawns`. Actual code (`GameSceneEventHandlers.ts:276-289`) has no such method — pending player moves are **discarded** (cleared without processing, line 278), and only weapon spawns are processed inline. The spec incorrectly states pending player:move messages are replayed. | MEDIUM |
-| 55 | rooms.md §Client health property name | Spec (line 393) uses `this.currentHealth = 100`. Actual (`GameSceneEventHandlers.ts:273`) uses `this.localPlayerHealth = 100`. | LOW |
-| 56 | ui.md §Kill Feed ordering | Spec pseudocode (line 246) and TypeScript (line 284) use `entries.unshift(entry)` to add new kills at top. Actual `KillFeedUI.ts:79` uses `this.kills.push(killEntry)` — new kills are added at the bottom, not the top. The FIFO removal also differs: spec removes oldest via `entries.pop()` (end), actual removes via `this.kills.shift()` (beginning). | MEDIUM |
-| 57 | ui.md §Hit Marker shape | Spec (line 647) describes "4 white lines forming X pattern" (diagonal). Actual `GameSceneUI.ts:313-341` draws a + pattern (vertical and horizontal lines), not an X pattern. Lines go up/down/left/right from center, not diagonally. | MEDIUM |
-| 58 | ui.md §Match End Screen title | Spec (line 825) shows `<h1>MATCH ENDED</h1>` followed by `<h2>` winner text `"{PlayerName} WINS!"`. Actual `MatchEndScreen.tsx:78-96` has no `<h1>MATCH ENDED</h1>` element. Winner text uses format "Winner: {name}" (not "{name} WINS!") and "Winners: {names}" (not "TIE: {names}"). | MEDIUM |
-| 59 | ui.md §Scoreboard player ID truncation | Spec code (line 841) shows `score.playerId.slice(0, 8)` for truncated player IDs. Actual `MatchEndScreen.tsx:136` shows `player.playerId` — full player ID, no truncation. | LOW |
-| 60 | ui.md §Ammo low-ammo color change | Spec (lines 310, 324-325) describes ammo text turning red (#ff0000) when current ≤ 20% of max. Actual `GameSceneUI.ts:75-86` `updateAmmoDisplay()` never changes ammo text color — it only toggles visibility and updates text content. No low-ammo color logic exists. | MEDIUM |
-| 61 | ui.md §Connection status "Reconnecting" UI | Spec (lines 871-872) describes a reconnecting state UI showing "Reconnecting... (attempt X/3)" in yellow (#ffff00). Actual code only logs reconnection to console (`WebSocketClient.ts:245`). No visible UI text is shown for reconnection state — only "Connected" (green) and "Failed" (red) text are created as Phaser text objects in `GameScene.ts:296-320`. | MEDIUM |
-| 62 | ui.md §Connection status font size | Spec (line 867) does not specify font size for connection status. Actual `GameScene.ts:297` uses `14px`. Spec says color is green (#00ff00) which matches. However, spec says "Connected! WASD=move, Click=shoot, R=reload, E=pickup, SPACE=dodge" which exactly matches the actual text. | LOW |
-| 63 | ui.md §Match timer boundary conditions | Spec pseudocode (lines 421-426) uses `> 120` for white, `> 60` for yellow, else red. At exactly 120s → spec=yellow. Actual code (`GameSceneUI.ts:273-278`) uses `< 60` for red, `< 120` for yellow, else white. At exactly 120s → code=white. At exactly 60s → spec=red, code=yellow. Boundary behavior differs. | LOW |
-| 64 | ui.md §Reload circle opacity | Spec (line 354) says reload circle has `0.6 alpha` for the green line. Actual `GameSceneUI.ts:168` uses `1.0` opacity for the green arc line. | LOW |
-| 65 | ui.md §Hit marker scrollFactor | Spec TypeScript (line 673) shows `line.setScrollFactor(0)` (screen-fixed). Actual `GameSceneUI.ts:305-348` does NOT set scrollFactor on hit marker lines — they use world coordinates (`camera.scrollX + camera.width/2`), not screen-fixed positioning. Different approach to achieve similar result. | LOW |
-| 66 | ui.md §Event handler health bar update source | Spec (lines 972-976) shows health bar updated only from `player:move` data. Actual code updates from both `player:move` (`GameSceneEventHandlers.ts:224-229`) AND `player:damaged` (`GameSceneEventHandlers.ts:388-389`). The `player:damaged` handler explicitly sets `isRegenerating` to false. This dual-source update is undocumented in the spec. | LOW |
-| 67 | match.md §Client Timer Display color threshold | Spec (line 844) shows timer turns red when `remainingSeconds < 30`. Actual `GameSceneUI.ts:273` turns red at `< 60` seconds and yellow at `< 120` seconds. The spec's threshold (30s) doesn't match any actual threshold. | MEDIUM |
-| 68 | match.md §Client Match End mechanism | Spec (lines 852-873) shows inline `showEndScreen('TIE!')`, `showEndScreen('YOU WIN!')`, `showEndScreen('YOU LOSE')` calls. Actual code (`GameSceneEventHandlers.ts:498-503`) delegates to `window.onMatchEnd()` React bridge callback — no `showEndScreen` function exists. The behavioral intent (set matchEnded flag, disable input/shooting, display results) is correct, but the rendering mechanism is entirely different. | MEDIUM |
-| 69 | dodge-roll.md §UpdatePlayer return type | Spec (line 341) shows `func (p *Physics) UpdatePlayer(player *PlayerState, deltaTime float64) bool`. Actual (`physics.go:25`) returns `UpdatePlayerResult` struct with fields `RollCancelled bool` and `CorrectionNeeded bool`. The spec's Go code block returns a simple `bool`, but the actual function returns a struct. | MEDIUM |
-| 70 | dodge-roll.md §roll:start audio scope | Spec (lines 577-583) shows `roll:start` handler playing `this.audioManager?.playDodgeRollSound()` only when `data.playerId === this.localPlayerId`. Actual code (`GameSceneEventHandlers.ts:616-618`) calls `this.audioManager.playDodgeRollSound()` unconditionally for ALL players' rolls, not just the local player. | LOW |
-| 71 | dodge-roll.md §player:dodge_roll data payload | Spec (lines 543-547) says `player:dodge_roll` has "No data payload — server uses current input state for direction." However, the client (`GameScene.ts:289`) actually sends `data: { direction: rollDirection }`. The server handler (`message_processor.go:432`) ignores this data (takes only `playerID` param and derives direction from stored input state), so it works correctly, but the spec's claim of "no data payload" is inaccurate. | LOW |
-| 72 | dodge-roll.md §Error Handling silent ignore | Spec (line 625) says invalid roll requests are "silently ignored." Actual server code (`message_processor.go:442-443`) logs `"Player %s cannot dodge roll (cooldown or dead)"` when `CanDodgeRoll()` returns false — not silent. | LOW |
-| 73 | melee.md §PlayerMeleeAttack GetAllPlayers | Spec (line 226) shows `allPlayers := gs.world.GetAllPlayers()`. Actual (`gameserver.go:441-446`) directly accesses `gs.world.players` map under `gs.world.mu.RLock()` to get `[]*PlayerState` (mutable pointers). The real `World.GetAllPlayers()` (`world.go:116-125`) returns `[]PlayerStateSnapshot` (read-only snapshots), which cannot be used for melee because `PerformMeleeAttack` needs mutable pointers to call `TakeDamage()` and `SetPosition()`. | MEDIUM |
-| 74 | arena.md §NewWeaponCrateManager Go code | Spec (lines 529-539) shows a slice of `*WeaponCrate` with hardcoded IDs (`"uzi-1"`, `"ak47-1"`, etc.) and hardcoded position literals. Actual (`weapon_crate.go:25-68`) uses a `map[string]*WeaponCrate`, positions computed from ratios (`ArenaWidth / 2`, `ArenaHeight * 0.2`, etc.), and IDs formatted as `"crate_uzi_0"`, `"crate_ak47_1"`, etc. via `fmt.Sprintf`. The computed position values are identical but the code structure, ID format, and data structure type differ. | MEDIUM |
-| 75 | arena.md §getBalancedSpawnPointLocked signature | Spec (line 444) shows `func (w *World) getBalancedSpawnPointLocked() Vector2` with no parameters. Actual (`world.go:51`) is `func (w *World) getBalancedSpawnPointLocked(excludePlayerID string) Vector2` — takes an `excludePlayerID` parameter to exclude the spawning player from enemy distance calculations. Also spec (line 451) uses exported `w.Players`; actual is unexported `w.players`. Spec uses global `rand.Float64()`; actual uses `w.rng.Float64()` with mutex protection. | MEDIUM |
-| 76 | arena.md §CanPickupWeapon function name | Spec (lines 640-651) shows `func (p *Physics) CanPickupWeapon(...)`. Actual function name is `CheckPlayerCrateProximity` (`physics.go:233`). Also spec checks `player.IsDead()` while actual checks `!player.IsAlive()` (functionally equivalent but different method names). | LOW |
-| 77 | arena.md §Error Handling NaN recovery | Spec (lines 657-661) says NaN/Inf positions are "Reset to arena center (960, 540)". Actual `sanitizeVector2` (`physics.go:208-228`) replaces NaN/Inf components with `0`, not arena center. Replacing with 0 means a NaN X would become 0 (left edge), not 960 (center). | MEDIUM |
-| 78 | arena.md §isInArena function | Spec (lines 161-168, 178-182) documents an `isInArena()` function in both TypeScript and Go. This function does not exist in either codebase — no code checks whether a position is "in the arena" as a boolean; boundary enforcement is done exclusively via `clampToArena()`. | LOW |
-| 79 | arena.md §Dodge Roll Go code UpdatePlayerPosition | Spec (lines 324-334) shows a separate `func (p *Physics) UpdatePlayerPosition(player *PlayerState, newPos Vector2)` method. This method does not exist — dodge roll wall collision logic is inline within `UpdatePlayer` (`physics.go:102-111`). The spec implies a separation that doesn't exist in the actual architecture. | MEDIUM |
-| 80 | arena.md §CheckAABBCollision Go standalone function | Spec (lines 605-608) shows a standalone exported `func CheckAABBCollision(point, center Vector2, halfWidth, halfHeight float64) bool`. No such standalone function exists in Go server code — AABB logic is inline within `CheckProjectilePlayerCollision` (`physics.go:291-293`). The client TypeScript version does exist as a standalone export (`physics.ts:108-118`). | LOW |
-| 81 | README.md §Reading Order messages.md | Line 49 says "All 26 WebSocket message types" but actual count is 6 client→server + 22 server→client = 28 types. The Quick Reference Table (line 163) correctly says "6 client→server, 22 server→client" but the reading order entry has the wrong total. | MEDIUM |
-| 82 | README.md §Reading Order (TODO) markers | Lines 74 and 78 mark server-architecture.md and test-index.md as "(TODO)" but both are complete specs (1267 and 642 lines respectively, both at version 1.1.0 dated 2026-02-15). | LOW |
-| 83 | README.md §Quick Reference Table missing ui.md | The Quick Reference Table (lines 157-177) lists 17 specs but omits `ui.md` (1251 lines). ui.md is included in the Reading Order (line 69) and the Dependency Graph, but not the table. | MEDIUM |
-| 84 | README.md §Dependencies table missing 3 specs | The Key Dependencies table (lines 136-151) is missing rows for `graphics.md`, `ui.md`, and `audio.md`. All three appear in the Dependency Graph (lines 129-131) and Reading Order but have no table entry. | MEDIUM |
-| 85 | README.md §Quick Reference line counts | Several approximate line counts are significantly off: messages.md listed as ~1100 (actual 1774), overview.md listed as ~300 (actual 682), test-index.md listed as ~400 (actual 642), audio.md listed as ~500 (actual 905), graphics.md listed as ~800 (actual 1073). | LOW |
-| 86 | README.md §Getting Started formatting | Line 290 has broken markdown bold: `**Read [player.md](player.md)** and [movement.md](movement.md)**` — the closing `**` is after movement.md instead of wrapping both links. | LOW |
-| 87 | test-index.md §Priority counts per spec | Priority distributions are wrong for ALL 19 specs. The index systematically inflates Critical counts. Examples: rooms.md index claims 8C/2H/0M, actual is 2C/6H/2M; player.md index claims 8C/5H/1M, actual is 3C/8H/3M; match.md index claims 8C/4H/1M, actual is 3C/5H/5M. The Summary Statistics total of "71 Critical" is therefore significantly overstated. | HIGH |
-| 88 | test-index.md §Summary Statistics totals | Claims 71 Critical, 94 High, 20 Medium, 9 Low tests summing to 194. The priority counts per-spec are wrong (finding #87), so the aggregate totals are also wrong. Additionally, the "9 Low" tests don't appear in any per-spec table — no spec defines any Low priority tests. The 9 Visual tests (line 46) and the "9 Low" count (line 38) appear coincidental. | HIGH |
-| 89 | test-index.md §Category counts | Claims 85 Unit, 85 Integration, 9 Visual (line 43-46). Many tests have category mismatches between the index and their source specs (e.g., graphics.md: index lists 7 Unit tests but spec has 1 Unit and 11 Visual; overview.md: index swaps Integration/Unit for 4 of 5 tests). Aggregate counts are therefore inaccurate. | HIGH |
-| 90 | test-index.md §client-architecture.md count | Index lists 8 tests (TS-CLIENT-001 to 008) for client-architecture.md. Actual spec defines 10 tests (TS-CLIENT-001 to 010). Missing: TS-CLIENT-009 (Object Pool Prevents GC, Unit/Medium) and TS-CLIENT-010 (Camera Follows Local Player, Unit/Medium). The "By Spec" table (line 68) says 8, should be 10. | MEDIUM |
-| 91 | test-index.md §Description scrambling | Multiple specs have test descriptions assigned to wrong IDs. Worst cases: audio.md (nearly every description differs from spec), weapons.md (descriptions almost entirely scrambled), hit-detection.md (descriptions mapped to wrong IDs from TS-HIT-002 onward), dodge-roll.md (descriptions shifted from TS-ROLL-007 onward). The descriptions themselves exist but are mapped to incorrect test IDs. | HIGH |
-| 92 | test-index.md §Netcode tests not in source specs | 15 Netcode test IDs (TS-PRED-001 to 004, TS-INTERP-001 to 003, TS-DELTA-001 to 003, TS-LAGCOMP-001 to 003, TS-NETSIM-001 to 002) are attributed to "Epic 4: movement.md, networking.md, hit-detection.md" but none of these IDs exist in any of those spec files. The specs describe netcode systems in prose but define no test scenarios with these IDs. These 15 tests exist only in test-index.md. | HIGH |
-| 93 | spec-of-specs-plan.md §Line Count Estimates | Every per-spec line estimate in the Implementation Status tables (lines 14-69) is significantly under actual. Claimed ~10,000 total (line 78), actual ~24,924. Examples: client-architecture.md claimed ~750, actual 1,774 (+136%); messages.md claimed ~950, actual 1,774 (+87%); arena.md claimed ~450, actual 979 (+118%). Estimates were never updated after specs were written. | LOW |
-| 94 | spec-of-specs-plan.md §Work Log message counts | Line 225 says "ALL 26 WebSocket message types (7 Client→Server, 19 Server→Client)". Actual counts after Epic 4: 6 Client→Server, 22 Server→Client (28 total). The plan was partially updated at line 1015 but the work log entry at line 225 was never corrected. | LOW |
-| 95 | spec-of-specs-plan.md §Work Log test priority counts | Lines 805-806 say "Critical (65), High (85)". Current test-index.md says Critical (71), High (94). These changed when 15 Epic 4 tests were added but the work log was not retroactively updated. | LOW |
-| 96 | spec-of-specs-plan.md §Final Validation Summary | Lines 1021-1031 still say "7 Client→Server, 20 Server→Client" and "55 JSON schemas" — this is the pre-Epic 4 state. After Epic 4, counts are 6 C→S, 22 S→C, and generated schemas increased (state:snapshot, state:delta added). The summary was never updated for Epic 4 changes. | LOW |
-| 97 | SPEC-OF-SPECS.md §Movement Constants | Line 409 says DECELERATION: 50 px/s². Actual value in `stick-rumble-client/src/shared/constants.ts:17` and `specs/constants.md:106` is 1500 px/s². Off by 30x — this was changed in Epic 4 but the blueprint was never updated. | HIGH |
-| 98 | SPEC-OF-SPECS.md §Server→Client message count | Line 486 says "19 types" but then lists 20 entries (lines 495-514). Actual `server-to-client.ts` defines 22 types — the blueprint is missing `state:snapshot` and `state:delta` (added in Epic 4). | HIGH |
-| 99 | SPEC-OF-SPECS.md §Client→Server `test` message | Line 484 lists `test` as one of 7 C→S message types. No formal schema exists for `test` in `events-schema/src/schemas/client-to-server.ts` — it only works via the server's default broadcast fallback case (`websocket_handler.go:330-335`). Actual formally-defined C→S types number 6 (the 7 minus `test`). | MEDIUM |
-| 100 | SPEC-OF-SPECS.md §Estimated Total Length | Line 2058 estimates ~8,575 total lines. Actual total is 24,924 lines (~2.9x the estimate). Every individual spec estimate is significantly below actual: e.g., messages.md estimated 700 (actual 1,774), client-architecture.md estimated 475 (actual 1,774), match.md estimated 375 (actual 1,330). | MEDIUM |
-| 101 | SPEC-OF-SPECS.md §Shooting test scenario descriptions | Lines 895-907 list TS-SHOOT-001 through TS-SHOOT-012 with descriptions that don't match actual shooting.md. E.g., blueprint TS-SHOOT-006 is "Dead player cannot shoot" but actual is "Projectile Velocity From Aim Angle"; blueprint TS-SHOOT-007 is "Spread applied to projectile angle" but actual is "Projectile Expires After Lifetime". The final spec reordered/renamed tests vs the blueprint. | MEDIUM |
-| 102 | SPEC-OF-SPECS.md §UI Timer red threshold | Line 1827 says timer turns red at `< 30 seconds`. Actual code (`GameSceneUI.ts:273`) uses `< 60` for red and `< 120` for yellow. The spec ui.md (finding #67) also has a wrong threshold (30s), matching this blueprint's wrong prescription. | MEDIUM |
-| 103 | SPEC-OF-SPECS.md §Missing spec-of-specs-plan.md | Table of Contents (lines 9-34) and File Specifications section list 21 spec files (README.md through test-index.md). `spec-of-specs-plan.md` exists in `specs/` (1,064 lines) but is not listed anywhere in SPEC-OF-SPECS.md. | LOW |
-| 104 | SPEC-OF-SPECS.md §No changelog or update date | File is at version 1.0.0 (line 3) with no changelog table and no "Last Updated" date. All other specs were updated to ~1.1.0 on 2026-02-15. SPEC-OF-SPECS.md was last modified Feb 2 and was not touched during the bulk update pass. | LOW |
+| 1 | constants.md | Spec says HEALTH_BAR_WIDTH=40px and HEALTH_BAR_HEIGHT=6px, but `HealthBar.ts:11-12` has width=32 and height=4. | HIGH |
+| 2 | movement.md | Spec documents `sanitizeDeltaTime` function (capping deltaTime to 0.1s). Function does not exist anywhere. Server `gameserver.go:155` and client `GameScene.ts:325` use raw delta. | HIGH |
+| 3 | movement.md | Client `PredictionEngine.ts:152-157` caps velocity magnitude to MOVEMENT.SPEED; server `physics.go` does not. Client ignores isSprinting (always 200 px/s); server uses SprintSpeed=300. | MEDIUM |
+| 4 | networking.md | Spec says typebox `0.32.x`, actual is `^0.34.27`. | LOW |
+| 5 | messages.md | Go `PlayerMoveData` spec shows `rotation`, `maxHealth`, `isDead`, `isSprinting`. Actual `PlayerStateSnapshot` uses `aimAngle`, no maxHealth, `deathTime *time.Time` instead of isDead, no isSprinting. Has extra: `isInvulnerable`, `invulnerabilityEnd`, `deathTime`, `kills`, `deaths`, `xp`, `isRegenerating`. | HIGH |
+| 6 | messages.md | Spec and TypeBox include `weaponType` in `projectile:spawn`. `broadcast_helper.go:271-276` only sends `id`, `ownerId`, `position`, `velocity` — no `weaponType`. | HIGH |
+| 7 | messages.md | Spec says `nextRespawnTime` is duration in milliseconds. `broadcast_helper.go:488` sends `respawnTime.Unix()` — Unix epoch timestamp in seconds. | HIGH |
+| 8 | messages.md | Spec requires `projectileId` in `player:damaged`. Melee path `broadcast_helper.go:669-674` omits it, sending only `victimId`, `attackerId`, `damage`, `newHealth`. | MEDIUM |
+| 9 | messages.md | Spec shows Go `InputStateData` with `Sequence int` field. Actual has no sequence field — extracted separately in `message_processor.go:39-42`. | LOW |
+| 10 | client-architecture.md | Spec says dodge roll uses `player.setAlpha(0.5)`. Actual `PlayerManager.ts:265-278` uses 360deg rotation + flickering visibility toggle. | MEDIUM |
+| 11 | client-architecture.md | Spec says `shoot()` checks `weaponState.isMelee` and sends either message. Actual has separate `shoot()` and `meleeAttack()` methods. | MEDIUM |
+| 12 | client-architecture.md | Spec lists `MatchTimer.ts` as separate file. Doesn't exist — inline in `GameSceneUI.ts:35,260`. Missing `xpCalculator.ts` from directory listing. | LOW |
+| 13 | client-architecture.md | Spec shows per-frame `followLocalPlayer()`. Actual uses `startFollow()` set once in `startCameraFollowIfNeeded()` at `GameScene.ts:472-493`. | LOW |
+| 14 | client-architecture.md | Spec shows `dodgeRollManager.update(delta)` and `meleeWeaponManager.update(delta)`. Both actual methods take no parameters. | LOW |
+| 15 | server-architecture.md | `broadcastFunc`, `onReloadComplete`, `onHit`, `onRespawn` signatures all wrong vs actual `gameserver.go:40-52`. | HIGH |
+| 16 | server-architecture.md | Spec shows fixed deltaTime from tickRate. Actual `gameserver.go:136-137` computes real elapsed: `now.Sub(lastTick).Seconds()`. | MEDIUM |
+| 17 | server-architecture.md | Spec shows `gs.world.GetAllPlayerStates()`. Actual is `gs.world.GetAllPlayers()`. | LOW |
+| 18 | server-architecture.md | Spec shows helper functions `getBool`, `getFloat64`, `getInt`. Actual uses direct type assertions. No NaN/Inf sanitization of aimAngle. | MEDIUM |
+| 19 | server-architecture.md | Spec shows `setupCallbacks()` with wrong signatures. Actual `websocket_handler.go:74-90` registers method references directly. | HIGH |
+| 20 | server-architecture.md | Spec shows blocking `player.SendChan <- msg` with recover. Actual `room.go:114-120` uses non-blocking `select` with `default`. | MEDIUM |
+| 21 | server-architecture.md | Spec omits `PingTracker *PingTracker` field from Player struct. | LOW |
+| 22 | server-architecture.md | Spec shows `mu sync.Mutex`. Actual `clock.go:41` is `sync.RWMutex`. | LOW |
+| 23 | server-architecture.md | Spec shows `handler := network.NewWebSocketHandler()`. Actual uses global singleton `network.HandleWebSocket` / `network.StartGlobalHandler(ctx)`. | MEDIUM |
+| 24 | server-architecture.md | Spec documents `sanitizePosition(pos Vector2)` function. Does not exist in server codebase. | HIGH |
+| 25 | hit-detection.md | Spec shows `SpawnPosition` with `json:"spawnPosition"`. Actual has `json:"-"` (excluded from JSON). | MEDIUM |
+| 26 | hit-detection.md | Spec shows `gs.onHit(hit.AttackerID, hit.VictimID, damage, hit.ProjectileID)`. Actual calls `gs.onHit(hit)` with entire HitEvent struct. | HIGH |
+| 27 | hit-detection.md | Spec shows separate `handleDeath` method. Actual death handling is inline in `onHit()` at `message_processor.go:172-262`. | MEDIUM |
+| 28 | hit-detection.md | Spec says hitscan skips invulnerable players. Actual `gameserver.go:746-749` only checks self-hit and IsAlive — invulnerable/rolling players CAN be hit by hitscan. | HIGH |
+| 29 | hit-detection.md | Spec shows `this.audioManager.playHitmarker()`. Actual only calls `this.ui.showHitMarker()` — TODO comment for audio. | LOW |
+| 30 | hit-detection.md | Spec shows `victim.playDeathAnimation()` and `killFeed.addEntry()`. Actual hides sprite via `setPlayerVisible(false)` + spectator mode. Kill feed in separate handler. | MEDIUM |
+| 31 | hit-detection.md | Spec shows 4-step tick. Actual has 9 steps: updateAllPlayers, recordPositionSnapshots, projectileManager.Update, checkHitDetection, checkReloads, checkRespawns, checkRollDuration, updateInvulnerability, updateHealthRegeneration, checkWeaponRespawns. | MEDIUM |
+| 32 | shooting.md | Spec shows `FailReason string`. Actual is `Reason string`. | HIGH |
+| 33 | shooting.md | Spec shows `gs.mu.Lock()` around PlayerShoot. Actual has no gs.mu — only `gs.weaponMu.RLock()`. | MEDIUM |
+| 34 | shooting.md | Spec shows `!player.IsAlive()` check. Actual only checks `!exists`. Dead players not rejected. | HIGH |
+| 35 | shooting.md | Spec shows `NewProjectile()` then `AddProjectile()`. Actual uses `CreateProjectile()` (create+add in one). | MEDIUM |
+| 36 | shooting.md | Spec shows StartReload checking `IsMelee()`. Actual checks `IsReloading` and `CurrentAmmo >= MagazineSize`. | HIGH |
+| 37 | shooting.md | Spec shows CanShoot as fire-rate only. Actual also checks IsReloading and CurrentAmmo. | MEDIUM |
+| 38 | shooting.md | Spec shows `shoot(aimAngle: number)`. Actual `shoot()` takes no params, uses `this.aimAngle`. Sends `clientTimestamp`. | MEDIUM |
+| 39 | shooting.md | Spec checks cooldown→reload→ammo. Actual checks reload→ammo→cooldown. | LOW |
+| 40 | shooting.md | Spec shows `>` for IsExpired. Actual uses `>=`. | LOW |
+| 41 | weapons.md | Spec omits `IsHitscan bool` field from Weapon struct. Used in `gameserver.go:373`. | MEDIUM |
+| 42 | weapons.md | Spec says Uzi muzzleFlashSize=6, duration=30. Actual: size=8, duration=50. | HIGH |
+| 43 | weapons.md | Spec shows single return from CreateWeaponByType. Actual returns `(*Weapon, error)`. | MEDIUM |
+| 44 | weapons.md | Spec WeaponVisuals missing `projectile: ProjectileVisuals` nested structure. | LOW |
+| 45 | overview.md | Spec says 7 C→S and 19 S→C. Actual: 6 C→S, 22 S→C (28 total). | MEDIUM |
+| 46 | overview.md | Spec file listing missing 6 specs: audio.md, graphics.md, ui.md, test-index.md, spec-of-specs-plan.md, server-architecture.md. | MEDIUM |
+| 47 | overview.md | Spec shows `GDD.md` at project root. Actual at `docs/GDD.md`. | LOW |
+| 48 | overview.md | Spec shows `.claude/todos.json` in folder tree. File doesn't exist. | LOW |
+| 49 | overview.md | Spec shows GameServer with Room, Match, ticker, broadcaster fields. Actual uses callbacks and duration configs. | HIGH |
+| 50 | overview.md | Spec shows `player.IsDead` check. Actual only checks `!exists`. Weapon access via weaponStates map, not player struct. | HIGH |
+| 51 | overview.md | Spec World struct missing clock, rng, rngMu fields. Map type is *PlayerState, not *Player. | LOW |
+| 52 | rooms.md | Spec shows room:joined sent "by caller" or not at all. Actual: `rm.sendRoomJoinedMessage()` called inside AddPlayer for both paths. | MEDIUM |
+| 53 | rooms.md | Spec shows `RoomJoinedData { playerId }` only. Actual sends `{ roomId, playerId }`. | MEDIUM |
+| 54 | rooms.md | Spec shows processPendingMessages replaying player:move. Actual discards pending moves (cleared without processing). | MEDIUM |
+| 55 | rooms.md | Spec uses `this.currentHealth`. Actual is `this.localPlayerHealth`. | LOW |
+| 56 | ui.md | Spec uses `unshift+pop` for kill feed. Actual uses `push+shift`. | MEDIUM |
+| 57 | ui.md | Spec says "4 white lines forming X pattern" (diagonal). Actual draws + pattern (vertical/horizontal). | MEDIUM |
+| 58 | ui.md | Spec shows "MATCH ENDED" h1 + "{PlayerName} WINS!". Actual: no h1, "Winner: {name}" / "Winners: {names}". | MEDIUM |
+| 59 | ui.md | Spec shows `playerId.slice(0, 8)`. Actual shows full playerId. | LOW |
+| 60 | ui.md | Spec says ammo turns red at <=20%. No color change logic exists in actual code. | MEDIUM |
+| 61 | ui.md | Spec shows "Reconnecting... (attempt X/3)" in yellow. Actual only logs to console. | MEDIUM |
+| 62 | ui.md | Spec doesn't specify font size. Actual 14px. | LOW |
+| 63 | ui.md | Spec boundary: 120s=yellow. Actual: 120s=white. At 60s: spec=red, actual=yellow. | LOW |
+| 64 | ui.md | Spec says reload circle 0.6 alpha. Actual 1.0. | LOW |
+| 65 | ui.md | Spec shows `setScrollFactor(0)`. Actual uses world coords with camera offset. | LOW |
+| 66 | ui.md | Spec only shows health bar from player:move. Actual also updates from player:damaged. | LOW |
+| 67 | match.md | Spec says timer red at < 30s. Actual: < 60s red, < 120s yellow. | MEDIUM |
+| 68 | match.md | Spec shows inline showEndScreen(). Actual delegates to window.onMatchEnd() React bridge. | MEDIUM |
+| 69 | dodge-roll.md | Spec shows UpdatePlayer returns bool. Actual returns UpdatePlayerResult struct. | MEDIUM |
+| 70 | dodge-roll.md | Spec shows roll:start audio only for local player. Actual plays for all players. | LOW |
+| 71 | dodge-roll.md | Spec says "no data payload". Client actually sends `{ direction: rollDirection }`. | LOW |
+| 72 | dodge-roll.md | Spec says invalid rolls "silently ignored". Actual logs warning. | LOW |
+| 73 | melee.md | Spec shows `gs.world.GetAllPlayers()`. Actual directly accesses `gs.world.players` under RLock for mutable pointers. | MEDIUM |
+| 74 | arena.md | Spec shows slice with hardcoded IDs/positions. Actual uses map, computed positions, different ID format. | MEDIUM |
+| 75 | arena.md | Spec shows no params. Actual takes `excludePlayerID string`. Also unexported `w.players`, instance `w.rng`. | MEDIUM |
+| 76 | arena.md | Spec says `CanPickupWeapon`. Actual function name is `CheckPlayerCrateProximity`. | LOW |
+| 77 | arena.md | Spec says NaN → arena center (960, 540). Actual `sanitizeVector2` replaces with 0. | MEDIUM |
+| 78 | arena.md | Spec documents `isInArena()` function. Does not exist — boundary via `clampToArena()` only. | LOW |
+| 79 | arena.md | Spec shows separate `UpdatePlayerPosition` method. Doesn't exist — inline in `UpdatePlayer`. | MEDIUM |
+| 80 | arena.md | Spec shows standalone `CheckAABBCollision` Go function. Doesn't exist — inline in CheckProjectilePlayerCollision. Client version does exist. | LOW |
+| 81 | README.md | Says "All 26 WebSocket message types". Should be 28 (6+22). Quick Reference correctly says 6+22. | MEDIUM |
+| 82 | README.md | server-architecture.md and test-index.md marked "(TODO)" but both are complete (v1.1.0). | LOW |
+| 83 | README.md | Quick Reference Table (17 specs) omits ui.md (1251 lines). | MEDIUM |
+| 84 | README.md | Key Dependencies table missing graphics.md, ui.md, audio.md. | MEDIUM |
+| 85 | README.md | Several line counts significantly off (messages.md ~1100 vs 1774, etc.). | LOW |
+| 86 | README.md | Broken markdown bold at line 290. | LOW |
+| 87 | test-index.md | Priority distributions wrong for ALL 19 specs. Critical counts systematically inflated. | HIGH |
+| 88 | test-index.md | Summary claims 71C/94H/20M/9L=194. Wrong due to per-spec errors. | HIGH |
+| 89 | test-index.md | Category counts 85U/85I/9V have mismatches between index and source specs. | HIGH |
+| 90 | test-index.md | Lists 8 tests for client-architecture.md. Actual spec defines 10. | MEDIUM |
+| 91 | test-index.md | Multiple specs have descriptions mapped to wrong test IDs. | HIGH |
+| 92 | test-index.md | 15 netcode test IDs exist only in test-index.md, not in source specs. | HIGH |
+| 93 | spec-of-specs-plan.md | Line estimates ~10k total vs actual ~24,924. | LOW |
+| 94 | spec-of-specs-plan.md | Work log says "26 message types (7 C→S, 19 S→C)". Should be 28 (6+22). | LOW |
+| 95 | spec-of-specs-plan.md | Work log says "Critical (65), High (85)". Out of date. | LOW |
+| 96 | spec-of-specs-plan.md | Final validation summary says "7 C→S, 20 S→C" and "55 JSON schemas". Pre-Epic 4. | LOW |
+| 97 | SPEC-OF-SPECS.md | DECELERATION: 50 px/s^2. Actual: 1500 px/s^2. Off by 30x. | HIGH |
+| 98 | SPEC-OF-SPECS.md | Says 19 S→C types, lists 20. Actual: 22 (missing state:snapshot, state:delta). | HIGH |
+| 99 | SPEC-OF-SPECS.md | Lists `test` as C→S type. No formal schema. Actually 6 formal C→S types. | MEDIUM |
+| 100 | SPEC-OF-SPECS.md | Estimated ~8,575 total lines. Actual 24,924 (~2.9x). | MEDIUM |
+| 101 | SPEC-OF-SPECS.md | Shooting test scenario descriptions don't match actual shooting.md test IDs. | MEDIUM |
+| 102 | SPEC-OF-SPECS.md | UI timer red threshold < 30s. Actual < 60s. | MEDIUM |
+| 103 | SPEC-OF-SPECS.md | spec-of-specs-plan.md not listed in ToC or file specs section. | LOW |
+| 104 | SPEC-OF-SPECS.md | No changelog or update date. Still at v1.0.0, never updated. | LOW |
 
-Severity: LOW (cosmetic/minor), MEDIUM (missing info but not wrong), HIGH (factually incorrect)
+## Discoveries
 
-## Per-Spec Process
+Worker: when you find additional drift while fixing a finding, add a row here.
+
+| # | Spec | Discovery | Severity |
+|---|------|-----------|----------|
+| | | | |
+
+## Per-Item Process
 
 ```
-1. Read the spec file in specs/
-2. Read the relevant source files it references
-3. Compare: does the spec accurately describe the code?
-4. If drift found: add a row to the Findings table above
-5. If no drift: just check it off
-6. Check off the validation checklist
-7. Stop — the loop restarts you for the next spec
+1. Read the finding from the table above — note the spec file, the cited source files, and what's wrong
+2. Read the spec file section that needs fixing
+3. Read the actual source code file(s) cited in the finding
+4. Edit the spec to match the source code (targeted fix, not a rewrite)
+5. Commit: "docs: Fix {spec-name} — {brief description}"
+6. Check off the item in the Fix Checklist above
+7. Stop — the loop restarts you for the next finding
 ```
 
 ## Rules
 
-1. **Read-only** — Do NOT edit any spec files or source code
-2. **One spec per iteration** — Validate one, update this plan, stop
-3. **Be specific** — Findings must cite the spec section AND the source file/line that contradicts it
-4. **Code is truth** — If spec says X but code does Y, that's drift
-5. **Check cross-references** — If a spec references another spec, verify the reference is accurate
-6. **Version/changelog** — Verify the spec has a recent changelog entry from the update pass
+1. **Spec-only edits** — Do NOT edit source code, only spec files in `specs/`
+2. **One finding per iteration** — Fix one, commit, check off, stop
+3. **Read source first** — Always verify the source code before editing the spec. The finding may be stale if code changed since validation.
+4. **Targeted fixes** — Change only what the finding describes. Don't rewrite surrounding paragraphs.
+5. **Preserve spec structure** — Keep headings, section order, and formatting intact
+6. **Code blocks must match reality** — If a finding says a Go struct has different fields, update the code block to match the actual struct
+7. **Update changelog** — If the spec has a changelog table, add a row: `| 1.1.1 | 2026-02-16 | Fixed {what} to match source code |`
+8. **Don't invent** — If you're unsure what the source code actually does, read it. Don't guess.
+9. **Commit message format** — `docs: Fix {spec-name} — {brief description of what was corrected}`
+10. **HIGH findings first** — Work through Tier 1, then Tier 2, then Tier 3

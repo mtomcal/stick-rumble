@@ -12,9 +12,11 @@
 #   PIDS_LIMIT=512         # Container PID cap (default: 512)
 #   SANDBOX_IMAGE=stick-rumble-sandbox  # Docker image name
 #   SANDBOX_NETWORK=sandbox-net         # Docker network name
+#   JOB_NAME=spec-fixes                 # Job name for container naming (default: basename of cwd)
 
 MAX_ITERATIONS=${1:-0}
 PROMPT_FILE=${2:-PROMPT.md}
+JOB_NAME=${JOB_NAME:-$(basename "$(pwd)")}
 ITERATION=0
 CURRENT_BRANCH=$(git branch --show-current)
 LOG_DIR=".loop-logs"
@@ -48,7 +50,6 @@ resolve_claude_auth() {
     if [ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then
         return 0
     fi
-    # Auto-extract from credentials file (subscription users)
     local CREDS="$HOME/.claude/.credentials.json"
     if [ -f "$CREDS" ]; then
         CLAUDE_CODE_OAUTH_TOKEN=$(python3 -c "
@@ -100,11 +101,9 @@ run_claude_sandboxed() {
     local prompt_file="$1"
     local iter_log="$2"
 
-    # Re-resolve auth each iteration (OAuth tokens may refresh)
     resolve_claude_auth
     resolve_git_auth
 
-    # Resolve symlinked settings
     local CLAUDE_SETTINGS
     CLAUDE_SETTINGS=$(readlink -f "$HOME/.claude/settings.json" 2>/dev/null || echo "$HOME/.claude/settings.json")
 
@@ -112,7 +111,7 @@ run_claude_sandboxed() {
     [ -t 0 ] && TTY_FLAG="-it"
 
     docker run --rm $TTY_FLAG \
-        --name "sandbox-loop-$$-$ITERATION" \
+        --name "ralph-${JOB_NAME}-${ITERATION}" \
         --memory="${MEMORY_LIMIT:-8g}" \
         --memory-swap="${MEMORY_LIMIT:-8g}" \
         --cpus="${CPU_LIMIT:-4}" \
@@ -141,6 +140,7 @@ run_claude_sandboxed() {
 
 # --- Banner ---
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Job:    $JOB_NAME"
 echo "Prompt: $PROMPT_FILE"
 echo "Branch: $CURRENT_BRANCH"
 echo "Logs:   $LOG_DIR/"
@@ -156,7 +156,6 @@ if [ "$SANDBOX" = "1" ]; then
 fi
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-# Verify prompt file exists
 if [ ! -f "$PROMPT_FILE" ]; then
     echo "Error: $PROMPT_FILE not found"
     exit 1
@@ -175,7 +174,6 @@ while true; do
 
     ITER_LOG="$LOG_DIR/iteration-$ITERATION.log"
 
-    # Run claude (sandboxed or bare)
     if [ "$SANDBOX" = "1" ]; then
         run_claude_sandboxed "$PROMPT_FILE" "$ITER_LOG"
     else
@@ -186,7 +184,6 @@ while true; do
     echo ""
     echo "Finished: $(date '+%Y-%m-%d %H:%M:%S')"
 
-    # Handle exit codes (sandbox mode)
     if [ "$SANDBOX" = "1" ] && [ "$EXIT_CODE" -ne 0 ]; then
         case $EXIT_CODE in
             137)
@@ -208,7 +205,6 @@ while true; do
         esac
     fi
 
-    # Check for done pattern
     if grep -q "$DONE_PATTERN" "$ITER_LOG"; then
         echo "Done pattern found in output - task completed"
 

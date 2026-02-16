@@ -1,61 +1,71 @@
-# Orchestrator: Spec Validation Monitor
+# Orchestrator: Spec Drift Fix Monitor
 
-You are monitoring a `loop.sh` worker that is validating spec files in `specs/` against source code. The worker does NOT edit specs — it only reads and reports drift. Your job is to auto-check every 5 minutes and course-correct when needed by editing PROMPT.md.
+You are monitoring a `loop.sh` worker that is fixing spec drift in `specs/`. The worker edits specs to match source code based on 104 findings from a prior validation pass. Your job is to auto-check every 5 minutes and course-correct when needed by editing PROMPT.md.
 
 ## How to Run
 
-```
-# Launch the worker loop (sandbox mode)
-SANDBOX=1 ./loop.sh 25 PROMPT.md
+```bash
+# Launch the worker loop in the background (sandbox mode)
+cd ../stick-rumble-worktrees/spec-fixes
+SANDBOX=1 JOB_NAME=spec-fixes ./loop.sh 110 PROMPT.md &
 
-# Or bare mode (no Docker):
-./loop.sh 25 PROMPT.md
+# Or bare mode:
+cd ../stick-rumble-worktrees/spec-fixes
+JOB_NAME=spec-fixes ./loop.sh 110 PROMPT.md &
 ```
 
 ### Auto-Checking
 
-The orchestrator runs checks on a 5-minute interval using a blocking `sleep 300` between cycles. No background timers — it simply sleeps, wakes, runs the full checklist, then sleeps again.
+After launching the loop in the background, enter a blocking check cycle: `sleep 300`, run the full checklist below, then `sleep 300` again. Repeat until the job completes. No background timers — just sleep, wake, check, sleep.
 
 ## What to Check
 
 ### 1. Progress
 
-Read IMPLEMENTATION_PLAN.md "Validation Checklist". Count `[x]` vs `[ ]`.
+Read IMPLEMENTATION_PLAN.md "Fix Checklist". Count `[x]` vs `[ ]`.
 
 ### 2. Git History
 
 Run: `git log --oneline -10`
 
 Red flags:
-- Commits touching spec files (this is a READ-ONLY validation)
-- Commits touching source code
+- Commits touching source code (this job only edits specs)
 - No plan updates in 2+ iterations (stuck)
+- Commits with wrong message format (should be "docs: Fix {spec} — ...")
+- Thrashing (same spec edited multiple times)
 
 ### 3. Latest Log
 
 Run: `ls -t .loop-logs/iteration-*.log | head -1` then read it.
 
-Look for: what spec is being validated, errors, whether worker is actually reading source code.
+Look for: which finding is being fixed, errors, whether worker is reading source code before editing spec.
 
-### 4. Findings
+### 4. Diff Size
 
-Read IMPLEMENTATION_PLAN.md "Findings" table. Check for new rows. Verify findings are specific (cite spec section + source file).
+Run: `git diff --stat HEAD~1`
 
-### 5. Container Resources
+Red flag: 200+ lines in one file = rewrite instead of targeted fix.
 
-Run: `docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.MemPerc}}\t{{.PIDs}}" | grep sandbox-loop`
+### 5. Discoveries
+
+Check if worker added new rows to IMPLEMENTATION_PLAN.md Discoveries section. If a discovery affects completed items, write a correction.
+
+### 6. Container Resources
+
+Run: `docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.MemPerc}}\t{{.PIDs}}" | grep ralph-spec-fixes-*`
 
 Red flags:
 - Memory above 80% of limit (approaching OOM kill)
 - PIDs near the limit (default 512)
+- CPU pegged at 100%
 
-### 6. One-Per-Iteration Check
+### 7. Spot Check
 
-Verify the worker is doing exactly one spec per iteration (check iteration log count vs checklist progress).
+Read one recently-committed spec file. Verify the fix matches the finding description and is accurate against source code.
 
 ## Course Corrections
 
-Append `CORRECTION: {what's wrong and what to do}` to PROMPT.md's IMPORTANT section.
+Append `CORRECTION: {what's wrong and what to do}` to PROMPT.md's IMPORTANT section. Worker picks it up next iteration.
 
 ## Status Report
 
@@ -64,17 +74,25 @@ After each check, tell the user:
 ```
 ## Check #{N} — {time}
 
-**Progress:** {X}/23 specs validated ({Y} since last check)
-**Current spec:** {name}
+**Progress:** {X}/104 findings fixed ({Y} since last check)
+**Current finding:** #{id} — {spec-name}
 **Health:** {OK | WARNING | PROBLEM}
 **Container:** {MEM usage/limit, CPU%, PIDs} or "bare mode"
-**Findings so far:** {count} ({HIGH}/{MEDIUM}/{LOW})
+**Recent commits:** {list}
 ```
+
+## Post-Job Completion (worktree mode)
+
+After the worker outputs `/done`:
+1. Verify the branch was pushed to the remote (`git log --oneline origin/ralph/spec-fixes -1`)
+2. If not pushed, push it: `git push -u origin ralph/spec-fixes`
+3. The worktree, branch, and job files (PROMPT.md, IMPLEMENTATION_PLAN.md, ORCHESTRATOR.md) are left intact for manual review
+4. The user will merge and clean up the worktree manually
 
 ## When to Intervene vs Let It Run
 
-**Let it run:** steady progress (1 spec per iteration), no spec edits, findings are specific.
+**Let it run:** steady progress (1 finding per iteration), only spec files edited, reasonable diff sizes, correct commit format.
 
-**Write a correction:** worker editing specs, doing multiple specs per iteration, vague findings, not reading source code.
+**Write a correction:** source code edited, rewrites instead of targeted fixes, stuck 2+ iterations, skipping items, not committing, not reading source before editing.
 
-**Alert the user:** error loop, worker modifying code, faking validations.
+**Alert the user:** error loop, worker modifying source code, garbled output, faking progress, fundamental misunderstanding of a finding.
