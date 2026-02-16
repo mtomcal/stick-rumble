@@ -1018,14 +1018,14 @@ The spec suite is now ready for AI agents to implement Stick Rumble from scratch
 
 ---
 
-## Final Validation Summary (2026-02-02)
+## Final Validation Summary (2026-02-15)
 
 All contracts have been validated and are in sync:
 
 | Validation Area | Status | Details |
 |-----------------|--------|---------|
-| WebSocket Messages | ✅ Complete | 7 Client→Server, 20 Server→Client |
-| events-schema | ✅ Complete | 55 JSON schemas generated and validated |
+| WebSocket Messages | ✅ Complete | 6 Client→Server, 22 Server→Client |
+| events-schema | ✅ Complete | JSON schemas generated and validated |
 | Weapon Configs | ✅ Complete | All 6 weapons match across JSON/server/client |
 | Game Constants | ✅ Complete | All constants documented in specs/constants.md |
 
@@ -1057,7 +1057,7 @@ Before marking a spec as complete, verify:
 Final verification confirms:
 - **21 spec documents** created (excluding meta docs)
 - **224 test scenarios** documented across all specs
-- **55 JSON schemas** generated and validated (via `make schema-validate`)
+- **JSON schemas** generated and validated (via `make schema-validate`)
 - **All contracts synchronized** between specs, events-schema, and implementation
 - **"Why" rationale** captured in every spec for design decisions
 
