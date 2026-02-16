@@ -1,7 +1,7 @@
 # Arena
 
-> **Spec Version**: 1.0.0
-> **Last Updated**: 2026-02-02
+> **Spec Version**: 1.0.1
+> **Last Updated**: 2026-02-16
 > **Depends On**: [constants.md](constants.md)
 > **Depended By**: [player.md](player.md), [movement.md](movement.md), [dodge-roll.md](dodge-roll.md), [weapons.md](weapons.md), [shooting.md](shooting.md), [hit-detection.md](hit-detection.md), [graphics.md](graphics.md)
 
@@ -141,31 +141,12 @@ The arena is a rectangle with fixed dimensions:
 3. 40 Phaser tiles at 48px each = 1920px
 4. Creates competitive visibility - entire arena fits on screen
 
-**Pseudocode:**
-```
-ARENA_WIDTH = 1920
-ARENA_HEIGHT = 1080
-
-function isInArena(position):
-    return position.x >= 0 AND position.x <= ARENA_WIDTH
-       AND position.y >= 0 AND position.y <= ARENA_HEIGHT
-```
-
 **TypeScript:**
 ```typescript
 export const ARENA = {
   WIDTH: 1920,
   HEIGHT: 1080,
 } as const;
-
-export function isInArena(position: Vector2): boolean {
-  return (
-    position.x >= 0 &&
-    position.x <= ARENA.WIDTH &&
-    position.y >= 0 &&
-    position.y <= ARENA.HEIGHT
-  );
-}
 ```
 
 **Go:**
@@ -174,11 +155,6 @@ const (
     ArenaWidth  = 1920.0
     ArenaHeight = 1080.0
 )
-
-func IsInArena(pos Vector2) bool {
-    return pos.X >= 0 && pos.X <= ArenaWidth &&
-           pos.Y >= 0 && pos.Y <= ArenaHeight
-}
 ```
 
 ### Boundary Clamping
@@ -206,6 +182,8 @@ function clampToArena(position):
     return Vector2(clampedX, clampedY)
 ```
 
+**Note:** Boundary clamping is used exclusively for boundary enforcement. There is no separate `isInArena()` function.
+
 **Boundary Limits (for player center):**
 
 | Boundary | Min Value | Max Value |
@@ -229,13 +207,13 @@ export function clampToArena(pos: Vector2): Vector2 {
 **Go:**
 ```go
 func clampToArena(pos Vector2) Vector2 {
-    halfWidth := PlayerWidth / 2.0   // 16
-    halfHeight := PlayerHeight / 2.0 // 32
+    halfWidth := PlayerWidth / 2   // 16
+    halfHeight := PlayerHeight / 2 // 32
 
-    return Vector2{
-        X: math.Max(halfWidth, math.Min(pos.X, ArenaWidth-halfWidth)),
-        Y: math.Max(halfHeight, math.Min(pos.Y, ArenaHeight-halfHeight)),
-    }
+    x := math.Max(halfWidth, math.Min(pos.X, ArenaWidth-halfWidth))
+    y := math.Max(halfHeight, math.Min(pos.Y, ArenaHeight-halfHeight))
+
+    return Vector2{X: x, Y: y}
 }
 ```
 
@@ -321,16 +299,16 @@ function updatePosition(player: Player, newPos: Vector2): void {
 
 **Go:**
 ```go
-func (p *Physics) UpdatePlayerPosition(player *PlayerState, newPos Vector2) {
-    clampedPos := clampToArena(newPos)
+// In UpdatePlayer (physics.go):
+// Clamp position to arena bounds
+clampedPos := clampToArena(newPos)
 
-    if player.IsRolling() {
-        if clampedPos.X != newPos.X || clampedPos.Y != newPos.Y {
-            player.EndDodgeRoll() // Wall collision during roll
-        }
-    }
-
-    player.SetPosition(clampedPos)
+// Check if position was clamped during a roll (wall collision)
+isRolling := player.IsRolling()
+if isRolling && (clampedPos.X != newPos.X || clampedPos.Y != newPos.Y) {
+    // Wall collision detected during roll - end the roll
+    player.EndDodgeRoll()
+    result.RollCancelled = true
 }
 ```
 
@@ -362,8 +340,8 @@ function getBalancedSpawnPoint(players):
     if enemies.length == 0:
         return Vector2(ARENA_WIDTH / 2, ARENA_HEIGHT / 2)  // (960, 540)
 
-    bestCandidate = null
-    bestMinDistance = -1
+    bestCandidate = center
+    bestMinDistance = 0
 
     // Try 10 random candidates
     for i in 1..10:
@@ -417,7 +395,7 @@ function getBalancedSpawnPoint(players: Player[]): Vector2 {
   }
 
   let bestCandidate: Vector2 = { x: ARENA.WIDTH / 2, y: ARENA.HEIGHT / 2 };
-  let bestMinDistance = -1;
+  let bestMinDistance = 0;
 
   for (let i = 0; i < 10; i++) {
     const candidate = {
@@ -441,48 +419,53 @@ function getBalancedSpawnPoint(players: Player[]): Vector2 {
 
 **Go:**
 ```go
-func (w *World) getBalancedSpawnPointLocked() Vector2 {
-    const spawnMargin = 100.0
-    minX, maxX := spawnMargin, ArenaWidth-spawnMargin
-    minY, maxY := spawnMargin, ArenaHeight-spawnMargin
-
-    // Collect living enemy positions
-    var enemies []Vector2
-    for _, p := range w.Players {
-        if !p.IsDead() {
-            enemies = append(enemies, p.GetPosition())
+func (w *World) getBalancedSpawnPointLocked(excludePlayerID string) Vector2 {
+    // Collect positions of all living enemy players
+    enemyPositions := make([]Vector2, 0)
+    for id, player := range w.players {
+        if id != excludePlayerID && !player.IsDead() {
+            enemyPositions = append(enemyPositions, player.GetPosition())
         }
     }
 
-    // Default to center if no enemies
-    if len(enemies) == 0 {
+    // If no enemies, spawn at center
+    if len(enemyPositions) == 0 {
         return Vector2{X: ArenaWidth / 2, Y: ArenaHeight / 2}
     }
 
-    var bestCandidate Vector2
-    bestMinDistance := -1.0
+    // Try 10 random spawn candidates and pick the one furthest from enemies
+    bestSpawn := Vector2{X: ArenaWidth / 2, Y: ArenaHeight / 2}
+    bestMinDistance := 0.0
 
     for i := 0; i < 10; i++ {
-        candidate := Vector2{
-            X: minX + rand.Float64()*(maxX-minX),
-            Y: minY + rand.Float64()*(maxY-minY),
-        }
+        // Generate random spawn point with margin from edges
+        margin := 100.0
 
-        minDistToEnemy := math.MaxFloat64
-        for _, enemy := range enemies {
-            dist := calculateDistance(candidate, enemy)
-            if dist < minDistToEnemy {
-                minDistToEnemy = dist
+        // Protect rand.Rand access (not thread-safe)
+        w.rngMu.Lock()
+        candidate := Vector2{
+            X: margin + w.rng.Float64()*(ArenaWidth-2*margin),
+            Y: margin + w.rng.Float64()*(ArenaHeight-2*margin),
+        }
+        w.rngMu.Unlock()
+
+        // Find minimum distance to any enemy
+        minDistance := 1e18
+        for _, enemyPos := range enemyPositions {
+            dist := distance(candidate, enemyPos)
+            if dist < minDistance {
+                minDistance = dist
             }
         }
 
-        if minDistToEnemy > bestMinDistance {
-            bestMinDistance = minDistToEnemy
-            bestCandidate = candidate
+        // Keep the spawn point with the largest minimum distance
+        if minDistance > bestMinDistance {
+            bestMinDistance = minDistance
+            bestSpawn = candidate
         }
     }
 
-    return bestCandidate
+    return bestSpawn
 }
 ```
 
@@ -527,14 +510,33 @@ Weapon crates spawn at **5 fixed positions** arranged in a pentagon pattern.
 **Go:**
 ```go
 func NewWeaponCrateManager() *WeaponCrateManager {
-    return &WeaponCrateManager{
-        Crates: []*WeaponCrate{
-            {ID: "uzi-1", Position: Vector2{X: 960, Y: 216}, WeaponType: WeaponTypeUzi, IsAvailable: true},
-            {ID: "ak47-1", Position: Vector2{X: 480, Y: 540}, WeaponType: WeaponTypeAK47, IsAvailable: true},
-            {ID: "shotgun-1", Position: Vector2{X: 1440, Y: 540}, WeaponType: WeaponTypeShotgun, IsAvailable: true},
-            {ID: "katana-1", Position: Vector2{X: 960, Y: 864}, WeaponType: WeaponTypeKatana, IsAvailable: true},
-            {ID: "bat-1", Position: Vector2{X: 288, Y: 162}, WeaponType: WeaponTypeBat, IsAvailable: true},
-        },
+    manager := &WeaponCrateManager{
+        crates: make(map[string]*WeaponCrate),
+    }
+    manager.InitializeDefaultSpawns()
+    return manager
+}
+
+func (wcm *WeaponCrateManager) InitializeDefaultSpawns() {
+    spawns := []struct {
+        Position   Vector2
+        WeaponType string
+    }{
+        {Position: Vector2{X: ArenaWidth / 2, Y: ArenaHeight * 0.2}, WeaponType: "uzi"},
+        {Position: Vector2{X: ArenaWidth * 0.25, Y: ArenaHeight / 2}, WeaponType: "ak47"},
+        {Position: Vector2{X: ArenaWidth * 0.75, Y: ArenaHeight / 2}, WeaponType: "shotgun"},
+        {Position: Vector2{X: ArenaWidth / 2, Y: ArenaHeight * 0.8}, WeaponType: "katana"},
+        {Position: Vector2{X: ArenaWidth * 0.15, Y: ArenaHeight * 0.15}, WeaponType: "bat"},
+    }
+
+    for i, spawn := range spawns {
+        crateID := fmt.Sprintf("crate_%s_%d", spawn.WeaponType, i)
+        wcm.crates[crateID] = &WeaponCrate{
+            ID:          crateID,
+            Position:    spawn.Position,
+            WeaponType:  spawn.WeaponType,
+            IsAvailable: true,
+        }
     }
 }
 ```
@@ -602,9 +604,11 @@ export function checkAABBCollision(
 
 **Go:**
 ```go
-func CheckAABBCollision(point, center Vector2, halfWidth, halfHeight float64) bool {
-    return math.Abs(point.X-center.X) < halfWidth &&
-           math.Abs(point.Y-center.Y) < halfHeight
+// No standalone CheckAABBCollision function in Go server
+// AABB logic is inline within CheckProjectilePlayerCollision:
+if math.Abs(proj.Position.X-playerPos.X) < halfWidth &&
+    math.Abs(proj.Position.Y-playerPos.Y) < halfHeight {
+    return true
 }
 ```
 
@@ -637,11 +641,12 @@ function canPickupWeapon(player: Player, crate: WeaponCrate): boolean {
 
 **Go:**
 ```go
-func (p *Physics) CanPickupWeapon(player *PlayerState, crate *WeaponCrate) bool {
-    if player.IsDead() {
+func (p *Physics) CheckPlayerCrateProximity(player *PlayerState, crate *WeaponCrate) bool {
+    if !crate.IsAvailable {
         return false
     }
-    if !crate.IsAvailable {
+
+    if !player.IsAlive() {
         return false
     }
 
@@ -658,7 +663,7 @@ func (p *Physics) CanPickupWeapon(player *PlayerState, crate *WeaponCrate) bool 
 
 **Trigger**: Player position somehow becomes NaN or Infinity (rare edge case)
 **Detection**: Check for `isNaN()` or `isInfinity()` before using position
-**Response**: Reset to arena center (960, 540)
+**Response**: Replace NaN or Infinity components with 0
 **Why**: Prevents cascading errors in physics calculations
 
 ### Out-of-Bounds Recovery
@@ -976,4 +981,5 @@ func TestCalculateDistance(t *testing.T) {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.0.1 | 2026-02-16 | Fix spec drift: align spawn algorithm Go code with actual world.go (variable names, bestMinDistance init, margin computation, distance function name); align clampToArena Go code with actual physics.go |
 | 1.0.0 | 2026-02-02 | Initial specification extracted from codebase |

@@ -72,7 +72,7 @@ The result of processing a shoot request.
 ```go
 type ShootResult struct {
     Success     bool        // Whether shot was successful
-    FailReason  string      // Reason code if failed ("cooldown", "empty", etc.)
+    Reason      string      // Reason code if failed ("cooldown", "empty", etc.)
     Projectile  *Projectile // Created projectile (nil if failed)
 }
 ```
@@ -185,13 +185,6 @@ class ShootingManager {
     private fireCooldownMs: number;
 
     canShoot(): boolean {
-        const now = this.clock.now();
-
-        // Check local cooldown
-        if (now - this.lastShotTime < this.fireCooldownMs) {
-            return false;
-        }
-
         // Check reload state
         if (this.weaponState?.isReloading) {
             return false;
@@ -202,22 +195,32 @@ class ShootingManager {
             return false;
         }
 
+        // Check fire rate cooldown
+        const now = this.clock.now();
+        if (now - this.lastShotTime < this.fireCooldownMs) {
+            return false;
+        }
+
         return true;
     }
 
-    shoot(aimAngle: number): boolean {
+    shoot(): boolean {
         if (!this.canShoot()) {
             return false;
         }
 
-        // Optimistic cooldown tracking
-        this.lastShotTime = this.clock.now();
+        // Record shot time for cooldown and lag compensation
+        const shotTime = this.clock.now();
+        this.lastShotTime = shotTime;
 
-        // Send to server
+        // Send shoot message to server with client timestamp for lag compensation
         this.wsClient.send({
             type: 'player:shoot',
-            timestamp: this.clock.now(),
-            data: { aimAngle }
+            timestamp: shotTime,
+            data: {
+                aimAngle: this.aimAngle,
+                clientTimestamp: shotTime,
+            },
         });
 
         return true;
@@ -229,46 +232,55 @@ class ShootingManager {
 ```go
 func (gs *GameServer) PlayerShoot(playerID string, aimAngle float64, clientTimestamp int64) ShootResult {
     // clientTimestamp used for lag compensation on hitscan weapons — see hit-detection.md
-    gs.mu.Lock()
-    defer gs.mu.Unlock()
 
     // Get player state
-    player, err := gs.world.GetPlayer(playerID)
-    if err != nil || !player.IsAlive() {
-        return ShootResult{Success: false, FailReason: ShootFailedNoPlayer}
+    player, exists := gs.world.GetPlayer(playerID)
+    if !exists {
+        return ShootResult{Success: false, Reason: ShootFailedNoPlayer}
     }
 
     // Get weapon state
+    gs.weaponMu.RLock()
     ws := gs.weaponStates[playerID]
+    gs.weaponMu.RUnlock()
+
     if ws == nil {
-        return ShootResult{Success: false, FailReason: ShootFailedNoPlayer}
+        return ShootResult{Success: false, Reason: ShootFailedNoPlayer}
     }
 
     // Check reload state
     if ws.IsReloading {
-        return ShootResult{Success: false, FailReason: ShootFailedReload}
+        return ShootResult{Success: false, Reason: ShootFailedReload}
     }
 
     // Check ammo (triggers auto-reload if empty)
-    if ws.CurrentAmmo == 0 {
+    if ws.IsEmpty() {
         ws.StartReload()
-        return ShootResult{Success: false, FailReason: ShootFailedEmpty}
+        return ShootResult{Success: false, Reason: ShootFailedEmpty}
     }
 
     // Check fire rate cooldown
     if !ws.CanShoot() {
-        return ShootResult{Success: false, FailReason: ShootFailedCooldown}
+        return ShootResult{Success: false, Reason: ShootFailedCooldown}
     }
+
+    // Record the shot (decrements ammo, sets cooldown)
+    ws.RecordShot()
 
     // Create projectile
     pos := player.GetPosition()
-    proj := NewProjectile(playerID, ws.Weapon.Name, pos, aimAngle, ws.Weapon.ProjectileSpeed)
-    gs.projectileManager.AddProjectile(proj)
+    proj := gs.projectileManager.CreateProjectile(
+        playerID,
+        ws.Weapon.Name,
+        pos,
+        aimAngle,
+        ws.Weapon.ProjectileSpeed,
+    )
 
-    // Record shot (decrement ammo, update cooldown)
-    ws.RecordShot()
-
-    return ShootResult{Success: true, Projectile: proj}
+    return ShootResult{
+        Success:    true,
+        Projectile: proj,
+    }
 }
 ```
 
@@ -286,24 +298,51 @@ Precise enforcement of weapon fire rates.
 **Pseudocode:**
 ```
 function canShoot(weaponState):
-    if weaponState.lastShotTime == zero:
-        return true  // First shot always allowed
+    isMelee = weaponState.weapon.isMelee()
 
-    cooldown = 1 second / weapon.fireRate
-    elapsed = now() - weaponState.lastShotTime
+    // Cannot shoot while reloading (ranged only)
+    if !isMelee and weaponState.isReloading:
+        return false
 
-    return elapsed >= cooldown
+    // Cannot shoot with empty magazine (ranged only)
+    if !isMelee and weaponState.currentAmmo <= 0:
+        return false
+
+    // Check fire rate cooldown (both melee and ranged)
+    if weaponState.lastShotTime != zero:
+        cooldown = 1 second / weapon.fireRate
+        elapsed = now() - weaponState.lastShotTime
+        if elapsed < cooldown:
+            return false
+
+    return true
 ```
 
 **Go:**
 ```go
 func (ws *WeaponState) CanShoot() bool {
-    if ws.LastShotTime.IsZero() {
-        return true
+    // Melee weapons bypass ammo and reload checks
+    isMelee := ws.Weapon.IsMelee()
+
+    // Cannot shoot while reloading (ranged only)
+    if !isMelee && ws.IsReloading {
+        return false
     }
 
-    cooldown := time.Duration(float64(time.Second) / ws.Weapon.FireRate)
-    return ws.clock.Since(ws.LastShotTime) >= cooldown
+    // Cannot shoot with empty magazine (ranged only)
+    if !isMelee && ws.CurrentAmmo <= 0 {
+        return false
+    }
+
+    // Check fire rate cooldown (both melee and ranged)
+    if !ws.LastShotTime.IsZero() {
+        cooldown := time.Duration(float64(time.Second) / ws.Weapon.FireRate)
+        if ws.clock.Since(ws.LastShotTime) < cooldown {
+            return false
+        }
+    }
+
+    return true
 }
 ```
 
@@ -388,7 +427,7 @@ func (p *Projectile) Update(deltaTime float64) {
 }
 
 func (p *Projectile) IsExpired() bool {
-    return time.Since(p.CreatedAt) > ProjectileMaxLifetime
+    return time.Since(p.CreatedAt) >= ProjectileMaxLifetime
 }
 
 func (p *Projectile) IsOutOfBounds() bool {
@@ -415,7 +454,7 @@ function recordShot(weaponState):
 
 function startReload(weaponState):
     if weaponState.isReloading: return  // Already reloading
-    if weaponState.weapon.isMelee: return  // Melee doesn't reload
+    if weaponState.currentAmmo >= weaponState.weapon.magazineSize: return  // Magazine full
 
     weaponState.isReloading = true
     weaponState.reloadStartTime = now()
@@ -439,9 +478,16 @@ func (ws *WeaponState) RecordShot() {
 }
 
 func (ws *WeaponState) StartReload() {
-    if ws.IsReloading || ws.Weapon.IsMelee() {
+    // Don't reload if already reloading
+    if ws.IsReloading {
         return
     }
+
+    // Don't reload if magazine is full
+    if ws.CurrentAmmo >= ws.Weapon.MagazineSize {
+        return
+    }
+
     ws.IsReloading = true
     ws.ReloadStartTime = ws.clock.Now()
 }
@@ -667,15 +713,15 @@ func CalculateShotgunPelletAngles(aimAngle, spreadDegrees float64) []float64 {
 ### Go (Server)
 
 **Thread Safety:**
-- All shoot processing holds `GameServer.mu` write lock
-- WeaponState access is always within locked context
-- Projectile updates happen in game tick (already locked)
+- Weapon state access uses `GameServer.weaponMu` (RWMutex): `RLock()` for reads in `PlayerShoot`, `Lock()` for writes in `AddPlayer`/`RemovePlayer`
+- No `GameServer.mu` lock held during shoot processing
+- Projectile updates happen in game tick (ProjectileManager has its own mutex)
 
 **Projectile Management:**
-- `ProjectileManager` maintains slice of active projectiles
+- `ProjectileManager` maintains a `map[string]*Projectile` keyed by projectile ID
 - `Update()` iterates all projectiles each tick
-- Expired/hit projectiles marked `Active = false`
-- Periodic cleanup removes inactive projectiles
+- Expired/out-of-bounds projectiles are deleted from the map immediately
+- `CreateProjectile()` creates and adds in a single call (no separate `AddProjectile`)
 
 **Fire Rate Precision:**
 - Use `time.Duration` for all timing calculations
@@ -776,7 +822,7 @@ test "empty magazine returns shoot:failed":
         result = playerShoot(player.id, aimAngle: 0)
     assert:
         result.success == false
-        result.failReason == "empty"
+        result.reason == "empty"
         weaponState.isReloading == true
 ```
 
@@ -807,7 +853,7 @@ test "fire rate cooldown enforced":
         result = playerShoot(player.id, 0)  // Second shot
     assert:
         result.success == false
-        result.failReason == "cooldown"
+        result.reason == "cooldown"
 ```
 
 ### TS-SHOOT-005: Reloading Blocks Shooting
@@ -835,7 +881,7 @@ test "reloading blocks shooting":
         result = playerShoot(player.id, 0)
     assert:
         result.success == false
-        result.failReason == "reloading"
+        result.reason == "reloading"
 ```
 
 ### TS-SHOOT-006: Projectile Velocity From Aim Angle
@@ -1036,7 +1082,7 @@ test "dead player cannot shoot":
         result = playerShoot(player.id, 0)
     assert:
         result.success == false
-        result.failReason == "no_player"
+        result.reason == "no_player"
 ```
 
 ---

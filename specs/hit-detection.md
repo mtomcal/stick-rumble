@@ -1,7 +1,7 @@
 # Hit Detection
 
-> **Spec Version**: 1.1.0
-> **Last Updated**: 2026-02-15
+> **Spec Version**: 1.1.1
+> **Last Updated**: 2026-02-16
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [shooting.md](shooting.md), [arena.md](arena.md), [messages.md](messages.md)
 > **Depended By**: [match.md](match.md), [client-architecture.md](client-architecture.md), [server-architecture.md](server-architecture.md)
 
@@ -74,7 +74,7 @@ type Projectile struct {
     WeaponType    string    `json:"weaponType"`    // Weapon that created it
     Position      Vector2   `json:"position"`      // Current position (X, Y)
     Velocity      Vector2   `json:"velocity"`      // Velocity vector (X, Y)
-    SpawnPosition Vector2   `json:"spawnPosition"` // Where projectile was created
+    SpawnPosition Vector2   `json:"-"`             // Where projectile was created (not serialized)
     CreatedAt     time.Time `json:"-"`             // Timestamp for lifetime check
     Active        bool      `json:"-"`             // Is projectile still active?
 }
@@ -169,21 +169,29 @@ function checkHitDetection():
 **Go:**
 ```go
 func (gs *GameServer) checkHitDetection() {
-    projectiles := gs.world.Projectiles.GetAllActive()
-    players := gs.world.GetAllPlayers()
+    projectiles := gs.projectileManager.GetActiveProjectiles()
+
+    // Get all players (thread-safe copy)
+    players := gs.world.GetAllPlayerPointers()
 
     hits := gs.physics.CheckAllProjectileCollisions(projectiles, players)
 
     for _, hit := range hits {
-        attackerWeapon := gs.world.GetPlayerWeapon(hit.AttackerID)
-        damage := attackerWeapon.Config.Damage
+        weaponState := gs.weaponStates[hit.AttackerID]
+        if weaponState == nil {
+            continue
+        }
+        damage := weaponState.Weapon.Damage
 
-        victim := gs.world.GetPlayer(hit.VictimID)
+        victim, exists := gs.world.GetPlayer(hit.VictimID)
+        if !exists {
+            continue
+        }
         victim.TakeDamage(damage)
 
-        gs.world.Projectiles.Remove(hit.ProjectileID)
+        gs.projectileManager.RemoveProjectile(hit.ProjectileID)
 
-        gs.onHit(hit.AttackerID, hit.VictimID, damage, hit.ProjectileID)
+        gs.onHit(hit)
     }
 }
 ```
@@ -371,38 +379,29 @@ function triggerDeath(victim, attackerID):
 ```
 
 **Go:**
+
+Death handling is performed inline within the `onHit()` callback in `message_processor.go`. When `victimState.Health <= 0` after damage application, the following occurs:
+
 ```go
-func (h *MessageProcessor) handleDeath(victimID, attackerID string) {
-    h.gameServer.MarkPlayerDead(victimID)
+// In MessageProcessor.onHit() - inline death handling
+if victimState.Health <= 0 {
+    // Mark player as dead
+    h.gameServer.MarkPlayerDead(hit.VictimID)
 
-    victimState := h.gameServer.GetPlayerState(victimID)
-    victimState.IncrementDeaths()
+    // Update stats: increment attacker kills and victim deaths
+    // NOTE: Must use GetWorld().GetPlayer() to get pointer, not GetPlayerState() which returns a copy!
+    attacker, attackerExists := h.gameServer.GetWorld().GetPlayer(hit.AttackerID)
+    if attackerExists && attacker != nil {
+        attacker.IncrementKills()
+        attacker.AddXP(game.KillXPReward)
+    }
+    victim, victimExists := h.gameServer.GetWorld().GetPlayer(hit.VictimID)
+    if victimExists && victim != nil {
+        victim.IncrementDeaths()
+    }
 
-    attackerState := h.gameServer.GetPlayerState(attackerID)
-    attackerState.IncrementKills()
-    attackerState.AddXP(KillXPReward) // 100 XP
-
-    // Broadcast death to room
-    room.Broadcast(map[string]any{
-        "type":      "player:death",
-        "timestamp": time.Now().UnixMilli(),
-        "data": map[string]any{
-            "victimId":   victimID,
-            "attackerId": attackerID,
-        },
-    })
-
-    // Broadcast kill credit with updated stats
-    room.Broadcast(map[string]any{
-        "type":      "player:kill_credit",
-        "timestamp": time.Now().UnixMilli(),
-        "data": map[string]any{
-            "killerId":    attackerID,
-            "victimId":    victimID,
-            "killerKills": attackerState.Kills,
-            "killerXP":    attackerState.XP,
-        },
-    })
+    // Broadcast player:death message
+    // ... (broadcast death and kill_credit messages)
 }
 ```
 
@@ -511,7 +510,7 @@ function processHitscanShot(shooterID, aimAngle, clientTimestamp):
     closestHit = nil
     closestDistance = infinity
 
-    for each player (not shooter, alive, not invulnerable):
+    for each player (not shooter, alive):
         // Get where victim WAS at queryTime
         victimPosition = positionHistory.GetPositionAt(playerID, queryTime)
         if not found: use current position as fallback
@@ -664,17 +663,18 @@ handlePlayerDamaged(data: PlayerDamagedData) {
 }
 
 handleHitConfirmed(data: HitConfirmedData) {
-  // Play hitmarker sound/visual for local player
-  this.audioManager.playHitmarker();
-  this.ui.showHitmarker();
+  // Show hitmarker visual for local player
+  this.ui.showHitMarker();
+  // TODO: Audio feedback (ding sound) - deferred to audio story
 }
 
 handlePlayerDeath(data: PlayerDeathData) {
-  const victim = this.playerManager.getPlayer(data.victimId);
-  if (victim) {
-    victim.playDeathAnimation();
-    this.killFeed.addEntry(data.attackerId, data.victimId);
+  // If local player died, hide sprite and enter spectator mode
+  if (data.victimId === this.playerManager.getLocalPlayerId()) {
+    this.playerManager.setPlayerVisible(data.victimId, false);
+    this.spectator.enterSpectatorMode();
   }
+  // Note: Kill feed updates are handled separately in player:kill_credit handler
 }
 ```
 
@@ -684,18 +684,35 @@ Hit detection is part of the game loop in `gameserver.go`:
 
 ```go
 func (gs *GameServer) tick() {
-    // 1. Process input
-    gs.processAllInputs()
+    // 1. Update all players (movement, physics)
+    gs.updateAllPlayers(deltaTime)
 
-    // 2. Update physics (positions, projectiles)
-    gs.updateAllPlayers()
-    gs.world.Projectiles.UpdateAll(gs.getDeltaTime())
+    // 2. Record position snapshots for lag compensation
+    gs.recordPositionSnapshots(now)
 
-    // 3. Check collisions
-    gs.checkHitDetection()  // ← Hit detection happens here
+    // 3. Update all projectiles
+    gs.projectileManager.Update(deltaTime)
 
-    // 4. Check game end conditions
-    gs.checkMatchEnd()
+    // 4. Check for projectile-player collisions (hit detection)
+    gs.checkHitDetection()
+
+    // 5. Check for reload completions
+    gs.checkReloads()
+
+    // 6. Check for respawns
+    gs.checkRespawns()
+
+    // 7. Check for dodge roll duration completion
+    gs.checkRollDuration()
+
+    // 8. Update invulnerability status
+    gs.updateInvulnerability()
+
+    // 9. Update health regeneration
+    gs.updateHealthRegeneration(deltaTime)
+
+    // 10. Check for weapon crate respawns
+    gs.checkWeaponRespawns()
 }
 ```
 
@@ -1130,3 +1147,4 @@ func TestProjectileOutOfBounds(t *testing.T) {
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification |
 | 1.1.0 | 2026-02-15 | Added Hitscan Hit Detection section (Pistol ray-circle collision). Added Lag Compensation via Position History section (RTT-based rewind, 150ms cap, linear interpolation). Updated overview to distinguish projectile vs hitscan collision modes. |
+| 1.1.1 | 2026-02-16 | Fixed checkHitDetection() Go code to use projectileManager API instead of world.Projectiles. Added missing step 10 (checkWeaponRespawns) to tick loop. |

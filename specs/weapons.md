@@ -75,6 +75,20 @@ interface RecoilConfig {
   maxAccumulation: number;    // Maximum accumulated recoil in degrees
 }
 
+interface ProjectileVisuals {
+  color: string;              // Projectile color (hex string)
+  diameter: number;           // Projectile size in pixels
+  tracerColor: string;        // Tracer trail color (hex string)
+  tracerWidth: number;        // Tracer line width in pixels
+}
+
+interface WeaponVisuals {
+  muzzleFlashColor: string;   // Muzzle flash color (hex string)
+  muzzleFlashSize: number;    // Muzzle flash size in pixels
+  muzzleFlashDuration: number; // Muzzle flash duration in milliseconds
+  projectile: ProjectileVisuals; // Projectile visual config
+}
+
 interface WeaponConfig {
   name: string;               // Display name ("Pistol", "AK47", etc.)
   damage: number;             // Base damage per hit (HP)
@@ -87,6 +101,7 @@ interface WeaponConfig {
   knockbackDistance: number;  // Knockback push distance (Bat only)
   recoil: RecoilConfig | null; // Recoil pattern (null = no recoil)
   spreadDegrees: number;      // Movement inaccuracy (degrees ± while moving)
+  isHitscan: boolean;         // Instant-hit weapon (lag compensated) vs projectile
   visuals: WeaponVisuals;     // Client-side rendering config
 }
 ```
@@ -114,6 +129,7 @@ type Weapon struct {
     KnockbackDistance float64        // Knockback distance in pixels (Bat only)
     Recoil            *RecoilPattern // Recoil pattern (nil for no recoil)
     SpreadDegrees     float64        // Movement spread in degrees
+    IsHitscan         bool           // Instant-hit weapon (lag compensated) vs projectile
 }
 
 // IsMelee returns true if this is a melee weapon
@@ -217,7 +233,7 @@ type WeaponCrate struct {
 | Weapon | Muzzle Color | Flash Size | Flash Duration | Projectile Color | Diameter | Tracer Width |
 |--------|--------------|------------|----------------|------------------|----------|--------------|
 | **Pistol** | 0xffdd00 | 8px | 50ms | 0xffff00 (Yellow) | 4px | 2px |
-| **Uzi** | 0xffaa00 | 6px | 30ms | 0xffaa00 (Orange) | 3px | 1.5px |
+| **Uzi** | 0xffaa00 | 8px | 50ms | 0xffaa00 (Orange) | 3px | 1.5px |
 | **AK47** | 0xffcc00 | 12px | 80ms | 0xffcc00 (Gold) | 5px | 2.5px |
 | **Shotgun** | 0xff8800 | 16px | 100ms | 0xff8800 (Orange-red) | 6px | 3px |
 
@@ -716,11 +732,11 @@ const color = parseHexColor(config.visuals.muzzleFlashColor);
 **Factory Pattern:**
 ```go
 // Create weapons via factory (handles config loading)
-weapon := CreateWeaponByType("ak47")
+weapon, err := CreateWeaponByType("ak47")
 
 // Case-insensitive lookup
-weapon := CreateWeaponByType("AK47")  // Same result
-weapon := CreateWeaponByType("Ak47")  // Same result
+weapon, err := CreateWeaponByType("AK47")  // Same result
+weapon, err := CreateWeaponByType("Ak47")  // Same result
 ```
 
 **Thread Safety:**

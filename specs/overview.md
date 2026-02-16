@@ -280,11 +280,17 @@ API URL: http://localhost:8080/ws
 **Game Server Pattern:**
 ```go
 type GameServer struct {
-    World       *World       // All players, projectiles, crates
-    Room        *Room        // Player connections, broadcasting
-    Match       *Match       // Win conditions, timer
-    ticker      *time.Ticker // 60 Hz game loop
-    broadcaster *time.Ticker // 20 Hz state broadcast
+    world              *World
+    physics            *Physics
+    projectileManager  *ProjectileManager
+    weaponCrateManager *WeaponCrateManager
+    weaponStates       map[string]*WeaponState
+    positionHistory    *PositionHistory
+    tickRate           time.Duration
+    updateRate         time.Duration
+    clock              Clock
+    broadcastFunc      func(playerStates []PlayerStateSnapshot)
+    // ... additional callback functions
 }
 ```
 
@@ -303,8 +309,8 @@ events-schema/
 ├── src/
 │   ├── schemas/
 │   │   ├── common.ts          # Position, Velocity, Message base
-│   │   ├── client-to-server.ts # Client→Server messages (7 types)
-│   │   └── server-to-client.ts # Server→Client messages (19 types)
+│   │   ├── client-to-server.ts # Client→Server messages (6 types)
+│   │   └── server-to-client.ts # Server→Client messages (22 types)
 │   ├── build-schemas.ts       # Generates JSON schemas for Go
 │   ├── validate-schemas.ts    # Validates schema integrity
 │   ├── check-schemas-up-to-date.ts # CI drift detection
@@ -348,31 +354,35 @@ Every client action is validated server-side:
 
 ```go
 // Example: Shoot validation
-func (s *GameServer) PlayerShoot(playerID, aimAngle) ShootResult {
-    player := s.World.GetPlayer(playerID)
+func (gs *GameServer) PlayerShoot(playerID, aimAngle, clientTimestamp) ShootResult {
+    player, exists := gs.world.GetPlayer(playerID)
 
-    // 1. Player exists and is alive
-    if player == nil || player.IsDead {
+    // 1. Player exists
+    if !exists {
         return ShootResult{Success: false, Reason: "no_player"}
     }
 
-    // 2. Not currently reloading
-    if player.Weapon.IsReloading {
+    // 2. Get weapon state from separate map
+    ws := gs.weaponStates[playerID]
+
+    // 3. Not currently reloading
+    if ws.IsReloading {
         return ShootResult{Success: false, Reason: "reloading"}
     }
 
-    // 3. Has ammo
-    if player.Weapon.CurrentAmmo <= 0 {
+    // 4. Has ammo
+    if ws.IsEmpty() {
         return ShootResult{Success: false, Reason: "empty"}
     }
 
-    // 4. Fire rate cooldown
-    if !player.Weapon.CanShoot() {
+    // 5. Fire rate cooldown
+    if !ws.CanShoot() {
         return ShootResult{Success: false, Reason: "cooldown"}
     }
 
-    // All checks passed - create projectile
-    return s.createProjectile(player, aimAngle)
+    // All checks passed - record shot and create projectile or process hitscan
+    ws.RecordShot()
+    return gs.createProjectileOrHitscan(player, ws.Weapon, aimAngle)
 }
 ```
 
@@ -412,8 +422,7 @@ When enabled, the server validates every outgoing message against JSON schemas g
 ```
 stick-rumble/
 ├── .claude/                       # Claude Code configuration
-│   ├── settings.json              # AI agent settings
-│   └── todos.json                 # Task tracking
+│   └── settings.json              # AI agent settings
 │
 ├── docs/                          # Project documentation
 │   ├── ARCHITECTURE.md            # System design overview
@@ -428,6 +437,8 @@ stick-rumble/
 ├── specs/                         # Detailed specifications (this folder)
 │   ├── README.md                  # Spec index and reading order
 │   ├── SPEC-OF-SPECS.md           # Specification structure template
+│   ├── spec-of-specs-plan.md      # Spec validation plan
+│   ├── test-index.md              # Test scenario index
 │   ├── overview.md                # This file
 │   ├── constants.md               # All magic numbers
 │   ├── arena.md                   # World boundaries
@@ -442,7 +453,11 @@ stick-rumble/
 │   ├── rooms.md                   # Matchmaking
 │   ├── messages.md                # WebSocket messages
 │   ├── networking.md              # Connection lifecycle
-│   └── client-architecture.md     # Phaser scenes and managers
+│   ├── graphics.md                # Rendering and visual effects
+│   ├── audio.md                   # Sound effects and audio
+│   ├── ui.md                      # User interface
+│   ├── client-architecture.md     # Phaser scenes and managers
+│   └── server-architecture.md     # Go server structure
 │
 ├── stick-rumble-client/           # Frontend application (see above)
 │
@@ -451,8 +466,7 @@ stick-rumble/
 ├── weapon-configs.json            # Weapon balance data (shared)
 ├── Makefile                       # Root-level build commands
 ├── CLAUDE.md                      # AI agent instructions
-├── README.md                      # Project entry point
-└── GDD.md                         # Game Design Document (root copy)
+└── README.md                      # Project entry point
 ```
 
 ### Naming Conventions
@@ -549,14 +563,18 @@ Key patterns used throughout the server:
 ```go
 // 1. RWMutex for concurrent access
 type World struct {
+    players map[string]*PlayerState
+    clock   Clock
+    rng     *rand.Rand
     mu      sync.RWMutex
-    players map[string]*Player
+    rngMu   sync.Mutex
 }
 
-func (w *World) GetPlayer(id string) *Player {
+func (w *World) GetPlayer(id string) (*PlayerState, bool) {
     w.mu.RLock()
     defer w.mu.RUnlock()
-    return w.players[id]
+    player, exists := w.players[id]
+    return player, exists
 }
 
 // 2. Channel-based broadcasting

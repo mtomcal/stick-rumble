@@ -1,7 +1,7 @@
 # Stick Rumble Specification Suite
 
-> **Version**: 1.1.0
-> **Last Updated**: 2026-02-15
+> **Version**: 1.1.1
+> **Last Updated**: 2026-02-16
 > **Purpose**: Complete specification for recreating Stick Rumble from scratch
 
 ---
@@ -46,7 +46,7 @@ For an AI agent recreating Stick Rumble from scratch, read specs in this order:
 
 ### Phase 3: Networking
 
-5. **[messages.md](messages.md)** - All 26 WebSocket message types
+5. **[messages.md](messages.md)** - All 28 WebSocket message types
 6. **[networking.md](networking.md)** - Connection lifecycle, reconnection
 7. **[rooms.md](rooms.md)** - Matchmaking, room management
 
@@ -71,11 +71,11 @@ For an AI agent recreating Stick Rumble from scratch, read specs in this order:
 
 ### Phase 7: Server Implementation
 
-18. **[server-architecture.md](server-architecture.md)** - Game loop, concurrency (TODO)
+18. **[server-architecture.md](server-architecture.md)** - Game loop, concurrency
 
 ### Phase 8: Verification
 
-19. **[test-index.md](test-index.md)** - All test scenarios cross-reference (TODO)
+19. **[test-index.md](test-index.md)** - All test scenarios cross-reference
 
 ---
 
@@ -149,6 +149,9 @@ For an AI agent recreating Stick Rumble from scratch, read specs in this order:
 | dodge-roll.md | movement.md, arena.md | hit-detection.md |
 | match.md | player.md, rooms.md | client-architecture.md |
 | client-architecture.md | All gameplay specs | graphics.md, ui.md, audio.md |
+| graphics.md | client-architecture.md | - |
+| ui.md | client-architecture.md | - |
+| audio.md | client-architecture.md | - |
 
 ---
 
@@ -156,25 +159,26 @@ For an AI agent recreating Stick Rumble from scratch, read specs in this order:
 
 | Spec | Description | Lines |
 |------|-------------|-------|
-| [constants.md](constants.md) | All magic numbers with rationale (speeds, damage, timing) | ~650 |
-| [arena.md](arena.md) | 1920x1080 world, boundaries, spawn points, collision | ~450 |
-| [player.md](player.md) | 100 HP, 5s regen delay, 3s respawn, 2s invuln | ~550 |
-| [movement.md](movement.md) | 200/300 px/s walk/sprint, 50/1500 px/s² accel/decel | ~620 |
-| [messages.md](messages.md) | 6 client→server, 22 server→client message types | ~1100 |
-| [networking.md](networking.md) | WebSocket lifecycle, reconnect, graceful shutdown | ~980 |
-| [rooms.md](rooms.md) | 2-8 players, auto-matchmaking, broadcast patterns | ~420 |
-| [weapons.md](weapons.md) | Pistol, Uzi, AK47, Shotgun, Bat, Katana stats | ~750 |
-| [shooting.md](shooting.md) | Fire rate, ammo, reload, recoil, spread | ~650 |
-| [hit-detection.md](hit-detection.md) | AABB collision, damage, death, expiration | ~550 |
-| [melee.md](melee.md) | Range + arc detection, knockback, multi-hit | ~580 |
-| [dodge-roll.md](dodge-roll.md) | 400ms roll, 200ms i-frames, 3s cooldown | ~720 |
-| [match.md](match.md) | 20 kills or 7 minutes, WAITING→ACTIVE→ENDED | ~750 |
-| [client-architecture.md](client-architecture.md) | Phaser scenes, managers, prediction, interpolation | ~850 |
-| [server-architecture.md](server-architecture.md) | Dual-loop engine, lag compensation, delta compression | ~1200 |
-| [graphics.md](graphics.md) | Procedural stick figures, weapons, effects, death visuals | ~800 |
-| [audio.md](audio.md) | Positional audio, weapon sounds, UI feedback | ~500 |
-| [overview.md](overview.md) | Architecture philosophy, prediction/reconciliation patterns | ~300 |
-| [test-index.md](test-index.md) | Cross-reference of all test scenarios across specs | ~400 |
+| [constants.md](constants.md) | All magic numbers with rationale (speeds, damage, timing) | ~539 |
+| [arena.md](arena.md) | 1920x1080 world, boundaries, spawn points, collision | ~982 |
+| [player.md](player.md) | 100 HP, 5s regen delay, 3s respawn, 2s invuln | ~966 |
+| [movement.md](movement.md) | 200/300 px/s walk/sprint, 50/1500 px/s² accel/decel | ~957 |
+| [messages.md](messages.md) | 6 client→server, 22 server→client message types | ~1812 |
+| [networking.md](networking.md) | WebSocket lifecycle, reconnect, graceful shutdown | ~1146 |
+| [rooms.md](rooms.md) | 2-8 players, auto-matchmaking, broadcast patterns | ~866 |
+| [weapons.md](weapons.md) | Pistol, Uzi, AK47, Shotgun, Bat, Katana stats | ~1056 |
+| [shooting.md](shooting.md) | Fire rate, ammo, reload, recoil, spread | ~1084 |
+| [hit-detection.md](hit-detection.md) | AABB collision, damage, death, expiration | ~1150 |
+| [melee.md](melee.md) | Range + arc detection, knockback, multi-hit | ~953 |
+| [dodge-roll.md](dodge-roll.md) | 400ms roll, 200ms i-frames, 3s cooldown | ~1128 |
+| [match.md](match.md) | 20 kills or 7 minutes, WAITING→ACTIVE→ENDED | ~1327 |
+| [client-architecture.md](client-architecture.md) | Phaser scenes, managers, prediction, interpolation | ~1807 |
+| [server-architecture.md](server-architecture.md) | Dual-loop engine, lag compensation, delta compression | ~1294 |
+| [graphics.md](graphics.md) | Procedural stick figures, weapons, effects, death visuals | ~1073 |
+| [ui.md](ui.md) | HUD elements, kill feed, match end screen | ~1251 |
+| [audio.md](audio.md) | Positional audio, weapon sounds, UI feedback | ~905 |
+| [overview.md](overview.md) | Architecture philosophy, prediction/reconciliation patterns | ~700 |
+| [test-index.md](test-index.md) | Cross-reference of all test scenarios across specs | ~642 |
 
 ---
 
@@ -287,7 +291,7 @@ Use this checklist when implementing Stick Rumble from scratch:
 
 1. **Read [constants.md](constants.md)** to understand all game values
 2. **Read [arena.md](arena.md)** to understand the game world
-3. **Read [player.md](player.md)** and [movement.md](movement.md)** for player mechanics
+3. **Read [player.md](player.md) and [movement.md](movement.md)** for player mechanics
 4. **Read [messages.md](messages.md)** to understand the communication protocol
 5. **Continue through the Reading Order** above
 
@@ -344,6 +348,7 @@ Test scenarios use the format `TS-{SPEC}-{NUMBER}`:
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.1.1 | 2026-02-16 | Fixed message count to 28 (6 client→server + 22 server→client per events-schema). Corrected all spec line counts to match actual files. |
+| 1.1.0 | 2026-02-15 | Updated Quick Reference Table: added server-architecture, graphics, audio, overview, test-index specs. Updated movement.md line counts (deceleration change). Updated messages.md counts (6 client→server, 22 server→client). |
 | 1.0.1 | 2026-02-02 | Added audio.md spec (19 specs complete) |
 | 1.0.0 | 2026-02-02 | Initial specification suite with 14 complete specs |
-| 1.1.0 | 2026-02-15 | Updated Quick Reference Table: added server-architecture, graphics, audio, overview, test-index specs. Updated movement.md line counts (deceleration change). Updated messages.md counts (6 client→server, 22 server→client). |

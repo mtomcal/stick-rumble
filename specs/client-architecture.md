@@ -233,10 +233,9 @@ stick-rumble-client/
 │       │   └── GameConfig.ts             # Phaser configuration
 │       ├── scenes/
 │       │   ├── GameScene.ts              # Main game scene
-│       │   ├── GameSceneUI.ts            # UI rendering
+│       │   ├── GameSceneUI.ts            # UI rendering (includes match timer)
 │       │   ├── GameSceneEventHandlers.ts # Message handlers + reconciliation
-│       │   ├── GameSceneSpectator.ts     # Spectator mode
-│       │   └── MatchTimer.ts             # Timer component
+│       │   └── GameSceneSpectator.ts     # Spectator mode
 │       ├── entities/
 │       │   ├── PlayerManager.ts          # Player rendering
 │       │   ├── ProjectileManager.ts      # Projectile lifecycle
@@ -252,7 +251,8 @@ stick-rumble-client/
 │       ├── input/
 │       │   ├── InputManager.ts           # WASD + mouse + sequence numbers
 │       │   ├── ShootingManager.ts        # Fire + reload
-│       │   └── DodgeRollManager.ts       # Roll cooldown
+│       │   └── DodgeRollManager.ts       # Roll cooldown (in input/)
+
 │       ├── network/
 │       │   ├── WebSocketClient.ts        # Connection wrapper
 │       │   ├── NetworkSimulator.ts       # Artificial latency/packet loss
@@ -277,7 +277,8 @@ stick-rumble-client/
 │       ├── audio/
 │       │   └── AudioManager.ts           # Positional audio
 │       └── utils/
-│           └── Clock.ts                  # Time abstraction
+│           ├── Clock.ts                  # Time abstraction
+│           └── xpCalculator.ts           # XP calculation
 ├── src/ui/
 │   └── debug/                            # [NEW: Epic 4] Network debug tools
 │       └── DebugNetworkPanel.tsx         # React panel for network simulation
@@ -449,14 +450,14 @@ function update(time, delta):
 
         checkWeaponProximity()
 
-    dodgeRollManager.update(delta)
+    dodgeRollManager.update()
     projectileManager.update(delta)
-    meleeWeaponManager.update(delta)
+    meleeWeaponManager.update()
 
     updateReloadUI()
     updateCrosshair()
 
-    followLocalPlayerWithCamera()
+    startCameraFollowIfNeeded()
 ```
 
 **TypeScript:**
@@ -473,14 +474,14 @@ update(time: number, delta: number): void {
     this.checkWeaponProximity();
   }
 
-  this.dodgeRollManager.update(delta);
+  this.dodgeRollManager.update();
   this.projectileManager.update(delta);
-  this.meleeWeaponManager.update(delta);
+  this.meleeWeaponManager.update();
 
   this.updateReloadUI();
   this.updateCrosshair();
 
-  this.followLocalPlayer();
+  this.startCameraFollowIfNeeded();
 }
 ```
 
@@ -488,7 +489,7 @@ update(time: number, delta: number): void {
 - Input processed first for minimum latency
 - Local player aim updated immediately for responsive feel (before server confirms)
 - Automatic weapons check pointer state for hold-to-fire
-- Camera follows local player with smooth lerp
+- Camera follow started once using Phaser's startFollow() API (not per-frame lerp)
 
 ---
 
@@ -580,10 +581,11 @@ function updatePlayers(states: PlayerState[]):
         else:
             player.setColor(playerColor)
 
-        // Dodge roll visual (rotation + transparency)
+        // Dodge roll visual (360° rotation + visibility flickering)
         if state.isRolling:
-            player.setAlpha(0.5)
-            player.setRotation(rollRotation)  // 360° spin
+            rollAngle = ((now % 400) / 400) * 360°  // Full rotation over 0.4s
+            player.setRotation(rollAngle)
+            player.setVisible(now % 200 < 100)  // Flicker with 200ms period
 ```
 
 **TypeScript:**
@@ -622,9 +624,12 @@ updatePlayers(states: PlayerState[]): void {
     }
 
     if (state.isRolling) {
-      player.setAlpha(0.5);
+      const rollAngle = ((Date.now() % 400) / 400) * Math.PI * 2; // 360° rotation
+      player.setRotation(rollAngle);
+      player.setVisible(Date.now() % 200 < 100); // Flicker effect
     } else {
-      player.setAlpha(1.0);
+      player.setRotation(0);
+      player.setVisible(true);
     }
   }
 }
@@ -634,7 +639,7 @@ updatePlayers(states: PlayerState[]): void {
 - Map-based storage for O(1) lookup by player ID
 - Walk animation driven by velocity magnitude (natural movement feel)
 - Gray color clearly indicates dead players
-- Alpha reduction during roll shows invincibility window visually
+- Visibility flickering during roll shows invincibility window visually
 
 ---
 
@@ -915,7 +920,7 @@ update(): void {
 
 #### ShootingManager
 
-**Purpose:** Manage weapon fire, reload, and cooldowns.
+**Purpose:** Manage weapon fire, reload, and cooldowns. Separate methods for ranged and melee.
 
 **Pseudocode:**
 ```
@@ -924,10 +929,20 @@ function shoot():
         return
 
     wsClient.send({
-        type: weaponState.isMelee ? 'player:melee_attack' : 'player:shoot',
-        data: { aimAngle: inputManager.aimAngle }
+        type: 'player:shoot',
+        data: { aimAngle: inputManager.aimAngle, clientTimestamp: now() }
     })
     lastShotTime = now()
+
+function meleeAttack():
+    if not canMeleeAttack():
+        return
+
+    wsClient.send({
+        type: 'player:melee_attack',
+        data: { aimAngle: inputManager.aimAngle }
+    })
+    lastMeleeTime = now()
 
 function canShoot():
     if weaponState.isReloading: return false
@@ -956,17 +971,34 @@ function isAutomatic():
 
 **TypeScript:**
 ```typescript
-shoot(): void {
-  if (!this.canShoot()) return;
+shoot(): boolean {
+  if (!this.canShoot()) return false;
 
-  const messageType = this.weaponState.isMelee ? 'player:melee_attack' : 'player:shoot';
+  const shotTime = this.clock.now();
   this.wsClient.send({
-    type: messageType,
-    timestamp: Date.now(),
-    data: { aimAngle: this.inputManager.getAimAngle() }
+    type: 'player:shoot',
+    timestamp: shotTime,
+    data: {
+      aimAngle: this.aimAngle,
+      clientTimestamp: shotTime
+    }
   });
 
-  this.lastShotTime = Date.now();
+  this.lastShotTime = shotTime;
+  return true;
+}
+
+meleeAttack(): boolean {
+  if (!this.canMeleeAttack()) return false;
+
+  this.lastMeleeTime = this.clock.now();
+  this.wsClient.send({
+    type: 'player:melee_attack',
+    timestamp: Date.now(),
+    data: { aimAngle: this.aimAngle }
+  });
+
+  return true;
 }
 
 canShoot(): boolean {
@@ -1355,9 +1387,9 @@ const PhaserGame: React.FC<{ onMatchEnd: (data: MatchEndData, playerId: string) 
 ├─────────────────────────────────────────────────────────────┤
 │ 5. Interpolation + Manager Updates                            │
 │    ├─ PlayerManager.update(delta) - Interpolate remote players│
-│    ├─ DodgeRollManager.update(delta) - Cooldown tracking     │
+│    ├─ DodgeRollManager.update() - Cooldown tracking          │
 │    ├─ ProjectileManager.update(delta) - Move projectiles     │
-│    └─ MeleeWeaponManager.update(delta) - Animate swings      │
+│    └─ MeleeWeaponManager.update() - Animate swings           │
 ├─────────────────────────────────────────────────────────────┤
 │ 6. UI Updates                                                │
 │    ├─ Reload progress bar (if reloading)                     │
@@ -1365,7 +1397,7 @@ const PhaserGame: React.FC<{ onMatchEnd: (data: MatchEndData, playerId: string) 
 │    └─ Cooldown indicator (dodge roll)                        │
 ├─────────────────────────────────────────────────────────────┤
 │ 7. Camera Update                                             │
-│    └─ Follow local player with lerp (0.1 factor)             │
+│    └─ Start camera follow if needed (Phaser's startFollow)   │
 ├─────────────────────────────────────────────────────────────┤
 │ 8. Phaser Render                                             │
 │    └─ WebGL/Canvas draw all visible objects                  │
@@ -1745,22 +1777,23 @@ it('should reuse pooled effects', () => {
 - Player at position (500, 500)
 
 **Input:**
-- Call update() multiple times
+- Call startCameraFollowIfNeeded()
 
 **Expected Output:**
-- Camera center approaches player position
-- Smooth lerp (0.1 factor)
+- Camera.startFollow() called with local player sprite
+- Smooth follow with 0.1 lerp factor
 
 **TypeScript (Vitest):**
 ```typescript
-it('should follow local player with camera', () => {
+it('should start camera follow on local player', () => {
   playerManager.setLocalPlayerId('local');
   playerManager.updatePlayers([{ id: 'local', position: { x: 500, y: 500 } }]);
 
-  scene.update(0, 16);
+  scene.startCameraFollowIfNeeded();
 
   const camera = scene.cameras.main;
-  expect(camera.scrollX).toBeCloseTo(500 - camera.width / 2, 1);
+  expect(scene.isCameraFollowing).toBe(true);
+  expect(scene.cameraFollowTarget).toBe(playerManager.getLocalPlayerSprite());
 });
 ```
 

@@ -222,8 +222,15 @@ func (gs *GameServer) PlayerMeleeAttack(playerID string, aimAngle float64) Melee
 
     player.SetAimAngle(aimAngle)
 
-    // Get all players and perform attack
-    allPlayers := gs.world.GetAllPlayers()
+    // Get all players for hit detection (direct map access for mutable pointers)
+    gs.world.mu.RLock()
+    allPlayers := make([]*PlayerState, 0, len(gs.world.players))
+    for _, p := range gs.world.players {
+        allPlayers = append(allPlayers, p)
+    }
+    gs.world.mu.RUnlock()
+
+    // Perform the melee attack
     result := PerformMeleeAttack(player, allPlayers, ws.Weapon)
 
     return MeleeResult{
@@ -660,7 +667,7 @@ class MeleeWeaponManager {
 **Thread Safety:**
 - `PlayerState` methods (`GetPosition`, `SetPosition`, `TakeDamage`) are mutex-protected
 - `weaponStates` map accessed with `weaponMu` RWMutex
-- `world.GetAllPlayers()` returns snapshot under read lock
+- Melee attack directly accesses `gs.world.players` map under `gs.world.mu.RLock()` to collect mutable `[]*PlayerState` pointers (cannot use `world.GetAllPlayers()` which returns read-only `[]PlayerStateSnapshot`; melee needs mutable pointers for `TakeDamage` and `applyKnockback`)
 
 **Attack Flow:**
 ```go
