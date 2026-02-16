@@ -355,7 +355,7 @@ function broadcastLoop(ctx):
             case <- ctx.Done():
                 return  // Shutdown signal
             case <- ticker.C:
-                states = world.GetAllPlayerStates()
+                states = world.GetAllPlayers()
                 broadcastFunc(states)  // Send to network layer
 ```
 
@@ -371,7 +371,7 @@ func (gs *GameServer) runBroadcastLoop(ctx context.Context) {
         case <-ctx.Done():
             return
         case <-ticker.C:
-            states := gs.world.GetAllPlayerStates()
+            states := gs.world.GetAllPlayers()
             if gs.broadcastFunc != nil {
                 gs.broadcastFunc(states)
             }
@@ -1229,7 +1229,7 @@ func TestConcurrentAccess(t *testing.T) {
         wg.Add(1)
         go func() {
             defer wg.Done()
-            _ = world.GetAllPlayerStates()
+            _ = world.GetAllPlayers()
         }()
     }
 
@@ -1326,4 +1326,5 @@ func TestConcurrentAccess(t *testing.T) {
 | 1.1.2 | 2026-02-16 | Fixed setupCallbacks section — callbacks are registered as method references in the constructor (not a separate `setupCallbacks()` method), added `SetGetRTT` and `SetOnWeaponRespawn` registrations. |
 | 1.1.3 | 2026-02-16 | Replaced nonexistent `sanitizePosition` with actual `sanitizeVector2` from `physics.go:208` — NaN/Inf replaced with 0 (not arena center). |
 | 1.1.4 | 2026-02-16 | Fixed tick() deltaTime — uses real elapsed `now.Sub(lastTick).Seconds()` not fixed from tickRate. Logic is inline in loop, not separate `tick()` method. |
+| 1.1.6 | 2026-02-16 | Fixed broadcastLoop and test code — `GetAllPlayerStates()` → `GetAllPlayers()` to match actual world.go method name |
 | 1.1.5 | 2026-02-16 | Fixed handleInputState — correct signature `(playerID string, data any)` not `(msg Message, playerID string)`, direct type assertions instead of `getBool`/`getFloat64`/`getInt` helpers, no NaN/Inf sanitization (schema validation guarantees types), validation returns early on failure (not non-blocking). |
