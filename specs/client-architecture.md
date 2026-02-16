@@ -455,13 +455,13 @@ function update(time, delta):
 
     updateReloadUI()
     updateCrosshair()
-
-    followLocalPlayerWithCamera()
 ```
+
+> **Note:** Camera follow is NOT per-frame. It is set up once via `startCameraFollowIfNeeded()`, which calls `this.cameras.main.startFollow(sprite, true, 0.1, 0.1)`. Phaser's built-in `startFollow` handles smooth lerp natively at 0.1 factor. The callback is triggered from event handlers (e.g., on first `player:move`), not from `update()`.
 
 **TypeScript:**
 ```typescript
-update(time: number, delta: number): void {
+update(_time: number, delta: number): void {
   if (!this.isSpectating) {
     this.inputManager.update();
     this.playerManager.updateLocalPlayerAim(this.inputManager.getAimAngle());
@@ -473,14 +473,12 @@ update(time: number, delta: number): void {
     this.checkWeaponProximity();
   }
 
-  this.dodgeRollManager.update(delta);
+  this.dodgeRollManager.update();
   this.projectileManager.update(delta);
-  this.meleeWeaponManager.update(delta);
+  this.meleeWeaponManager.update();
 
   this.updateReloadUI();
   this.updateCrosshair();
-
-  this.followLocalPlayer();
 }
 ```
 
@@ -488,7 +486,7 @@ update(time: number, delta: number): void {
 - Input processed first for minimum latency
 - Local player aim updated immediately for responsive feel (before server confirms)
 - Automatic weapons check pointer state for hold-to-fire
-- Camera follows local player with smooth lerp
+- Camera follow is set once via `startFollow()`, not per-frame
 
 ---
 
@@ -1374,8 +1372,8 @@ const PhaserGame: React.FC<{ onMatchEnd: (data: MatchEndData, playerId: string) 
 │    ├─ Crosshair spread (based on weapon + movement)          │
 │    └─ Cooldown indicator (dodge roll)                        │
 ├─────────────────────────────────────────────────────────────┤
-│ 7. Camera Update                                             │
-│    └─ Follow local player with lerp (0.1 factor)             │
+│ 7. Camera (handled by Phaser startFollow, not per-frame)     │
+│    └─ Set once via startCameraFollowIfNeeded() (0.1 lerp)    │
 ├─────────────────────────────────────────────────────────────┤
 │ 8. Phaser Render                                             │
 │    └─ WebGL/Canvas draw all visible objects                  │
@@ -1404,7 +1402,7 @@ Async WebSocket Messages (any time):
 1. Input first minimizes perceived latency
 2. Local visual updates before server response for immediate feedback
 3. Managers update in dependency order (dodge affects projectile)
-4. Camera last so it follows updated player position
+4. Camera follow is automatic via Phaser's `startFollow` (set once, not per-frame)
 5. Async messages can update at any point in frame
 
 ---
@@ -1755,11 +1753,12 @@ it('should reuse pooled effects', () => {
 - Player at position (500, 500)
 
 **Input:**
-- Call update() multiple times
+- Trigger `startCameraFollowIfNeeded()` callback (e.g., first player:move received)
 
 **Expected Output:**
-- Camera center approaches player position
-- Smooth lerp (0.1 factor)
+- `cameras.main.startFollow()` called with local player sprite
+- Lerp factors: 0.1 horizontal, 0.1 vertical
+- Camera tracks player automatically via Phaser engine
 
 **TypeScript (Vitest):**
 ```typescript
@@ -1767,7 +1766,8 @@ it('should follow local player with camera', () => {
   playerManager.setLocalPlayerId('local');
   playerManager.updatePlayers([{ id: 'local', position: { x: 500, y: 500 } }]);
 
-  scene.update(0, 16);
+  // Camera follow is set once via startCameraFollowIfNeeded(), not per update()
+  scene.startCameraFollowIfNeeded();
 
   const camera = scene.cameras.main;
   expect(camera.scrollX).toBeCloseTo(500 - camera.width / 2, 1);
@@ -1783,5 +1783,6 @@ it('should follow local player with camera', () => {
 | 1.0.0 | 2026-02-02 | Initial specification |
 | 1.1.0 | 2026-02-15 | Added new directories: physics/, simulation/, ui/debug/. Added subsystem descriptions: PredictionEngine, InterpolationEngine, GameSimulation, NetworkSimulator, DebugNetworkPanel. Updated directory tree with new files (RangedWeapon.ts, MeleeWeapon.ts, GameSceneSpectator.ts, urlParams.ts). Updated rendering pipeline with prediction/interpolation steps. Updated async message flow for state:snapshot/state:delta. |
 | 1.1.1 | 2026-02-16 | Fixed dodge roll visual — uses `setRotation` (360deg spin) + `setVisible` flicker (not `setAlpha(0.5)`) per `PlayerManager.ts:264-278`. |
+| 1.1.4 | 2026-02-16 | Fixed camera follow — uses `startFollow()` set once (not per-frame lerp in update). Removed `followLocalPlayer()` from update loop. |
 | 1.1.3 | 2026-02-16 | Fixed directory tree — removed nonexistent MatchTimer.ts, added xpCalculator.ts to utils/ |
 | 1.1.2 | 2026-02-16 | Fixed ShootingManager — separate `shoot()` and `meleeAttack()` methods (not single `shoot()` checking `isMelee`). Added `clientTimestamp` to shoot data. |
