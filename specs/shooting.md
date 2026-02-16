@@ -71,9 +71,9 @@ The result of processing a shoot request.
 **Go:**
 ```go
 type ShootResult struct {
-    Success     bool        // Whether shot was successful
-    FailReason  string      // Reason code if failed ("cooldown", "empty", etc.)
-    Projectile  *Projectile // Created projectile (nil if failed)
+    Success    bool        // Whether shot was successful
+    Reason     string      // Reason code if failed ("cooldown", "empty", etc.)
+    Projectile *Projectile // Created projectile (nil if failed)
 }
 ```
 
@@ -235,29 +235,29 @@ func (gs *GameServer) PlayerShoot(playerID string, aimAngle float64, clientTimes
     // Get player state
     player, err := gs.world.GetPlayer(playerID)
     if err != nil || !player.IsAlive() {
-        return ShootResult{Success: false, FailReason: ShootFailedNoPlayer}
+        return ShootResult{Success: false, Reason: ShootFailedNoPlayer}
     }
 
     // Get weapon state
     ws := gs.weaponStates[playerID]
     if ws == nil {
-        return ShootResult{Success: false, FailReason: ShootFailedNoPlayer}
+        return ShootResult{Success: false, Reason: ShootFailedNoPlayer}
     }
 
     // Check reload state
     if ws.IsReloading {
-        return ShootResult{Success: false, FailReason: ShootFailedReload}
+        return ShootResult{Success: false, Reason: ShootFailedReload}
     }
 
     // Check ammo (triggers auto-reload if empty)
     if ws.CurrentAmmo == 0 {
         ws.StartReload()
-        return ShootResult{Success: false, FailReason: ShootFailedEmpty}
+        return ShootResult{Success: false, Reason: ShootFailedEmpty}
     }
 
     // Check fire rate cooldown
     if !ws.CanShoot() {
-        return ShootResult{Success: false, FailReason: ShootFailedCooldown}
+        return ShootResult{Success: false, Reason: ShootFailedCooldown}
     }
 
     // Create projectile
@@ -776,7 +776,7 @@ test "empty magazine returns shoot:failed":
         result = playerShoot(player.id, aimAngle: 0)
     assert:
         result.success == false
-        result.failReason == "empty"
+        result.reason == "empty"
         weaponState.isReloading == true
 ```
 
@@ -807,7 +807,7 @@ test "fire rate cooldown enforced":
         result = playerShoot(player.id, 0)  // Second shot
     assert:
         result.success == false
-        result.failReason == "cooldown"
+        result.reason == "cooldown"
 ```
 
 ### TS-SHOOT-005: Reloading Blocks Shooting
@@ -835,7 +835,7 @@ test "reloading blocks shooting":
         result = playerShoot(player.id, 0)
     assert:
         result.success == false
-        result.failReason == "reloading"
+        result.reason == "reloading"
 ```
 
 ### TS-SHOOT-006: Projectile Velocity From Aim Angle
@@ -1036,7 +1036,7 @@ test "dead player cannot shoot":
         result = playerShoot(player.id, 0)
     assert:
         result.success == false
-        result.failReason == "no_player"
+        result.reason == "no_player"
 ```
 
 ---
@@ -1047,3 +1047,4 @@ test "dead player cannot shoot":
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification with complete shooting mechanics |
 | 1.1.0 | 2026-02-15 | Added `clientTimestamp` parameter to `PlayerShoot()` for lag compensation on hitscan weapons. |
+| 1.1.1 | 2026-02-16 | Fixed `ShootResult.FailReason` → `ShootResult.Reason` to match `gameserver.go:22`. |
