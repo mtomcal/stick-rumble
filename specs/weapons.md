@@ -113,7 +113,8 @@ type Weapon struct {
     ArcDegrees        float64        // Swing arc in degrees (melee) or pellet spread (shotgun)
     KnockbackDistance float64        // Knockback distance in pixels (Bat only)
     Recoil            *RecoilPattern // Recoil pattern (nil for no recoil)
-    SpreadDegrees     float64        // Movement spread in degrees
+    SpreadDegrees     float64        // Movement spread in degrees (+/- while moving, 0 for stationary)
+    IsHitscan         bool           // Instant-hit weapon (lag compensated) vs projectile
 }
 
 // IsMelee returns true if this is a melee weapon
