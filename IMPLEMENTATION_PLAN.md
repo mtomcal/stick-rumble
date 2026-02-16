@@ -106,7 +106,7 @@ The specs in `specs/` were bulk-updated and then validated by a prior Ralph job.
 - [x] 84. README.md — Add graphics.md, ui.md, audio.md to Key Dependencies table
 - [x] 99. SPEC-OF-SPECS.md — Fix client→server `test` message (no formal schema)
 - [x] 100. SPEC-OF-SPECS.md — Fix estimated total length (24,924 actual, not 8,575)
-- [ ] 101. SPEC-OF-SPECS.md — Fix shooting test scenario descriptions
+- [x] 101. SPEC-OF-SPECS.md — Fix shooting test scenario descriptions
 - [ ] 102. SPEC-OF-SPECS.md — Fix UI timer red threshold (< 60, not < 30)
 - [x] 90. test-index.md — Fix client-architecture.md test count (10, not 8)
 

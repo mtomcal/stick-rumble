@@ -896,15 +896,15 @@ Organized by category with tables:
 - TS-SHOOT-001: Successful shot creates projectile
 - TS-SHOOT-002: Shot decrements ammo
 - TS-SHOOT-003: Empty magazine returns shoot:failed
-- TS-SHOOT-004: Cooldown enforced between shots
+- TS-SHOOT-004: Fire rate cooldown enforced
 - TS-SHOOT-005: Reloading blocks shooting
-- TS-SHOOT-006: Dead player cannot shoot
-- TS-SHOOT-007: Spread applied to projectile angle
-- TS-SHOOT-008: Recoil accumulates on rapid fire
-- TS-SHOOT-009: Recoil recovers over time
-- TS-SHOOT-010: Sprint increases spread by 1.5x
-- TS-SHOOT-011: Reload restores full ammo
-- TS-SHOOT-012: Reload takes correct duration
+- TS-SHOOT-006: Projectile velocity from aim angle
+- TS-SHOOT-007: Projectile expires after lifetime
+- TS-SHOOT-008: Reload completes and restores ammo
+- TS-SHOOT-009: Shotgun creates 8 pellets
+- TS-SHOOT-010: Sprint applies accuracy penalty
+- TS-SHOOT-011: Vertical recoil accumulates
+- TS-SHOOT-012: Dead player cannot shoot
 
 **Estimated Length**: 450-550 lines
 
