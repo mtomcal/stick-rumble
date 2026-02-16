@@ -62,7 +62,7 @@ All spec files are at `docs/archive/20251125-055521-pre-bmm/specs/`.
 
 ## Progress Checklist
 
-- [ ] 1. README.md
+- [x] 1. README.md
 - [ ] 2. overview.md
 - [ ] 3. types-and-events.md
 - [ ] 4. config.md
@@ -88,7 +88,8 @@ Add rows here when you find something the plan missed.
 
 | # | Discovery | Affected Items | Action Taken |
 |---|-----------|---------------|--------------|
-| | | | |
+| 1 | `graphics.md` missing from README reading order, quick reference table, and dependency graph | README.md | Added graphics.md to all three sections in README.md |
+| 2 | Several source file line counts in README were wrong (Joystick.tsx: ~100→~193, MainScene.ts: ~890→~989, vite.config.ts: ~15→~23, tsconfig.json: ~20→~28) | README.md | Corrected all line counts |
 
 ---
 
