@@ -1,7 +1,7 @@
 # Rendering Effects (Pre-BMM Archive)
 
-> **Spec Version**: 1.0.0
-> **Last Updated**: 2026-02-15
+> **Spec Version**: 1.0.1
+> **Last Updated**: 2026-02-16
 > **Archive Snapshot**: 2025-11-25 05:55:21
 > **Depends On**: [player.md](player.md), [combat.md](combat.md), [main-scene.md](main-scene.md), [texture-generator.md](texture-generator.md)
 > **Depended By**: [ui.md](ui.md), [input.md](input.md)
@@ -778,3 +778,4 @@ Properties: `fontFamily: 'monospace'`, `fontSize: '10px'`, `color: '#00ff00'`, `
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-15 | Initial specification |
+| 1.0.1 | 2026-02-16 | Verified against source — all constants, rendering logic, and line references match |

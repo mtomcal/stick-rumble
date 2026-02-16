@@ -4,7 +4,7 @@
 > **Last Updated**: 2026-02-15
 > **Archive Snapshot**: 2025-11-25 05:55:21
 > **Source File**: `game/scenes/MainScene.ts` (~990 lines)
-> **Depends On**: [types-and-events.md](types-and-events.md), [stick-figure.md](stick-figure.md) (player.md)
+> **Depends On**: [types-and-events.md](types-and-events.md), [player.md](player.md)
 > **Depended By**: [combat.md](combat.md), [ai.md](ai.md), [rendering.md](rendering.md), [input.md](input.md)
 
 ---
@@ -531,7 +531,7 @@ This is a client-only prototype with no server component. All logic runs in the 
 
 | Topic | Spec |
 |-------|------|
-| StickFigure entity class | [stick-figure.md](stick-figure.md) (player.md) |
+| StickFigure entity class | [player.md](player.md) |
 | WEAPON_STATS detailed behavior | [combat.md](combat.md) |
 | Enemy AI logic in `handleEnemies()` | [ai.md](ai.md) |
 | A* pathfinding system | [pathfinder.md](pathfinder.md) |
@@ -550,3 +550,4 @@ This is a client-only prototype with no server component. All logic runs in the 
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-15 | Initial specification |
+| 1.0.1 | 2026-02-16 | Fix stick-figure.md → player.md references in header and cross-reference index |

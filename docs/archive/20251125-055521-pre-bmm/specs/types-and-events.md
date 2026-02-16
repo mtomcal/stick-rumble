@@ -2,9 +2,9 @@
 
 > **Spec Version**: 1.0.0
 > **Last Updated**: 2026-02-15
-> **Source File**: `types.ts` (45 lines), `game/EventBus.ts` (4 lines)
+> **Source File**: `types.ts` (44 lines), `game/EventBus.ts` (4 lines)
 > **Depends On**: [overview.md](overview.md)
-> **Depended By**: [config.md](config.md), [stick-figure.md](stick-figure.md), [main-scene.md](main-scene.md), [combat.md](combat.md), [ui.md](ui.md), [input.md](input.md), [gemini-service.md](gemini-service.md)
+> **Depended By**: [config.md](config.md), [player.md](player.md), [main-scene.md](main-scene.md), [combat.md](combat.md), [ui.md](ui.md), [input.md](input.md), [gemini-service.md](gemini-service.md)
 
 ---
 
@@ -54,7 +54,7 @@ export interface GameStats {
 - **App.tsx** -- Receives via `EventBus.on(EVENTS.PLAYER_UPDATE)`, stores in React state, renders in HUD
 - **MainScene.ts** -- Emits via `EventBus.emit(EVENTS.PLAYER_UPDATE, this.stats)` at end of `update()` and after significant state changes (damage, kills, game over)
 
-**Note**: The `overview.md` spec lists additional fields (`maxHealth`, `currentWeapon`) in its GameStats description. These fields do not exist in the actual `types.ts` source. The `health` field is used directly as a percentage (0-100), and the weapon name is not part of the stats interface.
+**Note**: The `health` field is used directly as a percentage (0-100). There is no `maxHealth` or `currentWeapon` field — the weapon name is not part of the stats interface.
 
 ---
 
@@ -204,7 +204,7 @@ Emitted when the player destroys an enemy. The `name` field is read from the ene
 **Direction**: React → Phaser
 **Payload**: `{ x: number, y: number, active: boolean }` (matches `VirtualJoystickData` shape)
 **Emitter**: `App.tsx:94` via `handleMove` callback
-**Listener**: `MainScene.ts:171` -- Stores in `this.virtualJoystick` for mobile movement input
+**Listener**: `MainScene.ts:171` -- Stores in `this.moveStick` for mobile movement input
 
 Emitted continuously while the left virtual joystick is being touched. When `active` is `false`, the joystick has been released.
 
@@ -213,7 +213,7 @@ Emitted continuously while the left virtual joystick is being touched. When `act
 **Direction**: React → Phaser
 **Payload**: `{ x: number, y: number, active: boolean }` (matches `VirtualJoystickData` shape)
 **Emitter**: `App.tsx:98` via `handleAim` callback
-**Listener**: `MainScene.ts:172` -- Stores in `this.virtualAimJoystick` for mobile aiming
+**Listener**: `MainScene.ts:172` -- Stores in `this.aimStick` for mobile aiming
 
 Emitted continuously while the right virtual joystick is being touched. MainScene converts the x/y values to an aim angle.
 
@@ -283,3 +283,4 @@ game/EventBus.ts
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-15 | Initial specification |
+| 1.0.1 | 2026-02-16 | Fix stick-figure.md → player.md reference, fix types.ts line count (45→44), fix moveStick/aimStick variable names, update note about overview.md GameStats fields |

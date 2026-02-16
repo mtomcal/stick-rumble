@@ -4,7 +4,7 @@
 > **Last Updated**: 2026-02-15
 > **Source Files**: `package.json` (24 lines), `vite.config.ts` (23 lines), `tsconfig.json` (28 lines), `index.html` (40 lines), `index.tsx` (14 lines), `game/phaserGame.ts` (26 lines)
 > **Depends On**: [overview.md](overview.md), [types-and-events.md](types-and-events.md)
-> **Depended By**: [stick-figure.md](stick-figure.md), [main-scene.md](main-scene.md), [ui.md](ui.md)
+> **Depended By**: [player.md](player.md), [main-scene.md](main-scene.md), [ui.md](ui.md)
 
 ---
 
@@ -160,7 +160,7 @@ Both `process.env.API_KEY` and `process.env.GEMINI_API_KEY` are replaced at comp
 |-------|-------------|-------|
 | `@` | Project root (`.`) | Allows imports like `@/types` instead of `./types` |
 
-This alias is mirrored in `tsconfig.json` so TypeScript resolves the same paths.
+This alias is mirrored in `tsconfig.json` so TypeScript resolves the same paths. **Note**: Despite being configured, the `@/` alias is never actually used in any import in the codebase — all imports use relative paths.
 
 ---
 
@@ -345,6 +345,7 @@ if (!rootElement) {
 
 const root = ReactDOM.createRoot(rootElement);
 root.render(
+  // StrictMode is removed for Phaser compatibility to prevent double initialization in dev
   <App />
 );
 ```
@@ -441,9 +442,9 @@ Browser loads index.html
         ├── import ReactDOM from 'react-dom/client'  → CDN via importmap
         ├── import App from './App'                   → Vite-served local module
         │     ├── import React from 'react'           → CDN via importmap
-        │     ├── import { EventBus } from '@/game/EventBus'  → Vite '@' alias
-        │     ├── import { EVENTS } from '@/types'    → Vite '@' alias
-        │     └── import { createGame } from '@/game/phaserGame'
+        │     ├── import { EventBus } from './game/EventBus'    → Vite-served local
+        │     ├── import { EVENTS } from './types'              → Vite-served local
+        │     └── import { createGame } from './game/phaserGame'
         │           └── import Phaser from 'phaser'   → CDN via importmap
         └── React mounts into #root
               └── App creates Phaser game into child container
@@ -486,3 +487,4 @@ If `GEMINI_API_KEY` is not set in the environment, `process.env.GEMINI_API_KEY` 
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-15 | Initial specification |
+| 1.0.1 | 2026-02-16 | Fix stick-figure.md → player.md reference, add missing StrictMode comment to index.tsx listing, fix import paths in module resolution diagram (no @/ alias usage), note @/ alias is unused |

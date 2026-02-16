@@ -3,7 +3,7 @@
 > **Spec Version**: 1.0.0
 > **Last Updated**: 2026-02-15
 > **Depends On**: None (root spec)
-> **Depended By**: [types-and-events.md](types-and-events.md), [config.md](config.md), [stick-figure.md](stick-figure.md), [main-scene.md](main-scene.md)
+> **Depended By**: [types-and-events.md](types-and-events.md), [config.md](config.md), [player.md](player.md), [main-scene.md](main-scene.md)
 
 ---
 
@@ -67,7 +67,7 @@ React (App.tsx)                    Phaser (MainScene.ts)
 2. Update Phase (per frame, 120 FPS physics)
    MainScene.update():
      a. Read input (keys or virtual joystick)
-     b. Calculate player velocity (250 px/s, diagonal normalized)
+     b. Calculate player velocity (350 px/s, diagonal normalized)
      c. Set player physics body velocity
      d. Update player aim angle (mouse or right joystick)
      e. Process AI for each enemy (pathfinding, LOS, attack decisions)
@@ -83,9 +83,9 @@ React (App.tsx)                    Phaser (MainScene.ts)
    Player         → Weapon pickups → weapon switch
 
 4. React Render Phase
-   EventBus 'game-stats' → App.tsx setState → React re-render
-   EventBus 'game-over'  → Show death screen
-   EventBus 'enemy-killed' → Maybe trigger Gemini taunt (30% chance)
+   EventBus 'player-update' → App.tsx setState → React re-render
+   EventBus 'game-over'     → Show death screen
+   EventBus 'bot-killed'    → Maybe trigger Gemini taunt (30% chance)
 ```
 
 ---
@@ -139,7 +139,7 @@ A `StickFigure` instance stored as `this.player` in MainScene. The player has:
 - Physics body: 15px radius circle
 - Health: 100 HP, regenerates at ~40 HP/s after 3 seconds of no damage
 - Weapons: starts with BAT, can pick up ranged weapons from the arena
-- Movement: 250 px/s base speed
+- Movement: 350 px/s base speed
 
 ### AI Bots (Enemies)
 
@@ -149,7 +149,7 @@ Also `StickFigure` instances, stored in a Phaser physics group `this.enemies`. B
 - Each bot gets a random weapon and a random name
 - Use A* pathfinding on a 50px grid
 - Check line-of-sight to player (throttled to every 200ms)
-- Attack when in range (melee: 80px, ranged: 400px)
+- Attack when in range (melee: weapon range + 20px, ranged: 600px or 300px for shotgun)
 
 ### Weapons
 
@@ -157,11 +157,11 @@ Five weapon types defined in a `WEAPON_STATS` object:
 
 | Weapon | Type | Damage | Cooldown | Clip | Reload | Special |
 |--------|------|--------|----------|------|--------|---------|
-| BAT | Melee | 30 | 400ms | -- | -- | 80px range, 90deg arc |
-| KATANA | Melee | 45 | 500ms | -- | -- | 100px range, 60deg arc |
-| UZI | Ranged | 8 | 100ms | 30 | 1500ms | 0.3 spread |
-| AK47 | Ranged | 20 | 150ms | 30 | 2000ms | 0.05 spread |
-| SHOTGUN | Ranged | 12 | 800ms | 6 | 2500ms | 0.6 spread, 5 pellets |
+| BAT | Melee | 60 | 425ms | -- | -- | 90px range, ~80deg arc |
+| KATANA | Melee | 100 | 800ms | -- | -- | 110px range, ~80deg arc |
+| UZI | Ranged | 12 | 100ms | 30 | 1200ms | 0.3 spread |
+| AK47 | Ranged | 20 | 150ms | 20 | 2000ms | 0.05 spread |
+| SHOTGUN | Ranged | 20 | 950ms | 6 | 2000ms | 0.6 spread, 6 pellets |
 
 Weapon pickups spawn at fixed positions in the arena. Picking up a weapon replaces the current one and resets ammo.
 
@@ -175,7 +175,7 @@ Bot AI runs every frame in MainScene's `update()` method. Each enemy:
 2. **Pathfinding**: Requests an A* path every 500ms. The pathfinder uses a 50px grid built from the level's wall geometry.
 3. **Line-of-sight**: Raycasts from bot to player, checking wall intersections. Throttled to 200ms intervals. If LOS exists, the bot can aim and shoot directly.
 4. **Movement**: Follows A* path waypoints if no LOS; moves directly toward player if LOS is clear.
-5. **Attack**: Melee bots swing when within range (80-100px). Ranged bots fire with +/- 0.4 radians inaccuracy.
+5. **Attack**: Melee bots swing when within range (110-130px, i.e., weapon range + 20px). Ranged bots fire with ±0.2 radians inaccuracy (0.4 total spread).
 
 The pathfinder (`Pathfinder.ts`) implements A* with Manhattan distance heuristic, a 500-step limit, and fallback logic when the target tile is inside a wall (searches a radius-2 neighborhood for the nearest open tile).
 
@@ -185,7 +185,7 @@ The pathfinder (`Pathfinder.ts`) implements A* with Manhattan distance heuristic
 
 `LevelGenerator.ts` creates the office arena:
 
-- **Floor**: 100px grid overlay (light blue lines on dark background)
+- **Floor**: 100px grid overlay (blue-grey lines at 0.5 opacity on light blue-grey background)
 - **Boundary walls**: 120px thick walls around the 1600x1600 perimeter
 - **Interior walls**: Vertical walls at x=500 and x=1100; horizontal walls at y=600 and y=1000 (with gaps for passages)
 - **Furniture**: Desk obstacles scattered through the arena
@@ -218,26 +218,25 @@ The `TextureGenerator` runs once during `MainScene.create()` to generate all reu
 The **EventBus** (`game/EventBus.ts`) is a `Phaser.Events.EventEmitter` singleton:
 
 ```typescript
-import { Events } from 'phaser';
-export const EventBus = new Events.EventEmitter();
+import Phaser from 'phaser';
+export const EventBus = new Phaser.Events.EventEmitter();
 ```
 
 ### Events Emitted (Phaser → React)
 
 | Event | Payload | Trigger |
 |-------|---------|---------|
-| `game-stats` | `GameStats` object | Every frame, from MainScene.update() |
-| `game-over` | `{ kills, wave }` | Player health reaches 0 |
-| `current-scene-ready` | `MainScene` instance | Scene create() completes |
-| `enemy-killed` | `{ name, weapon }` | Enemy destroyed by player |
-| `chat-message` | `ChatMessage` | Gemini API response received |
+| `player-update` | `GameStats` object | Every frame, from MainScene.update() |
+| `game-over` | `{ score, kills }` | Player health reaches 0 |
+| `bot-killed` | `{ name }` | Enemy destroyed by player |
 
 ### Events Listened (React → Phaser)
 
 | Event | Payload | Handler |
 |-------|---------|---------|
-| `joystick-move` | `VirtualJoystickData` | MainScene stores for mobile input |
-| `joystick-aim` | `VirtualJoystickData` | MainScene stores for mobile aiming |
+| `input-move` | `VirtualJoystickData` | MainScene stores for mobile input |
+| `input-aim` | `VirtualJoystickData` | MainScene stores for mobile aiming |
+| `restart` | (none) | MainScene calls scene.restart() |
 
 ### Shared Types
 
@@ -246,21 +245,22 @@ Both frameworks import from `types.ts`:
 ```typescript
 interface GameStats {
   health: number;
-  maxHealth: number;
   ammo: number;
   maxAmmo: number;
   isReloading: boolean;
   score: number;
   kills: number;
-  wave: number;
   isGameOver: boolean;
-  currentWeapon: string;
+  wave: number;
 }
 
 interface ChatMessage {
+  id: string;
   sender: string;
   text: string;
-  isSystem: boolean;
+  isSystem?: boolean;
+  isPlayer?: boolean;
+  timestamp: number;
 }
 
 interface VirtualJoystickData {
@@ -269,7 +269,13 @@ interface VirtualJoystickData {
   active: boolean;
 }
 
-enum WeaponType { BAT, KATANA, UZI, AK47, SHOTGUN }
+enum WeaponType {
+  BAT = 'BAT',
+  KATANA = 'KATANA',
+  UZI = 'UZI',
+  AK47 = 'AK47',
+  SHOTGUN = 'SHOTGUN'
+}
 ```
 
 ---
@@ -279,10 +285,10 @@ enum WeaponType { BAT, KATANA, UZI, AK47, SHOTGUN }
 `services/geminiService.ts` wraps the `@google/genai` SDK:
 
 - **Model**: `gemini-2.5-flash`
-- **API key**: Read from `import.meta.env.VITE_GEMINI_API_KEY` (configured in Vite)
+- **API key**: Read from `process.env.API_KEY` (mapped via Vite `define` from `GEMINI_API_KEY` env var)
 - **Two functions**:
-  - `generateBotTaunt(botName, weaponUsed)` -- Max 10 words, temperature 1.2, 30 token limit
-  - `generateAnnouncerText(waveNumber, enemiesLeft)` -- Max 5 words for wave announcements
+  - `generateBotTaunt(context: string)` -- Context string prompt, temperature 1.2, 30 token limit
+  - `generateAnnouncerText(wave: number)` -- Wave number, max 5 words for wave announcements
 - **Error handling**: Both functions return hardcoded fallback strings on API failure
 - **Rate limiting**: App.tsx triggers taunts with only 30% probability on each bot kill to avoid API spam
 
@@ -308,12 +314,16 @@ MainScene sets up these Phaser Arcade collision relationships in `create()`:
 
 | Collider/Overlap | Group A | Group B | Result |
 |-----------------|---------|---------|--------|
-| Overlap | Player bullets | Enemies | Damage enemy, destroy bullet |
-| Overlap | Enemy bullets | Player | Damage player, destroy bullet |
-| Collider | All bullets | Walls | Destroy bullet |
-| Overlap | Player | Enemies | Push-back (no damage) |
+| Collider | Player | Enemies | Push-back (no damage callback) |
+| Overlap | Player | Weapon drops | Switch weapon |
+| Collider | Player bullets | Enemies | Damage enemy, destroy bullet |
+| Collider | Player | Enemy bullets | Damage player, destroy bullet |
 | Collider | Enemies | Enemies | Prevent stacking |
-| Overlap | Player | Weapon pickups | Switch weapon |
+| Overlap | Enemy bullets | Enemies | Friendly-fire hit handling |
+| Collider | Player | Walls | Block movement |
+| Collider | Enemies | Walls | Block movement |
+| Collider | Player bullets | Walls | Destroy bullet |
+| Collider | Enemy bullets | Walls | Destroy bullet |
 
 ---
 
@@ -328,7 +338,7 @@ The Phaser camera follows the player with:
 
 ## Debug Overlay
 
-MainScene draws debug text (top-left corner) showing:
+MainScene draws debug text (left side, y=150) showing:
 - FPS
 - Update loop time (ms)
 - AI processing time (ms)
@@ -399,3 +409,4 @@ All arrows represent import/usage relationships. The EventBus is the only runtim
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-15 | Initial specification |
+| 1.0.1 | 2026-02-16 | Fix event names (game-stats→player-update, enemy-killed→bot-killed, joystick-*→input-*), fix player speed (250→350), fix weapon stats table (damage, cooldown, range, clip, pellet values), fix GameStats/ChatMessage/WeaponType type definitions, fix collision table (overlap→collider, add missing entries), fix Gemini function signatures, fix EventBus import style, remove phantom events |

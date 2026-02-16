@@ -435,3 +435,4 @@ The layout is entirely deterministic — every wall and desk is at a hardcoded p
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-15 | Initial specification |
+| 1.0.1 | 2026-02-16 | Verified against source — all 19 objects (walls, desks, pillars), colors, dimensions, and line references match |

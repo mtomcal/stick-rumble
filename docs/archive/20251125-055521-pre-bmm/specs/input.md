@@ -1,6 +1,6 @@
 # Input System
 
-> **Spec Version**: 1.0.0
+> **Spec Version**: 1.0.1
 > **Last Updated**: 2026-02-16
 > **Depends On**: [types-and-events.md](types-and-events.md), [overview.md](overview.md), [player.md](player.md)
 > **Depended By**: [main-scene.md](main-scene.md), [combat.md](combat.md), [ui.md](ui.md)
@@ -621,3 +621,4 @@ When the game starts or restarts, `App.tsx` increments `resetJoysticks` state, w
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-16 | Initial specification |
+| 1.0.1 | 2026-02-16 | Verified against source — all key bindings, mouse handling, joystick config, and line references match |
