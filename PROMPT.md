@@ -1,14 +1,12 @@
-Read IMPLEMENTATION_PLAN.md and pick the next unchecked finding from the fix checklist. Read the spec file, read the source code it references, then edit the spec to match reality. One finding per iteration, then stop.
+Each iteration, pick the next unchecked item from IMPLEMENTATION_PLAN.md's progress checklist and implement it. Work through items in order — one system section per iteration (all checklist items in that section).
 
 IMPORTANT:
 
-check the course corrections section FIRST every iteration — follow any active corrections before doing anything else.
-only edit spec files in specs/ — do NOT edit any source code.
-do NOT edit PROMPT.md, ORCHESTRATOR.md, or loop.sh.
-update IMPLEMENTATION_PLAN.md progress checklist when a finding is fixed.
-if you discover additional drift while fixing a finding, add it to the Discoveries section in IMPLEMENTATION_PLAN.md.
-do exactly ONE checklist item per iteration, then stop.
-commit your work at the end of every iteration.
-use commit message format: "docs: Fix {spec-name} — {brief description of what was corrected}"
-After committing, push to the remote with "git push -u origin ralph/spec-fixes" every iteration.
-output `/done` when all findings are fixed.
+check the course corrections section in IMPLEMENTATION_PLAN.md FIRST every iteration — follow any active corrections before doing anything else.
+you CAN edit any file under `stick-rumble-client/` and `stick-rumble-server/` — source code, tests, and configs.
+you CAN read any file under `specs/` for reference but CANNOT edit spec files.
+you CANNOT edit PROMPT.md or ORCHESTRATOR.md.
+update IMPLEMENTATION_PLAN.md after each iteration: check off completed items `[x]`, log any discoveries in the Worker Discovery Log section.
+always run relevant tests before committing (`make test-server` for server changes, `make test-client` for client changes).
+commit your work at the end of every iteration. Use git author: `git commit --author="mtomcal <mtomcal@users.noreply.github.com>"`.
+output `/done` when all progress checklist items are checked off (excluding HUMAN ONLY items).

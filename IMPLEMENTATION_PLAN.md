@@ -390,6 +390,44 @@ The following discrepancies were found between this plan and the spec diff (c7dd
 
 ---
 
+### Course Corrections
+
+> **For orchestrator use only.** The orchestrator appends corrections here when the worker drifts. Worker: check this section FIRST every iteration.
+
+_(No corrections yet.)_
+
+---
+
+### Per-Item Process
+
+Follow these steps for each system section:
+
+1. **Read the spec references** listed in the section's "Spec validation" item — understand what the code should look like
+2. **Read the existing source file(s)** mentioned in the section header — understand what's there now
+3. **Implement the code changes** — all non-test, non-validation items in the section
+4. **Write/update tests** — all "Test TS-XXX-NNN" items in the section
+5. **Run tests** — `make test-server` for Go changes, `make test-client` for TS changes
+6. **Verify assertion quality** — check that tests meet the assertion quality requirements listed
+7. **Check coverage** — verify the coverage gate item passes
+8. **Check off all items** in the section with `[x]`
+9. **Log any discoveries** in the Worker Discovery Log section below
+10. **Commit** with descriptive message
+
+### Rules
+
+1. **Read before editing** — always read the target file AND the relevant spec before making changes
+2. **One system section per iteration** — complete all items in a section before moving to the next
+3. **Preserve existing behavior** — don't break unrelated functionality; run full test suite
+4. **Spec is truth** — when plan and spec disagree, spec wins (and log the discrepancy as a discovery)
+5. **Check Validation Errata** — the errata section at the top has known discrepancies; apply those fixes
+6. **Update don't rewrite** — make targeted edits, don't rewrite entire files
+7. **Tests must be meaningful** — follow the assertion quality requirements exactly; no bare `toHaveBeenCalled()` on rendering calls
+8. **Skip HUMAN ONLY items** — Visual Regression and Manual Playtest sections are not for the worker
+9. **Commit every iteration** — even partial progress should be committed
+10. **Log discoveries** — if you find something the plan missed, add it to the Worker Discovery Log
+
+---
+
 ### Worker Discovery Log
 
 > **For agent workers.** When you encounter unexpected problems, spec ambiguities, missing dependencies, or new work items during implementation, log them here. Prefix each entry with the date and the system you were working on. Human reviewers will triage these into new tasks or errata.
