@@ -96,19 +96,19 @@ The following discrepancies were found between this plan and the spec diff (c7dd
 
 > **Current state**: `PlayerManager.ts` sets dead player color to 0x888888 (gray). No splayed corpse.
 
-- [ ] **Hide normal player graphics** on death state detection
-- [ ] **Create splayed corpse Graphics object**: 4 limbs at ±0.5 and ±2.5 rad from rotation
-- [ ] **Limb stroke**: 3px, 20px length
-- [ ] **Head circle**: 10px radius, offset 25px along rotation axis
-- [ ] **Color**: 0x444444 (dark gray)
-- [ ] **Depth**: Set to 5 (below live players at 50)
-- [ ] **Fade tween**: `delay: 5000, duration: 2000, alpha: 0, onComplete: destroy`
-- [ ] **Test TS-GFX-011**: Death corpse renders with splayed limbs
-- [ ] **Test TS-GFX-024**: Death corpse fade timing (5s visible + 2s fade)
-- [ ] **Spec validation**: Verify against `graphics.md` lines 666-674 — 4 limb angles exactly [+0.5, -0.5, +2.5, -2.5] rad, and `constants.md` lines 290-297 — all 8 constants match
-- [ ] **Assertion quality**: Tests assert exact limb angles (±0.5, ±2.5 rad), exact color (0x444444), exact delay/duration args — not bare `toHaveBeenCalled()` on `lineStyle`/`lineTo`
-- [ ] **Coverage gate**: Death corpse rendering code path in PlayerManager.ts ≥90% statements/lines/functions
-- [ ] **Visual test**: Read screenshot to confirm corpse appearance
+- [x] **Hide normal player graphics** on death state detection
+- [x] **Create splayed corpse Graphics object**: 4 limbs at ±0.5 and ±2.5 rad from rotation
+- [x] **Limb stroke**: 3px, 20px length
+- [x] **Head circle**: 10px radius, offset 25px along rotation axis
+- [x] **Color**: 0x444444 (dark gray)
+- [x] **Depth**: Set to 5 (below live players at 50)
+- [x] **Fade tween**: `delay: 5000, duration: 2000, alpha: 0, onComplete: destroy`
+- [x] **Test TS-GFX-011**: Death corpse renders with splayed limbs
+- [x] **Test TS-GFX-024**: Death corpse fade timing (5s visible + 2s fade)
+- [x] **Spec validation**: Verify against `graphics.md` lines 666-674 — 4 limb angles exactly [+0.5, -0.5, +2.5, -2.5] rad, and `constants.md` lines 290-297 — all 8 constants match
+- [x] **Assertion quality**: Tests assert exact limb angles (±0.5, ±2.5 rad), exact color (0x444444), exact delay/duration args — not bare `toHaveBeenCalled()` on `lineStyle`/`lineTo`
+- [x] **Coverage gate**: Death corpse rendering code path in PlayerManager.ts ≥90% statements/lines/functions
+- [ ] **Visual test**: Read screenshot to confirm corpse appearance — DEFERRED (HUMAN ONLY equivalent)
 
 #### System 5 — Client: Camera Effects (GameSceneUI.ts, ScreenShake.ts)
 
@@ -438,3 +438,5 @@ Follow these steps for each system section:
 - [2026-02-16] **System 1 — Root-level weapon-configs.json also needs updating**: There are TWO copies of `weapon-configs.json` — one at `stick-rumble-client/public/weapon-configs.json` and one at the project root `weapon-configs.json`. Both needed range/arc updates. The plan only mentions client config.
 - [2026-02-16] **System 1 — MockGraphics needed setAlpha and setVisible as vi.fn()**: The shared Phaser mock in `tests/__mocks__/phaser.ts` lacked `setAlpha` as a `vi.fn()` method, and `setVisible` was a regular method not a `vi.fn()`. Both needed to be mocked properly for tween and visibility testing. The inline mock in `MeleeWeaponManager.test.ts` also needed `setAlpha` and `tweens` added.
 - [2026-02-16] **System 1 — MeleeWeapon.update() backward compatibility**: `MeleeWeaponManager.ts` calls `weapon.update()` on each frame. The rewritten `MeleeWeapon.ts` no longer needs frame-based updates (tweens handle animation), but a no-op `update()` method was added to avoid runtime errors.
+- [2026-02-16] **System 3a — Mock scene needed tweens.add**: The `createMockScene()` factory in `PlayerManager.test.ts` didn't include `tweens: { add: vi.fn() }`. Added it to support corpse fade tween testing. Also updated 3 existing tests that checked for gray color (0x888888) to check for player hidden + corpse created instead.
+- [2026-02-16] **System 3a — Corpse rotation uses aimAngle**: The spec uses `this.rotation` for corpse limb/head angles, but `PlayerManager.ts` doesn't store a rotation for players — it uses `aimAngle`. Used `state.aimAngle ?? 0` as the rotation basis for corpse rendering.

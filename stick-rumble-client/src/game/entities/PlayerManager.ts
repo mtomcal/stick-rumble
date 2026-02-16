@@ -45,6 +45,7 @@ export class PlayerManager {
   private healthBars: Map<string, HealthBar> = new Map();
   private localPlayerId: string | null = null;
   private playerStates: Map<string, PlayerState> = new Map();
+  private corpseGraphics: Map<string, Phaser.GameObjects.Graphics> = new Map();
   // Interpolation engine for smooth movement of other players (Story 4.3)
   private interpolationEngine: InterpolationEngine = new InterpolationEngine();
   // Client-side predicted state for local player (Story stick-rumble-nki)
@@ -182,6 +183,9 @@ export class PlayerManager {
 
           this.weaponTypes.delete(id);
 
+          // Clean up corpse graphic if any
+          this.destroyCorpse(id);
+
           // Clear interpolation data for removed player
           this.interpolationEngine.clearPlayer(id);
         }
@@ -279,18 +283,39 @@ export class PlayerManager {
 
       // Apply death visual effects
       if (state.deathTime !== undefined) {
-        // Dead player: gray color
-        playerGraphics.setColor(0x888888);
+        // Hide normal player graphics on death
+        playerGraphics.setVisible(false);
+
+        // Hide associated elements
+        const label = this.playerLabels.get(state.id);
+        if (label) label.setVisible(false);
+        const aimIndicator = this.aimIndicators.get(state.id);
+        if (aimIndicator) aimIndicator.setVisible(false);
+        const weapon = this.weaponGraphics.get(state.id);
+        if (weapon) weapon.setVisible(false);
+        const health = this.healthBars.get(state.id);
+        if (health) health.setVisible(false);
+
+        // Create corpse graphic if not already created
+        if (!this.corpseGraphics.has(state.id)) {
+          this.createDeathCorpse(state);
+        }
       } else if (!state.isRolling) {
-        // Alive player (not rolling): restore original color
+        // Alive player (not rolling): restore original color and visibility
         const isLocal = state.id === this.localPlayerId;
         const color = isLocal ? 0x00ff00 : 0xff0000;
         playerGraphics.setColor(color);
+
+        // Clean up corpse if player respawned
+        this.destroyCorpse(state.id);
       } else {
         // Alive player (rolling): keep original color
         const isLocal = state.id === this.localPlayerId;
         const color = isLocal ? 0x00ff00 : 0xff0000;
         playerGraphics.setColor(color);
+
+        // Clean up corpse if player respawned
+        this.destroyCorpse(state.id);
       }
 
       // DO NOT update label, aim indicator, weapon, or health bar positions here
@@ -423,6 +448,56 @@ export class PlayerManager {
   }
 
   /**
+   * Create a splayed death corpse graphic at the player's position
+   */
+  private createDeathCorpse(state: PlayerState): void {
+    const deadGfx = this.scene.add.graphics();
+    deadGfx.lineStyle(3, 0x444444, 1);
+    const x = state.position.x;
+    const y = state.position.y;
+    const rot = state.aimAngle ?? 0;
+
+    // 4 splayed limbs at ±0.5 and ±2.5 radians from rotation
+    deadGfx.moveTo(x, y);
+    deadGfx.lineTo(x + Math.cos(rot + 0.5) * 20, y + Math.sin(rot + 0.5) * 20);
+    deadGfx.moveTo(x, y);
+    deadGfx.lineTo(x + Math.cos(rot - 0.5) * 20, y + Math.sin(rot - 0.5) * 20);
+    deadGfx.moveTo(x, y);
+    deadGfx.lineTo(x + Math.cos(rot + 2.5) * 20, y + Math.sin(rot + 2.5) * 20);
+    deadGfx.moveTo(x, y);
+    deadGfx.lineTo(x + Math.cos(rot - 2.5) * 20, y + Math.sin(rot - 2.5) * 20);
+    deadGfx.strokePath();
+
+    // Head offset along rotation axis
+    deadGfx.fillStyle(0x444444);
+    deadGfx.fillCircle(x + Math.cos(rot) * 25, y + Math.sin(rot) * 25, 10);
+
+    deadGfx.setDepth(5);
+
+    // Fade out after 5 seconds
+    this.scene.tweens.add({
+      targets: deadGfx,
+      alpha: 0,
+      duration: 2000,
+      delay: 5000,
+      onComplete: () => deadGfx.destroy()
+    });
+
+    this.corpseGraphics.set(state.id, deadGfx);
+  }
+
+  /**
+   * Destroy corpse graphic for a player (e.g., on respawn)
+   */
+  private destroyCorpse(playerId: string): void {
+    const corpse = this.corpseGraphics.get(playerId);
+    if (corpse) {
+      corpse.destroy();
+      this.corpseGraphics.delete(playerId);
+    }
+  }
+
+  /**
    * Cleanup all players
    */
   destroy(): void {
@@ -450,6 +525,11 @@ export class PlayerManager {
       healthBar.destroy();
     }
     this.healthBars.clear();
+
+    for (const corpse of this.corpseGraphics.values()) {
+      corpse.destroy();
+    }
+    this.corpseGraphics.clear();
 
     this.weaponTypes.clear();
     this.playerStates.clear();
