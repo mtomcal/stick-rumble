@@ -280,11 +280,19 @@ API URL: http://localhost:8080/ws
 **Game Server Pattern:**
 ```go
 type GameServer struct {
-    World       *World       // All players, projectiles, crates
-    Room        *Room        // Player connections, broadcasting
-    Match       *Match       // Win conditions, timer
-    ticker      *time.Ticker // 60 Hz game loop
-    broadcaster *time.Ticker // 20 Hz state broadcast
+    world              *World              // All players, projectiles, crates
+    physics            *Physics            // Movement and collision calculations
+    projectileManager  *ProjectileManager  // Active projectile tracking
+    weaponCrateManager *WeaponCrateManager // Weapon crate lifecycle
+    weaponStates       map[string]*WeaponState // playerID → weapon state
+
+    tickRate   time.Duration // 16.67ms (60 Hz game loop)
+    updateRate time.Duration // 50ms (20 Hz state broadcast)
+
+    broadcastFunc func(playerStates []PlayerStateSnapshot) // Injected callback
+    onHit         func(hit HitEvent)                       // Hit event callback
+    onRespawn     func(playerID string, position Vector2)  // Respawn callback
+    // ... additional callbacks for reload, weapon pickup, roll end, etc.
 }
 ```
 
@@ -676,6 +684,7 @@ func (s *Server) Serve(ctx context.Context) error {
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification |
+| 1.0.1 | 2026-02-16 | Fixed GameServer struct — replaced nonexistent Room/Match/ticker/broadcaster fields with actual callbacks and duration configs from `gameserver.go`. |
 
 ---
 
