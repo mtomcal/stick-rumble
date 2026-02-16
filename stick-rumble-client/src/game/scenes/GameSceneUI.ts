@@ -338,13 +338,23 @@ export class GameSceneUI {
   }
 
   /**
-   * Show floating damage number above damaged player
+   * Show floating damage number above damaged player.
+   * Variants: normal (white 16px), kill (red 24px), remote (white 16px, scale 0.7, alpha 0.8).
+   * @param playerManager - Player manager to get victim position
+   * @param victimId - ID of damaged player
+   * @param damage - Amount of damage dealt
+   * @param isKill - Whether this damage was a killing blow
+   * @param isLocal - Whether the local player dealt this damage
    */
-  showDamageNumber(playerManager: PlayerManager, victimId: string, damage: number): void {
+  showDamageNumber(playerManager: PlayerManager, victimId: string, damage: number, isKill: boolean = false, isLocal: boolean = true): void {
     const position = playerManager.getPlayerPosition(victimId);
     if (!position) {
       return; // Player not found or already removed
     }
+
+    // Determine variant: kill uses red 24px, normal/remote uses white 16px
+    const fontSize = isKill ? '24px' : '16px';
+    const color = isKill ? '#ff0000' : '#ffffff';
 
     // Create damage number text
     const damageText = this.scene.add.text(
@@ -352,24 +362,31 @@ export class GameSceneUI {
       position.y - 30, // Above player
       `-${damage}`,
       {
-        fontSize: '24px',
-        color: '#ff0000',
+        fontSize,
+        color,
         fontStyle: 'bold',
         stroke: '#000000',
-        strokeThickness: 3,
+        strokeThickness: 2,
       }
     );
     damageText.setOrigin(0.5);
+    damageText.setDepth(1000);
 
-    // Animate: float up and fade out
+    // Remote variant: smaller and more transparent
+    if (!isLocal) {
+      damageText.setScale(0.7);
+      damageText.setAlpha(0.8);
+    }
+
+    // Animate: float up 50px and fade out over 800ms
     this.scene.tweens.add({
       targets: damageText,
-      y: position.y - 80, // Move up 50 pixels
-      alpha: 0, // Fade to transparent
-      duration: 1000, // 1 second
+      y: position.y - 80, // Move up 50 pixels (from y-30 to y-80)
+      alpha: 0,
+      duration: 800,
       ease: 'Cubic.easeOut',
       onComplete: () => {
-        damageText.destroy(); // Clean up after animation
+        damageText.destroy();
       },
     });
   }

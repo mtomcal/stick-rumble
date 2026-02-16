@@ -393,8 +393,10 @@ export class GameSceneEventHandlers {
         this.ui.showDamageFlash();
       }
 
-      // Show damage numbers above damaged player
-      this.ui.showDamageNumber(this.playerManager, messageData.victimId, messageData.damage);
+      // Show damage numbers above damaged player (with kill/remote variants)
+      const isKill = messageData.newHealth <= 0;
+      const isLocal = messageData.attackerId === this.playerManager.getLocalPlayerId();
+      this.ui.showDamageNumber(this.playerManager, messageData.victimId, messageData.damage, isKill, isLocal);
 
       // Show hit effect at victim position (Story 3.7B: Hit Effects)
       const victimPos = this.playerManager.getPlayerPosition(messageData.victimId);

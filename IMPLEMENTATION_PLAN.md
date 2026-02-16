@@ -233,18 +233,18 @@ The following discrepancies were found between this plan and the spec diff (c7dd
 
 > **Current state**: `GameSceneUI.ts` always renders red, 24px, 3px stroke, 1000ms. No variants.
 
-- [ ] **Accept variant params**: `isKill` and `isLocal` in `showDamageNumber()`
-- [ ] **Normal hit**: White (#FFFFFF), 16px font
-- [ ] **Kill hit**: Red (#FF0000), 24px font
-- [ ] **Remote (non-local)**: White 16px, scale 0.7×, alpha 0.8
-- [ ] **Stroke thickness**: Change 3px → 2px black
-- [ ] **Duration**: Change 1000ms → 800ms
-- [ ] **Float distance**: 50px (unchanged)
-- [ ] **Depth**: Set to 1000
-- [ ] **Test TS-UI-016**: Damage number variants render correctly
-- [ ] **Spec validation**: Verify against `constants.md` lines 423-431 — normalColor=#FFFFFF, normalSize=16, killColor=#FF0000, killSize=24, remoteScale=0.7, remoteAlpha=0.8, strokeWidth=2, strokeColor=#000000, depth=1000. Verify duration=800 and float=50 per `constants.md` lines 237-238
-- [ ] **Assertion quality**: Test each variant separately — normal asserts color `#FFFFFF` and fontSize `16px`, kill asserts color `#FF0000` and fontSize `24px`, remote asserts scale 0.7 and alpha 0.8. Assert stroke exactly `2px` not `3px`. Assert tween duration exactly 800 not 1000. Assert depth exactly 1000
-- [ ] **Coverage gate**: `showDamageNumber()` all 3 variant branches ≥90% statements/lines/functions (branch coverage critical here)
+- [x] **Accept variant params**: `isKill` and `isLocal` in `showDamageNumber()`
+- [x] **Normal hit**: White (#FFFFFF), 16px font
+- [x] **Kill hit**: Red (#FF0000), 24px font
+- [x] **Remote (non-local)**: White 16px, scale 0.7×, alpha 0.8
+- [x] **Stroke thickness**: Change 3px → 2px black
+- [x] **Duration**: Change 1000ms → 800ms
+- [x] **Float distance**: 50px (unchanged)
+- [x] **Depth**: Set to 1000
+- [x] **Test TS-UI-016**: Damage number variants render correctly
+- [x] **Spec validation**: Verified against `constants.md` lines 567-579 — normalColor=#FFFFFF, normalSize=16, killColor=#FF0000, killSize=24, remoteScale=0.7, remoteAlpha=0.8, strokeWidth=2, strokeColor=#000000, depth=1000. Duration=800 and float=50 per lines 385-386. Plan line refs were wrong (said 423-431 and 237-238)
+- [x] **Assertion quality**: Tests assert each variant separately — normal white 16px, kill red 24px, remote scale 0.7 and alpha 0.8. Stroke 2px not 3px. Tween duration 800 not 1000. Depth 1000
+- [x] **Coverage gate**: `showDamageNumber()` all 3 variant branches ≥90% statements/lines/functions
 
 #### System 4d — Client: Directional Hit Indicators (GameSceneUI.ts or new utility)
 
@@ -462,3 +462,6 @@ Follow these steps for each system section:
 - [2026-02-16] **System 4b — Kill variant triggered on player:kill_credit**: The `hit:confirmed` event doesn't include a `kill` boolean. Normal hit markers are shown on `hit:confirmed` (white, 1.2×) and kill hit markers on `player:kill_credit` (red, 2.0×). Added `showHitMarker(true)` call to the kill credit handler.
 - [2026-02-16] **System 4b — Plan spec line refs wrong**: Plan said "constants.md lines 345-350" for hit marker constants, but those lines are about aim sway. Actual hit marker constants at lines 489-499.
 - [2026-02-16] **System 4b — World coordinates via pointer.worldX/worldY**: Spec errata 1.1.7 says hit marker uses world coordinates (no `setScrollFactor(0)`). Implemented using `pointer.worldX`/`pointer.worldY` with fallback to `pointer.x + camera.scrollX` when worldX is undefined.
+- [2026-02-16] **System 4c — Plan spec line refs wrong**: Plan said "constants.md lines 423-431" for damage number constants, but those are healing particle constants. Actual damage number constants at lines 567-579. Also said lines 237-238 for duration/float, actual at lines 385-386.
+- [2026-02-16] **System 4c — isKill derived from newHealth**: The `player:damaged` event includes `newHealth` but no explicit kill boolean. Used `newHealth <= 0` to determine if this damage was a killing blow. `isLocal` is `attackerId === localPlayerId`.
+- [2026-02-16] **System 4c — Backward-compatible signature**: Added `isKill` and `isLocal` as optional params with defaults (`false`, `true`), so existing callers that don't pass them get the normal local variant behavior.

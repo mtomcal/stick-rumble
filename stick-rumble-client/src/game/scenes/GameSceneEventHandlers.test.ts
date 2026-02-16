@@ -473,10 +473,13 @@ describe('GameSceneEventHandlers', () => {
       expect(mockHealthBarUI.updateHealth).not.toHaveBeenCalled();
 
       // Should still show damage numbers for other players
+      // isKill=false (newHealth 75 > 0), isLocal=false (attacker != player-1)
       expect(mockGameSceneUI.showDamageNumber).toHaveBeenCalledWith(
         mockPlayerManager,
         'other-player',
-        25
+        25,
+        false,
+        false
       );
     });
 

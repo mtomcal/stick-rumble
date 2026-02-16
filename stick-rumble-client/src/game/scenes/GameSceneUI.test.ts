@@ -93,6 +93,8 @@ describe('GameSceneUI', () => {
             setColor: vi.fn().mockReturnThis(),
             setVisible: vi.fn().mockReturnThis(),
             setDepth: vi.fn().mockReturnThis(),
+            setScale: vi.fn().mockReturnThis(),
+            setAlpha: vi.fn().mockReturnThis(),
             destroy: vi.fn(),
           };
           createdTexts.push(text);
@@ -615,72 +617,157 @@ describe('GameSceneUI', () => {
     });
   });
 
-  describe('showDamageNumber', () => {
-    it('should show damage number above damaged player', () => {
-      const mockPlayerManager = {
-        getPlayerPosition: vi.fn().mockReturnValue({ x: 500, y: 300 }),
-      } as unknown as PlayerManager;
+  describe('TS-UI-016: Damage number variants', () => {
+    const mockPlayerManager = () => ({
+      getPlayerPosition: vi.fn().mockReturnValue({ x: 500, y: 300 }),
+    }) as unknown as PlayerManager;
 
-      ui.showDamageNumber(mockPlayerManager, 'victim-1', 25);
+    describe('Normal hit variant (default)', () => {
+      it('should use white color (#ffffff) and 16px font', () => {
+        ui.showDamageNumber(mockPlayerManager(), 'victim-1', 25);
 
-      expect(mockScene.add.text).toHaveBeenCalledWith(
-        500,
-        270, // y - 30
-        '-25',
-        expect.objectContaining({
-          fontSize: '24px',
-          color: '#ff0000',
-        })
-      );
+        expect(mockScene.add.text).toHaveBeenCalledWith(
+          500, 270, '-25',
+          expect.objectContaining({
+            fontSize: '16px',
+            color: '#ffffff',
+          })
+        );
+      });
+
+      it('should use 2px black stroke (not 3px)', () => {
+        ui.showDamageNumber(mockPlayerManager(), 'victim-1', 25);
+
+        expect(mockScene.add.text).toHaveBeenCalledWith(
+          500, 270, '-25',
+          expect.objectContaining({
+            stroke: '#000000',
+            strokeThickness: 2,
+          })
+        );
+      });
+
+      it('should set depth to exactly 1000', () => {
+        ui.showDamageNumber(mockPlayerManager(), 'victim-1', 25);
+
+        expect(createdTexts[0].setDepth).toHaveBeenCalledWith(1000);
+      });
+
+      it('should not apply remote scaling for local player damage', () => {
+        ui.showDamageNumber(mockPlayerManager(), 'victim-1', 25, false, true);
+
+        expect(createdTexts[0].setScale).not.toHaveBeenCalled();
+        expect(createdTexts[0].setAlpha).not.toHaveBeenCalled();
+      });
     });
 
-    it('should animate damage number floating up and fading', () => {
-      const mockPlayerManager = {
-        getPlayerPosition: vi.fn().mockReturnValue({ x: 500, y: 300 }),
-      } as unknown as PlayerManager;
+    describe('Kill hit variant', () => {
+      it('should use red color (#ff0000) and 24px font for kill', () => {
+        ui.showDamageNumber(mockPlayerManager(), 'victim-1', 25, true);
 
-      ui.showDamageNumber(mockPlayerManager, 'victim-1', 25);
+        expect(mockScene.add.text).toHaveBeenCalledWith(
+          500, 270, '-25',
+          expect.objectContaining({
+            fontSize: '24px',
+            color: '#ff0000',
+          })
+        );
+      });
 
-      expect(mockScene.tweens.add).toHaveBeenCalledWith(
-        expect.objectContaining({
-          y: 220, // position.y - 80 = 300 - 80 = 220
-          alpha: 0,
-          duration: 1000,
-          ease: 'Cubic.easeOut',
-        })
-      );
+      it('should use 2px black stroke for kill variant', () => {
+        ui.showDamageNumber(mockPlayerManager(), 'victim-1', 25, true);
+
+        expect(mockScene.add.text).toHaveBeenCalledWith(
+          500, 270, '-25',
+          expect.objectContaining({
+            stroke: '#000000',
+            strokeThickness: 2,
+          })
+        );
+      });
+
+      it('should set depth to 1000 for kill variant', () => {
+        ui.showDamageNumber(mockPlayerManager(), 'victim-1', 25, true);
+
+        expect(createdTexts[0].setDepth).toHaveBeenCalledWith(1000);
+      });
     });
 
-    it('should destroy damage text after animation', () => {
-      const mockPlayerManager = {
-        getPlayerPosition: vi.fn().mockReturnValue({ x: 500, y: 300 }),
-      } as unknown as PlayerManager;
+    describe('Remote (non-local) variant', () => {
+      it('should set scale to 0.7 for remote damage', () => {
+        ui.showDamageNumber(mockPlayerManager(), 'victim-1', 25, false, false);
 
-      ui.showDamageNumber(mockPlayerManager, 'victim-1', 25);
+        expect(createdTexts[0].setScale).toHaveBeenCalledWith(0.7);
+      });
 
-      // The text created for damage should be destroyed
-      expect(createdTexts[0].destroy).toHaveBeenCalled();
+      it('should set alpha to 0.8 for remote damage', () => {
+        ui.showDamageNumber(mockPlayerManager(), 'victim-1', 25, false, false);
+
+        expect(createdTexts[0].setAlpha).toHaveBeenCalledWith(0.8);
+      });
+
+      it('should use white 16px for remote damage', () => {
+        ui.showDamageNumber(mockPlayerManager(), 'victim-1', 25, false, false);
+
+        expect(mockScene.add.text).toHaveBeenCalledWith(
+          500, 270, '-25',
+          expect.objectContaining({
+            fontSize: '16px',
+            color: '#ffffff',
+          })
+        );
+      });
     });
 
-    it('should not show damage number if player position not found', () => {
-      const mockPlayerManager = {
-        getPlayerPosition: vi.fn().mockReturnValue(null),
-      } as unknown as PlayerManager;
+    describe('Tween animation', () => {
+      it('should float up 50px and fade over 800ms (not 1000ms)', () => {
+        ui.showDamageNumber(mockPlayerManager(), 'victim-1', 25);
 
-      ui.showDamageNumber(mockPlayerManager, 'nonexistent', 25);
+        expect(mockScene.tweens.add).toHaveBeenCalledWith(
+          expect.objectContaining({
+            y: 220, // position.y(300) - 80 = 220
+            alpha: 0,
+            duration: 800,
+            ease: 'Cubic.easeOut',
+          })
+        );
+      });
 
-      // Should not create any text
-      expect(mockScene.add.text).not.toHaveBeenCalled();
+      it('should destroy text after tween completes', () => {
+        ui.showDamageNumber(mockPlayerManager(), 'victim-1', 25);
+
+        expect(createdTexts[0].destroy).toHaveBeenCalled();
+      });
+
+      it('should set origin to 0.5 (centered)', () => {
+        ui.showDamageNumber(mockPlayerManager(), 'victim-1', 25);
+
+        expect(createdTexts[0].setOrigin).toHaveBeenCalledWith(0.5);
+      });
     });
 
-    it('should set origin on damage text', () => {
-      const mockPlayerManager = {
-        getPlayerPosition: vi.fn().mockReturnValue({ x: 500, y: 300 }),
-      } as unknown as PlayerManager;
+    describe('Edge cases', () => {
+      it('should not show damage number if player position not found', () => {
+        const noPositionManager = {
+          getPlayerPosition: vi.fn().mockReturnValue(null),
+        } as unknown as PlayerManager;
 
-      ui.showDamageNumber(mockPlayerManager, 'victim-1', 25);
+        ui.showDamageNumber(noPositionManager, 'nonexistent', 25);
 
-      expect(createdTexts[0].setOrigin).toHaveBeenCalledWith(0.5);
+        expect(mockScene.add.text).not.toHaveBeenCalled();
+      });
+
+      it('should default to normal variant when isKill and isLocal are omitted', () => {
+        ui.showDamageNumber(mockPlayerManager(), 'victim-1', 25);
+
+        expect(mockScene.add.text).toHaveBeenCalledWith(
+          500, 270, '-25',
+          expect.objectContaining({
+            fontSize: '16px',
+            color: '#ffffff',
+          })
+        );
+      });
     });
   });
 
