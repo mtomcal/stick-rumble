@@ -54,10 +54,10 @@ The specs in `specs/` were bulk-updated and then validated by a prior Ralph job.
 - [x] 49. overview.md — Fix GameServer struct (no Room/Match/ticker/broadcaster fields)
 - [x] 50. overview.md — Fix anti-cheat PlayerShoot pseudocode (no IsDead check, weaponStates map)
 - [x] 53. rooms.md — Fix room:joined data payload (includes roomId from server)
-- [x] 87. test-index.md — Fix priority counts per spec (corrected shooting, rooms, server-architecture, match, messages to match source specs)
-- [x] 88. test-index.md — Fix summary statistics totals (updated Critical/High/Medium/Low counts, removed phantom Low=9)
-- [x] 89. test-index.md — Fix category counts (Unit/Integration mismatches corrected for 5 specs)
-- [x] 91. test-index.md — Fix description scrambling (corrected shooting.md test descriptions to match source spec IDs)
+- [x] 87. test-index.md — Fix priority counts per spec (corrected ALL 19 specs to match source spec definitions)
+- [x] 88. test-index.md — Fix summary statistics totals (224 total, 71C/102H/51M/0L, 154U/57I/13V)
+- [x] 89. test-index.md — Fix category counts (Unit/Integration/Visual corrected for all 19 specs)
+- [x] 91. test-index.md — Fix description scrambling (corrected all 19 specs' test descriptions to match source spec IDs)
 - [x] 92. test-index.md — Remove or flag 15 netcode test IDs not in source specs
 - [x] 97. SPEC-OF-SPECS.md — Fix DECELERATION constant (50 vs actual 1500 px/s^2)
 - [x] 98. SPEC-OF-SPECS.md — Fix Server->Client message count (19 listed but 22 actual)
@@ -108,7 +108,7 @@ The specs in `specs/` were bulk-updated and then validated by a prior Ralph job.
 - [ ] 100. SPEC-OF-SPECS.md — Fix estimated total length (24,924 actual, not 8,575)
 - [ ] 101. SPEC-OF-SPECS.md — Fix shooting test scenario descriptions
 - [ ] 102. SPEC-OF-SPECS.md — Fix UI timer red threshold (< 60, not < 30)
-- [ ] 90. test-index.md — Fix client-architecture.md test count (10, not 8)
+- [x] 90. test-index.md — Fix client-architecture.md test count (10, not 8)
 
 ### Tier 3 — LOW severity (cosmetic, minor)
 
