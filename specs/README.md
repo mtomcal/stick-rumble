@@ -172,6 +172,7 @@ For an AI agent recreating Stick Rumble from scratch, read specs in this order:
 | [client-architecture.md](client-architecture.md) | Phaser scenes, managers, prediction, interpolation | ~850 |
 | [server-architecture.md](server-architecture.md) | Dual-loop engine, lag compensation, delta compression | ~1200 |
 | [graphics.md](graphics.md) | Procedural stick figures, weapons, effects, death visuals | ~800 |
+| [ui.md](ui.md) | HUD elements, kill feed, scoreboard, match end screen | ~1250 |
 | [audio.md](audio.md) | Positional audio, weapon sounds, UI feedback | ~500 |
 | [overview.md](overview.md) | Architecture philosophy, prediction/reconciliation patterns | ~300 |
 | [test-index.md](test-index.md) | Cross-reference of all test scenarios across specs | ~400 |
@@ -346,5 +347,6 @@ Test scenarios use the format `TS-{SPEC}-{NUMBER}`:
 |---------|------|---------|
 | 1.0.1 | 2026-02-02 | Added audio.md spec (19 specs complete) |
 | 1.0.0 | 2026-02-02 | Initial specification suite with 14 complete specs |
+| 1.1.2 | 2026-02-16 | Added ui.md to Quick Reference Table |
 | 1.1.1 | 2026-02-16 | Fixed message count in Reading Order (28 total, not 26) |
 | 1.1.0 | 2026-02-15 | Updated Quick Reference Table: added server-architecture, graphics, audio, overview, test-index specs. Updated movement.md line counts (deceleration change). Updated messages.md counts (6 client→server, 22 server→client). |

@@ -102,7 +102,7 @@ The specs in `specs/` were bulk-updated and then validated by a prior Ralph job.
 - [x] 77. arena.md — Fix NaN recovery (sanitizeVector2 uses 0, not arena center)
 - [x] 79. arena.md — Fix dodge roll Go code (inline in UpdatePlayer, not separate method)
 - [x] 81. README.md — Fix message count (28 total, not 26)
-- [ ] 83. README.md — Add ui.md to Quick Reference Table
+- [x] 83. README.md — Add ui.md to Quick Reference Table
 - [ ] 84. README.md — Add graphics.md, ui.md, audio.md to Key Dependencies table
 - [ ] 99. SPEC-OF-SPECS.md — Fix client→server `test` message (no formal schema)
 - [ ] 100. SPEC-OF-SPECS.md — Fix estimated total length (24,924 actual, not 8,575)
