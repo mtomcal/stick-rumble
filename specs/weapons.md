@@ -68,6 +68,20 @@ The core weapon definition structure containing all stats and behavior parameter
 
 **TypeScript:**
 ```typescript
+interface ProjectileVisuals {
+  color: string;              // Hex color for projectile circle
+  diameter: number;           // Projectile circle diameter (px)
+  tracerColor: string;        // Hex color for tracer trail
+  tracerWidth: number;        // Tracer line width (px)
+}
+
+interface WeaponVisuals {
+  muzzleFlashColor: string;   // Hex color for muzzle flash
+  muzzleFlashSize: number;    // Muzzle flash radius (px)
+  muzzleFlashDuration: number; // Muzzle flash duration (ms)
+  projectile: ProjectileVisuals; // Projectile rendering config
+}
+
 interface RecoilConfig {
   verticalPerShot: number;    // Degrees of vertical climb per shot
   horizontalPerShot: number;  // Degrees of horizontal spread (±random)
@@ -636,7 +650,13 @@ All weapon stats are stored in `weapon-configs.json` at the project root.
       "visuals": {
         "muzzleFlashColor": "0xffdd00",
         "muzzleFlashSize": 8,
-        "muzzleFlashDuration": 50
+        "muzzleFlashDuration": 50,
+        "projectile": {
+          "color": "0xffff00",
+          "diameter": 4,
+          "tracerColor": "0xffff00",
+          "tracerWidth": 2
+        }
       }
     }
     // ... other weapons
@@ -1042,4 +1062,5 @@ func TestKnockbackBoundaryClamping(t *testing.T) {
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification |
+| 1.0.2 | 2026-02-16 | Added `ProjectileVisuals` and `WeaponVisuals` interfaces to TypeScript section, added `projectile` sub-field to JSON example |
 | 1.0.1 | 2026-02-16 | Fixed Uzi visual config — muzzleFlashSize=8 (not 6), muzzleFlashDuration=50 (not 30) per `weaponConfig.ts:199-200`. |

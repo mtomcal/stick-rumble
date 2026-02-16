@@ -125,7 +125,7 @@ The specs in `specs/` were bulk-updated and then validated by a prior Ralph job.
 - [x] 29. hit-detection.md — Fix client handleHitConfirmed (no audio, only showHitMarker)
 - [x] 39. shooting.md — Fix client canShoot() check order (reload, ammo, cooldown)
 - [x] 40. shooting.md — Fix IsExpired operator (>= not >)
-- [ ] 44. weapons.md — Add projectile sub-field to WeaponVisuals interface
+- [x] 44. weapons.md — Add projectile sub-field to WeaponVisuals interface
 - [ ] 47. overview.md — Fix GDD.md path (docs/GDD.md, not root)
 - [ ] 48. overview.md — Remove .claude/todos.json from folder tree
 - [ ] 51. overview.md — Fix World struct (add clock, rng, rngMu fields, PlayerState type)
