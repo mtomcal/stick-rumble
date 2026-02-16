@@ -966,8 +966,8 @@ this.wsClient.on('player:move', (data) => {
 });
 
 this.wsClient.on('player:kill_credit', (data) => {
-  const killerName = data.killerId.slice(0, 8);
-  const victimName = data.victimId.slice(0, 8);
+  const killerName = data.killerId.substring(0, 8);
+  const victimName = data.victimId.substring(0, 8);
   this.killFeedUI.addKill(killerName, victimName);
 });
 
@@ -1240,4 +1240,5 @@ it('should sort scoreboard by kills descending, deaths ascending', () => {
 | 1.0.0 | 2026-02-02 | Initial specification |
 | 1.1.0 | 2026-02-15 | Added Debug Network Panel section (DebugNetworkPanel.tsx for testing netcode under degraded conditions). |
 | 1.1.1 | 2026-02-16 | Fixed kill feed ordering — actual uses `push` (add to end) + `shift` (remove oldest from front), not `unshift` + `pop`. Uses KillEntry objects with container, not raw text with setScrollFactor. |
+| 1.1.3 | 2026-02-16 | Fixed kill feed player ID method — `slice(0, 8)` → `substring(0, 8)` to match source |
 | 1.1.2 | 2026-02-16 | Fixed match end screen test expected output — winner text is "Winner: Player1", not "Player1 WINS!" |
