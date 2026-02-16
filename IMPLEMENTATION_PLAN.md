@@ -1,298 +1,389 @@
-# Spec Drift Fix Plan
+# Pre-BMM Visual Systems Implementation Plan
 
-> Reference file for the worker loop. Read this at the START of each iteration to know what to do.
+> Bring code into compliance with specs v1.2.0 / v2.0.0 (commit c7dd8ef).
+> Organized by system. Each system lists spec requirements, current code state, and concrete changes.
 
-## Context
+---
 
-The specs in `specs/` were bulk-updated and then validated by a prior Ralph job. That validation found 104 drift findings (39 HIGH, 37 MEDIUM, 28 LOW). This job fixes them all by editing specs to match the actual source code.
+## Overview
 
-### Context Table
+The specs were updated to port visual systems from the pre-BMM (before-multiplayer) prototype. The code still reflects the old designs. This plan brings the code into compliance across **7 work systems** spanning both client and server.
 
-| # | Spec File | Findings | Key Source Files |
-|---|-----------|----------|------------------|
-| 1 | constants.md | 1 | `stick-rumble-client/src/game/entities/HealthBar.ts` |
-| 2 | movement.md | 2 | `stick-rumble-server/internal/game/physics.go`, `gameserver.go`, `PredictionEngine.ts`, `GameScene.ts` |
-| 3 | networking.md | 1 | `events-schema/package.json` |
-| 4 | messages.md | 7 | `player.go`, `broadcast_helper.go`, `message_processor.go`, `server-to-client.ts` |
-| 5 | client-architecture.md | 5 | `PlayerManager.ts`, `ShootingManager.ts`, `GameScene.ts`, `GameSceneUI.ts` |
-| 6 | server-architecture.md | 10 | `gameserver.go`, `message_processor.go`, `websocket_handler.go`, `room.go`, `clock.go`, `main.go` |
-| 7 | hit-detection.md | 7 | `projectile.go`, `gameserver.go`, `physics.go`, `GameSceneEventHandlers.ts` |
-| 8 | shooting.md | 9 | `gameserver.go`, `weapon.go`, `ShootingManager.ts` |
-| 9 | weapons.md | 4 | `weapon.go`, `weapon-configs.json`, `weapon_factory.go`, `weaponConfig.ts` |
-| 10 | overview.md | 7 | `client-to-server.ts`, `server-to-client.ts`, `gameserver.go`, `world.go` |
-| 11 | rooms.md | 4 | `room.go`, `GameSceneEventHandlers.ts`, `server-to-client.ts` |
-| 12 | ui.md | 12 | `KillFeedUI.ts`, `GameSceneUI.ts`, `MatchEndScreen.tsx`, `WebSocketClient.ts`, `GameScene.ts` |
-| 13 | match.md | 2 | `GameSceneUI.ts`, `GameSceneEventHandlers.ts` |
-| 14 | dodge-roll.md | 4 | `physics.go`, `GameSceneEventHandlers.ts`, `GameScene.ts`, `message_processor.go` |
-| 15 | melee.md | 1 | `gameserver.go`, `world.go` |
-| 16 | arena.md | 7 | `weapon_crate.go`, `world.go`, `physics.go` |
-| 17 | README.md | 6 | N/A (cross-references to other specs) |
-| 18 | test-index.md | 7 | Cross-references to all spec test sections |
-| 19 | spec-of-specs-plan.md | 4 | N/A (historical plan doc) |
-| 20 | SPEC-OF-SPECS.md | 8 | `constants.ts`, `server-to-client.ts`, `client-to-server.ts` |
+### Scope Summary
 
-## Fix Checklist
+| # | System | Server Changes | Client Changes | New Files | Priority |
+|---|--------|---------------|----------------|-----------|----------|
+| 1 | Melee Constants & Visuals | Yes (ranges, arc) | Yes (arc rendering, swing tween) | No | High |
+| 2 | Aim Sway | No | Yes (new system) | Maybe | High |
+| 3 | Death & Damage Feedback | No | Yes (corpse, blood, healing particles) | No | High |
+| 4 | Crosshair & Hit Feedback | No | Yes (reticle, hit markers, damage numbers) | Maybe | Medium |
+| 5 | Camera Effects | No | Yes (flash, shake) | No | Medium |
+| 6 | Gun Recoil & Reload | No | Yes (weapon kickback, reload pulse) | No | Medium |
+| 7 | Arena & HUD (Floor Grid, Minimap) | No | Yes (new systems) | Maybe | Low |
 
-### Tier 1 — HIGH severity (factually incorrect, fix first)
+---
 
-**What to Check:** Code blocks with wrong struct fields, function signatures, or constant values. Verify the spec's code snippet matches the actual source line-for-line.
+## Comprehensive Implementation Checklist
 
-- [x] 1. constants.md — Health bar dimensions (HEALTH_BAR_WIDTH=40/HEIGHT=6 vs actual 32/4)
-- [x] 2. movement.md — Remove nonexistent `sanitizeDeltaTime` function docs
-- [x] 5. messages.md — Fix PlayerState Go struct (wrong field names, missing fields)
-- [x] 6. messages.md — Add missing `weaponType` note for projectile:spawn Go broadcast
-- [x] 7. messages.md — Fix weapon:pickup_confirmed nextRespawnTime (Unix timestamp, not ms duration)
-- [x] 15. server-architecture.md — Fix GameServer callback signatures (broadcastFunc, onReloadComplete, onHit, onRespawn)
-- [x] 19. server-architecture.md — Fix setupCallbacks method references and signatures
-- [x] 24. server-architecture.md — Remove nonexistent `sanitizePosition` function docs
-- [x] 26. hit-detection.md — Fix checkHitDetection onHit call signature (HitEvent struct, not individual params)
-- [x] 28. hit-detection.md — Fix hitscan invulnerability check (doesn't check IsInvulnerable/IsInvincibleFromRoll)
-- [x] 32. shooting.md — Fix ShootResult.FailReason to .Reason
-- [x] 34. shooting.md — Fix PlayerShoot alive check (only checks !exists, not IsAlive)
-- [x] 36. shooting.md — Fix StartReload IsMelee check (actually checks IsReloading + full magazine)
-- [x] 42. weapons.md — Fix Uzi visual config values (muzzleFlashSize=8, duration=50)
-- [x] 49. overview.md — Fix GameServer struct (no Room/Match/ticker/broadcaster fields)
-- [x] 50. overview.md — Fix anti-cheat PlayerShoot pseudocode (no IsDead check, weaponStates map)
-- [x] 53. rooms.md — Fix room:joined data payload (includes roomId from server)
-- [x] 87. test-index.md — Fix priority counts per spec (corrected ALL 19 specs to match source spec definitions)
-- [x] 88. test-index.md — Fix summary statistics totals (224 total, 71C/102H/51M/0L, 154U/57I/13V)
-- [x] 89. test-index.md — Fix category counts (Unit/Integration/Visual corrected for all 19 specs)
-- [x] 91. test-index.md — Fix description scrambling (corrected all 19 specs' test descriptions to match source spec IDs)
-- [x] 92. test-index.md — Remove or flag 15 netcode test IDs not in source specs
-- [x] 97. SPEC-OF-SPECS.md — Fix DECELERATION constant (50 vs actual 1500 px/s^2)
-- [x] 98. SPEC-OF-SPECS.md — Fix Server->Client message count (19 listed but 22 actual)
+### Validation Errata
 
-### Tier 2 — MEDIUM severity (missing info or misleading)
+The following discrepancies were found between this plan and the spec diff (c7dd8ef). Address during implementation:
 
-**What to Check:** Prose descriptions that contradict source behavior, missing fields/params, wrong method names. Verify the spec's narrative matches actual control flow.
+- **RenderedPlayer interface**: Spec adds `lastDamageTime?: number` and `lastDamageSourceAngle?: number` fields — needed for blood particles and hit indicators
+- **Hit marker tween**: Spec includes scale-down (`scale: marker.scale * 0.5`) during 150ms fade — not just alpha fade
+- **Hit indicator tween**: Spec scales indicators to 1.5× while fading — not just alpha fade
+- **Damage number depth**: Should be set to 1000 (from `constants.md`)
+- **Healing particle spread**: Spec table says ±25px but code gives ±12.5px — use `(Math.random() - 0.5) * 50` for ±25px per table
+- **Camera shake**: Systems 1 and 5 both describe `shake(50, 0.001)` — these are the same effect triggered from melee hit AND ranged hit contexts
 
-- [x] 3. movement.md — Fix client-side prediction asymmetries (velocity cap, sprint speed)
-- [x] 8. messages.md — Fix player:damaged melee path (missing projectileId)
-- [x] 10. client-architecture.md — Fix dodge roll visual (rotation+flicker, not alpha)
-- [x] 11. client-architecture.md — Fix ShootingManager.shoot() vs meleeAttack() separation
-- [x] 16. server-architecture.md — Fix tick() deltaTime (real elapsed, not fixed from tickRate)
-- [x] 18. server-architecture.md — Fix handleInputState (direct type assertions, no NaN sanitization)
-- [x] 20. server-architecture.md — Fix Room.Broadcast (non-blocking select, not blocking channel)
-- [x] 23. server-architecture.md — Fix main.go pattern (global singleton, not explicit handler)
-- [x] 25. hit-detection.md — Fix Projectile SpawnPosition json tag (json:"-", not "spawnPosition")
-- [x] 27. hit-detection.md — Fix death trigger (inline in onHit, not separate handleDeath method)
-- [x] 30. hit-detection.md — Fix client handlePlayerDeath (setVisible+spectator, not death animation)
-- [x] 31. hit-detection.md — Fix tick() method (10 steps, not 4)
-- [x] 33. shooting.md — Fix PlayerShoot locking (weaponMu.RLock, not gs.mu.Lock)
-- [x] 35. shooting.md — Fix projectile creation (CreateProjectile, not NewProjectile+AddProjectile)
-- [x] 37. shooting.md — Fix CanShoot scope (also checks IsReloading and CurrentAmmo)
-- [x] 38. shooting.md — Fix client shoot() signature (no params, uses this.aimAngle)
-- [x] 41. weapons.md — Fix Weapon struct (add IsHitscan field)
-- [x] 43. weapons.md — Fix CreateWeaponByType return (returns error too)
-- [x] 45. overview.md — Fix message type counts (6 C→S, 22 S→C = 28 total)
-- [x] 46. overview.md — Fix spec file listing (missing 6 specs)
-- [x] 52. rooms.md — Fix AddPlayer Go code (RoomManager sends room:joined, not caller)
-- [x] 54. rooms.md — Fix processPendingMessages (pending moves discarded, not replayed)
-- [x] 56. ui.md — Fix kill feed ordering (push+shift, not unshift+pop)
-- [x] 57. ui.md — Fix hit marker shape (+ pattern, not X)
-- [x] 58. ui.md — Fix match end screen title/format
-- [x] 60. ui.md — Fix ammo low-ammo color (no color change logic exists)
-- [x] 61. ui.md — Fix connection status reconnecting UI (console only, no visible text)
-- [x] 67. match.md — Fix client timer red threshold (< 60, not < 30)
-- [x] 68. match.md — Fix client match end mechanism (window.onMatchEnd bridge, not showEndScreen)
-- [x] 69. dodge-roll.md — Fix UpdatePlayer return type (UpdatePlayerResult struct, not bool)
-- [x] 73. melee.md — Fix PlayerMeleeAttack (direct world.players access, not GetAllPlayers)
-- [x] 74. arena.md — Fix NewWeaponCrateManager (map, computed positions, different ID format)
-- [x] 75. arena.md — Fix getBalancedSpawnPointLocked signature (excludePlayerID param)
-- [x] 77. arena.md — Fix NaN recovery (sanitizeVector2 uses 0, not arena center)
-- [x] 79. arena.md — Fix dodge roll Go code (inline in UpdatePlayer, not separate method)
-- [x] 81. README.md — Fix message count (28 total, not 26)
-- [x] 83. README.md — Add ui.md to Quick Reference Table
-- [x] 84. README.md — Add graphics.md, ui.md, audio.md to Key Dependencies table
-- [x] 99. SPEC-OF-SPECS.md — Fix client→server `test` message (no formal schema)
-- [x] 100. SPEC-OF-SPECS.md — Fix estimated total length (24,924 actual, not 8,575)
-- [x] 101. SPEC-OF-SPECS.md — Fix shooting test scenario descriptions
-- [x] 102. SPEC-OF-SPECS.md — Fix UI timer red threshold (< 60, not < 30)
-- [x] 90. test-index.md — Fix client-architecture.md test count (10, not 8)
+---
 
-### Tier 3 — LOW severity (cosmetic, minor)
+### Phase 1: Foundation Constants
 
-**What to Check:** Version numbers, line counts, file paths, formatting, operator typos. Quick cross-reference against source or filesystem.
+#### System 1 — Server: Melee Range & Arc Values
 
-- [x] 4. networking.md — Fix typebox version (0.34.x, not 0.32.x)
-- [x] 9. messages.md — Clarify InputState sequence field extraction
-- [x] 12. client-architecture.md — Fix directory tree (no MatchTimer.ts, add xpCalculator.ts)
-- [x] 13. client-architecture.md — Fix camera follow (startFollow once, not per-frame lerp)
-- [x] 14. client-architecture.md — Fix update() method signatures (no delta param)
-- [x] 17. server-architecture.md — Fix broadcastLoop method name (GetAllPlayers, not GetAllPlayerStates)
-- [x] 21. server-architecture.md — Add PingTracker field to Player struct
-- [x] 22. server-architecture.md — Fix ManualClock mutex type (RWMutex, not Mutex)
-- [x] 29. hit-detection.md — Fix client handleHitConfirmed (no audio, only showHitMarker)
-- [x] 39. shooting.md — Fix client canShoot() check order (reload, ammo, cooldown)
-- [x] 40. shooting.md — Fix IsExpired operator (>= not >)
-- [x] 44. weapons.md — Add projectile sub-field to WeaponVisuals interface
-- [x] 47. overview.md — Fix GDD.md path (docs/GDD.md, not root)
-- [x] 48. overview.md — Remove .claude/todos.json from folder tree
-- [x] 51. overview.md — Fix World struct (add clock, rng, rngMu fields, PlayerState type)
-- [x] 55. rooms.md — Fix health property name (localPlayerHealth, not currentHealth)
-- [x] 59. ui.md — Fix scoreboard player ID (full ID, no truncation)
-- [x] 62. ui.md — Note connection status font size (14px)
-- [x] 63. ui.md — Fix match timer boundary conditions (>= vs >)
-- [x] 64. ui.md — Fix reload circle opacity (1.0, not 0.6)
-- [x] 65. ui.md — Fix hit marker scrollFactor (world coords, not setScrollFactor(0))
-- [x] 66. ui.md — Add dual-source health bar update (player:move + player:damaged)
-- [x] 70. dodge-roll.md — Fix roll:start audio scope (all players, not just local)
-- [x] 71. dodge-roll.md — Fix player:dodge_roll data payload (sends direction, not empty)
-- [x] 72. dodge-roll.md — Fix error handling (logs warning, not silent)
-- [x] 76. arena.md — Fix CanPickupWeapon function name (CheckPlayerCrateProximity)
-- [x] 78. arena.md — Remove nonexistent isInArena function docs
-- [x] 80. arena.md — Remove nonexistent CheckAABBCollision standalone Go function
-- [x] 82. README.md — Remove TODO markers from complete specs
-- [x] 85. README.md — Fix approximate line counts
-- [x] 86. README.md — Fix broken markdown bold formatting
-- [x] 93. spec-of-specs-plan.md — Fix line count estimates
-- [x] 94. spec-of-specs-plan.md — Fix work log message counts
-- [x] 95. spec-of-specs-plan.md — Fix work log test priority counts
-- [x] 96. spec-of-specs-plan.md — Fix final validation summary counts
-- [x] 103. SPEC-OF-SPECS.md — Add spec-of-specs-plan.md to table of contents
-- [x] 104. SPEC-OF-SPECS.md — Add changelog/update date
+> **Current state**: Bat=64px, Katana=80px, Arc=90° in both `weapon_factory.go` and `weapon_config.go`.
 
-## Findings Reference
+- [ ] **weapon_factory.go — Bat range**: Change `Range: 64` → `Range: 90`
+- [ ] **weapon_factory.go — Katana range**: Change `Range: 80` → `Range: 110`
+- [ ] **weapon_factory.go — Bat arc**: Change `ArcDegrees: 90` → `ArcDegrees: 80`
+- [ ] **weapon_factory.go — Katana arc**: Change `ArcDegrees: 90` → `ArcDegrees: 80`
+- [ ] **weapon_config.go**: Apply same changes if values are duplicated
+- [ ] **Server tests pass**: `make test-server` — melee range/arc detection still works
+- [ ] **Spec validation**: Verify against `constants.md` line 217 (Bat=90), line 228 (Katana=110), `melee.md` line 1165 (both ranges), `weapons.md` lines 2330-2331. Arc 80° matches `constants.md` and `melee.md` ±0.7 rad
+- [ ] **Assertion quality**: Server tests assert exact range/arc values (e.g., `assert.Equal(t, 90, bat.Range)`), not just `!= 0` or `require.NotNil`
+- [ ] **Coverage gate**: `go test ./internal/game/... -cover` — weapon_factory.go and weapon_config.go ≥90% statement coverage
 
-The full 104 findings with exact source citations are below. Worker: use these to know exactly what to change in each spec.
+#### System 1 — Client: Melee Range & Arc Values
 
-| # | Spec | Finding | Severity |
-|---|------|---------|----------|
-| 1 | constants.md | Spec says HEALTH_BAR_WIDTH=40px and HEALTH_BAR_HEIGHT=6px, but `HealthBar.ts:11-12` has width=32 and height=4. | HIGH |
-| 2 | movement.md | Spec documents `sanitizeDeltaTime` function (capping deltaTime to 0.1s). Function does not exist anywhere. Server `gameserver.go:155` and client `GameScene.ts:325` use raw delta. | HIGH |
-| 3 | movement.md | Client `PredictionEngine.ts:152-157` caps velocity magnitude to MOVEMENT.SPEED; server `physics.go` does not. Client ignores isSprinting (always 200 px/s); server uses SprintSpeed=300. | MEDIUM |
-| 4 | networking.md | Spec says typebox `0.32.x`, actual is `^0.34.27`. | LOW |
-| 5 | messages.md | Go `PlayerMoveData` spec shows `rotation`, `maxHealth`, `isDead`, `isSprinting`. Actual `PlayerStateSnapshot` uses `aimAngle`, no maxHealth, `deathTime *time.Time` instead of isDead, no isSprinting. Has extra: `isInvulnerable`, `invulnerabilityEnd`, `deathTime`, `kills`, `deaths`, `xp`, `isRegenerating`. | HIGH |
-| 6 | messages.md | Spec and TypeBox include `weaponType` in `projectile:spawn`. `broadcast_helper.go:271-276` only sends `id`, `ownerId`, `position`, `velocity` — no `weaponType`. | HIGH |
-| 7 | messages.md | Spec says `nextRespawnTime` is duration in milliseconds. `broadcast_helper.go:488` sends `respawnTime.Unix()` — Unix epoch timestamp in seconds. | HIGH |
-| 8 | messages.md | Spec requires `projectileId` in `player:damaged`. Melee path `broadcast_helper.go:669-674` omits it, sending only `victimId`, `attackerId`, `damage`, `newHealth`. | MEDIUM |
-| 9 | messages.md | Spec shows Go `InputStateData` with `Sequence int` field. Actual has no sequence field — extracted separately in `message_processor.go:39-42`. | LOW |
-| 10 | client-architecture.md | Spec says dodge roll uses `player.setAlpha(0.5)`. Actual `PlayerManager.ts:265-278` uses 360deg rotation + flickering visibility toggle. | MEDIUM |
-| 11 | client-architecture.md | Spec says `shoot()` checks `weaponState.isMelee` and sends either message. Actual has separate `shoot()` and `meleeAttack()` methods. | MEDIUM |
-| 12 | client-architecture.md | Spec lists `MatchTimer.ts` as separate file. Doesn't exist — inline in `GameSceneUI.ts:35,260`. Missing `xpCalculator.ts` from directory listing. | LOW |
-| 13 | client-architecture.md | Spec shows per-frame `followLocalPlayer()`. Actual uses `startFollow()` set once in `startCameraFollowIfNeeded()` at `GameScene.ts:472-493`. | LOW |
-| 14 | client-architecture.md | Spec shows `dodgeRollManager.update(delta)` and `meleeWeaponManager.update(delta)`. Both actual methods take no parameters. | LOW |
-| 15 | server-architecture.md | `broadcastFunc`, `onReloadComplete`, `onHit`, `onRespawn` signatures all wrong vs actual `gameserver.go:40-52`. | HIGH |
-| 16 | server-architecture.md | Spec shows fixed deltaTime from tickRate. Actual `gameserver.go:136-137` computes real elapsed: `now.Sub(lastTick).Seconds()`. | MEDIUM |
-| 17 | server-architecture.md | Spec shows `gs.world.GetAllPlayerStates()`. Actual is `gs.world.GetAllPlayers()`. | LOW |
-| 18 | server-architecture.md | Spec shows helper functions `getBool`, `getFloat64`, `getInt`. Actual uses direct type assertions. No NaN/Inf sanitization of aimAngle. | MEDIUM |
-| 19 | server-architecture.md | Spec shows `setupCallbacks()` with wrong signatures. Actual `websocket_handler.go:74-90` registers method references directly. | HIGH |
-| 20 | server-architecture.md | Spec shows blocking `player.SendChan <- msg` with recover. Actual `room.go:114-120` uses non-blocking `select` with `default`. | MEDIUM |
-| 21 | server-architecture.md | Spec omits `PingTracker *PingTracker` field from Player struct. | LOW |
-| 22 | server-architecture.md | Spec shows `mu sync.Mutex`. Actual `clock.go:41` is `sync.RWMutex`. | LOW |
-| 23 | server-architecture.md | Spec shows `handler := network.NewWebSocketHandler()`. Actual uses global singleton `network.HandleWebSocket` / `network.StartGlobalHandler(ctx)`. | MEDIUM |
-| 24 | server-architecture.md | Spec documents `sanitizePosition(pos Vector2)` function. Does not exist in server codebase. | HIGH |
-| 25 | hit-detection.md | Spec shows `SpawnPosition` with `json:"spawnPosition"`. Actual has `json:"-"` (excluded from JSON). | MEDIUM |
-| 26 | hit-detection.md | Spec shows `gs.onHit(hit.AttackerID, hit.VictimID, damage, hit.ProjectileID)`. Actual calls `gs.onHit(hit)` with entire HitEvent struct. | HIGH |
-| 27 | hit-detection.md | Spec shows separate `handleDeath` method. Actual death handling is inline in `onHit()` at `message_processor.go:172-262`. | MEDIUM |
-| 28 | hit-detection.md | Spec says hitscan skips invulnerable players. Actual `gameserver.go:746-749` only checks self-hit and IsAlive — invulnerable/rolling players CAN be hit by hitscan. | HIGH |
-| 29 | hit-detection.md | Spec shows `this.audioManager.playHitmarker()`. Actual only calls `this.ui.showHitMarker()` — TODO comment for audio. | LOW |
-| 30 | hit-detection.md | Spec shows `victim.playDeathAnimation()` and `killFeed.addEntry()`. Actual hides sprite via `setPlayerVisible(false)` + spectator mode. Kill feed in separate handler. | MEDIUM |
-| 31 | hit-detection.md | Spec shows 4-step tick. Actual has 9 steps: updateAllPlayers, recordPositionSnapshots, projectileManager.Update, checkHitDetection, checkReloads, checkRespawns, checkRollDuration, updateInvulnerability, updateHealthRegeneration, checkWeaponRespawns. | MEDIUM |
-| 32 | shooting.md | Spec shows `FailReason string`. Actual is `Reason string`. | HIGH |
-| 33 | shooting.md | Spec shows `gs.mu.Lock()` around PlayerShoot. Actual has no gs.mu — only `gs.weaponMu.RLock()`. | MEDIUM |
-| 34 | shooting.md | Spec shows `!player.IsAlive()` check. Actual only checks `!exists`. Dead players not rejected. | HIGH |
-| 35 | shooting.md | Spec shows `NewProjectile()` then `AddProjectile()`. Actual uses `CreateProjectile()` (create+add in one). | MEDIUM |
-| 36 | shooting.md | Spec shows StartReload checking `IsMelee()`. Actual checks `IsReloading` and `CurrentAmmo >= MagazineSize`. | HIGH |
-| 37 | shooting.md | Spec shows CanShoot as fire-rate only. Actual also checks IsReloading and CurrentAmmo. | MEDIUM |
-| 38 | shooting.md | Spec shows `shoot(aimAngle: number)`. Actual `shoot()` takes no params, uses `this.aimAngle`. Sends `clientTimestamp`. | MEDIUM |
-| 39 | shooting.md | Spec checks cooldown→reload→ammo. Actual checks reload→ammo→cooldown. | LOW |
-| 40 | shooting.md | Spec shows `>` for IsExpired. Actual uses `>=`. | LOW |
-| 41 | weapons.md | Spec omits `IsHitscan bool` field from Weapon struct. Used in `gameserver.go:373`. | MEDIUM |
-| 42 | weapons.md | Spec says Uzi muzzleFlashSize=6, duration=30. Actual: size=8, duration=50. | HIGH |
-| 43 | weapons.md | Spec shows single return from CreateWeaponByType. Actual returns `(*Weapon, error)`. | MEDIUM |
-| 44 | weapons.md | Spec WeaponVisuals missing `projectile: ProjectileVisuals` nested structure. | LOW |
-| 45 | overview.md | Spec says 7 C→S and 19 S→C. Actual: 6 C→S, 22 S→C (28 total). | MEDIUM |
-| 46 | overview.md | Spec file listing missing 6 specs: audio.md, graphics.md, ui.md, test-index.md, spec-of-specs-plan.md, server-architecture.md. | MEDIUM |
-| 47 | overview.md | Spec shows `GDD.md` at project root. Actual at `docs/GDD.md`. | LOW |
-| 48 | overview.md | Spec shows `.claude/todos.json` in folder tree. File doesn't exist. | LOW |
-| 49 | overview.md | Spec shows GameServer with Room, Match, ticker, broadcaster fields. Actual uses callbacks and duration configs. | HIGH |
-| 50 | overview.md | Spec shows `player.IsDead` check. Actual only checks `!exists`. Weapon access via weaponStates map, not player struct. | HIGH |
-| 51 | overview.md | Spec World struct missing clock, rng, rngMu fields. Map type is *PlayerState, not *Player. | LOW |
-| 52 | rooms.md | Spec shows room:joined sent "by caller" or not at all. Actual: `rm.sendRoomJoinedMessage()` called inside AddPlayer for both paths. | MEDIUM |
-| 53 | rooms.md | Spec shows `RoomJoinedData { playerId }` only. Actual sends `{ roomId, playerId }`. | MEDIUM |
-| 54 | rooms.md | Spec shows processPendingMessages replaying player:move. Actual discards pending moves (cleared without processing). | MEDIUM |
-| 55 | rooms.md | Spec uses `this.currentHealth`. Actual is `this.localPlayerHealth`. | LOW |
-| 56 | ui.md | Spec uses `unshift+pop` for kill feed. Actual uses `push+shift`. | MEDIUM |
-| 57 | ui.md | Spec says "4 white lines forming X pattern" (diagonal). Actual draws + pattern (vertical/horizontal). | MEDIUM |
-| 58 | ui.md | Spec shows "MATCH ENDED" h1 + "{PlayerName} WINS!". Actual: no h1, "Winner: {name}" / "Winners: {names}". | MEDIUM |
-| 59 | ui.md | Spec shows `playerId.slice(0, 8)`. Actual shows full playerId. | LOW |
-| 60 | ui.md | Spec says ammo turns red at <=20%. No color change logic exists in actual code. | MEDIUM |
-| 61 | ui.md | Spec shows "Reconnecting... (attempt X/3)" in yellow. Actual only logs to console. | MEDIUM |
-| 62 | ui.md | Spec doesn't specify font size. Actual 14px. | LOW |
-| 63 | ui.md | Spec boundary: 120s=yellow. Actual: 120s=white. At 60s: spec=red, actual=yellow. | LOW |
-| 64 | ui.md | Spec says reload circle 0.6 alpha. Actual 1.0. | LOW |
-| 65 | ui.md | Spec shows `setScrollFactor(0)`. Actual uses world coords with camera offset. | LOW |
-| 66 | ui.md | Spec only shows health bar from player:move. Actual also updates from player:damaged. | LOW |
-| 67 | match.md | Spec says timer red at < 30s. Actual: < 60s red, < 120s yellow. | MEDIUM |
-| 68 | match.md | Spec shows inline showEndScreen(). Actual delegates to window.onMatchEnd() React bridge. | MEDIUM |
-| 69 | dodge-roll.md | Spec shows UpdatePlayer returns bool. Actual returns UpdatePlayerResult struct. | MEDIUM |
-| 70 | dodge-roll.md | Spec shows roll:start audio only for local player. Actual plays for all players. | LOW |
-| 71 | dodge-roll.md | Spec says "no data payload". Client actually sends `{ direction: rollDirection }`. | LOW |
-| 72 | dodge-roll.md | Spec says invalid rolls "silently ignored". Actual logs warning. | LOW |
-| 73 | melee.md | Spec shows `gs.world.GetAllPlayers()`. Actual directly accesses `gs.world.players` under RLock for mutable pointers. | MEDIUM |
-| 74 | arena.md | Spec shows slice with hardcoded IDs/positions. Actual uses map, computed positions, different ID format. | MEDIUM |
-| 75 | arena.md | Spec shows no params. Actual takes `excludePlayerID string`. Also unexported `w.players`, instance `w.rng`. | MEDIUM |
-| 76 | arena.md | Spec says `CanPickupWeapon`. Actual function name is `CheckPlayerCrateProximity`. | LOW |
-| 77 | arena.md | Spec says NaN → arena center (960, 540). Actual `sanitizeVector2` replaces with 0. | MEDIUM |
-| 78 | arena.md | Spec documents `isInArena()` function. Does not exist — boundary via `clampToArena()` only. | LOW |
-| 79 | arena.md | Spec shows separate `UpdatePlayerPosition` method. Doesn't exist — inline in `UpdatePlayer`. | MEDIUM |
-| 80 | arena.md | Spec shows standalone `CheckAABBCollision` Go function. Doesn't exist — inline in CheckProjectilePlayerCollision. Client version does exist. | LOW |
-| 81 | README.md | Says "All 26 WebSocket message types". Should be 28 (6+22). Quick Reference correctly says 6+22. | MEDIUM |
-| 82 | README.md | server-architecture.md and test-index.md marked "(TODO)" but both are complete (v1.1.0). | LOW |
-| 83 | README.md | Quick Reference Table (17 specs) omits ui.md (1251 lines). | MEDIUM |
-| 84 | README.md | Key Dependencies table missing graphics.md, ui.md, audio.md. | MEDIUM |
-| 85 | README.md | Several line counts significantly off (messages.md ~1100 vs 1774, etc.). | LOW |
-| 86 | README.md | Broken markdown bold at line 290. | LOW |
-| 87 | test-index.md | Priority distributions wrong for ALL 19 specs. Critical counts systematically inflated. | HIGH |
-| 88 | test-index.md | Summary claims 71C/94H/20M/9L=194. Wrong due to per-spec errors. | HIGH |
-| 89 | test-index.md | Category counts 85U/85I/9V have mismatches between index and source specs. | HIGH |
-| 90 | test-index.md | Lists 8 tests for client-architecture.md. Actual spec defines 10. | MEDIUM |
-| 91 | test-index.md | Multiple specs have descriptions mapped to wrong test IDs. | HIGH |
-| 92 | test-index.md | 15 netcode test IDs exist only in test-index.md, not in source specs. | HIGH |
-| 93 | spec-of-specs-plan.md | Line estimates ~10k total vs actual ~24,924. | LOW |
-| 94 | spec-of-specs-plan.md | Work log says "26 message types (7 C→S, 19 S→C)". Should be 28 (6+22). | LOW |
-| 95 | spec-of-specs-plan.md | Work log says "Critical (65), High (85)". Out of date. | LOW |
-| 96 | spec-of-specs-plan.md | Final validation summary says "7 C→S, 20 S→C" and "55 JSON schemas". Pre-Epic 4. | LOW |
-| 97 | SPEC-OF-SPECS.md | DECELERATION: 50 px/s^2. Actual: 1500 px/s^2. Off by 30x. | HIGH |
-| 98 | SPEC-OF-SPECS.md | Says 19 S→C types, lists 20. Actual: 22 (missing state:snapshot, state:delta). | HIGH |
-| 99 | SPEC-OF-SPECS.md | Lists `test` as C→S type. No formal schema. Actually 6 formal C→S types. | MEDIUM |
-| 100 | SPEC-OF-SPECS.md | Estimated ~8,575 total lines. Actual 24,924 (~2.9x). | MEDIUM |
-| 101 | SPEC-OF-SPECS.md | Shooting test scenario descriptions don't match actual shooting.md test IDs. | MEDIUM |
-| 102 | SPEC-OF-SPECS.md | UI timer red threshold < 30s. Actual < 60s. | MEDIUM |
-| 103 | SPEC-OF-SPECS.md | spec-of-specs-plan.md not listed in ToC or file specs section. | LOW |
-| 104 | SPEC-OF-SPECS.md | No changelog or update date. Still at v1.0.0, never updated. | LOW |
+> **Current state**: Same stale values (64/80/90) in both `weaponConfig.ts` and `weapon-configs.json`.
 
-## Discoveries
+- [ ] **weaponConfig.ts — Bat**: range=90, arc=80
+- [ ] **weaponConfig.ts — Katana**: range=110, arc=80
+- [ ] **weapon-configs.json — Bat**: range=90, arc=80
+- [ ] **weapon-configs.json — Katana**: range=110, arc=80
+- [ ] **Client tests pass**: `make test-client`
+- [ ] **Spec validation**: Verify client values match server values exactly: Bat range=90, Katana range=110, both arc=80. Cross-check `weaponConfig.ts` AND `weapon-configs.json` — no stale values (64, 80, 90°) remain
+- [ ] **Assertion quality**: Tests assert exact numeric values (`expect(bat.range).toBe(90)`, `expect(katana.arcDegrees).toBe(80)`), not `toBeDefined()` or `toBeTruthy()`
+- [ ] **Coverage gate**: `npm run test:unit:coverage` — weaponConfig.ts ≥90% statements/lines/functions
 
-Worker: when you find additional drift while fixing a finding, add a row here.
+---
 
-| # | Spec | Discovery | Severity |
-|---|------|-----------|----------|
-| D1 | test-index.md | 14 specs still need cross-referencing against source spec test sections (arena, audio, client-architecture, constants, dodge-roll, graphics, hit-detection, melee, movement, networking, overview, player, ui, weapons). Priority/category mismatches likely exist. | MEDIUM |
-| D2 | server-architecture.md | handlePlayerShoot code block has wrong signature `(msg Message, playerID string)` vs actual `(playerID string, data any)`, uses `getFloat64`/`getInt64` helpers instead of direct type assertions, and `sendWeaponState` is called with 2 args `(playerID, result.WeaponState)` vs actual 1 arg `(playerID)`. | MEDIUM |
+### Phase 2: Core Visual Overhauls
 
-## Per-Item Process
+#### System 1 — Client: Melee Arc Visual (MeleeWeapon.ts)
 
-```
-1. Read the finding from the table above — note the spec file, the cited source files, and what's wrong
-2. Read the spec file section that needs fixing
-3. Read the actual source code file(s) cited in the finding
-4. Edit the spec to match the source code (targeted fix, not a rewrite)
-5. Commit: "docs: Fix {spec-name} — {brief description}"
-6. Check off the item in the Fix Checklist above
-7. Stop — the loop restarts you for the next finding
-```
+> **Current state**: Per-weapon colors (brown/silver), fill+stroke arc, 200ms 4-frame animation.
 
-## Rules
+- [ ] **Remove per-weapon colors**: No more brown (bat) / silver (katana) — all arcs use 0xFFFFFF white
+- [ ] **Remove fill rendering**: Delete `fillStyle` / `fillPath` — stroke only
+- [ ] **Stroke width**: Change from 3px to 2px
+- [ ] **Stroke alpha**: Set to 0.8
+- [ ] **Remove 4-frame animation**: Delete old frame-based animation approach
+- [ ] **Add alpha fade tween**: `tweens.add({ targets: graphics, alpha: 0, duration: 200, onComplete: destroy })`
+- [ ] **Add weapon container rotation tween**: `angle: { from: container.angle - 45, to: container.angle + 60 }, duration: 100, yoyo: true`
+- [ ] **Add camera shake on melee hit**: `cameras.main.shake(50, 0.001)`
+- [ ] **Test TS-MELEE-013**: White stroke-only arc renders correctly
+- [ ] **Test TS-MELEE-015**: Weapon container rotation tween works
+- [ ] **Test TS-GFX-013**: Melee arc renders as white stroke-only
+- [ ] **Spec validation**: Verify against `constants.md` lines 246-254 — color=0xFFFFFF, strokeWidth=2, strokeAlpha=0.8, fadeDuration=200, swingFrom=-45°, swingTo=+60°, swingDuration=100ms, yoyo=true, shakeDuration=50ms, shakeIntensity=0.001. Confirm NO fill rendering, NO per-weapon colors
+- [ ] **Assertion quality**: Tests verify exact color (`toHaveBeenCalledWith(2, 0xFFFFFF, 0.8)`), exact tween params (`duration: 200`, `angle: {from: -45, to: 60}`), not bare `toHaveBeenCalled()` without args
+- [ ] **Assertion quality**: No `toBeDefined()` on graphics objects — assert specific draw calls with exact stroke width (2), alpha (0.8), and arc angle (80° / ±0.7 rad)
+- [ ] **Coverage gate**: MeleeWeapon.ts ≥90% statements/lines/functions in coverage report
+- [ ] **Visual test**: `make test-visual` — read screenshots to verify white arc appearance
 
-1. **Spec-only edits** — Do NOT edit source code, only spec files in `specs/`
-2. **One finding per iteration** — Fix one, commit, check off, stop
-3. **Read source first** — Always verify the source code before editing the spec. The finding may be stale if code changed since validation.
-4. **Targeted fixes** — Change only what the finding describes. Don't rewrite surrounding paragraphs.
-5. **Preserve spec structure** — Keep headings, section order, and formatting intact
-6. **Code blocks must match reality** — If a finding says a Go struct has different fields, update the code block to match the actual struct
-7. **Update changelog** — If the spec has a changelog table, add a row: `| 1.1.1 | 2026-02-16 | Fixed {what} to match source code |`
-8. **Don't invent** — If you're unsure what the source code actually does, read it. Don't guess.
-9. **Commit message format** — `docs: Fix {spec-name} — {brief description of what was corrected}`
-10. **HIGH findings first** — Work through Tier 1, then Tier 2, then Tier 3
+#### System 3a — Client: Death Corpse (PlayerManager.ts)
+
+> **Current state**: `PlayerManager.ts` sets dead player color to 0x888888 (gray). No splayed corpse.
+
+- [ ] **Hide normal player graphics** on death state detection
+- [ ] **Create splayed corpse Graphics object**: 4 limbs at ±0.5 and ±2.5 rad from rotation
+- [ ] **Limb stroke**: 3px, 20px length
+- [ ] **Head circle**: 10px radius, offset 25px along rotation axis
+- [ ] **Color**: 0x444444 (dark gray)
+- [ ] **Depth**: Set to 5 (below live players at 50)
+- [ ] **Fade tween**: `delay: 5000, duration: 2000, alpha: 0, onComplete: destroy`
+- [ ] **Test TS-GFX-011**: Death corpse renders with splayed limbs
+- [ ] **Test TS-GFX-024**: Death corpse fade timing (5s visible + 2s fade)
+- [ ] **Spec validation**: Verify against `graphics.md` lines 666-674 — 4 limb angles exactly [+0.5, -0.5, +2.5, -2.5] rad, and `constants.md` lines 290-297 — all 8 constants match
+- [ ] **Assertion quality**: Tests assert exact limb angles (±0.5, ±2.5 rad), exact color (0x444444), exact delay/duration args — not bare `toHaveBeenCalled()` on `lineStyle`/`lineTo`
+- [ ] **Coverage gate**: Death corpse rendering code path in PlayerManager.ts ≥90% statements/lines/functions
+- [ ] **Visual test**: Read screenshot to confirm corpse appearance
+
+#### System 5 — Client: Camera Effects (GameSceneUI.ts, ScreenShake.ts)
+
+> **Current state**: Damage flash is a red overlay rectangle at 0.5 alpha, 200ms fade in `GameSceneUI.ts`. Camera shake in `ScreenShake.ts` uses per-weapon intensities (100-150ms, 0.005-0.012).
+
+- [ ] **Remove damageOverlay rectangle**: Delete rectangle creation and tween
+- [ ] **Add camera flash on damage received**: `cameras.main.flash(100, 128, 0, 0)`
+- [ ] **Normalize camera shake**: On dealing damage (hit:confirmed) → `cameras.main.shake(50, 0.001)`
+- [ ] **Evaluate per-weapon shake**: Decide whether old per-weapon values in ScreenShake.ts should be replaced with uniform 50ms/0.001
+- [ ] **Test TS-UI-013**: Camera flash on damage received
+- [ ] **Test TS-UI-017**: Camera shake on dealing damage
+- [ ] **Spec validation**: Verify flash args match `constants.md` lines 303-310 exactly: `flash(100, 128, 0, 0)` — duration 100ms, RGB (128, 0, 0). Verify shake matches lines 305-306: `shake(50, 0.001)`
+- [ ] **Assertion quality**: Tests assert `flash` called with exact 4 args `(100, 128, 0, 0)`, `shake` called with exact `(50, 0.001)` — not bare `cameras.main.flash.toHaveBeenCalled()`
+- [ ] **Coverage gate**: GameSceneUI.ts damage flash path + ScreenShake.ts shake path ≥90% statements/lines/functions
+
+---
+
+### Phase 3: New Client Systems
+
+#### System 2 — Client: Aim Sway (PlayerManager.ts + weapon/shooting)
+
+> **Current state**: Not implemented. Server uses raw aimAngle from client. No oscillation.
+> **Design decision**: Client-only. Sway computed in client update loop, server receives sway-affected angle via `input:state`. No server changes needed.
+
+- [ ] **Add sway state**: `swayTime: number = 0`, `aimSway: number = 0` per player
+- [ ] **Compute sway each frame**: Detect speed > 10px/s for moving vs idle
+- [ ] **Moving params**: speed=0.008 rad/ms, magnitude=±0.15 rad
+- [ ] **Idle params**: speed=0.002 rad/ms, magnitude=±0.03 rad
+- [ ] **Formula**: `aimSway = (sin(time * speed) + sin(time * speed * 0.7)) * magnitude`
+- [ ] **Apply to weapon rotation**: `weaponGraphics.setRotation(aimAngle + aimSway)`
+- [ ] **Apply to projectile angle**: Fire with `aimAngle + aimSway` sent to server
+- [ ] **Apply to barrel position**: Include sway offset in barrel calculation
+- [ ] **Test TS-SHOOT-013**: Aim sway affects projectile trajectory
+- [ ] **Test TS-GFX-019**: Aim sway visual oscillation visible
+- [ ] **Spec validation**: Verify formula matches `constants.md` lines 369-376 exactly: speed 0.008/0.002, magnitude 0.15/0.03, threshold 10 px/s, composite sine `(sin(t*s) + sin(t*s*0.7)) * mag`. Verify `shooting.md` lines 1490-1518 — sway applied to both visual AND trajectory
+- [ ] **Assertion quality**: Tests compute expected sway output for known time/speed inputs using `toBeCloseTo()` with ≥2 decimal precision — not just `expect(sway).not.toBe(0)` or `toBeDefined()`
+- [ ] **Assertion quality**: Trajectory test verifies fired angle equals `aimAngle + computedSway` with `toBeCloseTo()`, not just "angle changed"
+- [ ] **Coverage gate**: Aim sway computation + application code paths ≥90% statements/lines/functions
+
+#### System 3b — Client: Blood Particles (GameSceneEventHandlers.ts)
+
+> **Current state**: Not implemented. HitEffectManager exists but no blood particles.
+
+- [ ] **Add RenderedPlayer fields**: `lastDamageTime?: number`, `lastDamageSourceAngle?: number`
+- [ ] **On player:damaged event**: Create 5 circles at victim position
+- [ ] **Color**: 0xCC0000 (dark red)
+- [ ] **Radius**: Random 2-5px per particle
+- [ ] **Speed**: Random 50-150 px/s, direction away from damage source ±0.5 rad
+- [ ] **Drag**: 200 px/s²
+- [ ] **Fade + shrink tween**: alpha and scale to 0 over 500ms
+- [ ] **Test TS-GFX-015**: Blood particles spawn on damage
+- [ ] **Spec validation**: Verify against `constants.md` lines 262-269 — all 8 blood particle constants match: count=5, color=0xCC0000, minRadius=2, maxRadius=5, minSpeed=50, maxSpeed=150, drag=200, duration=500. Verify direction spread ±0.5 rad per `graphics.md` line 713
+- [ ] **Assertion quality**: Tests assert exactly 5 particles created (`toHaveBeenCalledTimes(5)` or array length check), assert color `0xCC0000` in `fillStyle` call, assert tween duration is exactly 500 — not `toBeGreaterThan(0)` on particle count
+- [ ] **Coverage gate**: Blood particle creation + tween code path ≥90% statements/lines/functions
+
+#### System 3c — Client: Healing Particles (PlayerManager.ts or HealthBarUI)
+
+> **Current state**: `HealthBarUI.ts` only pulses health bar alpha. No floating particles.
+
+- [ ] **Detect isRegenerating state**: Check each update tick
+- [ ] **15% chance per tick**: `Math.random() > 0.85`
+- [ ] **Create green circle**: 0x00FF00, 2px radius
+- [ ] **Random offset**: ±25px from player center (use `(Math.random() - 0.5) * 50`)
+- [ ] **Float-up tween**: y -= 20, alpha: 0, duration: 600ms, onComplete: destroy
+- [ ] **Test TS-GFX-016**: Healing particles appear during regen
+- [ ] **Spec validation**: Verify against `constants.md` lines 277-282 — color=0x00FF00, radius=2, chance=0.15, spread=25, floatDistance=20, duration=600. Note: use `(Math.random() - 0.5) * 50` for ±25px (spec code has ±12.5px bug)
+- [ ] **Assertion quality**: Tests assert exact color `0x00FF00` in `fillStyle`, exact tween params `{y: '-=20', alpha: 0, duration: 600}`, circle radius exactly 2 — not `toBeTruthy()` on particle object
+- [ ] **Coverage gate**: Healing particle creation + probability gate code path ≥90% statements/lines/functions
+
+#### System 6a — Client: Gun Recoil Visual (PlayerManager.ts)
+
+> **Current state**: `ScreenShake.ts` only does camera shake, no weapon container movement.
+
+- [ ] **Add recoilOffset property**: `recoilOffset: number = 0` per weapon
+- [ ] **On fire event**: Tween recoilOffset to -6px (default) or -10px (shotgun)
+- [ ] **Tween config**: 50ms duration, yoyo: true
+- [ ] **Apply offset**: `cos(rotation) * recoilOffset`, `sin(rotation) * recoilOffset` in weapon position update
+- [ ] **Test TS-GFX-018**: Gun recoil on ranged fire
+- [ ] **Spec validation**: Verify against `constants.md` lines 359-361 — default=-6, shotgun=-10, duration=50, yoyo=true. Verify offset formula matches `graphics.md` lines 818-820: `x += cos(rotation) * recoilOffset`, `y += sin(rotation) * recoilOffset`
+- [ ] **Assertion quality**: Tests assert tween target value is exactly -6 (default) or -10 (shotgun), duration exactly 50, yoyo is `true` — not bare `toHaveBeenCalled()` on `tweens.add`
+- [ ] **Coverage gate**: Recoil tween creation + offset application code path ≥90% statements/lines/functions
+
+---
+
+### Phase 4: Hit Feedback Overhaul
+
+#### System 4a — Client: Crosshair → Reticle Texture (Crosshair.ts)
+
+> **Current state**: `Crosshair.ts` draws white + sign (10px, 5px gap) + red spread circle (radius = spread * 2px/deg).
+
+- [ ] **Generate reticle texture**: `make.graphics()` + `generateTexture('reticle', 32, 32)`
+- [ ] **Ring**: radius 10, 2px white stroke
+- [ ] **4 cardinal tick marks**: 6px each
+- [ ] **Red center dot**: 0xFF0000, radius 2
+- [ ] **Replace procedural crosshair**: Use Sprite with 'reticle' texture
+- [ ] **Remove spread circle logic**: Delete dynamic spread rendering entirely
+- [ ] **Set depth 100, alpha 0.8**
+- [ ] **Position at cursor/aim point each frame**
+- [ ] **Test TS-GFX-023**: Crosshair reticle texture renders correctly
+- [ ] **Spec validation**: Verify against `constants.md` lines 318-325 — size=32×32, ringRadius=10, ringStroke=2, dotColor=0xFF0000, dotRadius=2, tickLength=6, depth=100, alpha=0.8. Confirm spread circle completely removed (no `spread` or `spreadRadius` references in Crosshair.ts)
+- [ ] **Assertion quality**: Tests assert `generateTexture` called with exact `('reticle', 32, 32)`, assert `strokeCircle` with exact `(16, 16, 10)`, assert `fillCircle` with exact `(16, 16, 2)` and color `0xFF0000`, depth exactly 100, alpha exactly 0.8 — not bare `toHaveBeenCalled()`
+- [ ] **Coverage gate**: Crosshair.ts ≥90% statements/lines/functions
+- [ ] **Visual test**: Read screenshot to confirm reticle appearance
+
+#### System 4b — Client: Hit Marker → X Texture (GameSceneUI.ts)
+
+> **Current state**: `GameSceneUI.ts` draws 4 white lines forming + pattern at screen center, 200ms fade.
+
+- [ ] **Generate hitmarker texture**: 20×20, two diagonal lines forming X, white 3px stroke
+- [ ] **Replace line-based hit marker**: Use sprite instead of 4 procedural lines
+- [ ] **Normal hit**: White tint, scale 1.2×
+- [ ] **Kill hit**: Red (0xFF0000) tint, scale 2.0×
+- [ ] **Position at reticle**: Not screen center
+- [ ] **Fade tween**: 150ms (not 200ms), include scale-down to `marker.scale * 0.5`
+- [ ] **Test TS-UI-014**: Hit marker normal variant
+- [ ] **Test TS-UI-015**: Hit marker kill variant
+- [ ] **Spec validation**: Verify against `constants.md` lines 345-350 — size=20×20, stroke=3, normalScale=1.2, killScale=2.0, killColor=0xFF0000, fadeDuration=150. Verify scale-down to `marker.scale * 0.5` per `ui.md` tween code. Verify position is at reticle per `ui.md` line 1981
+- [ ] **Assertion quality**: Tests assert normal scale exactly 1.2, kill scale exactly 2.0, kill tint exactly 0xFF0000, tween duration exactly 150 (not 200), scale end value is `initialScale * 0.5` — not bare `expect(marker).toBeDefined()` or `toHaveBeenCalled()`
+- [ ] **Coverage gate**: Hit marker creation + variant branching code path ≥90% statements/lines/functions
+
+#### System 4c — Client: Damage Number Variants (GameSceneUI.ts)
+
+> **Current state**: `GameSceneUI.ts` always renders red, 24px, 3px stroke, 1000ms. No variants.
+
+- [ ] **Accept variant params**: `isKill` and `isLocal` in `showDamageNumber()`
+- [ ] **Normal hit**: White (#FFFFFF), 16px font
+- [ ] **Kill hit**: Red (#FF0000), 24px font
+- [ ] **Remote (non-local)**: White 16px, scale 0.7×, alpha 0.8
+- [ ] **Stroke thickness**: Change 3px → 2px black
+- [ ] **Duration**: Change 1000ms → 800ms
+- [ ] **Float distance**: 50px (unchanged)
+- [ ] **Depth**: Set to 1000
+- [ ] **Test TS-UI-016**: Damage number variants render correctly
+- [ ] **Spec validation**: Verify against `constants.md` lines 423-431 — normalColor=#FFFFFF, normalSize=16, killColor=#FF0000, killSize=24, remoteScale=0.7, remoteAlpha=0.8, strokeWidth=2, strokeColor=#000000, depth=1000. Verify duration=800 and float=50 per `constants.md` lines 237-238
+- [ ] **Assertion quality**: Test each variant separately — normal asserts color `#FFFFFF` and fontSize `16px`, kill asserts color `#FF0000` and fontSize `24px`, remote asserts scale 0.7 and alpha 0.8. Assert stroke exactly `2px` not `3px`. Assert tween duration exactly 800 not 1000. Assert depth exactly 1000
+- [ ] **Coverage gate**: `showDamageNumber()` all 3 variant branches ≥90% statements/lines/functions (branch coverage critical here)
+
+#### System 4d — Client: Directional Hit Indicators (GameSceneUI.ts or new utility)
+
+> **Current state**: Not implemented.
+
+- [ ] **Generate chevron texture**: 16×16 `hit_indicator`
+- [ ] **Position**: 60px from player center, pointing toward damage source/target
+- [ ] **Outgoing (hit:confirmed)**: White, 200ms fade, scale to 1.5×; red on kill
+- [ ] **Incoming (player:damaged for local)**: Red, 400ms fade, scale to 1.5×
+- [ ] **Depth**: 1001
+- [ ] **Test TS-GFX-021**: Directional hit indicator (outgoing)
+- [ ] **Test TS-GFX-022**: Directional hit indicator (incoming)
+- [ ] **Spec validation**: Verify against `constants.md` lines 333-337 — size=16×16, distance=60, outgoingDuration=200, incomingDuration=400, depth=1001. Verify scale-up to 1.5× per `graphics.md` lines 905, 912. Verify incoming is always red, outgoing is white (red on kill)
+- [ ] **Assertion quality**: Tests assert outgoing tween duration exactly 200, incoming tween duration exactly 400, scale target exactly 1.5, depth exactly 1001, distance from player center exactly 60px. Assert incoming tint is always red regardless of kill state. No bare `toHaveBeenCalled()` on sprite creation
+- [ ] **Coverage gate**: Hit indicator outgoing + incoming + kill variant branches ≥90% statements/lines/functions
+
+---
+
+### Phase 5: Polish & New Features
+
+#### System 6b — Client: Reload Animation Pulse (PlayerManager.ts)
+
+> **Current state**: `GameSceneUI.ts` shows progress bar + circular arc + "RELOAD!" text. No weapon container pulse.
+
+- [ ] **On reload start**: Add tween to weapon container
+- [ ] **Alpha pulse**: 1 → 0.5 → 1
+- [ ] **Scale pulse**: 1 → 0.8 → 1
+- [ ] **Timing**: 200ms per pulse, yoyo: true, repeat: 2 (3 total pulses)
+- [ ] **On complete**: Reset alpha=1, scaleX=1, scaleY=1
+- [ ] **Keep existing reload UI**: Progress bar, circle, text remain — this ADDS the weapon pulse
+- [ ] **Test TS-GFX-020**: Reload animation pulses
+- [ ] **Spec validation**: Verify against `constants.md` lines 385-388 — alpha=0.5, scaleX=0.8, scaleY=0.8, duration=200, yoyo=true, repeat=2. Verify reset on complete per `graphics.md` lines 863-866
+- [ ] **Assertion quality**: Tests assert tween config has alpha exactly 0.5, scaleX/scaleY exactly 0.8, duration exactly 200, repeat exactly 2, yoyo is `true`. Assert onComplete resets alpha to 1 and scale to 1 — not bare `tweens.add.toHaveBeenCalled()`
+- [ ] **Coverage gate**: Reload pulse tween creation + completion handler ≥90% statements/lines/functions
+
+#### System 6c — Client: Wall Spark (GameScene.ts or ShootingManager)
+
+> **Current state**: Not implemented.
+
+- [ ] **Check barrel overlap**: Before creating bullet client-side, test if barrel position overlaps wall geometry
+- [ ] **Spark visual**: Yellow circle (0xFFFF00), 3px radius
+- [ ] **Tween**: Scale 1→2, alpha fade over 100ms
+- [ ] **Skip bullet creation**: No bullet created when barrel is inside wall
+- [ ] **Test TS-GFX-017**: Wall spark on obstructed barrel
+- [ ] **Spec validation**: Verify against `graphics.md` lines 778-790 — color=0xFFFF00, radius=3, scaleEnd=2, duration=100. Verify bullet suppression: no projectile created when barrel is obstructed
+- [ ] **Assertion quality**: Tests assert spark color exactly 0xFFFF00, radius exactly 3, tween scale target exactly 2, tween duration exactly 100. Assert bullet creation was NOT called (`not.toHaveBeenCalled()` or `toHaveBeenCalledTimes(0)`) when barrel is in wall
+- [ ] **Coverage gate**: Wall detection + spark creation + bullet suppression code path ≥90% statements/lines/functions
+
+#### System 7a — Client: Floor Grid (GameScene.ts)
+
+> **Current state**: `GameScene.ts` only draws background rectangle and border. No grid.
+
+- [ ] **Draw in create()**: After background rectangle
+- [ ] **Grid spacing**: 100px covering entire arena
+- [ ] **Line style**: 1px, color 0xB0BEC5, alpha 0.5
+- [ ] **Draw vertical lines**: `for x = 0 to ARENA.WIDTH step 100`
+- [ ] **Draw horizontal lines**: `for y = 0 to ARENA.HEIGHT step 100`
+- [ ] **Depth**: -1 (below everything)
+- [ ] **Test TS-ARENA-013**: Floor grid renders at correct depth and spacing
+- [ ] **Spec validation**: Verify against `constants.md` lines 396-399 and `arena.md` lines 133-137 — spacing=100, color=0xB0BEC5, alpha=0.5, lineWidth=1, depth=-1. Verify grid covers full arena (lines from 0 to ARENA.WIDTH/HEIGHT)
+- [ ] **Assertion quality**: Tests assert `lineStyle` called with exact `(1, 0xB0BEC5, 0.5)`, assert `setDepth(-1)`, assert correct number of vertical lines (`ARENA.WIDTH / 100 + 1`) and horizontal lines (`ARENA.HEIGHT / 100 + 1`) — not just `graphics.strokePath.toHaveBeenCalled()`
+- [ ] **Coverage gate**: Grid drawing code path ≥90% statements/lines/functions
+
+#### System 7b — Client: Minimap (GameSceneUI.ts or new MinimapUI)
+
+> **Current state**: Not implemented.
+
+- [ ] **Position**: (20, 20), 120×120px
+- [ ] **Scale**: 0.075 (1600px world → 120px minimap)
+- [ ] **Static layer (depth 1999)**: Black bg, white border, wall positions; `setScrollFactor(0)`
+- [ ] **Dynamic layer (depth 2000)**: Player/enemy dots, radar ring, aim line; `setScrollFactor(0)`
+- [ ] **Player dot**: Green, 4px
+- [ ] **Enemy dots**: Red, 3px; only within 600px radar range
+- [ ] **Update every frame**: Clear + redraw dynamic layer
+- [ ] **Test TS-UI-018**: Minimap renders static layer
+- [ ] **Test TS-UI-019**: Minimap radar range filters enemies
+- [ ] **Spec validation**: Verify against `constants.md` lines 407-415 — x=20, y=20, scale=0.075, size=120, radarRange=600, staticDepth=1999, dynamicDepth=2000, playerDotSize=4, enemyDotSize=3. Verify both layers use `setScrollFactor(0)` per `ui.md`
+- [ ] **Assertion quality**: TS-UI-018 asserts static layer depth exactly 1999, position exactly (20,20), `setScrollFactor(0)` called. TS-UI-019 asserts enemy at 500px distance IS shown, enemy at 700px IS NOT shown (exact boundary test at 600px) — not just "some dots rendered"
+- [ ] **Coverage gate**: Minimap static setup + dynamic update + radar filtering ≥90% statements/lines/functions (branch coverage on radar range filter critical)
+
+---
+
+### Final Verification
+
+#### Automated Tests
+- [ ] `make test-server` — all server tests pass
+- [ ] `make test-client` — all client tests pass
+- [ ] `make test-visual` — visual regression tests pass
+- [ ] `make lint` — no lint errors
+- [ ] `make typecheck` — no type errors
+
+#### Global Coverage Gate
+- [ ] Client overall: ≥90% statements, ≥90% lines, ≥90% functions, ≥87.8% branches (per vitest.config.ts thresholds)
+- [ ] Server overall: ≥90% statement coverage on changed packages (`go test ./internal/game/... -cover`)
+- [ ] No new file has <90% coverage — run `npm run test:unit:coverage` and check HTML report for uncovered lines
+
+#### Global Assertion Quality Audit
+- [ ] Grep for `toBeDefined()` in new/modified test files — ZERO instances on graphics, tween, or rendering objects (acceptable only for constructor existence checks)
+- [ ] Grep for bare `.toHaveBeenCalled()` (without `With`) in new/modified test files — ZERO instances on rendering calls (every `lineStyle`, `fillCircle`, `strokeCircle`, `flash`, `shake`, `tweens.add` must assert args)
+- [ ] Grep for `toBeTruthy()` / `toBeFalsy()` in new/modified test files — ZERO instances where a specific value should be asserted instead
+- [ ] Every tween assertion checks at minimum: `duration`, `targets`, and primary animated property — not just that `tweens.add` was called
+- [ ] Every color assertion uses exact hex value (e.g., `0xFFFFFF`, `0xCC0000`) — not `expect(color).toBeTruthy()` or `.not.toBe(0)`
+
+#### Global Spec Validation Audit
+- [ ] Cross-reference every numeric constant in code against `specs/constants.md` — all values match exactly
+- [ ] Cross-reference every depth value against depth table in `specs/graphics.md` — no depth conflicts or mismatches
+- [ ] Cross-reference every test ID (TS-XXX-NNN) against `specs/test-index.md` — all referenced tests exist and descriptions match
+- [ ] Verify no stale old values remain (search for: range 64, range 80, arc 90°, stroke 3px on arcs, 200ms hit marker fade, 1000ms damage number duration, 24px red-only damage numbers)
+
+#### Visual Regression (Read Screenshots) — HUMAN ONLY
+
+> **Not for agent workers.** These require a human to visually inspect screenshot PNGs and confirm rendering correctness. Agents cannot meaningfully evaluate visual output.
+
+- [ ] Melee arc: white stroke-only, correct size
+- [ ] Death corpse: splayed limbs, correct color/depth
+- [ ] Reticle crosshair: ring + ticks + red dot
+- [ ] Hit markers: X shape, correct tint on kill
+- [ ] Damage numbers: correct sizes/colors per variant
+- [ ] Floor grid: visible at correct spacing
+- [ ] Minimap: static + dynamic layers rendering
+
+#### Manual Playtest — HUMAN ONLY
+
+> **Not for agent workers.** These require a human to run the game in a browser and interactively verify gameplay feel, animation timing, and visual feedback. No automated substitute exists for these checks.
+
+- [ ] Melee swing: white arc appears and fades, weapon container rotates
+- [ ] Aim sway: weapon oscillates while moving, steadies when idle
+- [ ] Aim sway affects bullet trajectory (shots spread while moving)
+- [ ] Blood particles: spray away from damage source on hit
+- [ ] Death corpse: appears with splayed limbs, fades after 5s
+- [ ] Healing particles: green dots float up during regen
+- [ ] Camera flash: red flash on taking damage (100ms)
+- [ ] Camera shake: subtle shake on dealing damage (50ms)
+- [ ] Crosshair: pre-rendered reticle at cursor, no spread circle
+- [ ] Hit markers: white X on hit, red X on kill, at reticle position
+- [ ] Damage numbers: white 16px normal, red 24px kill, small for remote
+- [ ] Directional indicators: chevrons point toward damage source/target
+- [ ] Gun recoil: weapon kicks back on fire, snaps back
+- [ ] Reload pulse: weapon flickers during reload
+- [ ] Wall spark: yellow spark when barrel is in wall, no bullet
+- [ ] Floor grid: visible grid lines across arena
+- [ ] Minimap: shows self (green), nearby enemies (red), walls
