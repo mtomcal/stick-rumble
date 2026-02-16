@@ -8,4 +8,3 @@ update IMPLEMENTATION_PLAN.md progress checklist when a spec is validated.
 update IMPLEMENTATION_PLAN.md Findings table if you find remaining drift.
 do exactly ONE checklist item per iteration, then stop.
 output `/done` when all specs are validated.
-CORRECTION: PROMPT.md was accidentally overwritten with a different task. Ignore any archive/writing instructions. You are VALIDATING specs in specs/ against source code. Read-only. Continue from where the checklist left off.
