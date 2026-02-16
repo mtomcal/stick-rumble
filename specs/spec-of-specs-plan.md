@@ -66,7 +66,7 @@
 
 | Spec File | Status | Lines | Notes |
 |-----------|--------|-------|-------|
-| [test-index.md](test-index.md) | **Complete** | ~645 | Cross-reference of all test scenarios (179 tests)
+| [test-index.md](test-index.md) | **Complete** | ~645 | Cross-reference of all test scenarios (224 tests)
 
 ---
 
@@ -76,7 +76,7 @@
 - **Completed**: 21 (README.md, overview.md, constants.md, arena.md, player.md, movement.md, messages.md, networking.md, rooms.md, weapons.md, shooting.md, hit-detection.md, melee.md, dodge-roll.md, match.md, client-architecture.md, graphics.md, ui.md, audio.md, server-architecture.md, test-index.md)
 - **Pending**: 0
 - **Actual Total Lines**: ~22,130
-- **Total Test Scenarios**: 179
+- **Total Test Scenarios**: 224
 
 ---
 
@@ -799,11 +799,11 @@
 ### 2026-02-02: test-index.md
 
 **What was done:**
-- Comprehensive cross-reference index of ALL 179 test scenarios
+- Comprehensive cross-reference index of ALL 224 test scenarios
 - Summary statistics: total tests, by category, by priority, by spec
 - Complete test catalog organized by spec (19 specs with tests)
-- Tests by Category: Unit (85), Integration (85), Visual (9)
-- Tests by Priority: Critical (65), High (85), Medium (20), Low (9)
+- Tests by Category: Unit (154), Integration (57), Visual (13)
+- Tests by Priority: Critical (71), High (102), Medium (51), Low (0)
 - Critical path implementation order with 7 phases
 - Detailed tables for each spec with test ID, category, priority, description
 - Implementation checklist with checkboxes for tracking progress
@@ -814,7 +814,7 @@
 - Test scenario naming conventions from SPEC-OF-SPECS.md
 
 **Key findings:**
-- 179 total test scenarios across all specs
+- 224 total test scenarios across all specs
 - Average 9.4 tests per spec
 - Highest test count: dodge-roll.md, graphics.md, hit-detection.md, melee.md, player.md (14 each)
 - Critical tests focus on game loop, networking, and combat
@@ -835,7 +835,7 @@
 
 All 21 specification documents have been created, covering:
 - 8 implementation phases
-- 179 test scenarios
+- 224 test scenarios
 - ~22,130 lines of documentation
 
 The spec suite is now ready for AI agents to implement Stick Rumble from scratch.
@@ -1056,7 +1056,7 @@ Before marking a spec as complete, verify:
 
 Final verification confirms:
 - **21 spec documents** created (excluding meta docs)
-- **179 test scenarios** documented across all specs
+- **224 test scenarios** documented across all specs
 - **55 JSON schemas** generated and validated (via `make schema-validate`)
 - **All contracts synchronized** between specs, events-schema, and implementation
 - **"Why" rationale** captured in every spec for design decisions
