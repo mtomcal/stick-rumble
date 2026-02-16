@@ -96,7 +96,7 @@ The specs in `specs/` were bulk-updated and then validated by a prior Ralph job.
 - [x] 67. match.md — Fix client timer red threshold (< 60, not < 30)
 - [x] 68. match.md — Fix client match end mechanism (window.onMatchEnd bridge, not showEndScreen)
 - [x] 69. dodge-roll.md — Fix UpdatePlayer return type (UpdatePlayerResult struct, not bool)
-- [ ] 73. melee.md — Fix PlayerMeleeAttack (direct world.players access, not GetAllPlayers)
+- [x] 73. melee.md — Fix PlayerMeleeAttack (direct world.players access, not GetAllPlayers)
 - [ ] 74. arena.md — Fix NewWeaponCrateManager (map, computed positions, different ID format)
 - [ ] 75. arena.md — Fix getBalancedSpawnPointLocked signature (excludePlayerID param)
 - [ ] 77. arena.md — Fix NaN recovery (sanitizeVector2 uses 0, not arena center)

@@ -222,8 +222,14 @@ func (gs *GameServer) PlayerMeleeAttack(playerID string, aimAngle float64) Melee
 
     player.SetAimAngle(aimAngle)
 
-    // Get all players and perform attack
-    allPlayers := gs.world.GetAllPlayers()
+    // Get all players directly from world.players map (under read lock)
+    gs.world.mu.RLock()
+    allPlayers := make([]*PlayerState, 0, len(gs.world.players))
+    for _, p := range gs.world.players {
+        allPlayers = append(allPlayers, p)
+    }
+    gs.world.mu.RUnlock()
+
     result := PerformMeleeAttack(player, allPlayers, ws.Weapon)
 
     return MeleeResult{
