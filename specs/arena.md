@@ -141,45 +141,24 @@ The arena is a rectangle with fixed dimensions:
 3. 40 Phaser tiles at 48px each = 1920px
 4. Creates competitive visibility - entire arena fits on screen
 
-**Pseudocode:**
-```
-ARENA_WIDTH = 1920
-ARENA_HEIGHT = 1080
-
-function isInArena(position):
-    return position.x >= 0 AND position.x <= ARENA_WIDTH
-       AND position.y >= 0 AND position.y <= ARENA_HEIGHT
-```
-
-**TypeScript:**
+**Constants:**
 ```typescript
+// TypeScript (constants.ts)
 export const ARENA = {
   WIDTH: 1920,
   HEIGHT: 1080,
 } as const;
-
-export function isInArena(position: Vector2): boolean {
-  return (
-    position.x >= 0 &&
-    position.x <= ARENA.WIDTH &&
-    position.y >= 0 &&
-    position.y <= ARENA.HEIGHT
-  );
-}
 ```
 
-**Go:**
 ```go
+// Go (constants.go)
 const (
     ArenaWidth  = 1920.0
     ArenaHeight = 1080.0
 )
-
-func IsInArena(pos Vector2) bool {
-    return pos.X >= 0 && pos.X <= ArenaWidth &&
-           pos.Y >= 0 && pos.Y <= ArenaHeight
-}
 ```
+
+> **Note:** There is no standalone `isInArena()` / `IsInArena()` function. Boundary checking is done inline via clamping (`physics.go:186-187`), projectile `IsOutOfBounds()` (`projectile.go:62-63`), and physics validation (`physics.go:340-341`).
 
 ### Boundary Clamping
 
@@ -444,10 +423,6 @@ function getBalancedSpawnPoint(players: Player[]): Vector2 {
 **Go:**
 ```go
 func (w *World) getBalancedSpawnPointLocked(excludePlayerID string) Vector2 {
-    const spawnMargin = 100.0
-    minX, maxX := spawnMargin, ArenaWidth-spawnMargin
-    minY, maxY := spawnMargin, ArenaHeight-spawnMargin
-
     // Collect living enemy positions (excluding the respawning player)
     enemyPositions := make([]Vector2, 0)
     for id, player := range w.players {
@@ -457,34 +432,39 @@ func (w *World) getBalancedSpawnPointLocked(excludePlayerID string) Vector2 {
     }
 
     // Default to center if no enemies
-    if len(enemies) == 0 {
+    if len(enemyPositions) == 0 {
         return Vector2{X: ArenaWidth / 2, Y: ArenaHeight / 2}
     }
 
-    var bestCandidate Vector2
-    bestMinDistance := -1.0
+    bestSpawn := Vector2{X: ArenaWidth / 2, Y: ArenaHeight / 2}
+    bestMinDistance := 0.0
 
     for i := 0; i < 10; i++ {
-        candidate := Vector2{
-            X: minX + rand.Float64()*(maxX-minX),
-            Y: minY + rand.Float64()*(maxY-minY),
-        }
+        margin := 100.0
 
-        minDistToEnemy := math.MaxFloat64
-        for _, enemy := range enemies {
-            dist := calculateDistance(candidate, enemy)
-            if dist < minDistToEnemy {
-                minDistToEnemy = dist
+        // Uses instance w.rng (not global rand) under w.rngMu lock
+        w.rngMu.Lock()
+        candidate := Vector2{
+            X: margin + w.rng.Float64()*(ArenaWidth-2*margin),
+            Y: margin + w.rng.Float64()*(ArenaHeight-2*margin),
+        }
+        w.rngMu.Unlock()
+
+        minDistance := 1e18
+        for _, enemyPos := range enemyPositions {
+            dist := distance(candidate, enemyPos)
+            if dist < minDistance {
+                minDistance = dist
             }
         }
 
-        if minDistToEnemy > bestMinDistance {
-            bestMinDistance = minDistToEnemy
-            bestCandidate = candidate
+        if minDistance > bestMinDistance {
+            bestMinDistance = minDistance
+            bestSpawn = candidate
         }
     }
 
-    return bestCandidate
+    return bestSpawn
 }
 ```
 
@@ -621,13 +601,7 @@ export function checkAABBCollision(
 }
 ```
 
-**Go:**
-```go
-func CheckAABBCollision(point, center Vector2, halfWidth, halfHeight float64) bool {
-    return math.Abs(point.X-center.X) < halfWidth &&
-           math.Abs(point.Y-center.Y) < halfHeight
-}
-```
+> **Note:** There is no standalone `CheckAABBCollision()` Go function. AABB collision is done inline within `physics.CheckProjectilePlayerCollision()` (`physics.go:252-299`). The TypeScript version may exist as a client utility but the Go server inlines the math.
 
 ### Weapon Pickup Proximity
 
@@ -658,7 +632,7 @@ function canPickupWeapon(player: Player, crate: WeaponCrate): boolean {
 
 **Go:**
 ```go
-func (p *Physics) CanPickupWeapon(player *PlayerState, crate *WeaponCrate) bool {
+func (p *Physics) CheckPlayerCrateProximity(player *PlayerState, crate *WeaponCrate) bool {
     if player.IsDead() {
         return false
     }
@@ -997,4 +971,5 @@ func TestCalculateDistance(t *testing.T) {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.0.3 | 2026-02-16 | Removed nonexistent `CheckAABBCollision` standalone Go function — AABB is inlined in `CheckProjectilePlayerCollision`. Removed nonexistent `IsInArena` — boundary checking done inline. Renamed `CanPickupWeapon` → `CheckPlayerCrateProximity` to match source. |
 | 1.0.0 | 2026-02-02 | Initial specification extracted from codebase |

@@ -139,9 +139,9 @@ The specs in `specs/` were bulk-updated and then validated by a prior Ralph job.
 - [x] 70. dodge-roll.md — Fix roll:start audio scope (all players, not just local)
 - [x] 71. dodge-roll.md — Fix player:dodge_roll data payload (sends direction, not empty)
 - [x] 72. dodge-roll.md — Fix error handling (logs warning, not silent)
-- [ ] 76. arena.md — Fix CanPickupWeapon function name (CheckPlayerCrateProximity)
-- [ ] 78. arena.md — Remove nonexistent isInArena function docs
-- [ ] 80. arena.md — Remove nonexistent CheckAABBCollision standalone Go function
+- [x] 76. arena.md — Fix CanPickupWeapon function name (CheckPlayerCrateProximity)
+- [x] 78. arena.md — Remove nonexistent isInArena function docs
+- [x] 80. arena.md — Remove nonexistent CheckAABBCollision standalone Go function
 - [ ] 82. README.md — Remove TODO markers from complete specs
 - [ ] 85. README.md — Fix approximate line counts
 - [ ] 86. README.md — Fix broken markdown bold formatting
