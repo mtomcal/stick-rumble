@@ -222,7 +222,7 @@
 ### 2026-02-02: messages.md
 
 **What was done:**
-- Documented ALL 26 WebSocket message types (7 Client→Server, 19 Server→Client)
+- Documented ALL 28 WebSocket message types (6 Client→Server, 22 Server→Client)
 - Complete TypeScript and Go schemas for every message with field descriptions
 - Documented the **WHY** for each message's existence and design
 - When each message is sent (trigger conditions)
@@ -236,8 +236,8 @@
 
 **Sources analyzed:**
 - `events-schema/src/schemas/common.ts` (base Message format, Position, Velocity)
-- `events-schema/src/schemas/client-to-server.ts` (all 7 client→server schemas)
-- `events-schema/src/schemas/server-to-client.ts` (all 19 server→client schemas)
+- `events-schema/src/schemas/client-to-server.ts` (all 6 client→server schemas)
+- `events-schema/src/schemas/server-to-client.ts` (all 22 server→client schemas)
 - `stick-rumble-server/internal/network/websocket_handler.go` (connection handling)
 - `stick-rumble-server/internal/network/message_processor.go` (message routing)
 - `stick-rumble-server/internal/network/broadcast_helper.go` (broadcast patterns)
@@ -258,7 +258,7 @@
 - Documented complete WebSocket connection lifecycle (client and server)
 - Connection establishment with HTTP upgrade and player ID generation
 - Message serialization (JSON over text frames) with rationale for JSON vs binary
-- Message routing via switch statement with all 7 message types
+- Message routing via switch statement with all 6 client→server message types
 - Reconnection logic: 3 attempts with exponential backoff (1s, 2s, 4s)
 - Intentional disconnect handling (shouldReconnect flag, close code 1000)
 - Graceful server shutdown: SIGTERM/SIGINT handling with 30s timeout
@@ -757,7 +757,7 @@
 - WebSocketHandler with singleton pattern for shared room state
 - World data structure with RWMutex for thread-safe player access
 - Complete game loop implementation with 8-step tick processing
-- Message routing via switch statement with all 7 message types
+- Message routing via switch statement with all 6 client→server message types
 - Event callback system for decoupling game logic from network layer
 - Concurrency model documentation with goroutine architecture diagram
 - Synchronization primitives table (RWMutex, Mutex, Channels)
@@ -914,8 +914,8 @@ The spec suite is now ready for AI agents to implement Stick Rumble from scratch
 
 | Category | Spec Count | events-schema Count | Status |
 |----------|-----------|---------------------|--------|
-| Client→Server | 7 | 6 | ✅ OK (`test` excluded) |
-| Server→Client | 20 | 20 | ✅ OK |
+| Client→Server | 6 | 6 | ✅ OK |
+| Server→Client | 22 | 22 | ✅ OK |
 
 **Summary:** All production message types are fully captured. The `test` message is intentionally omitted from TypeBox schemas as it's only used for development/debugging.
 
