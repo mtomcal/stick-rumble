@@ -404,6 +404,12 @@ export class GameSceneEventHandlers {
         } else {
           this.hitEffectManager.showBulletImpact(victimPos.x, victimPos.y);
         }
+
+        // Blood particles spray away from damage source
+        const attackerPos = this.playerManager.getPlayerPosition(messageData.attackerId);
+        if (attackerPos) {
+          this.hitEffectManager.showBloodParticles(victimPos.x, victimPos.y, attackerPos.x, attackerPos.y);
+        }
       }
     };
     this.handlerRefs.set('player:damaged', playerDamagedHandler);

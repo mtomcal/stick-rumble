@@ -31,6 +31,12 @@ describe('HitEffectManager', () => {
           alpha: 1,
           visible: false,
         })),
+        circle: vi.fn((_x: number, _y: number, _radius: number, _color: number) => ({
+          setDepth: vi.fn().mockReturnThis(),
+          destroy: vi.fn(),
+          x: _x,
+          y: _y,
+        })),
       },
       tweens: {
         add: vi.fn((config) => {
@@ -339,6 +345,156 @@ describe('HitEffectManager', () => {
       expect(() => emptyManager.showBulletImpact(100, 200)).toThrow('Effect pool is empty');
 
       emptyManager.destroy();
+    });
+  });
+
+  describe('showBloodParticles (TS-GFX-015)', () => {
+    it('should create exactly 5 blood particles', () => {
+      manager.showBloodParticles(200, 200, 100, 200);
+
+      const addCircle = scene.add.circle as unknown as ReturnType<typeof vi.fn>;
+      expect(addCircle).toHaveBeenCalledTimes(5);
+    });
+
+    it('should create circles with color 0xCC0000 (dark red)', () => {
+      manager.showBloodParticles(200, 200, 100, 200);
+
+      const addCircle = scene.add.circle as unknown as ReturnType<typeof vi.fn>;
+      for (const call of addCircle.mock.calls) {
+        expect(call[3]).toBe(0xCC0000);
+      }
+    });
+
+    it('should create circles at victim position', () => {
+      manager.showBloodParticles(300, 400, 100, 200);
+
+      const addCircle = scene.add.circle as unknown as ReturnType<typeof vi.fn>;
+      for (const call of addCircle.mock.calls) {
+        expect(call[0]).toBe(300); // victimX
+        expect(call[1]).toBe(400); // victimY
+      }
+    });
+
+    it('should create circles with radius between 2 and 5', () => {
+      // Run multiple times to check random radius range
+      for (let trial = 0; trial < 10; trial++) {
+        const trialScene = {
+          ...scene,
+          add: {
+            ...scene.add,
+            circle: vi.fn((_x: number, _y: number, _radius: number, _color: number) => ({
+              setDepth: vi.fn().mockReturnThis(),
+              destroy: vi.fn(),
+              x: _x,
+              y: _y,
+            })),
+          },
+          tweens: scene.tweens,
+        } as unknown as Phaser.Scene;
+        const trialManager = new HitEffectManager(trialScene, 5);
+
+        trialManager.showBloodParticles(200, 200, 100, 200);
+
+        const addCircle = trialScene.add.circle as unknown as ReturnType<typeof vi.fn>;
+        for (const call of addCircle.mock.calls) {
+          const radius = call[2] as number;
+          expect(radius).toBeGreaterThanOrEqual(2);
+          expect(radius).toBeLessThanOrEqual(5);
+        }
+
+        trialManager.destroy();
+      }
+    });
+
+    it('should set depth to 60 (EFFECT_DEPTH) on each particle', () => {
+      manager.showBloodParticles(200, 200, 100, 200);
+
+      const addCircle = scene.add.circle as unknown as ReturnType<typeof vi.fn>;
+      for (const result of addCircle.mock.results) {
+        expect(result.value.setDepth).toHaveBeenCalledWith(60);
+      }
+    });
+
+    it('should create tween with 500ms duration, alpha:0, scale:0 for each particle', () => {
+      // Use a non-auto-completing tweens mock for inspection
+      const tweenConfigs: unknown[] = [];
+      const inspectScene = {
+        ...scene,
+        add: {
+          ...scene.add,
+          circle: vi.fn((_x: number, _y: number, _radius: number, _color: number) => ({
+            setDepth: vi.fn().mockReturnThis(),
+            destroy: vi.fn(),
+            x: _x,
+            y: _y,
+          })),
+        },
+        tweens: {
+          add: vi.fn((config: unknown) => {
+            tweenConfigs.push(config);
+            return { play: vi.fn(), stop: vi.fn() };
+          }),
+        },
+      } as unknown as Phaser.Scene;
+      const inspectManager = new HitEffectManager(inspectScene, 5);
+
+      inspectManager.showBloodParticles(200, 200, 100, 200);
+
+      // 5 particles = 5 tweens
+      expect(tweenConfigs.length).toBe(5);
+      for (const config of tweenConfigs) {
+        const c = config as { alpha: number; scale: number; duration: number; onComplete: () => void };
+        expect(c.alpha).toBe(0);
+        expect(c.scale).toBe(0);
+        expect(c.duration).toBe(500);
+        expect(typeof c.onComplete).toBe('function');
+      }
+
+      inspectManager.destroy();
+    });
+
+    it('should destroy circles on tween complete', () => {
+      const addCircle = scene.add.circle as unknown as ReturnType<typeof vi.fn>;
+      manager.showBloodParticles(200, 200, 100, 200);
+
+      // Since our mock scene auto-completes tweens, circles should be destroyed
+      for (const result of addCircle.mock.results) {
+        expect(result.value.destroy).toHaveBeenCalled();
+      }
+    });
+
+    it('should direct particles away from damage source', () => {
+      // Source at (0, 200), victim at (200, 200) → base angle is 0 rad (rightward)
+      const tweenConfigs: Array<{ x: number; y: number }> = [];
+      const inspectScene = {
+        ...scene,
+        add: {
+          ...scene.add,
+          circle: vi.fn((_x: number, _y: number, _radius: number, _color: number) => ({
+            setDepth: vi.fn().mockReturnThis(),
+            destroy: vi.fn(),
+            x: _x,
+            y: _y,
+          })),
+        },
+        tweens: {
+          add: vi.fn((config: { x: number; y: number }) => {
+            tweenConfigs.push(config);
+            return { play: vi.fn(), stop: vi.fn() };
+          }),
+        },
+      } as unknown as Phaser.Scene;
+      const inspectManager = new HitEffectManager(inspectScene, 5);
+
+      inspectManager.showBloodParticles(200, 200, 0, 200);
+
+      // All tween end positions should be to the right of victim (x > 200)
+      // since particles move away from source (which is to the left)
+      for (const config of tweenConfigs) {
+        expect(config.x).toBeGreaterThan(200);
+      }
+
+      inspectManager.destroy();
     });
   });
 });

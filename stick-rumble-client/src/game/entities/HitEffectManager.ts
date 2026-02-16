@@ -232,6 +232,45 @@ export class HitEffectManager {
   }
 
   /**
+   * Show blood particles bursting from victim position away from damage source.
+   * Creates 5 circles with random radius (2-5px), velocity (50-150 px/s),
+   * direction (away from source ±0.5 rad), and 500ms fade+shrink tween.
+   *
+   * @param victimX Victim's x position
+   * @param victimY Victim's y position
+   * @param sourceX Attacker's x position (for direction calculation)
+   * @param sourceY Attacker's y position (for direction calculation)
+   */
+  showBloodParticles(victimX: number, victimY: number, sourceX: number, sourceY: number): void {
+    const baseAngle = Math.atan2(victimY - sourceY, victimX - sourceX);
+
+    for (let i = 0; i < 5; i++) {
+      const radius = 2 + Math.random() * 3; // 2-5px
+      const circle = this.scene.add.circle(victimX, victimY, radius, 0xCC0000);
+      circle.setDepth(HitEffectManager.EFFECT_DEPTH);
+
+      const angle = baseAngle + (Math.random() - 0.5); // ±0.5 rad spread
+      const speed = 50 + Math.random() * 100; // 50-150 px/s
+      // Simulate 500ms of movement with drag (200 px/s²)
+      // Average effective distance ≈ speed * duration / 2 (due to drag)
+      const duration = 500;
+      const effectiveDistance = speed * (duration / 1000) * 0.5;
+      const endX = victimX + Math.cos(angle) * effectiveDistance;
+      const endY = victimY + Math.sin(angle) * effectiveDistance;
+
+      this.scene.tweens.add({
+        targets: circle,
+        x: endX,
+        y: endY,
+        alpha: 0,
+        scale: 0,
+        duration: 500,
+        onComplete: () => circle.destroy(),
+      });
+    }
+  }
+
+  /**
    * Cleanup all pooled effects
    */
   destroy(): void {

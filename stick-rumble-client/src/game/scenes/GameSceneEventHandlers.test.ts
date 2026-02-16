@@ -71,6 +71,7 @@ describe('GameSceneEventHandlers', () => {
       showBulletImpact: vi.fn(),
       showMeleeHit: vi.fn(),
       showMuzzleFlash: vi.fn(),
+      showBloodParticles: vi.fn(),
       destroy: vi.fn(),
     } as any;
 
@@ -1492,6 +1493,59 @@ describe('GameSceneEventHandlers', () => {
       // Should not show any hit effect
       expect(mockHitEffectManager.showBulletImpact).not.toHaveBeenCalled();
       expect(mockHitEffectManager.showMeleeHit).not.toHaveBeenCalled();
+    });
+
+    it('should trigger blood particles on player:damaged with attacker and victim positions (TS-GFX-015)', () => {
+      eventHandlers.setupEventHandlers();
+
+      // Mock getPlayerPosition to return different positions for victim and attacker
+      mockPlayerManager.getPlayerPosition = vi.fn((id: string) => {
+        if (id === 'victim-1') return { x: 200, y: 300 };
+        if (id === 'attacker-1') return { x: 100, y: 300 };
+        return null;
+      });
+
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const playerDamagedHandler = handlerRefs.get('player:damaged');
+
+      const data = {
+        victimId: 'victim-1',
+        attackerId: 'attacker-1',
+        damage: 25,
+        newHealth: 75,
+        projectileId: 'proj-123',
+      };
+
+      playerDamagedHandler?.(data);
+
+      // Should call showBloodParticles with victim position and attacker position
+      expect(mockHitEffectManager.showBloodParticles).toHaveBeenCalledWith(200, 300, 100, 300);
+    });
+
+    it('should not trigger blood particles when attacker position is null', () => {
+      eventHandlers.setupEventHandlers();
+
+      // Victim position available but attacker position null
+      mockPlayerManager.getPlayerPosition = vi.fn((id: string) => {
+        if (id === 'victim-1') return { x: 200, y: 300 };
+        return null;
+      });
+
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const playerDamagedHandler = handlerRefs.get('player:damaged');
+
+      const data = {
+        victimId: 'victim-1',
+        attackerId: 'unknown-attacker',
+        damage: 25,
+        newHealth: 75,
+        projectileId: 'proj-123',
+      };
+
+      playerDamagedHandler?.(data);
+
+      // Blood particles should NOT be called (no attacker position)
+      expect(mockHitEffectManager.showBloodParticles).not.toHaveBeenCalled();
     });
 
     it('should handle weapon:state with Bat melee weapon type', () => {

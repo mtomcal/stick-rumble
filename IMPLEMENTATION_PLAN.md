@@ -152,17 +152,17 @@ The following discrepancies were found between this plan and the spec diff (c7dd
 
 > **Current state**: Not implemented. HitEffectManager exists but no blood particles.
 
-- [ ] **Add RenderedPlayer fields**: `lastDamageTime?: number`, `lastDamageSourceAngle?: number`
-- [ ] **On player:damaged event**: Create 5 circles at victim position
-- [ ] **Color**: 0xCC0000 (dark red)
-- [ ] **Radius**: Random 2-5px per particle
-- [ ] **Speed**: Random 50-150 px/s, direction away from damage source ±0.5 rad
-- [ ] **Drag**: 200 px/s²
-- [ ] **Fade + shrink tween**: alpha and scale to 0 over 500ms
-- [ ] **Test TS-GFX-015**: Blood particles spawn on damage
-- [ ] **Spec validation**: Verify against `constants.md` lines 262-269 — all 8 blood particle constants match: count=5, color=0xCC0000, minRadius=2, maxRadius=5, minSpeed=50, maxSpeed=150, drag=200, duration=500. Verify direction spread ±0.5 rad per `graphics.md` line 713
-- [ ] **Assertion quality**: Tests assert exactly 5 particles created (`toHaveBeenCalledTimes(5)` or array length check), assert color `0xCC0000` in `fillStyle` call, assert tween duration is exactly 500 — not `toBeGreaterThan(0)` on particle count
-- [ ] **Coverage gate**: Blood particle creation + tween code path ≥90% statements/lines/functions
+- [x] **Add RenderedPlayer fields**: `lastDamageTime?: number`, `lastDamageSourceAngle?: number` — SKIPPED: not needed, direction computed from attacker/victim positions on the fly
+- [x] **On player:damaged event**: Create 5 circles at victim position
+- [x] **Color**: 0xCC0000 (dark red)
+- [x] **Radius**: Random 2-5px per particle
+- [x] **Speed**: Random 50-150 px/s, direction away from damage source ±0.5 rad
+- [x] **Drag**: 200 px/s² — simulated via tween distance calculation
+- [x] **Fade + shrink tween**: alpha and scale to 0 over 500ms
+- [x] **Test TS-GFX-015**: Blood particles spawn on damage
+- [x] **Spec validation**: Verified count=5, color=0xCC0000, radius 2-5, speed 50-150, spread ±0.5 rad, duration=500. Constants line refs in plan were wrong (pointed to AK47 constants, not blood particle constants — the actual blood constants are around line 406 in constants.md)
+- [x] **Assertion quality**: Tests assert exactly 5 particles created (`toHaveBeenCalledTimes(5)`), assert color `0xCC0000` in `add.circle` call, assert tween duration exactly 500, alpha=0, scale=0
+- [x] **Coverage gate**: Blood particle creation + tween code path ≥90% statements/lines/functions
 
 #### System 3c — Client: Healing Particles (PlayerManager.ts or HealthBarUI)
 

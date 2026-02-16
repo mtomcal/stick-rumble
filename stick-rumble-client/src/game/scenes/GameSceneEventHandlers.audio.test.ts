@@ -84,6 +84,7 @@ describe('GameSceneEventHandlers - Audio Integration', () => {
       showBulletImpact: vi.fn(),
       showMeleeHit: vi.fn(),
       showMuzzleFlash: vi.fn(),
+      showBloodParticles: vi.fn(),
       destroy: vi.fn(),
     } as any;
 
