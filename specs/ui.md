@@ -674,10 +674,11 @@ showHitMarker(): void {
     this.scene.add.line(0, 0, centerX + gap, centerY, centerX + gap + lineLength, centerY, 0xffffff),
   ];
 
+  // Note: No setScrollFactor(0) — lines are positioned in world coords
+  // using camera.scrollX/scrollY offsets, so they appear at screen center.
   lines.forEach(line => {
-    line.setLineWidth(3);
-    line.setScrollFactor(0);
     line.setDepth(1001);
+    line.setLineWidth(3);
   });
 
   this.scene.tweens.add({
@@ -1244,6 +1245,7 @@ it('should sort scoreboard by kills descending, deaths ascending', () => {
 | 1.0.0 | 2026-02-02 | Initial specification |
 | 1.1.0 | 2026-02-15 | Added Debug Network Panel section (DebugNetworkPanel.tsx for testing netcode under degraded conditions). |
 | 1.1.1 | 2026-02-16 | Fixed kill feed ordering — actual uses `push` (add to end) + `shift` (remove oldest from front), not `unshift` + `pop`. Uses KillEntry objects with container, not raw text with setScrollFactor. |
+| 1.1.7 | 2026-02-16 | Fixed hit marker — uses world coordinates (no `setScrollFactor(0)`) per actual `GameSceneUI.ts:305-361` |
 | 1.1.6 | 2026-02-16 | Clarified reload circle alpha — explicitly 1.0 (fully opaque) per `GameSceneUI.ts:168` |
 | 1.1.5 | 2026-02-16 | Fixed match timer boundary conditions — uses `< 60` and `< 120` (not `> 120` and `> 60`), checks red first |
 | 1.1.4 | 2026-02-16 | Added font size (14px) to connection status specification |
