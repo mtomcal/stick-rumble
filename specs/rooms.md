@@ -182,15 +182,14 @@ func (rm *RoomManager) AddPlayer(player *Player) *Room {
 
     // Tab reload handling: check for room with exactly 1 player
     for _, room := range rm.rooms {
-        if room.PlayerCount() == 1 {
-            if room.Match != nil && !room.Match.IsEnded() {
-                if err := room.AddPlayer(player); err == nil {
-                    room.Match.RegisterPlayer(player.ID)
-                    rm.playerToRoom[player.ID] = room.ID
-                    // Send room:joined (done by caller)
-                    return room
-                }
-            }
+        if room.PlayerCount() == 1 && !room.Match.IsEnded() {
+            room.AddPlayer(player)
+            rm.playerToRoom[player.ID] = room.ID
+            room.Match.RegisterPlayer(player.ID)
+
+            // RoomManager sends room:joined directly (not caller)
+            rm.sendRoomJoinedMessage(player, room)
+            return room
         }
     }
 
@@ -201,18 +200,23 @@ func (rm *RoomManager) AddPlayer(player *Player) *Room {
     if len(rm.waitingPlayers) >= 2 {
         player1 := rm.waitingPlayers[0]
         player2 := rm.waitingPlayers[1]
-        rm.waitingPlayers = rm.waitingPlayers[2:]
 
         room := NewRoom()
         room.AddPlayer(player1)
         room.AddPlayer(player2)
         room.Match.RegisterPlayer(player1.ID)
         room.Match.RegisterPlayer(player2.ID)
-        room.Match.Start()
 
+        rm.waitingPlayers = rm.waitingPlayers[2:]
         rm.rooms[room.ID] = room
         rm.playerToRoom[player1.ID] = room.ID
         rm.playerToRoom[player2.ID] = room.ID
+
+        room.Match.Start()
+
+        // RoomManager sends room:joined to both players
+        rm.sendRoomJoinedMessage(player1, room)
+        rm.sendRoomJoinedMessage(player2, room)
 
         return room
     }
