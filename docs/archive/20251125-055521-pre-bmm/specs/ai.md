@@ -431,3 +431,4 @@ The `enemies.getChildren().forEach()` loop iterates over all group members. If a
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-15 | Initial specification documenting pre-BMM archive snapshot |
+| 1.0.1 | 2026-02-16 | Verified against source — all constants, behaviors, and line references match |
