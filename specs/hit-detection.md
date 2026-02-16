@@ -169,21 +169,42 @@ function checkHitDetection():
 **Go:**
 ```go
 func (gs *GameServer) checkHitDetection() {
-    projectiles := gs.world.Projectiles.GetAllActive()
-    players := gs.world.GetAllPlayers()
+    projectiles := gs.projectileManager.GetActiveProjectiles()
+    if len(projectiles) == 0 {
+        return
+    }
+
+    // Get all players under read lock
+    gs.world.mu.RLock()
+    players := make([]*PlayerState, 0, len(gs.world.players))
+    for _, player := range gs.world.players {
+        players = append(players, player)
+    }
+    gs.world.mu.RUnlock()
 
     hits := gs.physics.CheckAllProjectileCollisions(projectiles, players)
 
     for _, hit := range hits {
-        attackerWeapon := gs.world.GetPlayerWeapon(hit.AttackerID)
-        damage := attackerWeapon.Config.Damage
+        gs.weaponMu.RLock()
+        weaponState := gs.weaponStates[hit.AttackerID]
+        gs.weaponMu.RUnlock()
+        if weaponState == nil {
+            continue
+        }
 
-        victim := gs.world.GetPlayer(hit.VictimID)
+        damage := weaponState.Weapon.Damage
+
+        victim, exists := gs.world.GetPlayer(hit.VictimID)
+        if !exists {
+            continue
+        }
         victim.TakeDamage(damage)
 
-        gs.world.Projectiles.Remove(hit.ProjectileID)
+        gs.projectileManager.RemoveProjectile(hit.ProjectileID)
 
-        gs.onHit(hit.AttackerID, hit.VictimID, damage, hit.ProjectileID)
+        if gs.onHit != nil {
+            gs.onHit(hit)  // Passes entire HitEvent struct
+        }
     }
 }
 ```
@@ -1130,3 +1151,4 @@ func TestProjectileOutOfBounds(t *testing.T) {
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification |
 | 1.1.0 | 2026-02-15 | Added Hitscan Hit Detection section (Pistol ray-circle collision). Added Lag Compensation via Position History section (RTT-based rewind, 150ms cap, linear interpolation). Updated overview to distinguish projectile vs hitscan collision modes. |
+| 1.1.1 | 2026-02-16 | Fixed `checkHitDetection` code block — `onHit(hit)` takes HitEvent struct (not individual params), weapon damage via `gs.weaponStates` map (not `gs.world.GetPlayerWeapon`), projectiles via `gs.projectileManager` (not `gs.world.Projectiles`), players accessed directly under RLock. |
