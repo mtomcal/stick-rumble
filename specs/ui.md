@@ -854,6 +854,7 @@ export function MatchEndScreen({ matchData, localPlayerId, onClose, onPlayAgain 
 **Position**: (10, 30), below title
 
 **Visual Specification:**
+- Font size: 14px
 - Connected: "Connected! WASD=move, Click=shoot, R=reload, E=pickup, SPACE=dodge"
   - Color: Green (#00ff00)
 - Failed: "Failed to connect to server"
@@ -1240,5 +1241,6 @@ it('should sort scoreboard by kills descending, deaths ascending', () => {
 | 1.0.0 | 2026-02-02 | Initial specification |
 | 1.1.0 | 2026-02-15 | Added Debug Network Panel section (DebugNetworkPanel.tsx for testing netcode under degraded conditions). |
 | 1.1.1 | 2026-02-16 | Fixed kill feed ordering — actual uses `push` (add to end) + `shift` (remove oldest from front), not `unshift` + `pop`. Uses KillEntry objects with container, not raw text with setScrollFactor. |
+| 1.1.4 | 2026-02-16 | Added font size (14px) to connection status specification |
 | 1.1.3 | 2026-02-16 | Fixed kill feed player ID method — `slice(0, 8)` → `substring(0, 8)` to match source |
 | 1.1.2 | 2026-02-16 | Fixed match end screen test expected output — winner text is "Winner: Player1", not "Player1 WINS!" |

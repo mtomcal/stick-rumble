@@ -131,7 +131,7 @@ The specs in `specs/` were bulk-updated and then validated by a prior Ralph job.
 - [x] 51. overview.md — Fix World struct (add clock, rng, rngMu fields, PlayerState type)
 - [x] 55. rooms.md — Fix health property name (localPlayerHealth, not currentHealth)
 - [x] 59. ui.md — Fix scoreboard player ID (full ID, no truncation)
-- [ ] 62. ui.md — Note connection status font size (14px)
+- [x] 62. ui.md — Note connection status font size (14px)
 - [ ] 63. ui.md — Fix match timer boundary conditions (>= vs >)
 - [ ] 64. ui.md — Fix reload circle opacity (1.0, not 0.6)
 - [ ] 65. ui.md — Fix hit marker scrollFactor (world coords, not setScrollFactor(0))
