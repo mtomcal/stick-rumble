@@ -30,7 +30,7 @@ The networking layer provides real-time bidirectional communication between the 
 | gorilla/websocket | v1.5.3 | Server WebSocket implementation (Go) |
 | Browser WebSocket API | Native | Client WebSocket implementation |
 | Ajv | 8.x | Client-side JSON Schema validation |
-| @sinclair/typebox | 0.32.x | Schema definition and type inference |
+| @sinclair/typebox | 0.34.x | Schema definition and type inference |
 
 ### File Locations
 
@@ -1143,4 +1143,5 @@ func TestGracefulShutdown(t *testing.T) {
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification |
+| 1.1.1 | 2026-02-16 | Fixed TypeBox version from 0.32.x to 0.34.x to match source |
 | 1.1.0 | 2026-02-15 | Added Delta Compression section (state:snapshot/state:delta, per-client tracking, change thresholds). Added Ping Tracking section (ping/pong RTT, circular buffer). Added Network Simulator section (server + client, env vars). Added Input Sequence Numbers section. Added File Locations table with new files (delta_tracker.go, ping_tracker.go, position_history.go, network_simulator.go, NetworkSimulator.ts, message_processor.go, broadcast_helper.go). |
