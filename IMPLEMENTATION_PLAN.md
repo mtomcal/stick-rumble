@@ -127,7 +127,7 @@ The specs in `specs/` were bulk-updated and then validated by a prior Ralph job.
 - [x] 40. shooting.md — Fix IsExpired operator (>= not >)
 - [x] 44. weapons.md — Add projectile sub-field to WeaponVisuals interface
 - [x] 47. overview.md — Fix GDD.md path (docs/GDD.md, not root)
-- [ ] 48. overview.md — Remove .claude/todos.json from folder tree
+- [x] 48. overview.md — Remove .claude/todos.json from folder tree
 - [ ] 51. overview.md — Fix World struct (add clock, rng, rngMu fields, PlayerState type)
 - [ ] 55. rooms.md — Fix health property name (localPlayerHealth, not currentHealth)
 - [ ] 59. ui.md — Fix scoreboard player ID (full ID, no truncation)
