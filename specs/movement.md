@@ -692,23 +692,7 @@ Time     Velocity (px/s)   Position (y)   Notes
 
 ### Extreme Delta Time
 
-**Trigger**: Game lag causes deltaTime > 1 second
-**Detection**: Check deltaTime before physics update
-**Response**: Cap deltaTime at 0.1s (100ms)
-**Why**: Prevents teleportation due to lag spikes
-
-**Go:**
-```go
-func sanitizeDeltaTime(dt float64) float64 {
-    if dt > 0.1 {
-        return 0.1  // Cap at 100ms
-    }
-    if dt <= 0 {
-        return 0.01667  // Default to 60 Hz
-    }
-    return dt
-}
-```
+**Note**: Neither the server nor the client currently sanitizes or caps deltaTime. The server computes real elapsed time via `now.Sub(lastTick).Seconds()` (`gameserver.go:136`) and the client converts Phaser's frame delta from ms to seconds (`GameScene.ts:325-327`). Both use the raw value directly — no `sanitizeDeltaTime` function exists. Large lag spikes could theoretically cause position jumps, but this is not currently guarded against.
 
 ---
 
@@ -958,3 +942,4 @@ func TestDiagonalNormalization(t *testing.T) {
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification extracted from codebase |
 | 1.1.0 | 2026-02-15 | Updated DECELERATION from 50→1500 px/s². Rewrote Client-Side Prediction section to document PredictionEngine, server reconciliation (with input sequence replay), and InterpolationEngine. Updated deceleration test scenario timing. Added file location table for new physics modules. |
+| 1.1.1 | 2026-02-16 | Removed nonexistent `sanitizeDeltaTime` function from Error Handling section to match source code (raw delta used) |
