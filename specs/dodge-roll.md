@@ -561,17 +561,20 @@ Sent when the player presses SPACE to request a dodge roll.
 
 **Schema:**
 ```typescript
-// No data payload - server uses current input state for direction
 interface PlayerDodgeRollMessage {
   type: 'player:dodge_roll';
   timestamp: number;
+  data: {
+    direction: { x: number; y: number };  // Normalized roll direction vector
+  };
 }
 ```
 
-**Why no direction in message:**
-- Server already has the player's input state (WASD, aim angle)
-- Prevents client from sending arbitrary directions (cheat prevention)
-- Reduces message size
+> **Note:** The formal TypeBox schema (`createTypedMessageSchemaNoData`) defines this as having no data payload, but the actual client implementation (`GameScene.ts:286-290`) sends `data: { direction: rollDirection }` computed from WASD input or aim angle. The server extracts the direction from the data payload.
+
+**Direction calculation:**
+1. If WASD keys pressed → normalized WASD direction vector
+2. If stationary → aim angle direction (cos/sin)
 
 ### Server → Client: roll:start
 
@@ -1143,5 +1146,6 @@ it('should show 50% progress at 1.5s', () => {
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification |
+| 1.0.3 | 2026-02-16 | Fixed player:dodge_roll payload — client sends `data: { direction }`, not empty (schema and implementation diverge) |
 | 1.0.2 | 2026-02-16 | Fixed roll:start audio scope — plays for ALL players' rolls, not just local player |
 | 1.0.1 | 2026-02-16 | Fixed UpdatePlayer return type — returns `UpdatePlayerResult` struct (with `RollCancelled` and `CorrectionNeeded` fields), not `bool`. Added `sanitizeVector2` calls to match source. |
