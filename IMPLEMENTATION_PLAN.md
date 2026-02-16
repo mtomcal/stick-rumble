@@ -217,17 +217,17 @@ The following discrepancies were found between this plan and the spec diff (c7dd
 
 > **Current state**: `GameSceneUI.ts` draws 4 white lines forming + pattern at screen center, 200ms fade.
 
-- [ ] **Generate hitmarker texture**: 20×20, two diagonal lines forming X, white 3px stroke
-- [ ] **Replace line-based hit marker**: Use sprite instead of 4 procedural lines
-- [ ] **Normal hit**: White tint, scale 1.2×
-- [ ] **Kill hit**: Red (0xFF0000) tint, scale 2.0×
-- [ ] **Position at reticle**: Not screen center
-- [ ] **Fade tween**: 150ms (not 200ms), include scale-down to `marker.scale * 0.5`
-- [ ] **Test TS-UI-014**: Hit marker normal variant
-- [ ] **Test TS-UI-015**: Hit marker kill variant
-- [ ] **Spec validation**: Verify against `constants.md` lines 345-350 — size=20×20, stroke=3, normalScale=1.2, killScale=2.0, killColor=0xFF0000, fadeDuration=150. Verify scale-down to `marker.scale * 0.5` per `ui.md` tween code. Verify position is at reticle per `ui.md` line 1981
-- [ ] **Assertion quality**: Tests assert normal scale exactly 1.2, kill scale exactly 2.0, kill tint exactly 0xFF0000, tween duration exactly 150 (not 200), scale end value is `initialScale * 0.5` — not bare `expect(marker).toBeDefined()` or `toHaveBeenCalled()`
-- [ ] **Coverage gate**: Hit marker creation + variant branching code path ≥90% statements/lines/functions
+- [x] **Generate hitmarker texture**: 20×20, two diagonal lines forming X, white 3px stroke
+- [x] **Replace line-based hit marker**: Use sprite instead of 4 procedural lines
+- [x] **Normal hit**: White tint, scale 1.2×
+- [x] **Kill hit**: Red (0xFF0000) tint, scale 2.0×
+- [x] **Position at reticle**: Not screen center — uses pointer worldX/worldY
+- [x] **Fade tween**: 150ms (not 200ms), include scale-down to `marker.scale * 0.5`
+- [x] **Test TS-UI-014**: Hit marker normal variant
+- [x] **Test TS-UI-015**: Hit marker kill variant
+- [x] **Spec validation**: Verified against `constants.md` lines 489-499 — size=20×20, stroke=3, normalScale=1.2, killScale=2.0, killColor=0xFF0000, fadeDuration=150, depth=1000. Scale-down matches `marker.scale * 0.5` per `ui.md` tween code. Position at pointer world coords (not screen center). Plan line refs were wrong (said 345-350, actual 489-499)
+- [x] **Assertion quality**: Tests assert normal scale 1.2, kill scale 2.0, kill tint 0xFF0000, tween duration 150, scale end value `initialScale * 0.5` (normal: 0.6, kill: 1.0), depth 1000
+- [x] **Coverage gate**: Hit marker creation + variant branching code path ≥90% statements/lines/functions
 
 #### System 4c — Client: Damage Number Variants (GameSceneUI.ts)
 
@@ -458,3 +458,7 @@ Follow these steps for each system section:
 - [2026-02-16] **System 4a — Complete Crosshair.ts rewrite**: Replaced per-frame procedural Graphics-based crosshair (white + sign, red spread circle) with pre-generated 32×32 reticle texture (ring, 4 cardinal ticks, red center dot) displayed as a Sprite. Removed all spread-related code (WEAPON_SPREAD constants, spreadRadius, drawSpreadIndicator, SPREAD_LERP_SPEED, PIXELS_PER_DEGREE). `getCurrentSpreadRadius()` now always returns 0. Public interface preserved for backward compatibility.
 - [2026-02-16] **System 4a — Plan spec line refs wrong**: Plan said "constants.md lines 318-325" for reticle constants, but those lines are about hit indicators. Actual reticle constants at lines 462-473: RETICLE_TEXTURE_SIZE=32, RING_RADIUS=10, RING_STROKE=2, etc.
 - [2026-02-16] **System 4a — GameScene.test.setup.ts did NOT need updating**: Despite the new `scene.make.graphics` call in Crosshair's constructor, the shared `createMockScene()` did not need changes because GameScene tests don't directly instantiate Crosshair — they go through GameSceneUI which is mocked at a higher level.
+- [2026-02-16] **System 4b — GameScene.test.setup.ts DID need updating**: Unlike System 4a (Crosshair), System 4b added `scene.make.graphics()` to GameSceneUI's constructor, which IS instantiated in GameScene tests. Added `mockMakeGraphics` object and `make: { graphics: vi.fn() }` to `createMockScene()`.
+- [2026-02-16] **System 4b — Kill variant triggered on player:kill_credit**: The `hit:confirmed` event doesn't include a `kill` boolean. Normal hit markers are shown on `hit:confirmed` (white, 1.2×) and kill hit markers on `player:kill_credit` (red, 2.0×). Added `showHitMarker(true)` call to the kill credit handler.
+- [2026-02-16] **System 4b — Plan spec line refs wrong**: Plan said "constants.md lines 345-350" for hit marker constants, but those lines are about aim sway. Actual hit marker constants at lines 489-499.
+- [2026-02-16] **System 4b — World coordinates via pointer.worldX/worldY**: Spec errata 1.1.7 says hit marker uses world coordinates (no `setScrollFactor(0)`). Implemented using `pointer.worldX`/`pointer.worldY` with fallback to `pointer.x + camera.scrollX` when worldX is undefined.

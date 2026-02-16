@@ -26,6 +26,22 @@ export class GameSceneUI {
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
+    this.generateHitMarkerTexture();
+  }
+
+  /**
+   * Generate the hitmarker X texture (20x20, white X, 3px stroke).
+   * Called once during construction.
+   */
+  private generateHitMarkerTexture(): void {
+    const gfx = this.scene.make.graphics({ x: 0, y: 0 }, false);
+    gfx.lineStyle(3, 0xffffff, 1);
+    gfx.beginPath();
+    gfx.moveTo(2, 2); gfx.lineTo(18, 18);
+    gfx.moveTo(18, 2); gfx.lineTo(2, 18);
+    gfx.strokePath();
+    gfx.generateTexture('hitmarker', 20, 20);
+    gfx.destroy();
   }
 
   /**
@@ -287,63 +303,37 @@ export class GameSceneUI {
   }
 
   /**
-   * Show hit marker (crosshair confirmation) at screen center
+   * Show hit marker at reticle/pointer position.
+   * Uses pre-generated 20x20 X texture with normal and kill variants.
+   * @param kill - Whether this is a kill confirmation (red, 2x scale)
    */
-  showHitMarker(): void {
-    const camera = this.scene.cameras.main;
-    const centerX = camera.scrollX + camera.width / 2;
-    const centerY = camera.scrollY + camera.height / 2;
-    const lineLength = 15;
-    const gap = 10; // Gap from center
+  showHitMarker(kill: boolean = false): void {
+    const pointer = this.scene.input?.activePointer;
+    if (!pointer) {
+      return;
+    }
 
-    // Create 4 lines forming a crosshair (top, bottom, left, right)
-    const lines = [
-      // Top line
-      this.scene.add.line(
-        0, 0,
-        centerX, centerY - gap,
-        centerX, centerY - gap - lineLength,
-        0xffffff
-      ),
-      // Bottom line
-      this.scene.add.line(
-        0, 0,
-        centerX, centerY + gap,
-        centerX, centerY + gap + lineLength,
-        0xffffff
-      ),
-      // Left line
-      this.scene.add.line(
-        0, 0,
-        centerX - gap, centerY,
-        centerX - gap - lineLength, centerY,
-        0xffffff
-      ),
-      // Right line
-      this.scene.add.line(
-        0, 0,
-        centerX + gap, centerY,
-        centerX + gap + lineLength, centerY,
-        0xffffff
-      ),
-    ];
+    // World coordinates from pointer
+    const worldX = pointer.worldX ?? (pointer.x + this.scene.cameras.main.scrollX);
+    const worldY = pointer.worldY ?? (pointer.y + this.scene.cameras.main.scrollY);
 
-    // Set high depth so crosshair appears above everything
-    lines.forEach(line => {
-      line.setDepth(1001);
-      line.setLineWidth(3);
-    });
+    const marker = this.scene.add.sprite(worldX, worldY, 'hitmarker');
+    marker.setDepth(1000);
 
-    // Animate: expand slightly and fade out, then clean up
+    if (kill) {
+      marker.setTint(0xff0000);
+      marker.setScale(2.0);
+    } else {
+      marker.setTint(0xffffff);
+      marker.setScale(1.2);
+    }
+
     this.scene.tweens.add({
-      targets: lines,
+      targets: marker,
       alpha: 0,
-      duration: 200,
-      ease: 'Cubic.easeOut',
-      onComplete: () => {
-        // Clean up lines after animation
-        lines.forEach(line => line.destroy());
-      },
+      scale: marker.scale * 0.5,
+      duration: 150,
+      onComplete: () => marker.destroy(),
     });
   }
 

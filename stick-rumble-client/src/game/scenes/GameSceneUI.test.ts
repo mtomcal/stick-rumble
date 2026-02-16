@@ -27,6 +27,8 @@ describe('GameSceneUI', () => {
   let mockLine: any;
   let createdTexts: any[];
   let createdGraphics: any[];
+  let mockMakeGraphics: any;
+  let mockSprite: any;
 
   beforeEach(() => {
     createdTexts = [];
@@ -57,6 +59,26 @@ describe('GameSceneUI', () => {
       destroy: vi.fn(),
     };
 
+    // Create mock make.graphics for texture generation
+    mockMakeGraphics = {
+      lineStyle: vi.fn().mockReturnThis(),
+      beginPath: vi.fn().mockReturnThis(),
+      moveTo: vi.fn().mockReturnThis(),
+      lineTo: vi.fn().mockReturnThis(),
+      strokePath: vi.fn().mockReturnThis(),
+      generateTexture: vi.fn().mockReturnThis(),
+      destroy: vi.fn(),
+    };
+
+    // Create mock sprite for hit marker
+    mockSprite = {
+      setDepth: vi.fn().mockReturnThis(),
+      setTint: vi.fn().mockReturnThis(),
+      setScale: vi.fn().mockImplementation(function(this: any, s: number) { this.scale = s; return this; }),
+      scale: 1,
+      destroy: vi.fn(),
+    };
+
     // Create mock scene
     mockScene = {
       sys: {
@@ -78,6 +100,7 @@ describe('GameSceneUI', () => {
         }),
         rectangle: vi.fn().mockReturnValue(mockDamageFlashOverlay),
         line: vi.fn().mockReturnValue(mockLine),
+        sprite: vi.fn().mockReturnValue(mockSprite),
         graphics: vi.fn().mockImplementation(() => {
           const graphics = {
             fillStyle: vi.fn().mockReturnThis(),
@@ -96,8 +119,19 @@ describe('GameSceneUI', () => {
           return graphics;
         }),
       },
+      make: {
+        graphics: vi.fn().mockReturnValue(mockMakeGraphics),
+      },
       cameras: {
         main: mockCamera,
+      },
+      input: {
+        activePointer: {
+          x: 500,
+          y: 400,
+          worldX: 600,
+          worldY: 450,
+        },
       },
       tweens: {
         add: vi.fn().mockImplementation((config) => {
@@ -450,43 +484,134 @@ describe('GameSceneUI', () => {
     });
   });
 
-  describe('showHitMarker', () => {
-    it('should create 4 crosshair lines at screen center', () => {
-      ui.showHitMarker();
-
-      // Should create 4 lines (top, bottom, left, right)
-      expect(mockScene.add.line).toHaveBeenCalledTimes(4);
+  describe('TS-GFX-025: Hit marker texture generation', () => {
+    it('should generate hitmarker texture with generateTexture("hitmarker", 20, 20)', () => {
+      expect(mockMakeGraphics.generateTexture).toHaveBeenCalledWith('hitmarker', 20, 20);
     });
 
-    it('should set high depth on all lines', () => {
-      ui.showHitMarker();
-
-      // Each line should have depth set
-      expect(mockLine.setDepth).toHaveBeenCalledWith(1001);
-      expect(mockLine.setDepth).toHaveBeenCalledTimes(4);
+    it('should draw X with 3px white stroke', () => {
+      expect(mockMakeGraphics.lineStyle).toHaveBeenCalledWith(3, 0xffffff, 1);
     });
 
-    it('should set line width on all lines', () => {
-      ui.showHitMarker();
-
-      expect(mockLine.setLineWidth).toHaveBeenCalledWith(3);
-      expect(mockLine.setLineWidth).toHaveBeenCalledTimes(4);
+    it('should draw two diagonal lines forming X shape', () => {
+      // First diagonal: (2,2) to (18,18)
+      expect(mockMakeGraphics.moveTo).toHaveBeenCalledWith(2, 2);
+      expect(mockMakeGraphics.lineTo).toHaveBeenCalledWith(18, 18);
+      // Second diagonal: (18,2) to (2,18)
+      expect(mockMakeGraphics.moveTo).toHaveBeenCalledWith(18, 2);
+      expect(mockMakeGraphics.lineTo).toHaveBeenCalledWith(2, 18);
     });
 
-    it('should animate and destroy lines', () => {
-      ui.showHitMarker();
+    it('should destroy temp graphics after texture generation', () => {
+      expect(mockMakeGraphics.destroy).toHaveBeenCalled();
+    });
+  });
 
-      // Tween should be created with fade out
+  describe('TS-UI-014: Hit marker normal variant', () => {
+    it('should create sprite at pointer world position with "hitmarker" texture', () => {
+      ui.showHitMarker(false);
+
+      expect(mockScene.add.sprite).toHaveBeenCalledWith(600, 450, 'hitmarker');
+    });
+
+    it('should set depth to exactly 1000', () => {
+      ui.showHitMarker(false);
+
+      expect(mockSprite.setDepth).toHaveBeenCalledWith(1000);
+    });
+
+    it('should set white tint (0xFFFFFF) for normal hit', () => {
+      ui.showHitMarker(false);
+
+      expect(mockSprite.setTint).toHaveBeenCalledWith(0xffffff);
+    });
+
+    it('should set scale to exactly 1.2 for normal hit', () => {
+      ui.showHitMarker(false);
+
+      expect(mockSprite.setScale).toHaveBeenCalledWith(1.2);
+    });
+
+    it('should create tween with alpha 0, scale 0.6 (1.2 * 0.5), duration 150ms', () => {
+      ui.showHitMarker(false);
+
       expect(mockScene.tweens.add).toHaveBeenCalledWith(
         expect.objectContaining({
+          targets: mockSprite,
           alpha: 0,
-          duration: 200,
-          ease: 'Cubic.easeOut',
+          scale: 0.6, // 1.2 * 0.5
+          duration: 150,
         })
       );
+    });
 
-      // Lines should be destroyed after animation (mock calls onComplete immediately)
-      expect(mockLine.destroy).toHaveBeenCalledTimes(4);
+    it('should destroy marker sprite after tween completes', () => {
+      ui.showHitMarker(false);
+
+      // Mock calls onComplete immediately
+      expect(mockSprite.destroy).toHaveBeenCalled();
+    });
+  });
+
+  describe('TS-UI-015: Hit marker kill variant', () => {
+    it('should set red tint (0xFF0000) for kill hit', () => {
+      ui.showHitMarker(true);
+
+      expect(mockSprite.setTint).toHaveBeenCalledWith(0xff0000);
+    });
+
+    it('should set scale to exactly 2.0 for kill hit', () => {
+      ui.showHitMarker(true);
+
+      expect(mockSprite.setScale).toHaveBeenCalledWith(2.0);
+    });
+
+    it('should create tween with scale 1.0 (2.0 * 0.5) for kill variant', () => {
+      ui.showHitMarker(true);
+
+      expect(mockScene.tweens.add).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targets: mockSprite,
+          alpha: 0,
+          scale: 1.0, // 2.0 * 0.5
+          duration: 150,
+        })
+      );
+    });
+
+    it('should set depth to 1000 for kill variant (same as normal)', () => {
+      ui.showHitMarker(true);
+
+      expect(mockSprite.setDepth).toHaveBeenCalledWith(1000);
+    });
+  });
+
+  describe('showHitMarker edge cases', () => {
+    it('should not throw when pointer is null', () => {
+      (mockScene as any).input.activePointer = null;
+
+      expect(() => ui.showHitMarker(false)).not.toThrow();
+    });
+
+    it('should fall back to pointer.x + scrollX when worldX is undefined', () => {
+      (mockScene as any).input.activePointer = {
+        x: 500,
+        y: 400,
+        worldX: undefined,
+        worldY: undefined,
+      };
+
+      ui.showHitMarker(false);
+
+      // worldX fallback: 500 + scrollX(100) = 600, worldY fallback: 400 + scrollY(50) = 450
+      expect(mockScene.add.sprite).toHaveBeenCalledWith(600, 450, 'hitmarker');
+    });
+
+    it('should default to normal variant when kill param is omitted', () => {
+      ui.showHitMarker();
+
+      expect(mockSprite.setTint).toHaveBeenCalledWith(0xffffff);
+      expect(mockSprite.setScale).toHaveBeenCalledWith(1.2);
     });
   });
 

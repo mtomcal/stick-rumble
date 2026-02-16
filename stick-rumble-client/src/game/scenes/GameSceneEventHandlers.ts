@@ -422,7 +422,7 @@ export class GameSceneEventHandlers {
     const hitConfirmedHandler = (data: unknown) => {
       const messageData = data as HitConfirmedData;
       console.log(`Hit confirmed! Dealt ${messageData.damage} damage to ${messageData.victimId}`);
-      this.ui.showHitMarker();
+      this.ui.showHitMarker(false);
       this.ui.showCameraShake();
       // TODO: Audio feedback (ding sound) - deferred to audio story
     };
@@ -447,6 +447,9 @@ export class GameSceneEventHandlers {
     const playerKillCreditHandler = (data: unknown) => {
       const messageData = data as PlayerKillCreditData;
       console.log(`Kill credit: ${messageData.killerId} killed ${messageData.victimId} (Kills: ${messageData.killerKills}, XP: ${messageData.killerXP})`);
+
+      // Show kill variant hit marker (red, 2x scale)
+      this.ui.showHitMarker(true);
 
       // Add kill to feed (using player IDs for now - will be replaced with names later)
       this.killFeedUI.addKill(messageData.killerId.substring(0, 8), messageData.victimId.substring(0, 8));
