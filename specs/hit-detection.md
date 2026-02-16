@@ -367,65 +367,73 @@ func (p *PlayerState) TakeDamage(amount int) {
 
 ### Death Trigger
 
-Death is triggered when a player's health reaches 0 or below.
-
-**Why separate death from damage?**
-- Clean separation of concerns
-- Allows overkill damage tracking (future feature)
-- Easier to add death prevention mechanics later
+Death is triggered when a player's health reaches 0 or below. The death logic is **inline in `onHit`**, not a separate method.
 
 **Pseudocode:**
 ```
-function triggerDeath(victim, attackerID):
-    victim.isDead = true
-    victim.deathTime = now()
-    victim.deaths++
+// Inside onHit callback, after applying damage:
+if victimState.Health <= 0:
+    markPlayerDead(victimID)
 
-    attacker = getPlayer(attackerID)
+    attacker = world.GetPlayer(attackerID)
     attacker.kills++
     attacker.xp += KILL_XP_REWARD  // 100 XP
+
+    victim = world.GetPlayer(victimID)
+    victim.deaths++
 
     broadcast player:death { victimId, attackerId }
     broadcast player:kill_credit { killerId, victimId, killerKills, killerXP }
 
-    scheduleRespawn(victim, RESPAWN_DELAY)  // 3000ms
+    match.AddKill(attackerID)
+    if match.CheckKillTarget():
+        match.EndMatch("kill_target")
+        broadcast match:ended
 ```
 
-**Go:**
+**Go (inline in onHit):**
 ```go
-func (h *MessageProcessor) handleDeath(victimID, attackerID string) {
-    h.gameServer.MarkPlayerDead(victimID)
+// Inside func (h *WebSocketHandler) onHit(hit game.HitEvent):
+if victimState.Health <= 0 {
+    h.gameServer.MarkPlayerDead(hit.VictimID)
 
-    victimState := h.gameServer.GetPlayerState(victimID)
-    victimState.IncrementDeaths()
+    // Must use GetWorld().GetPlayer() to get pointer — GetPlayerState() returns a copy
+    attacker, attackerExists := h.gameServer.GetWorld().GetPlayer(hit.AttackerID)
+    if attackerExists && attacker != nil {
+        attacker.IncrementKills()
+        attacker.AddXP(game.KillXPReward)
+    }
+    victim, victimExists := h.gameServer.GetWorld().GetPlayer(hit.VictimID)
+    if victimExists && victim != nil {
+        victim.IncrementDeaths()
+    }
 
-    attackerState := h.gameServer.GetPlayerState(attackerID)
-    attackerState.IncrementKills()
-    attackerState.AddXP(KillXPReward) // 100 XP
+    // Broadcast player:death
+    deathData := map[string]interface{}{
+        "victimId":   hit.VictimID,
+        "attackerId": hit.AttackerID,
+    }
+    // ... marshal and room.Broadcast(deathBytes, "")
 
-    // Broadcast death to room
-    room.Broadcast(map[string]any{
-        "type":      "player:death",
-        "timestamp": time.Now().UnixMilli(),
-        "data": map[string]any{
-            "victimId":   victimID,
-            "attackerId": attackerID,
-        },
-    })
+    // Broadcast player:kill_credit
+    killCreditData := map[string]interface{}{
+        "killerId":    hit.AttackerID,
+        "victimId":    hit.VictimID,
+        "killerKills": attacker.Kills,
+        "killerXP":    attacker.XP,
+    }
+    // ... marshal and room.Broadcast(creditBytes, "")
 
-    // Broadcast kill credit with updated stats
-    room.Broadcast(map[string]any{
-        "type":      "player:kill_credit",
-        "timestamp": time.Now().UnixMilli(),
-        "data": map[string]any{
-            "killerId":    attackerID,
-            "victimId":    victimID,
-            "killerKills": attackerState.Kills,
-            "killerXP":    attackerState.XP,
-        },
-    })
+    // Track kill in match and check win conditions
+    room.Match.AddKill(hit.AttackerID)
+    if room.Match.CheckKillTarget() {
+        room.Match.EndMatch("kill_target")
+        h.broadcastMatchEnded(room, h.gameServer.GetWorld())
+    }
 }
 ```
+
+> **Note:** There is no separate `handleDeath` method. Death handling is inline in the `onHit` callback on `WebSocketHandler`. The `GetWorld().GetPlayer()` call is necessary to get a mutable pointer — `GetPlayerState()` returns a copy.
 
 ### Projectile Expiration
 
