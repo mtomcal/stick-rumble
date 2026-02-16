@@ -423,7 +423,7 @@ func (p *Projectile) Update(deltaTime float64) {
 }
 
 func (p *Projectile) IsExpired() bool {
-    return time.Since(p.CreatedAt) > ProjectileMaxLifetime
+    return time.Since(p.CreatedAt) >= ProjectileMaxLifetime
 }
 
 func (p *Projectile) IsOutOfBounds() bool {
@@ -1089,5 +1089,6 @@ test "dead player cannot shoot":
 | 1.1.0 | 2026-02-15 | Added `clientTimestamp` parameter to `PlayerShoot()` for lag compensation on hitscan weapons. |
 | 1.1.1 | 2026-02-16 | Fixed `ShootResult.FailReason` → `ShootResult.Reason` to match `gameserver.go:22`. |
 | 1.1.2 | 2026-02-16 | Fixed `PlayerShoot` — only checks `!exists` (no `IsAlive` check), uses `weaponMu.RLock` (not `gs.mu.Lock`), uses `CreateProjectile` (not `NewProjectile+AddProjectile`), added hitscan branch. |
+| 1.1.5 | 2026-02-16 | Fixed `IsExpired()` operator — uses `>=` not `>` for `ProjectileMaxLifetime` comparison |
 | 1.1.4 | 2026-02-16 | Fixed client `canShoot()` check order — reload → ammo → cooldown (was cooldown → reload → ammo) |
 | 1.1.3 | 2026-02-16 | Fixed `StartReload` — checks `IsReloading` + `CurrentAmmo >= MagazineSize` (not `IsMelee()`). |
