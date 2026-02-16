@@ -24,6 +24,9 @@ describe('ProceduralWeaponGraphics', () => {
       removeAll: vi.fn(),
       setRotation: vi.fn(),
       setPosition: vi.fn(),
+      setVisible: vi.fn(),
+      setAlpha: vi.fn(),
+      setScale: vi.fn(),
       destroy: vi.fn(),
       scaleY: 1,
     } as unknown as Phaser.GameObjects.Container;
@@ -202,6 +205,97 @@ describe('ProceduralWeaponGraphics', () => {
       weapon.setFlipY(false);
 
       expect(container.scaleY).toBe(1);
+    });
+  });
+
+  describe('TS-GFX-020: Reload animation pulses', () => {
+    it('should create tween targeting the container with alpha exactly 0.5', () => {
+      const weapon = new ProceduralWeaponGraphics(scene, 100, 100, 'Pistol');
+      weapon.triggerReloadPulse();
+
+      expect(scene.tweens.add).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targets: container,
+          alpha: 0.5,
+        })
+      );
+    });
+
+    it('should set scaleX and scaleY to exactly 0.8', () => {
+      const weapon = new ProceduralWeaponGraphics(scene, 100, 100, 'Pistol');
+      weapon.triggerReloadPulse();
+
+      expect(scene.tweens.add).toHaveBeenCalledWith(
+        expect.objectContaining({
+          scaleX: 0.8,
+          scaleY: 0.8,
+        })
+      );
+    });
+
+    it('should use duration exactly 200ms with yoyo true', () => {
+      const weapon = new ProceduralWeaponGraphics(scene, 100, 100, 'Pistol');
+      weapon.triggerReloadPulse();
+
+      expect(scene.tweens.add).toHaveBeenCalledWith(
+        expect.objectContaining({
+          duration: 200,
+          yoyo: true,
+        })
+      );
+    });
+
+    it('should repeat exactly 2 times (3 total pulses)', () => {
+      const weapon = new ProceduralWeaponGraphics(scene, 100, 100, 'Pistol');
+      weapon.triggerReloadPulse();
+
+      expect(scene.tweens.add).toHaveBeenCalledWith(
+        expect.objectContaining({
+          repeat: 2,
+        })
+      );
+    });
+
+    it('should reset alpha to 1 on complete', () => {
+      // Make tweens.add call onComplete immediately
+      (scene.tweens.add as ReturnType<typeof vi.fn>).mockImplementation((config: any) => {
+        if (config.onComplete) config.onComplete();
+        return {};
+      });
+
+      const weapon = new ProceduralWeaponGraphics(scene, 100, 100, 'Pistol');
+      weapon.triggerReloadPulse();
+
+      expect(container.setAlpha).toHaveBeenCalledWith(1);
+    });
+
+    it('should reset scale to 1 on complete', () => {
+      (scene.tweens.add as ReturnType<typeof vi.fn>).mockImplementation((config: any) => {
+        if (config.onComplete) config.onComplete();
+        return {};
+      });
+
+      const weapon = new ProceduralWeaponGraphics(scene, 100, 100, 'Pistol');
+      weapon.triggerReloadPulse();
+
+      expect(container.setScale).toHaveBeenCalledWith(1);
+    });
+
+    it('should have complete tween config with all spec values', () => {
+      const weapon = new ProceduralWeaponGraphics(scene, 100, 100, 'Pistol');
+      weapon.triggerReloadPulse();
+
+      expect(scene.tweens.add).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targets: container,
+          alpha: 0.5,
+          scaleX: 0.8,
+          scaleY: 0.8,
+          duration: 200,
+          yoyo: true,
+          repeat: 2,
+        })
+      );
     });
   });
 

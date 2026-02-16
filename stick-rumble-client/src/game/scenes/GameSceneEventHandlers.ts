@@ -357,12 +357,22 @@ export class GameSceneEventHandlers {
     const weaponStateHandler = (data: unknown) => {
       const messageData = data as WeaponStateData;
       if (this.shootingManager) {
+        // Detect reload start transition (before updateWeaponState changes internal state)
+        const wasReloading = this.shootingManager.isReloading();
         this.shootingManager.updateWeaponState(messageData);
         // Update weapon type for cooldown tracking if it's a melee weapon
         if (messageData.weaponType === 'Bat' || messageData.weaponType === 'Katana') {
           this.shootingManager.setWeaponType(messageData.weaponType as 'Bat' | 'Katana');
         }
         this.ui.updateAmmoDisplay(this.shootingManager);
+
+        // Trigger reload pulse on weapon graphics when reload starts (not melee)
+        if (messageData.isReloading && !wasReloading && !this.shootingManager.isMeleeWeapon()) {
+          const localId = this.playerManager.getLocalPlayerId();
+          if (localId) {
+            this.playerManager.triggerReloadPulse(localId);
+          }
+        }
       }
     };
     this.handlerRefs.set('weapon:state', weaponStateHandler);

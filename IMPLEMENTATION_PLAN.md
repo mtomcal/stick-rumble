@@ -269,16 +269,16 @@ The following discrepancies were found between this plan and the spec diff (c7dd
 
 > **Current state**: `GameSceneUI.ts` shows progress bar + circular arc + "RELOAD!" text. No weapon container pulse.
 
-- [ ] **On reload start**: Add tween to weapon container
-- [ ] **Alpha pulse**: 1 → 0.5 → 1
-- [ ] **Scale pulse**: 1 → 0.8 → 1
-- [ ] **Timing**: 200ms per pulse, yoyo: true, repeat: 2 (3 total pulses)
-- [ ] **On complete**: Reset alpha=1, scaleX=1, scaleY=1
-- [ ] **Keep existing reload UI**: Progress bar, circle, text remain — this ADDS the weapon pulse
-- [ ] **Test TS-GFX-020**: Reload animation pulses
-- [ ] **Spec validation**: Verify against `constants.md` lines 385-388 — alpha=0.5, scaleX=0.8, scaleY=0.8, duration=200, yoyo=true, repeat=2. Verify reset on complete per `graphics.md` lines 863-866
-- [ ] **Assertion quality**: Tests assert tween config has alpha exactly 0.5, scaleX/scaleY exactly 0.8, duration exactly 200, repeat exactly 2, yoyo is `true`. Assert onComplete resets alpha to 1 and scale to 1 — not bare `tweens.add.toHaveBeenCalled()`
-- [ ] **Coverage gate**: Reload pulse tween creation + completion handler ≥90% statements/lines/functions
+- [x] **On reload start**: Add tween to weapon container
+- [x] **Alpha pulse**: 1 → 0.5 → 1
+- [x] **Scale pulse**: 1 → 0.8 → 1
+- [x] **Timing**: 200ms per pulse, yoyo: true, repeat: 2 (3 total pulses)
+- [x] **On complete**: Reset alpha=1, scaleX=1, scaleY=1
+- [x] **Keep existing reload UI**: Progress bar, circle, text remain — this ADDS the weapon pulse
+- [x] **Test TS-GFX-020**: Reload animation pulses
+- [x] **Spec validation**: Verified against `constants.md` lines 529-536 (actual location) — alpha=0.5, scaleX=0.8, scaleY=0.8, duration=200, yoyo=true, repeat=2. Verified reset on complete per `graphics.md` lines 941-944
+- [x] **Assertion quality**: Tests assert tween config has alpha exactly 0.5, scaleX/scaleY exactly 0.8, duration exactly 200, repeat exactly 2, yoyo is `true`. Assert onComplete resets alpha to 1 and scale to 1 — not bare `tweens.add.toHaveBeenCalled()`
+- [x] **Coverage gate**: Reload pulse tween creation + completion handler ≥90% statements/lines/functions
 
 #### System 6c — Client: Wall Spark (GameScene.ts or ShootingManager)
 
@@ -471,3 +471,7 @@ Follow these steps for each system section:
 - [2026-02-16] **System 4d — GameScene.test.setup.ts needed fillStyle/fillPath/closePath**: The chevron texture uses `fillStyle`, `fillPath`, and `closePath` on `make.graphics()`. Added these methods to `mockMakeGraphics` in both `GameSceneUI.test.ts` and `GameScene.test.setup.ts`.
 - [2026-02-16] **System 4d — Kill credit handler also shows outgoing indicator**: In addition to `hit:confirmed` (normal outgoing), the `player:kill_credit` handler also shows an outgoing indicator with `kill=true` for red chevron on kills.
 - [2026-02-16] **System 4d — getLocalPlayerPosition added to mockPlayerManager**: The base `mockPlayerManager` in `GameSceneEventHandlers.test.ts` was missing `getLocalPlayerPosition`. Added it alongside the existing `getPlayerPosition` mock.
+- [2026-02-16] **System 6b — Plan spec line refs wrong**: Plan said "constants.md lines 385-388" for reload animation constants, but those are healing particle constants. Actual reload animation constants at lines 529-536.
+- [2026-02-16] **System 6b — Placed in ProceduralWeaponGraphics not PlayerManager**: The spec shows `this.weaponContainer` — the actual container lives in `ProceduralWeaponGraphics.container`. Added `triggerReloadPulse()` to ProceduralWeaponGraphics, delegated through `PlayerManager.triggerReloadPulse(playerId)`.
+- [2026-02-16] **System 6b — Reload start detected in weapon:state handler**: The `weapon:state` handler detects reload start transition by comparing `wasReloading` (before `updateWeaponState`) with `messageData.isReloading`. Only triggers pulse for non-melee weapons on the local player.
+- [2026-02-16] **System 6b — Three mockShootingManager objects needed isReloading/isMeleeWeapon**: The weapon:state test blocks create inline `mockShootingManager` objects that were missing `isReloading()` and `isMeleeWeapon()`. Added both to all three instances.

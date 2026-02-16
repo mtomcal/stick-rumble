@@ -729,6 +729,16 @@ export class PlayerManager {
   }
 
   /**
+   * Trigger reload animation pulse on a player's weapon graphics
+   */
+  triggerReloadPulse(playerId: string): void {
+    const weaponGraphics = this.weaponGraphics.get(playerId);
+    if (weaponGraphics) {
+      weaponGraphics.triggerReloadPulse();
+    }
+  }
+
+  /**
    * Update the weapon type for a specific player
    * This changes the weapon graphics displayed for the player
    */

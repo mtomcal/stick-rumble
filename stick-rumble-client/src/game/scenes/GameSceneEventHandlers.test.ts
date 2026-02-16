@@ -41,6 +41,7 @@ describe('GameSceneEventHandlers', () => {
       getPlayerAimAngle: vi.fn().mockReturnValue(0),
       updatePlayerWeapon: vi.fn(),
       triggerWeaponRecoil: vi.fn(),
+      triggerReloadPulse: vi.fn(),
     } as unknown as PlayerManager;
 
     mockProjectileManager = {
@@ -1335,6 +1336,8 @@ describe('GameSceneEventHandlers', () => {
       const mockShootingManager = {
         updateWeaponState: vi.fn(),
         setWeaponType: vi.fn(),
+        isReloading: vi.fn().mockReturnValue(false),
+        isMeleeWeapon: vi.fn().mockReturnValue(false),
       };
 
       eventHandlers.setShootingManager(mockShootingManager as any);
@@ -1558,6 +1561,8 @@ describe('GameSceneEventHandlers', () => {
       const mockShootingManager = {
         updateWeaponState: vi.fn(),
         setWeaponType: vi.fn(),
+        isReloading: vi.fn().mockReturnValue(false),
+        isMeleeWeapon: vi.fn().mockReturnValue(true),
       };
 
       eventHandlers.setShootingManager(mockShootingManager as any);
@@ -1582,6 +1587,8 @@ describe('GameSceneEventHandlers', () => {
       const mockShootingManager = {
         updateWeaponState: vi.fn(),
         setWeaponType: vi.fn(),
+        isReloading: vi.fn().mockReturnValue(false),
+        isMeleeWeapon: vi.fn().mockReturnValue(true),
       };
 
       eventHandlers.setShootingManager(mockShootingManager as any);

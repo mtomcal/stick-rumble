@@ -174,6 +174,25 @@ export class ProceduralWeaponGraphics {
   }
 
   /**
+   * Trigger reload animation pulse (alpha/scale pulse 3 times)
+   */
+  triggerReloadPulse(): void {
+    this.scene.tweens.add({
+      targets: this.container,
+      alpha: 0.5,
+      scaleX: 0.8,
+      scaleY: 0.8,
+      duration: 200,
+      yoyo: true,
+      repeat: 2,
+      onComplete: () => {
+        this.container.setAlpha(1);
+        this.container.setScale(1);
+      },
+    });
+  }
+
+  /**
    * Cleanup
    */
   destroy(): void {
