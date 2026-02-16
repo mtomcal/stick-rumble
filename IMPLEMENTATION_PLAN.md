@@ -65,7 +65,7 @@ All spec files are at `docs/archive/20251125-055521-pre-bmm/specs/`.
 - [x] 1. README.md
 - [x] 2. overview.md
 - [x] 3. types-and-events.md
-- [ ] 4. config.md
+- [x] 4. config.md
 - [ ] 5. player.md
 - [ ] 6. main-scene.md
 - [ ] 7. combat.md
