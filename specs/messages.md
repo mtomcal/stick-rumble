@@ -555,10 +555,25 @@ interface PlayerMoveData {
 
 **Go:**
 ```go
-type PlayerMoveData struct {
-    Players []PlayerState `json:"players"`
+// PlayerStateSnapshot is the struct serialized for each player in broadcasts
+type PlayerStateSnapshot struct {
+    ID                     string     `json:"id"`
+    Position               Vector2    `json:"position"`
+    Velocity               Vector2    `json:"velocity"`
+    AimAngle               float64    `json:"aimAngle"`
+    Health                 int        `json:"health"`
+    IsInvulnerable         bool       `json:"isInvulnerable"`
+    InvulnerabilityEndTime time.Time  `json:"invulnerabilityEnd"`
+    DeathTime              *time.Time `json:"deathTime,omitempty"`
+    Kills                  int        `json:"kills"`
+    Deaths                 int        `json:"deaths"`
+    XP                     int        `json:"xp"`
+    IsRegeneratingHealth   bool       `json:"isRegenerating"`
+    Rolling                bool       `json:"isRolling"`
 }
 ```
+
+> **Note:** The Go `PlayerStateSnapshot` struct serializes different JSON field names than the TypeBox `PlayerStateSchema` expects. For example, Go sends `aimAngle` while the TypeBox schema defines `rotation`; Go sends `deathTime` instead of `isDead`; Go omits `maxHealth` and `isSprinting`. This mismatch exists in the codebase and may be reconciled by the client-side handler.
 
 **Example:**
 ```json
