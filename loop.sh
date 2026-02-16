@@ -108,7 +108,10 @@ run_claude_sandboxed() {
     local CLAUDE_SETTINGS
     CLAUDE_SETTINGS=$(readlink -f "$HOME/.claude/settings.json" 2>/dev/null || echo "$HOME/.claude/settings.json")
 
-    docker run --rm -it \
+    local TTY_FLAG=""
+    [ -t 0 ] && TTY_FLAG="-it"
+
+    docker run --rm $TTY_FLAG \
         --name "sandbox-loop-$$-$ITERATION" \
         --memory="${MEMORY_LIMIT:-8g}" \
         --memory-swap="${MEMORY_LIMIT:-8g}" \
