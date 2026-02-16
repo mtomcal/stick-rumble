@@ -407,3 +407,4 @@ This is a client-only module. There is no server-side equivalent — the server 
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-15 | Initial specification |
+| 1.0.1 | 2026-02-16 | Verified against source — all texture names, dimensions, colors, and drawing procedures match |
