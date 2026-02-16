@@ -414,6 +414,7 @@ export class GameSceneEventHandlers {
       const messageData = data as HitConfirmedData;
       console.log(`Hit confirmed! Dealt ${messageData.damage} damage to ${messageData.victimId}`);
       this.ui.showHitMarker();
+      this.ui.showCameraShake();
       // TODO: Audio feedback (ding sound) - deferred to audio story
     };
     this.handlerRefs.set('hit:confirmed', hitConfirmedHandler);

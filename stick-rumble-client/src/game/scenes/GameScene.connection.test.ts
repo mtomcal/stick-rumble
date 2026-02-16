@@ -118,9 +118,10 @@ describe('GameScene - Connection & Initialization', () => {
 
       scene.create();
 
-      // Should create 5 rectangles (arena bg, arena border, health bar bg, health bar, damage flash)
+      // Should create 4 rectangles (arena bg, arena border, health bar bg, health bar)
+      // Damage flash overlay was removed — now uses cameras.main.flash()
       const rectangleCalls = mockSceneContext.add.rectangle.mock.calls;
-      expect(rectangleCalls.length).toBe(5);
+      expect(rectangleCalls.length).toBe(4);
       // Second rectangle is the arena border
       expect(rectangleCalls[1]).toEqual([0, 0, 1920, 1080, 0xffffff, 0]);
 

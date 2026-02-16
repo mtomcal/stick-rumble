@@ -100,6 +100,7 @@ describe('GameSceneEventHandlers - Audio Integration', () => {
       showDamageFlash: vi.fn(),
       showDamageNumber: vi.fn(),
       showHitMarker: vi.fn(),
+      showCameraShake: vi.fn(),
       updateMatchTimer: vi.fn(),
     } as unknown as GameSceneUI;
 

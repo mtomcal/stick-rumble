@@ -18,7 +18,6 @@ export class GameSceneUI {
   private isSceneValid(): boolean {
     return this.scene && this.scene.sys && this.scene.sys.isActive();
   }
-  private damageFlashOverlay: Phaser.GameObjects.Rectangle | null = null;
   private reloadProgressBar: Phaser.GameObjects.Graphics | null = null;
   private reloadProgressBarBg: Phaser.GameObjects.Graphics | null = null;
   private reloadIndicatorText: Phaser.GameObjects.Text | null = null;
@@ -43,19 +42,11 @@ export class GameSceneUI {
   }
 
   /**
-   * Create damage flash overlay
+   * Create damage flash overlay — no-op, kept for backward compatibility.
+   * Damage flash now uses cameras.main.flash() directly.
    */
-  createDamageFlashOverlay(width: number, height: number): void {
-    this.damageFlashOverlay = this.scene.add.rectangle(
-      width / 2,
-      height / 2,
-      width,
-      height,
-      0xff0000,
-      0 // Fully transparent initially
-    );
-    this.damageFlashOverlay.setScrollFactor(0);
-    this.damageFlashOverlay.setDepth(999);
+  createDamageFlashOverlay(_width: number, _height: number): void {
+    // No overlay needed — showDamageFlash() uses cameras.main.flash()
   }
 
   /**
@@ -280,23 +271,19 @@ export class GameSceneUI {
   }
 
   /**
-   * Show red screen flash when local player takes damage
+   * Show camera flash when local player takes damage.
+   * Uses native Phaser camera flash — 100ms, RGB(128, 0, 0).
    */
   showDamageFlash(): void {
-    if (!this.damageFlashOverlay) {
-      return;
-    }
+    this.scene.cameras.main.flash(100, 128, 0, 0);
+  }
 
-    // Reset alpha to 50% opacity
-    this.damageFlashOverlay.setAlpha(0.5);
-
-    // Fade out over 200ms
-    this.scene.tweens.add({
-      targets: this.damageFlashOverlay,
-      alpha: 0,
-      duration: 200,
-      ease: 'Linear',
-    });
+  /**
+   * Trigger camera shake when local player deals damage.
+   * Uses native Phaser camera shake — 50ms, intensity 0.001.
+   */
+  showCameraShake(): void {
+    this.scene.cameras.main.shake(50, 0.001);
   }
 
   /**
@@ -408,9 +395,7 @@ export class GameSceneUI {
     if (this.matchTimerText) {
       this.matchTimerText.destroy();
     }
-    if (this.damageFlashOverlay) {
-      this.damageFlashOverlay.destroy();
-    }
+    // damageFlashOverlay removed — flash is now a camera effect (no game object to destroy)
     if (this.reloadProgressBar) {
       this.reloadProgressBar.destroy();
     }

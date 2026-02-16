@@ -38,6 +38,8 @@ describe('GameSceneUI', () => {
       height: 1080,
       scrollX: 100,
       scrollY: 50,
+      flash: vi.fn(),
+      shake: vi.fn(),
     };
 
     // Create mock damage flash overlay
@@ -127,12 +129,11 @@ describe('GameSceneUI', () => {
   });
 
   describe('createDamageFlashOverlay', () => {
-    it('should create damage flash overlay with specified dimensions', () => {
+    it('should be a no-op (flash now uses cameras.main.flash)', () => {
       ui.createDamageFlashOverlay(1920, 1080);
 
-      expect(mockScene.add.rectangle).toHaveBeenCalledWith(960, 540, 1920, 1080, 0xff0000, 0);
-      expect(mockDamageFlashOverlay.setScrollFactor).toHaveBeenCalledWith(0);
-      expect(mockDamageFlashOverlay.setDepth).toHaveBeenCalledWith(999);
+      // No rectangle should be created — damage flash uses cameras.main.flash()
+      expect(mockScene.add.rectangle).not.toHaveBeenCalled();
     });
   });
 
@@ -395,26 +396,57 @@ describe('GameSceneUI', () => {
     });
   });
 
-  describe('showDamageFlash', () => {
-    it('should show damage flash with fade out animation', () => {
-      ui.createDamageFlashOverlay(1920, 1080);
-
+  describe('showDamageFlash (TS-UI-013)', () => {
+    it('should call cameras.main.flash with exact args (100, 128, 0, 0)', () => {
       ui.showDamageFlash();
 
-      expect(mockDamageFlashOverlay.setAlpha).toHaveBeenCalledWith(0.5);
-      expect(mockScene.tweens.add).toHaveBeenCalledWith(
-        expect.objectContaining({
-          targets: mockDamageFlashOverlay,
-          alpha: 0,
-          duration: 200,
-          ease: 'Linear',
-        })
-      );
+      expect(mockCamera.flash).toHaveBeenCalledWith(100, 128, 0, 0);
     });
 
-    it('should not throw if damage flash overlay not created', () => {
-      // Don't create damage flash overlay first
-      expect(() => ui.showDamageFlash()).not.toThrow();
+    it('should flash with duration 100ms', () => {
+      ui.showDamageFlash();
+
+      const args = mockCamera.flash.mock.calls[0];
+      expect(args[0]).toBe(100);
+    });
+
+    it('should flash with RGB(128, 0, 0) — dark red, not blinding', () => {
+      ui.showDamageFlash();
+
+      const args = mockCamera.flash.mock.calls[0];
+      expect(args[1]).toBe(128); // R
+      expect(args[2]).toBe(0);   // G
+      expect(args[3]).toBe(0);   // B
+    });
+
+    it('should not use screen overlay rectangle (uses cameras.main.flash)', () => {
+      ui.showDamageFlash();
+
+      // No rectangle or tween should be created
+      expect(mockScene.add.rectangle).not.toHaveBeenCalled();
+      expect(mockScene.tweens.add).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('showCameraShake (TS-UI-017)', () => {
+    it('should call cameras.main.shake with exact args (50, 0.001)', () => {
+      ui.showCameraShake();
+
+      expect(mockCamera.shake).toHaveBeenCalledWith(50, 0.001);
+    });
+
+    it('should shake with duration 50ms', () => {
+      ui.showCameraShake();
+
+      const args = mockCamera.shake.mock.calls[0];
+      expect(args[0]).toBe(50);
+    });
+
+    it('should shake with intensity 0.001 — subtle, felt not seen', () => {
+      ui.showCameraShake();
+
+      const args = mockCamera.shake.mock.calls[0];
+      expect(args[1]).toBe(0.001);
     });
   });
 
@@ -660,12 +692,11 @@ describe('GameSceneUI', () => {
       expect(timerText.destroy).toHaveBeenCalled();
     });
 
-    it('should destroy damage flash overlay when destroyed', () => {
+    it('should not crash on destroy even without damage flash overlay (no-op)', () => {
       ui.createDamageFlashOverlay(1920, 1080);
 
-      ui.destroy();
-
-      expect(mockDamageFlashOverlay.destroy).toHaveBeenCalled();
+      // No game object to destroy — flash is a camera effect
+      expect(() => ui.destroy()).not.toThrow();
     });
 
     it('should destroy reload progress bar when destroyed', () => {

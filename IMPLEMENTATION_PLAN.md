@@ -114,15 +114,15 @@ The following discrepancies were found between this plan and the spec diff (c7dd
 
 > **Current state**: Damage flash is a red overlay rectangle at 0.5 alpha, 200ms fade in `GameSceneUI.ts`. Camera shake in `ScreenShake.ts` uses per-weapon intensities (100-150ms, 0.005-0.012).
 
-- [ ] **Remove damageOverlay rectangle**: Delete rectangle creation and tween
-- [ ] **Add camera flash on damage received**: `cameras.main.flash(100, 128, 0, 0)`
-- [ ] **Normalize camera shake**: On dealing damage (hit:confirmed) → `cameras.main.shake(50, 0.001)`
-- [ ] **Evaluate per-weapon shake**: Decide whether old per-weapon values in ScreenShake.ts should be replaced with uniform 50ms/0.001
-- [ ] **Test TS-UI-013**: Camera flash on damage received
-- [ ] **Test TS-UI-017**: Camera shake on dealing damage
-- [ ] **Spec validation**: Verify flash args match `constants.md` lines 303-310 exactly: `flash(100, 128, 0, 0)` — duration 100ms, RGB (128, 0, 0). Verify shake matches lines 305-306: `shake(50, 0.001)`
-- [ ] **Assertion quality**: Tests assert `flash` called with exact 4 args `(100, 128, 0, 0)`, `shake` called with exact `(50, 0.001)` — not bare `cameras.main.flash.toHaveBeenCalled()`
-- [ ] **Coverage gate**: GameSceneUI.ts damage flash path + ScreenShake.ts shake path ≥90% statements/lines/functions
+- [x] **Remove damageOverlay rectangle**: Delete rectangle creation and tween
+- [x] **Add camera flash on damage received**: `cameras.main.flash(100, 128, 0, 0)`
+- [x] **Normalize camera shake**: On dealing damage (hit:confirmed) → `cameras.main.shake(50, 0.001)`
+- [x] **Evaluate per-weapon shake**: Decided to KEEP per-weapon recoil shake (on fire) — it's a separate concern from hit feedback shake (on hit:confirmed). See discovery log.
+- [x] **Test TS-UI-013**: Camera flash on damage received
+- [x] **Test TS-UI-017**: Camera shake on dealing damage
+- [x] **Spec validation**: Verify flash args match `constants.md` lines 303-310 exactly: `flash(100, 128, 0, 0)` — duration 100ms, RGB (128, 0, 0). Verify shake matches lines 305-306: `shake(50, 0.001)`
+- [x] **Assertion quality**: Tests assert `flash` called with exact 4 args `(100, 128, 0, 0)`, `shake` called with exact `(50, 0.001)` — not bare `cameras.main.flash.toHaveBeenCalled()`
+- [x] **Coverage gate**: GameSceneUI.ts damage flash path + ScreenShake.ts shake path ≥90% statements/lines/functions
 
 ---
 
@@ -440,3 +440,7 @@ Follow these steps for each system section:
 - [2026-02-16] **System 1 — MeleeWeapon.update() backward compatibility**: `MeleeWeaponManager.ts` calls `weapon.update()` on each frame. The rewritten `MeleeWeapon.ts` no longer needs frame-based updates (tweens handle animation), but a no-op `update()` method was added to avoid runtime errors.
 - [2026-02-16] **System 3a — Mock scene needed tweens.add**: The `createMockScene()` factory in `PlayerManager.test.ts` didn't include `tweens: { add: vi.fn() }`. Added it to support corpse fade tween testing. Also updated 3 existing tests that checked for gray color (0x888888) to check for player hidden + corpse created instead.
 - [2026-02-16] **System 3a — Corpse rotation uses aimAngle**: The spec uses `this.rotation` for corpse limb/head angles, but `PlayerManager.ts` doesn't store a rotation for players — it uses `aimAngle`. Used `state.aimAngle ?? 0` as the rotation basis for corpse rendering.
+- [2026-02-16] **System 5 — Per-weapon recoil shake kept separate from hit feedback shake**: `ScreenShake.ts` has per-weapon recoil intensities (Uzi 0.005, AK47 0.007, Shotgun 0.012) triggered on fire/projectile:spawn. The spec's `shake(50, 0.001)` is for hit feedback (hit:confirmed), which is a different trigger. Kept per-weapon recoil as-is and added the normalized `shake(50, 0.001)` only on hit:confirmed via `GameSceneUI.showCameraShake()`.
+- [2026-02-16] **System 5 — createDamageFlashOverlay kept as no-op**: `GameScene.ts` still calls `this.gameSceneUI.createDamageFlashOverlay(width, height)` during scene setup. Rather than modifying GameScene.ts (which would expand the scope), `createDamageFlashOverlay` was converted to a no-op. The actual damage flash now uses `cameras.main.flash()` in `showDamageFlash()`.
+- [2026-02-16] **System 5 — Rectangle count changed in GameScene.connection.test.ts**: Removing the damageFlashOverlay rectangle reduced the total rectangle count from 5 to 4 in scene creation (arena bg, arena border, health bar bg, health bar fill). Updated the assertion in `GameScene.connection.test.ts`.
+- [2026-02-16] **System 5 — 6 test files needed showCameraShake mock**: Adding `showCameraShake()` to `GameSceneUI` required updating the mock in 6 test files: `GameSceneEventHandlers.test.ts`, `GameSceneEventHandlers.audio.test.ts`, `GameSceneEventHandlers.recoil.test.ts`, `GameSceneEventHandlers.reconciliation.test.ts`, `GameSceneUI.test.ts`, and `GameScene.connection.test.ts`.

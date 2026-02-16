@@ -87,6 +87,7 @@ describe('GameSceneEventHandlers', () => {
       showDamageFlash: vi.fn(),
       showDamageNumber: vi.fn(),
       showHitMarker: vi.fn(),
+      showCameraShake: vi.fn(),
       updateMatchTimer: vi.fn(),
     } as unknown as GameSceneUI;
 
@@ -1693,6 +1694,25 @@ describe('GameSceneEventHandlers', () => {
 
       // Should call updatePlayers with isDelta=true
       expect(mockPlayerManager.updatePlayers).toHaveBeenCalledWith(data.players, { isDelta: true });
+    });
+
+    it('should trigger camera shake on hit:confirmed (TS-UI-017)', () => {
+      eventHandlers.setupEventHandlers();
+
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const hitConfirmedHandler = handlerRefs.get('hit:confirmed');
+
+      const data = {
+        victimId: 'other-player',
+        damage: 25,
+      };
+
+      hitConfirmedHandler?.(data);
+
+      // Should call showCameraShake (which calls cameras.main.shake(50, 0.001))
+      expect(mockGameSceneUI.showCameraShake).toHaveBeenCalled();
+      // Should also show hit marker
+      expect(mockGameSceneUI.showHitMarker).toHaveBeenCalled();
     });
 
     it('should process queued weapon spawns on room:joined', () => {
