@@ -641,18 +641,22 @@ interface ProjectileSpawnData {
 }
 ```
 
-**Go:**
+**Go Broadcast (actual):**
+
+The Go server does **not** use a named struct for this message. Instead, `broadcast_helper.go:broadcastProjectileSpawn` builds an inline `map[string]interface{}` with only four fields:
+
 ```go
-type ProjectileSpawnData struct {
-    ID         string  `json:"id"`
-    OwnerID    string  `json:"ownerId"`
-    WeaponType string  `json:"weaponType"`
-    Position   Vector2 `json:"position"`
-    Velocity   Vector2 `json:"velocity"`
+data := map[string]interface{}{
+    "id":       proj.ID,
+    "ownerId":  proj.OwnerID,
+    "position": proj.Position,
+    "velocity": proj.Velocity,
 }
 ```
 
-**Example:**
+> **Note:** The Go broadcast omits `weaponType` even though the TypeBox `ProjectileSpawnDataSchema` defines it as a required field. This means the server sends only `id`, `ownerId`, `position`, and `velocity`. Schema validation in development mode (`ENABLE_SCHEMA_VALIDATION=true`) would flag this mismatch.
+
+**Example (actual server payload):**
 ```json
 {
   "type": "projectile:spawn",
@@ -660,7 +664,6 @@ type ProjectileSpawnData struct {
   "data": {
     "id": "proj-xyz789",
     "ownerId": "550e8400-e29b-41d4-a716-446655440000",
-    "weaponType": "Pistol",
     "position": { "x": 100, "y": 200 },
     "velocity": { "x": 800, "y": 0 }
   }
@@ -1787,3 +1790,4 @@ Client                          Server
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification extracted from codebase |
 | 1.1.0 | 2026-02-15 | Added `sequence` field to `input:state`. Added `clientTimestamp` field to `player:shoot`. Added `lastProcessedSequence` and `correctedPlayers` to `player:move`. Added new `state:snapshot` and `state:delta` message types for delta compression. Updated server→client count from 20 to 22. |
+| 1.1.1 | 2026-02-16 | Fixed `projectile:spawn` Go section — server broadcast omits `weaponType` (only sends id, ownerId, position, velocity) |
