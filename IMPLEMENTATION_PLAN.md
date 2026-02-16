@@ -120,7 +120,7 @@ The specs in `specs/` were bulk-updated and then validated by a prior Ralph job.
 - [x] 13. client-architecture.md — Fix camera follow (startFollow once, not per-frame lerp)
 - [x] 14. client-architecture.md — Fix update() method signatures (no delta param)
 - [x] 17. server-architecture.md — Fix broadcastLoop method name (GetAllPlayers, not GetAllPlayerStates)
-- [ ] 21. server-architecture.md — Add PingTracker field to Player struct
+- [x] 21. server-architecture.md — Add PingTracker field to Player struct
 - [ ] 22. server-architecture.md — Fix ManualClock mutex type (RWMutex, not Mutex)
 - [ ] 29. hit-detection.md — Fix client handleHitConfirmed (no audio, only showHitMarker)
 - [ ] 39. shooting.md — Fix client canShoot() check order (reload, ammo, cooldown)
