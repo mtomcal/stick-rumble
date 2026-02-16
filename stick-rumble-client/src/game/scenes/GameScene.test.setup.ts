@@ -81,6 +81,8 @@ export const createMockScene = () => {
     fillRect: vi.fn().mockReturnThis(),
     fillCircle: vi.fn().mockReturnThis(),
     lineStyle: vi.fn().mockReturnThis(),
+    strokeRect: vi.fn().mockReturnThis(),
+    strokeCircle: vi.fn().mockReturnThis(),
     beginPath: vi.fn().mockReturnThis(),
     moveTo: vi.fn().mockReturnThis(),
     lineTo: vi.fn().mockReturnThis(),

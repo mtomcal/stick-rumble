@@ -39,6 +39,7 @@ describe('GameSceneEventHandlers', () => {
       getPlayerPosition: vi.fn().mockReturnValue({ x: 100, y: 200 }),
       getLocalPlayerPosition: vi.fn().mockReturnValue({ x: 100, y: 200 }),
       getPlayerAimAngle: vi.fn().mockReturnValue(0),
+      getLivingPlayers: vi.fn().mockReturnValue([]),
       updatePlayerWeapon: vi.fn(),
       triggerWeaponRecoil: vi.fn(),
       triggerReloadPulse: vi.fn(),
@@ -93,6 +94,8 @@ describe('GameSceneEventHandlers', () => {
       showHitMarker: vi.fn(),
       showHitIndicator: vi.fn(),
       showWallSpark: vi.fn(),
+      setupMinimap: vi.fn(),
+      updateMinimap: vi.fn(),
       showCameraShake: vi.fn(),
       updateMatchTimer: vi.fn(),
     } as unknown as GameSceneUI;

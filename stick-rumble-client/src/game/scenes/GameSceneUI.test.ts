@@ -118,8 +118,13 @@ describe('GameSceneUI', () => {
           const graphics = {
             fillStyle: vi.fn().mockReturnThis(),
             fillRect: vi.fn().mockReturnThis(),
+            fillCircle: vi.fn().mockReturnThis(),
             lineStyle: vi.fn().mockReturnThis(),
+            strokeRect: vi.fn().mockReturnThis(),
+            strokeCircle: vi.fn().mockReturnThis(),
             beginPath: vi.fn().mockReturnThis(),
+            moveTo: vi.fn().mockReturnThis(),
+            lineTo: vi.fn().mockReturnThis(),
             arc: vi.fn().mockReturnThis(),
             strokePath: vi.fn().mockReturnThis(),
             clear: vi.fn().mockReturnThis(),
@@ -1178,6 +1183,191 @@ describe('GameSceneUI', () => {
           duration: 100,
         })
       );
+    });
+  });
+
+  describe('TS-UI-018: Minimap renders static layer', () => {
+    it('should create static graphics at depth 1999 with scrollFactor 0', () => {
+      ui.setupMinimap();
+
+      // First graphics call is the static layer
+      const staticGraphics = createdGraphics[0];
+      expect(staticGraphics.setScrollFactor).toHaveBeenCalledWith(0);
+      expect(staticGraphics.setDepth).toHaveBeenCalledWith(1999);
+    });
+
+    it('should draw black background at (20, 20) with 120x120 size', () => {
+      ui.setupMinimap();
+
+      const staticGraphics = createdGraphics[0];
+      expect(staticGraphics.fillStyle).toHaveBeenCalledWith(0x000000, 0.7);
+      expect(staticGraphics.fillRect).toHaveBeenCalledWith(20, 20, 120, 120);
+    });
+
+    it('should draw white border with 2px stroke at 0.5 alpha', () => {
+      ui.setupMinimap();
+
+      const staticGraphics = createdGraphics[0];
+      expect(staticGraphics.lineStyle).toHaveBeenCalledWith(2, 0xffffff, 0.5);
+      expect(staticGraphics.strokeRect).toHaveBeenCalledWith(20, 20, 120, 120);
+    });
+
+    it('should create dynamic graphics at depth 2000 with scrollFactor 0', () => {
+      ui.setupMinimap();
+
+      // Second graphics call is the dynamic layer
+      const dynamicGraphics = createdGraphics[1];
+      expect(dynamicGraphics.setScrollFactor).toHaveBeenCalledWith(0);
+      expect(dynamicGraphics.setDepth).toHaveBeenCalledWith(2000);
+    });
+
+    it('should position minimap at exactly (20, 20)', () => {
+      ui.setupMinimap();
+
+      const staticGraphics = createdGraphics[0];
+      const fillRectCalls = staticGraphics.fillRect.mock.calls;
+      expect(fillRectCalls[0][0]).toBe(20);
+      expect(fillRectCalls[0][1]).toBe(20);
+    });
+  });
+
+  describe('TS-UI-019: Minimap radar range filters enemies', () => {
+    let mockPlayerManager: any;
+
+    beforeEach(() => {
+      mockPlayerManager = {
+        getLocalPlayerPosition: vi.fn().mockReturnValue({ x: 500, y: 500 }),
+        getLocalPlayerId: vi.fn().mockReturnValue('player-1'),
+        getPlayerAimAngle: vi.fn().mockReturnValue(0),
+        getLivingPlayers: vi.fn().mockReturnValue([
+          { id: 'player-1', position: { x: 500, y: 500 } },
+          { id: 'enemy-near', position: { x: 700, y: 500 } },  // 200px away
+          { id: 'enemy-far', position: { x: 1200, y: 500 } },  // 700px away
+        ]),
+      };
+    });
+
+    it('should show enemy within 600px as red dot (radius 3)', () => {
+      ui.setupMinimap();
+      const dynamicGraphics = createdGraphics[1];
+
+      ui.updateMinimap(mockPlayerManager);
+
+      // enemy-near at 200px distance should be shown
+      expect(dynamicGraphics.fillStyle).toHaveBeenCalledWith(0xff0000, 1);
+      expect(dynamicGraphics.fillCircle).toHaveBeenCalledWith(
+        20 + 700 * 0.075,  // mapX + enemy.x * scale
+        20 + 500 * 0.075,  // mapY + enemy.y * scale
+        3
+      );
+    });
+
+    it('should NOT show enemy beyond 600px', () => {
+      ui.setupMinimap();
+      const dynamicGraphics = createdGraphics[1];
+
+      ui.updateMinimap(mockPlayerManager);
+
+      // enemy-far at 700px distance should NOT be shown
+      expect(dynamicGraphics.fillCircle).not.toHaveBeenCalledWith(
+        20 + 1200 * 0.075,
+        20 + 500 * 0.075,
+        3
+      );
+    });
+
+    it('should show local player as green dot (radius 4)', () => {
+      ui.setupMinimap();
+      const dynamicGraphics = createdGraphics[1];
+
+      ui.updateMinimap(mockPlayerManager);
+
+      expect(dynamicGraphics.fillStyle).toHaveBeenCalledWith(0x00ff00, 1);
+      expect(dynamicGraphics.fillCircle).toHaveBeenCalledWith(
+        20 + 500 * 0.075,
+        20 + 500 * 0.075,
+        4
+      );
+    });
+
+    it('should show radar range ring at 0.15 alpha', () => {
+      ui.setupMinimap();
+      const dynamicGraphics = createdGraphics[1];
+
+      ui.updateMinimap(mockPlayerManager);
+
+      expect(dynamicGraphics.lineStyle).toHaveBeenCalledWith(1, 0x00ff00, 0.15);
+      expect(dynamicGraphics.strokeCircle).toHaveBeenCalledWith(
+        20 + 500 * 0.075,
+        20 + 500 * 0.075,
+        600 * 0.075
+      );
+    });
+
+    it('should clear dynamic graphics before redrawing', () => {
+      ui.setupMinimap();
+      const dynamicGraphics = createdGraphics[1];
+
+      ui.updateMinimap(mockPlayerManager);
+
+      expect(dynamicGraphics.clear).toHaveBeenCalled();
+    });
+
+    it('should show enemy at exactly 600px distance (boundary test)', () => {
+      mockPlayerManager.getLivingPlayers.mockReturnValue([
+        { id: 'player-1', position: { x: 500, y: 500 } },
+        { id: 'enemy-boundary', position: { x: 1100, y: 500 } },  // exactly 600px away
+      ]);
+
+      ui.setupMinimap();
+      const dynamicGraphics = createdGraphics[1];
+
+      ui.updateMinimap(mockPlayerManager);
+
+      // Exactly 600px should be included (dist <= 600)
+      expect(dynamicGraphics.fillCircle).toHaveBeenCalledWith(
+        20 + 1100 * 0.075,
+        20 + 500 * 0.075,
+        3
+      );
+    });
+
+    it('should NOT show enemy at 601px distance (boundary test)', () => {
+      mockPlayerManager.getLivingPlayers.mockReturnValue([
+        { id: 'player-1', position: { x: 500, y: 500 } },
+        { id: 'enemy-beyond', position: { x: 1101, y: 500 } },  // 601px away
+      ]);
+
+      ui.setupMinimap();
+      const dynamicGraphics = createdGraphics[1];
+
+      ui.updateMinimap(mockPlayerManager);
+
+      // 601px should NOT be included
+      expect(dynamicGraphics.fillCircle).not.toHaveBeenCalledWith(
+        20 + 1101 * 0.075,
+        20 + 500 * 0.075,
+        3
+      );
+    });
+
+    it('should draw aim direction line', () => {
+      ui.setupMinimap();
+      const dynamicGraphics = createdGraphics[1];
+
+      ui.updateMinimap(mockPlayerManager);
+
+      expect(dynamicGraphics.lineStyle).toHaveBeenCalledWith(1, 0x00ff00, 0.8);
+      expect(dynamicGraphics.beginPath).toHaveBeenCalled();
+      expect(dynamicGraphics.strokePath).toHaveBeenCalled();
+    });
+
+    it('should not draw if minimap not setup', () => {
+      // Don't call setupMinimap
+      ui.updateMinimap(mockPlayerManager);
+
+      // Should return early without errors
+      expect(mockPlayerManager.getLocalPlayerPosition).not.toHaveBeenCalled();
     });
   });
 });

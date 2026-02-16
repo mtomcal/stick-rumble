@@ -23,6 +23,8 @@ export class GameSceneUI {
   private reloadIndicatorText: Phaser.GameObjects.Text | null = null;
   private reloadCircle: Phaser.GameObjects.Graphics | null = null;
   private crosshair: Crosshair | null = null;
+  private minimapStaticGraphics: Phaser.GameObjects.Graphics | null = null;
+  private minimapDynamicGraphics: Phaser.GameObjects.Graphics | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -450,6 +452,103 @@ export class GameSceneUI {
   }
 
   /**
+   * Set up the minimap static layer (background and border).
+   * Called once during scene creation.
+   */
+  setupMinimap(): void {
+    const scale = 0.075;
+    const mapX = 20;
+    const mapY = 20;
+    const mapSize = 1600 * scale; // 120px
+
+    // Static layer — drawn once
+    this.minimapStaticGraphics = this.scene.add.graphics();
+    this.minimapStaticGraphics.setScrollFactor(0);
+    this.minimapStaticGraphics.setDepth(1999);
+
+    // Background
+    this.minimapStaticGraphics.fillStyle(0x000000, 0.7);
+    this.minimapStaticGraphics.fillRect(mapX, mapY, mapSize, mapSize);
+
+    // Border
+    this.minimapStaticGraphics.lineStyle(2, 0xffffff, 0.5);
+    this.minimapStaticGraphics.strokeRect(mapX, mapY, mapSize, mapSize);
+
+    // Dynamic layer — cleared and redrawn each frame
+    this.minimapDynamicGraphics = this.scene.add.graphics();
+    this.minimapDynamicGraphics.setScrollFactor(0);
+    this.minimapDynamicGraphics.setDepth(2000);
+  }
+
+  /**
+   * Update the minimap dynamic layer with current player positions.
+   * Called every frame from GameScene.update().
+   */
+  updateMinimap(playerManager: PlayerManager): void {
+    if (!this.minimapDynamicGraphics) return;
+
+    const scale = 0.075;
+    const mapX = 20;
+    const mapY = 20;
+
+    this.minimapDynamicGraphics.clear();
+
+    const localPos = playerManager.getLocalPlayerPosition();
+    if (!localPos) return;
+
+    const localId = playerManager.getLocalPlayerId();
+    const livingPlayers = playerManager.getLivingPlayers();
+
+    // Enemy dots (within radar range only)
+    for (const player of livingPlayers) {
+      if (player.id === localId) continue;
+      const dx = localPos.x - player.position.x;
+      const dy = localPos.y - player.position.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist <= 600) {
+        this.minimapDynamicGraphics.fillStyle(0xff0000, 1);
+        this.minimapDynamicGraphics.fillCircle(
+          mapX + player.position.x * scale,
+          mapY + player.position.y * scale,
+          3
+        );
+      }
+    }
+
+    // Player dot
+    this.minimapDynamicGraphics.fillStyle(0x00ff00, 1);
+    this.minimapDynamicGraphics.fillCircle(
+      mapX + localPos.x * scale,
+      mapY + localPos.y * scale,
+      4
+    );
+
+    // Radar range ring
+    this.minimapDynamicGraphics.lineStyle(1, 0x00ff00, 0.15);
+    this.minimapDynamicGraphics.strokeCircle(
+      mapX + localPos.x * scale,
+      mapY + localPos.y * scale,
+      600 * scale
+    );
+
+    // Aim direction line
+    const localAimAngle = playerManager.getPlayerAimAngle(localId ?? '');
+    if (localAimAngle !== null) {
+      this.minimapDynamicGraphics.lineStyle(1, 0x00ff00, 0.8);
+      this.minimapDynamicGraphics.beginPath();
+      this.minimapDynamicGraphics.moveTo(
+        mapX + localPos.x * scale,
+        mapY + localPos.y * scale
+      );
+      this.minimapDynamicGraphics.lineTo(
+        mapX + localPos.x * scale + Math.cos(localAimAngle) * 10,
+        mapY + localPos.y * scale + Math.sin(localAimAngle) * 10
+      );
+      this.minimapDynamicGraphics.strokePath();
+    }
+  }
+
+  /**
    * Show wall spark effect when barrel is obstructed by wall geometry.
    * Yellow circle that scales up and fades out.
    */
@@ -490,6 +589,12 @@ export class GameSceneUI {
     }
     if (this.crosshair) {
       this.crosshair.destroy();
+    }
+    if (this.minimapStaticGraphics) {
+      this.minimapStaticGraphics.destroy();
+    }
+    if (this.minimapDynamicGraphics) {
+      this.minimapDynamicGraphics.destroy();
     }
   }
 }

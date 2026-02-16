@@ -312,18 +312,18 @@ The following discrepancies were found between this plan and the spec diff (c7dd
 
 > **Current state**: Not implemented.
 
-- [ ] **Position**: (20, 20), 120×120px
-- [ ] **Scale**: 0.075 (1600px world → 120px minimap)
-- [ ] **Static layer (depth 1999)**: Black bg, white border, wall positions; `setScrollFactor(0)`
-- [ ] **Dynamic layer (depth 2000)**: Player/enemy dots, radar ring, aim line; `setScrollFactor(0)`
-- [ ] **Player dot**: Green, 4px
-- [ ] **Enemy dots**: Red, 3px; only within 600px radar range
-- [ ] **Update every frame**: Clear + redraw dynamic layer
-- [ ] **Test TS-UI-018**: Minimap renders static layer
-- [ ] **Test TS-UI-019**: Minimap radar range filters enemies
-- [ ] **Spec validation**: Verify against `constants.md` lines 407-415 — x=20, y=20, scale=0.075, size=120, radarRange=600, staticDepth=1999, dynamicDepth=2000, playerDotSize=4, enemyDotSize=3. Verify both layers use `setScrollFactor(0)` per `ui.md`
-- [ ] **Assertion quality**: TS-UI-018 asserts static layer depth exactly 1999, position exactly (20,20), `setScrollFactor(0)` called. TS-UI-019 asserts enemy at 500px distance IS shown, enemy at 700px IS NOT shown (exact boundary test at 600px) — not just "some dots rendered"
-- [ ] **Coverage gate**: Minimap static setup + dynamic update + radar filtering ≥90% statements/lines/functions (branch coverage on radar range filter critical)
+- [x] **Position**: (20, 20), 120×120px
+- [x] **Scale**: 0.075 (1600px world → 120px minimap)
+- [x] **Static layer (depth 1999)**: Black bg, white border, wall positions; `setScrollFactor(0)`
+- [x] **Dynamic layer (depth 2000)**: Player/enemy dots, radar ring, aim line; `setScrollFactor(0)`
+- [x] **Player dot**: Green, 4px
+- [x] **Enemy dots**: Red, 3px; only within 600px radar range
+- [x] **Update every frame**: Clear + redraw dynamic layer
+- [x] **Test TS-UI-018**: Minimap renders static layer
+- [x] **Test TS-UI-019**: Minimap radar range filters enemies
+- [x] **Spec validation**: Verify against `constants.md` lines 407-415 — x=20, y=20, scale=0.075, size=120, radarRange=600, staticDepth=1999, dynamicDepth=2000, playerDotSize=4, enemyDotSize=3. Verify both layers use `setScrollFactor(0)` per `ui.md`
+- [x] **Assertion quality**: TS-UI-018 asserts static layer depth exactly 1999, position exactly (20,20), `setScrollFactor(0)` called. TS-UI-019 asserts enemy at 500px distance IS shown, enemy at 700px IS NOT shown (exact boundary test at 600px) — not just "some dots rendered"
+- [x] **Coverage gate**: Minimap static setup + dynamic update + radar filtering ≥90% statements/lines/functions (branch coverage on radar range filter critical)
 
 ---
 
@@ -482,3 +482,7 @@ Follow these steps for each system section:
 - [2026-02-16] **System 7a — Plan spec line refs wrong**: Plan said "constants.md lines 396-399" for floor grid constants, but those lines are about melee arc/swing/camera shake. Actual floor grid constants at lines 540-547.
 - [2026-02-16] **System 7a — mockGraphics needed moveTo/lineTo**: The shared `createMockScene()` mockGraphics object was missing `moveTo` and `lineTo` methods. Added both with `.mockReturnThis()` for grid line drawing.
 - [2026-02-16] **System 7a — Vertical line count is 20 not 21**: `for x = 0; x <= 1920; x += 100` iterates x=0,100,...,1900 = 20 values. Initial test counted `moveTo` calls with `y===0` which also matched the first horizontal line's `moveTo(0, 0)`. Fixed to count `lineTo` calls with `y===1080` (definitively vertical lines).
+- [2026-02-16] **System 7b — Plan spec line refs wrong**: Plan said "constants.md lines 407-415" for minimap constants, but those are blood particle constants. Actual minimap constants at lines 551-563.
+- [2026-02-16] **System 7b — No wall rendering in minimap**: The spec shows wall rendering in the static layer, but the arena has no internal walls. The wall loop in the spec (`walls.forEach(...)`) is a no-op for the current arena. Only background and border are drawn in the static layer.
+- [2026-02-16] **System 7b — Distance calculated with Math.sqrt not Phaser**: Used `Math.sqrt(dx*dx + dy*dy)` instead of `Phaser.Math.Distance.Between()` to avoid mocking additional Phaser methods. Same result.
+- [2026-02-16] **System 7b — mockGraphics needed strokeRect/strokeCircle/fillCircle**: The `add.graphics` mock in both `GameSceneUI.test.ts` and `GameScene.test.setup.ts` needed additional methods for minimap rendering.

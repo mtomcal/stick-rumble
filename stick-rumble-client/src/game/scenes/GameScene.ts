@@ -328,6 +328,9 @@ export class GameScene extends Phaser.Scene {
 
           // Create crosshair system
           this.ui.createCrosshair();
+
+          // Setup minimap
+          this.ui.setupMinimap();
         })
         .catch(err => {
           console.error('Failed to connect:', err);
@@ -449,6 +452,11 @@ export class GameScene extends Phaser.Scene {
 
       const spreadDegrees = WEAPON_SPREAD[weaponType.toLowerCase()] || 0;
       this.ui.updateCrosshair(isMoving, spreadDegrees, weaponType);
+    }
+
+    // Update minimap
+    if (this.ui && this.playerManager) {
+      this.ui.updateMinimap(this.playerManager);
     }
 
     // Update spectator mode
