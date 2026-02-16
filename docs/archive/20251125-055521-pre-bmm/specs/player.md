@@ -500,3 +500,4 @@ The codebase uses extensive null/active checks before accessing game objects:
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-15 | Initial spec documenting pre-BMM archive snapshot |
+| 1.0.1 | 2026-02-16 | Verified against source — no corrections needed (all values, line numbers, and descriptions match) |
