@@ -293,24 +293,49 @@ Precise enforcement of weapon fire rates.
 **Pseudocode:**
 ```
 function canShoot(weaponState):
-    if weaponState.lastShotTime == zero:
-        return true  // First shot always allowed
+    isMelee = weapon.isMelee()
 
-    cooldown = 1 second / weapon.fireRate
-    elapsed = now() - weaponState.lastShotTime
+    // Cannot shoot while reloading (ranged only)
+    if !isMelee and weaponState.isReloading:
+        return false
 
-    return elapsed >= cooldown
+    // Cannot shoot with empty magazine (ranged only)
+    if !isMelee and weaponState.currentAmmo <= 0:
+        return false
+
+    // Check fire rate cooldown (both melee and ranged)
+    if weaponState.lastShotTime != zero:
+        cooldown = 1 second / weapon.fireRate
+        if now() - weaponState.lastShotTime < cooldown:
+            return false
+
+    return true
 ```
 
 **Go:**
 ```go
 func (ws *WeaponState) CanShoot() bool {
-    if ws.LastShotTime.IsZero() {
-        return true
+    isMelee := ws.Weapon.IsMelee()
+
+    // Cannot shoot while reloading (ranged only)
+    if !isMelee && ws.IsReloading {
+        return false
     }
 
-    cooldown := time.Duration(float64(time.Second) / ws.Weapon.FireRate)
-    return ws.clock.Since(ws.LastShotTime) >= cooldown
+    // Cannot shoot with empty magazine (ranged only)
+    if !isMelee && ws.CurrentAmmo <= 0 {
+        return false
+    }
+
+    // Check fire rate cooldown (both melee and ranged)
+    if !ws.LastShotTime.IsZero() {
+        cooldown := time.Duration(float64(time.Second) / ws.Weapon.FireRate)
+        if ws.clock.Since(ws.LastShotTime) < cooldown {
+            return false
+        }
+    }
+
+    return true
 }
 ```
 
