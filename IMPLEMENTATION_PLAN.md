@@ -387,3 +387,13 @@ The following discrepancies were found between this plan and the spec diff (c7dd
 - [ ] Wall spark: yellow spark when barrel is in wall, no bullet
 - [ ] Floor grid: visible grid lines across arena
 - [ ] Minimap: shows self (green), nearby enemies (red), walls
+
+---
+
+### Worker Discovery Log
+
+> **For agent workers.** When you encounter unexpected problems, spec ambiguities, missing dependencies, or new work items during implementation, log them here. Prefix each entry with the date and the system you were working on. Human reviewers will triage these into new tasks or errata.
+>
+> Format: `- [YYYY-MM-DD] **System N — Summary**: Details of what was found and any suggested resolution.`
+
+_(No entries yet.)_
