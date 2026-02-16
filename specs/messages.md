@@ -1220,7 +1220,7 @@ interface WeaponPickupConfirmedData {
   playerId: string;        // Player who picked up
   crateId: string;         // Crate that was picked up
   weaponType: string;      // Weapon type received
-  nextRespawnTime: number; // Milliseconds until respawn
+  nextRespawnTime: number; // Unix epoch timestamp in seconds when crate respawns
 }
 ```
 
@@ -1233,7 +1233,7 @@ interface WeaponPickupConfirmedData {
     "playerId": "550e8400-e29b-41d4-a716-446655440000",
     "crateId": "ak47-1",
     "weaponType": "AK47",
-    "nextRespawnTime": 30000
+    "nextRespawnTime": 1704067231
   }
 }
 ```
@@ -1791,3 +1791,4 @@ Client                          Server
 | 1.0.0 | 2026-02-02 | Initial specification extracted from codebase |
 | 1.1.0 | 2026-02-15 | Added `sequence` field to `input:state`. Added `clientTimestamp` field to `player:shoot`. Added `lastProcessedSequence` and `correctedPlayers` to `player:move`. Added new `state:snapshot` and `state:delta` message types for delta compression. Updated server→client count from 20 to 22. |
 | 1.1.1 | 2026-02-16 | Fixed `projectile:spawn` Go section — server broadcast omits `weaponType` (only sends id, ownerId, position, velocity) |
+| 1.1.2 | 2026-02-16 | Fixed `weapon:pickup_confirmed` `nextRespawnTime` — is Unix epoch timestamp in seconds (via `respawnTime.Unix()`), not duration in milliseconds |
