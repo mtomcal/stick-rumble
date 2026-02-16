@@ -208,8 +208,8 @@ func TestWeaponConfigToWeapon_MeleeWeapon(t *testing.T) {
 		MagazineSize:      0,
 		ReloadTimeMs:      0,
 		ProjectileSpeed:   0,
-		Range:             64.0,
-		ArcDegrees:        90,
+		Range:             90.0,
+		ArcDegrees:        80,
 		KnockbackDistance: 40,
 		Recoil:            nil,
 		SpreadDegrees:     0,
@@ -226,11 +226,11 @@ func TestWeaponConfigToWeapon_MeleeWeapon(t *testing.T) {
 	if weapon.ReloadTime != 0 {
 		t.Errorf("Expected reload time 0 for melee, got %v", weapon.ReloadTime)
 	}
-	if weapon.Range != 64.0 {
-		t.Errorf("Expected range 64.0, got %f", weapon.Range)
+	if weapon.Range != 90.0 {
+		t.Errorf("Expected range 90.0, got %f", weapon.Range)
 	}
-	if weapon.ArcDegrees != 90 {
-		t.Errorf("Expected arc degrees 90, got %f", weapon.ArcDegrees)
+	if weapon.ArcDegrees != 80 {
+		t.Errorf("Expected arc degrees 80, got %f", weapon.ArcDegrees)
 	}
 	if weapon.KnockbackDistance != 40 {
 		t.Errorf("Expected knockback distance 40, got %f", weapon.KnockbackDistance)

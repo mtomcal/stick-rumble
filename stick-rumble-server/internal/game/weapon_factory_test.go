@@ -31,11 +31,11 @@ func TestNewBat(t *testing.T) {
 	if bat.ProjectileSpeed != 0 {
 		t.Errorf("Expected projectile speed 0 (melee has no projectiles), got %f", bat.ProjectileSpeed)
 	}
-	if bat.Range != 64 {
-		t.Errorf("Expected range 64px, got %f", bat.Range)
+	if bat.Range != 90 {
+		t.Errorf("Expected range 90px, got %f", bat.Range)
 	}
-	if bat.ArcDegrees != 90 {
-		t.Errorf("Expected arc 90 degrees, got %f", bat.ArcDegrees)
+	if bat.ArcDegrees != 80 {
+		t.Errorf("Expected arc 80 degrees, got %f", bat.ArcDegrees)
 	}
 	if bat.KnockbackDistance != 40 {
 		t.Errorf("Expected knockback 40px, got %f", bat.KnockbackDistance)
@@ -71,11 +71,11 @@ func TestNewKatana(t *testing.T) {
 	if katana.ProjectileSpeed != 0 {
 		t.Errorf("Expected projectile speed 0 (melee has no projectiles), got %f", katana.ProjectileSpeed)
 	}
-	if katana.Range != 80 {
-		t.Errorf("Expected range 80px, got %f", katana.Range)
+	if katana.Range != 110 {
+		t.Errorf("Expected range 110px, got %f", katana.Range)
 	}
-	if katana.ArcDegrees != 90 {
-		t.Errorf("Expected arc 90 degrees, got %f", katana.ArcDegrees)
+	if katana.ArcDegrees != 80 {
+		t.Errorf("Expected arc 80 degrees, got %f", katana.ArcDegrees)
 	}
 	if katana.KnockbackDistance != 0 {
 		t.Errorf("Expected knockback 0px (katana has no knockback), got %f", katana.KnockbackDistance)

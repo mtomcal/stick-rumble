@@ -410,8 +410,8 @@ describe('weaponConfig', () => {
       expect(bat?.damage).toBe(25);
       expect(bat?.fireRate).toBe(2.0);
       expect(bat?.magazineSize).toBe(0); // Melee
-      expect(bat?.range).toBe(64);
-      expect(bat?.arcDegrees).toBe(90);
+      expect(bat?.range).toBe(90);
+      expect(bat?.arcDegrees).toBe(80);
       expect(bat?.knockbackDistance).toBe(40);
     });
 
@@ -421,8 +421,8 @@ describe('weaponConfig', () => {
       expect(katana?.damage).toBe(45);
       expect(katana?.fireRate).toBe(1.25);
       expect(katana?.magazineSize).toBe(0); // Melee
-      expect(katana?.range).toBe(80);
-      expect(katana?.arcDegrees).toBe(90);
+      expect(katana?.range).toBe(110);
+      expect(katana?.arcDegrees).toBe(80);
     });
 
     it('should have valid Uzi config', () => {

@@ -44,28 +44,28 @@ The following discrepancies were found between this plan and the spec diff (c7dd
 
 > **Current state**: Bat=64px, Katana=80px, Arc=90° in both `weapon_factory.go` and `weapon_config.go`.
 
-- [ ] **weapon_factory.go — Bat range**: Change `Range: 64` → `Range: 90`
-- [ ] **weapon_factory.go — Katana range**: Change `Range: 80` → `Range: 110`
-- [ ] **weapon_factory.go — Bat arc**: Change `ArcDegrees: 90` → `ArcDegrees: 80`
-- [ ] **weapon_factory.go — Katana arc**: Change `ArcDegrees: 90` → `ArcDegrees: 80`
-- [ ] **weapon_config.go**: Apply same changes if values are duplicated
-- [ ] **Server tests pass**: `make test-server` — melee range/arc detection still works
-- [ ] **Spec validation**: Verify against `constants.md` line 217 (Bat=90), line 228 (Katana=110), `melee.md` line 1165 (both ranges), `weapons.md` lines 2330-2331. Arc 80° matches `constants.md` and `melee.md` ±0.7 rad
-- [ ] **Assertion quality**: Server tests assert exact range/arc values (e.g., `assert.Equal(t, 90, bat.Range)`), not just `!= 0` or `require.NotNil`
-- [ ] **Coverage gate**: `go test ./internal/game/... -cover` — weapon_factory.go and weapon_config.go ≥90% statement coverage
+- [x] **weapon_factory.go — Bat range**: Change `Range: 64` → `Range: 90`
+- [x] **weapon_factory.go — Katana range**: Change `Range: 80` → `Range: 110`
+- [x] **weapon_factory.go — Bat arc**: Change `ArcDegrees: 90` → `ArcDegrees: 80`
+- [x] **weapon_factory.go — Katana arc**: Change `ArcDegrees: 90` → `ArcDegrees: 80`
+- [x] **weapon_config.go**: Apply same changes if values are duplicated
+- [x] **Server tests pass**: `make test-server` — melee range/arc detection still works
+- [x] **Spec validation**: Verify against `constants.md` line 217 (Bat=90), line 228 (Katana=110), `melee.md` line 1165 (both ranges), `weapons.md` lines 2330-2331. Arc 80° matches `constants.md` and `melee.md` ±0.7 rad
+- [x] **Assertion quality**: Server tests assert exact range/arc values (e.g., `assert.Equal(t, 90, bat.Range)`), not just `!= 0` or `require.NotNil`
+- [x] **Coverage gate**: `go test ./internal/game/... -cover` — weapon_factory.go and weapon_config.go ≥90% statement coverage
 
 #### System 1 — Client: Melee Range & Arc Values
 
 > **Current state**: Same stale values (64/80/90) in both `weaponConfig.ts` and `weapon-configs.json`.
 
-- [ ] **weaponConfig.ts — Bat**: range=90, arc=80
-- [ ] **weaponConfig.ts — Katana**: range=110, arc=80
-- [ ] **weapon-configs.json — Bat**: range=90, arc=80
-- [ ] **weapon-configs.json — Katana**: range=110, arc=80
-- [ ] **Client tests pass**: `make test-client`
-- [ ] **Spec validation**: Verify client values match server values exactly: Bat range=90, Katana range=110, both arc=80. Cross-check `weaponConfig.ts` AND `weapon-configs.json` — no stale values (64, 80, 90°) remain
-- [ ] **Assertion quality**: Tests assert exact numeric values (`expect(bat.range).toBe(90)`, `expect(katana.arcDegrees).toBe(80)`), not `toBeDefined()` or `toBeTruthy()`
-- [ ] **Coverage gate**: `npm run test:unit:coverage` — weaponConfig.ts ≥90% statements/lines/functions
+- [x] **weaponConfig.ts — Bat**: range=90, arc=80
+- [x] **weaponConfig.ts — Katana**: range=110, arc=80
+- [x] **weapon-configs.json — Bat**: range=90, arc=80
+- [x] **weapon-configs.json — Katana**: range=110, arc=80
+- [x] **Client tests pass**: `make test-client`
+- [x] **Spec validation**: Verify client values match server values exactly: Bat range=90, Katana range=110, both arc=80. Cross-check `weaponConfig.ts` AND `weapon-configs.json` — no stale values (64, 80, 90°) remain
+- [x] **Assertion quality**: Tests assert exact numeric values (`expect(bat.range).toBe(90)`, `expect(katana.arcDegrees).toBe(80)`), not `toBeDefined()` or `toBeTruthy()`
+- [x] **Coverage gate**: `npm run test:unit:coverage` — weaponConfig.ts ≥90% statements/lines/functions
 
 ---
 
@@ -75,22 +75,22 @@ The following discrepancies were found between this plan and the spec diff (c7dd
 
 > **Current state**: Per-weapon colors (brown/silver), fill+stroke arc, 200ms 4-frame animation.
 
-- [ ] **Remove per-weapon colors**: No more brown (bat) / silver (katana) — all arcs use 0xFFFFFF white
-- [ ] **Remove fill rendering**: Delete `fillStyle` / `fillPath` — stroke only
-- [ ] **Stroke width**: Change from 3px to 2px
-- [ ] **Stroke alpha**: Set to 0.8
-- [ ] **Remove 4-frame animation**: Delete old frame-based animation approach
-- [ ] **Add alpha fade tween**: `tweens.add({ targets: graphics, alpha: 0, duration: 200, onComplete: destroy })`
-- [ ] **Add weapon container rotation tween**: `angle: { from: container.angle - 45, to: container.angle + 60 }, duration: 100, yoyo: true`
-- [ ] **Add camera shake on melee hit**: `cameras.main.shake(50, 0.001)`
-- [ ] **Test TS-MELEE-013**: White stroke-only arc renders correctly
-- [ ] **Test TS-MELEE-015**: Weapon container rotation tween works
-- [ ] **Test TS-GFX-013**: Melee arc renders as white stroke-only
-- [ ] **Spec validation**: Verify against `constants.md` lines 246-254 — color=0xFFFFFF, strokeWidth=2, strokeAlpha=0.8, fadeDuration=200, swingFrom=-45°, swingTo=+60°, swingDuration=100ms, yoyo=true, shakeDuration=50ms, shakeIntensity=0.001. Confirm NO fill rendering, NO per-weapon colors
-- [ ] **Assertion quality**: Tests verify exact color (`toHaveBeenCalledWith(2, 0xFFFFFF, 0.8)`), exact tween params (`duration: 200`, `angle: {from: -45, to: 60}`), not bare `toHaveBeenCalled()` without args
-- [ ] **Assertion quality**: No `toBeDefined()` on graphics objects — assert specific draw calls with exact stroke width (2), alpha (0.8), and arc angle (80° / ±0.7 rad)
-- [ ] **Coverage gate**: MeleeWeapon.ts ≥90% statements/lines/functions in coverage report
-- [ ] **Visual test**: `make test-visual` — read screenshots to verify white arc appearance
+- [x] **Remove per-weapon colors**: No more brown (bat) / silver (katana) — all arcs use 0xFFFFFF white
+- [x] **Remove fill rendering**: Delete `fillStyle` / `fillPath` — stroke only
+- [x] **Stroke width**: Change from 3px to 2px
+- [x] **Stroke alpha**: Set to 0.8
+- [x] **Remove 4-frame animation**: Delete old frame-based animation approach
+- [x] **Add alpha fade tween**: `tweens.add({ targets: graphics, alpha: 0, duration: 200, onComplete: destroy })`
+- [x] **Add weapon container rotation tween**: `angle: { from: container.angle - 45, to: container.angle + 60 }, duration: 100, yoyo: true`
+- [ ] **Add camera shake on melee hit**: `cameras.main.shake(50, 0.001)` — DEFERRED to System 5 (Camera Effects)
+- [x] **Test TS-MELEE-013**: White stroke-only arc renders correctly
+- [x] **Test TS-MELEE-015**: Weapon container rotation tween works
+- [x] **Test TS-GFX-013**: Melee arc renders as white stroke-only
+- [x] **Spec validation**: Verify against `constants.md` lines 246-254 — color=0xFFFFFF, strokeWidth=2, strokeAlpha=0.8, fadeDuration=200, swingFrom=-45°, swingTo=+60°, swingDuration=100ms, yoyo=true, shakeDuration=50ms, shakeIntensity=0.001. Confirm NO fill rendering, NO per-weapon colors
+- [x] **Assertion quality**: Tests verify exact color (`toHaveBeenCalledWith(2, 0xFFFFFF, 0.8)`), exact tween params (`duration: 200`, `angle: {from: -45, to: 60}`), not bare `toHaveBeenCalled()` without args
+- [x] **Assertion quality**: No `toBeDefined()` on graphics objects — assert specific draw calls with exact stroke width (2), alpha (0.8), and arc angle (80° / ±0.7 rad)
+- [x] **Coverage gate**: MeleeWeapon.ts ≥90% statements/lines/functions in coverage report
+- [ ] **Visual test**: `make test-visual` — read screenshots to verify white arc appearance — DEFERRED (HUMAN ONLY equivalent)
 
 #### System 3a — Client: Death Corpse (PlayerManager.ts)
 
@@ -434,4 +434,7 @@ Follow these steps for each system section:
 >
 > Format: `- [YYYY-MM-DD] **System N — Summary**: Details of what was found and any suggested resolution.`
 
-_(No entries yet.)_
+- [2026-02-16] **System 1 — Camera shake deferred to System 5**: The "Add camera shake on melee hit" checklist item overlaps with System 5 (Camera Effects), which normalizes all camera shake to `shake(50, 0.001)`. Implementing it in System 1 would create duplicate work. Deferred to System 5 where it belongs.
+- [2026-02-16] **System 1 — Root-level weapon-configs.json also needs updating**: There are TWO copies of `weapon-configs.json` — one at `stick-rumble-client/public/weapon-configs.json` and one at the project root `weapon-configs.json`. Both needed range/arc updates. The plan only mentions client config.
+- [2026-02-16] **System 1 — MockGraphics needed setAlpha and setVisible as vi.fn()**: The shared Phaser mock in `tests/__mocks__/phaser.ts` lacked `setAlpha` as a `vi.fn()` method, and `setVisible` was a regular method not a `vi.fn()`. Both needed to be mocked properly for tween and visibility testing. The inline mock in `MeleeWeaponManager.test.ts` also needed `setAlpha` and `tweens` added.
+- [2026-02-16] **System 1 — MeleeWeapon.update() backward compatibility**: `MeleeWeaponManager.ts` calls `weapon.update()` on each frame. The rewritten `MeleeWeapon.ts` no longer needs frame-based updates (tweens handle animation), but a no-op `update()` method was added to avoid runtime errors.

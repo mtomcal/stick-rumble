@@ -45,7 +45,7 @@ func TestPerformMeleeAttack_NonMeleeWeapon(t *testing.T) {
 func TestPerformMeleeAttack_BatHitsSingleTarget(t *testing.T) {
 	bat := NewBat()
 	attacker := createTestPlayer("attacker", 100, 100, 0) // Aiming right (0°)
-	// Target at exactly 50px to the right (within 64px range, within 90° arc)
+	// Target at exactly 50px to the right (within 90px range, within 80° arc)
 	target := createTestPlayer("target", 150, 100, 0)
 
 	result := PerformMeleeAttack(attacker, []*PlayerState{attacker, target}, bat)
@@ -69,7 +69,7 @@ func TestPerformMeleeAttack_BatHitsSingleTarget(t *testing.T) {
 func TestPerformMeleeAttack_KatanaHitsSingleTarget(t *testing.T) {
 	katana := NewKatana()
 	attacker := createTestPlayer("attacker", 100, 100, 0) // Aiming right (0°)
-	// Target at exactly 70px to the right (within 80px range, within 90° arc)
+	// Target at exactly 70px to the right (within 110px range, within 80° arc)
 	target := createTestPlayer("target", 170, 100, 0)
 
 	result := PerformMeleeAttack(attacker, []*PlayerState{attacker, target}, katana)
@@ -88,9 +88,9 @@ func TestPerformMeleeAttack_KatanaHitsSingleTarget(t *testing.T) {
 }
 
 func TestPerformMeleeAttack_TargetOutOfRange(t *testing.T) {
-	bat := NewBat() // 64px range
+	bat := NewBat() // 90px range
 	attacker := createTestPlayer("attacker", 100, 100, 0)
-	// Target at 100px to the right (beyond 64px range)
+	// Target at 100px to the right (beyond 90px range)
 	target := createTestPlayer("target", 200, 100, 0)
 
 	result := PerformMeleeAttack(attacker, []*PlayerState{attacker, target}, bat)
@@ -104,9 +104,9 @@ func TestPerformMeleeAttack_TargetOutOfRange(t *testing.T) {
 }
 
 func TestPerformMeleeAttack_TargetOutsideArc(t *testing.T) {
-	bat := NewBat()                                       // 90° arc (45° on each side of aim direction)
+	bat := NewBat()                                       // 80° arc (40° on each side of aim direction)
 	attacker := createTestPlayer("attacker", 100, 100, 0) // Aiming right (0°)
-	// Target directly behind attacker (180° from aim direction, outside 90° arc)
+	// Target directly behind attacker (180° from aim direction, outside 80° arc)
 	target := createTestPlayer("target", 50, 100, 0)
 
 	result := PerformMeleeAttack(attacker, []*PlayerState{attacker, target}, bat)
@@ -120,15 +120,15 @@ func TestPerformMeleeAttack_TargetOutsideArc(t *testing.T) {
 }
 
 func TestPerformMeleeAttack_MultipleTargetsInArc(t *testing.T) {
-	bat := NewBat()                                       // 64px range, 90° arc
+	bat := NewBat()                                       // 90px range, 80° arc
 	attacker := createTestPlayer("attacker", 100, 100, 0) // Aiming right
 
 	// Target 1: directly to the right (within range and arc)
 	target1 := createTestPlayer("target1", 150, 100, 0)
 	// Target 2: to the right and slightly up (within range and arc, ~20° from aim)
 	target2 := createTestPlayer("target2", 140, 120, 0)
-	// Target 3: to the right and down (within 45° arc)
-	target3 := createTestPlayer("target3", 130, 130, 0)
+	// Target 3: to the right and down (within 40° half-arc, ~32° from aim)
+	target3 := createTestPlayer("target3", 140, 125, 0)
 
 	result := PerformMeleeAttack(attacker, []*PlayerState{attacker, target1, target2, target3}, bat)
 
@@ -329,11 +329,11 @@ func TestIsInMeleeRange_DirectlyInFront(t *testing.T) {
 }
 
 func TestIsInMeleeRange_AtEdgeOfArc(t *testing.T) {
-	bat := NewBat() // 90° arc = 45° on each side
+	bat := NewBat() // 80° arc = 40° on each side
 	attacker := createTestPlayer("attacker", 100, 100, 0)
-	// Target at exactly 45° from aim direction (edge of arc)
-	// Distance = 50px (within 64px range)
-	angleRad := 45 * (math.Pi / 180)
+	// Target at 39° from aim direction (just inside edge of 40° half-arc)
+	// Distance = 50px (within 90px range)
+	angleRad := 39 * (math.Pi / 180)
 	targetX := 100 + 50*math.Cos(angleRad)
 	targetY := 100 + 50*math.Sin(angleRad)
 	target := createTestPlayer("target", targetX, targetY, 0)
@@ -341,15 +341,15 @@ func TestIsInMeleeRange_AtEdgeOfArc(t *testing.T) {
 	inRange := isInMeleeRange(attacker, target, bat)
 
 	if !inRange {
-		t.Error("Expected target at edge of arc (45°) to be in range")
+		t.Error("Expected target at 39° (inside 40° half-arc) to be in range")
 	}
 }
 
 func TestIsInMeleeRange_JustOutsideArc(t *testing.T) {
-	bat := NewBat() // 90° arc = 45° on each side
+	bat := NewBat() // 80° arc = 40° on each side
 	attacker := createTestPlayer("attacker", 100, 100, 0)
-	// Target at 50° from aim direction (outside 45° arc boundary)
-	angleRad := 50 * (math.Pi / 180)
+	// Target at 41° from aim direction (outside 40° half-arc boundary)
+	angleRad := 41 * (math.Pi / 180)
 	targetX := 100 + 50*math.Cos(angleRad)
 	targetY := 100 + 50*math.Sin(angleRad)
 	target := createTestPlayer("target", targetX, targetY, 0)
@@ -357,7 +357,7 @@ func TestIsInMeleeRange_JustOutsideArc(t *testing.T) {
 	inRange := isInMeleeRange(attacker, target, bat)
 
 	if inRange {
-		t.Error("Expected target just outside arc (50°) to NOT be in range")
+		t.Error("Expected target at 41° (outside 40° half-arc) to NOT be in range")
 	}
 }
 
@@ -375,28 +375,28 @@ func TestIsInMeleeRange_BehindPlayer(t *testing.T) {
 }
 
 func TestIsInMeleeRange_AtMaxRange(t *testing.T) {
-	bat := NewBat() // 64px range
+	bat := NewBat() // 90px range
 	attacker := createTestPlayer("attacker", 100, 100, 0)
-	// Target at exactly 64px to the right
-	target := createTestPlayer("target", 164, 100, 0)
+	// Target at exactly 90px to the right
+	target := createTestPlayer("target", 190, 100, 0)
 
 	inRange := isInMeleeRange(attacker, target, bat)
 
 	if !inRange {
-		t.Error("Expected target at max range (64px) to be in range")
+		t.Error("Expected target at max range (90px) to be in range")
 	}
 }
 
 func TestIsInMeleeRange_JustBeyondMaxRange(t *testing.T) {
-	bat := NewBat() // 64px range
+	bat := NewBat() // 90px range
 	attacker := createTestPlayer("attacker", 100, 100, 0)
-	// Target at 65px to the right (just beyond range)
-	target := createTestPlayer("target", 165, 100, 0)
+	// Target at 91px to the right (just beyond range)
+	target := createTestPlayer("target", 191, 100, 0)
 
 	inRange := isInMeleeRange(attacker, target, bat)
 
 	if inRange {
-		t.Error("Expected target just beyond max range (65px) to NOT be in range")
+		t.Error("Expected target just beyond max range (91px) to NOT be in range")
 	}
 }
 
@@ -416,7 +416,7 @@ func TestIsInMeleeRange_NegativeAimAngle(t *testing.T) {
 func TestIsInMeleeRange_360DegreeWrap(t *testing.T) {
 	bat := NewBat()
 	attacker := createTestPlayer("attacker", 100, 100, 350) // Near 0°
-	// Target at 10° (should be within 90° arc due to wraparound)
+	// Target at 10° (should be within 80° arc due to wraparound)
 	angleRad := 10 * (math.Pi / 180)
 	targetX := 100 + 50*math.Cos(angleRad)
 	targetY := 100 + 50*math.Sin(angleRad)
@@ -433,16 +433,16 @@ func TestKatanaRange_LongerThanBat(t *testing.T) {
 	bat := NewBat()
 	katana := NewKatana()
 	attacker := createTestPlayer("attacker", 100, 100, 0)
-	// Target at 75px (beyond bat range, within katana range)
-	target := createTestPlayer("target", 175, 100, 0)
+	// Target at 100px (beyond bat range 90px, within katana range 110px)
+	target := createTestPlayer("target", 200, 100, 0)
 
 	batInRange := isInMeleeRange(attacker, target, bat)
 	katanaInRange := isInMeleeRange(attacker, target, katana)
 
 	if batInRange {
-		t.Error("Expected target at 75px to be out of Bat range (64px)")
+		t.Error("Expected target at 100px to be out of Bat range (90px)")
 	}
 	if !katanaInRange {
-		t.Error("Expected target at 75px to be in Katana range (80px)")
+		t.Error("Expected target at 100px to be in Katana range (110px)")
 	}
 }
