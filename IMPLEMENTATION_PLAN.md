@@ -104,7 +104,7 @@ The specs in `specs/` were bulk-updated and then validated by a prior Ralph job.
 - [x] 81. README.md — Fix message count (28 total, not 26)
 - [x] 83. README.md — Add ui.md to Quick Reference Table
 - [x] 84. README.md — Add graphics.md, ui.md, audio.md to Key Dependencies table
-- [ ] 99. SPEC-OF-SPECS.md — Fix client→server `test` message (no formal schema)
+- [x] 99. SPEC-OF-SPECS.md — Fix client→server `test` message (no formal schema)
 - [ ] 100. SPEC-OF-SPECS.md — Fix estimated total length (24,924 actual, not 8,575)
 - [ ] 101. SPEC-OF-SPECS.md — Fix shooting test scenario descriptions
 - [ ] 102. SPEC-OF-SPECS.md — Fix UI timer red threshold (< 60, not < 30)

@@ -466,7 +466,7 @@ Organized by category with tables:
    }
    ```
 
-2. **Client → Server Messages** (7 types)
+2. **Client → Server Messages** (6 types)
    Each message includes:
    - Type string
    - Full data schema with types
@@ -481,7 +481,6 @@ Organized by category with tables:
    - `weapon:pickup_attempt`
    - `player:melee_attack`
    - `player:dodge_roll`
-   - `test`
 
 3. **Server → Client Messages** (22 types)
    Each message includes:
