@@ -54,10 +54,10 @@ The specs in `specs/` were bulk-updated and then validated by a prior Ralph job.
 - [x] 49. overview.md — Fix GameServer struct (no Room/Match/ticker/broadcaster fields)
 - [x] 50. overview.md — Fix anti-cheat PlayerShoot pseudocode (no IsDead check, weaponStates map)
 - [x] 53. rooms.md — Fix room:joined data payload (includes roomId from server)
-- [ ] 87. test-index.md — Fix priority counts per spec (systematically inflated Critical counts)
-- [ ] 88. test-index.md — Fix summary statistics totals
-- [ ] 89. test-index.md — Fix category counts (Unit/Integration/Visual mismatches)
-- [ ] 91. test-index.md — Fix description scrambling (wrong IDs mapped to descriptions)
+- [x] 87. test-index.md — Fix priority counts per spec (corrected shooting, rooms, server-architecture, match, messages to match source specs)
+- [x] 88. test-index.md — Fix summary statistics totals (updated Critical/High/Medium/Low counts, removed phantom Low=9)
+- [x] 89. test-index.md — Fix category counts (Unit/Integration mismatches corrected for 5 specs)
+- [x] 91. test-index.md — Fix description scrambling (corrected shooting.md test descriptions to match source spec IDs)
 - [ ] 92. test-index.md — Remove or flag 15 netcode test IDs not in source specs
 - [ ] 97. SPEC-OF-SPECS.md — Fix DECELERATION constant (50 vs actual 1500 px/s^2)
 - [ ] 98. SPEC-OF-SPECS.md — Fix Server->Client message count (19 listed but 22 actual)
@@ -269,7 +269,7 @@ Worker: when you find additional drift while fixing a finding, add a row here.
 
 | # | Spec | Discovery | Severity |
 |---|------|-----------|----------|
-| | | | |
+| D1 | test-index.md | 14 specs still need cross-referencing against source spec test sections (arena, audio, client-architecture, constants, dodge-roll, graphics, hit-detection, melee, movement, networking, overview, player, ui, weapons). Priority/category mismatches likely exist. | MEDIUM |
 
 ## Per-Item Process
 

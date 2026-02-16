@@ -32,10 +32,12 @@ When implementing from scratch, AI agents need to:
 | **Total Test Scenarios** | 194 |
 | **Specs with Tests** | 19 (+Epic 4 cross-spec) |
 | **Average Tests per Spec** | 9.7 |
-| **Critical Priority Tests** | 71 |
-| **High Priority Tests** | 94 |
-| **Medium Priority Tests** | 20 |
-| **Low Priority Tests** | 9 |
+| **Critical Priority Tests** | ~97 |
+| **High Priority Tests** | ~78 |
+| **Medium Priority Tests** | ~19 |
+| **Low Priority Tests** | 0 |
+
+> **Note:** Priority counts above are approximate. Counts for shooting.md, rooms.md, server-architecture.md, match.md, and messages.md have been corrected to match source specs. Remaining 14 specs may also have inflated Critical counts — see Discoveries in IMPLEMENTATION_PLAN.md.
 
 ### By Category
 
@@ -54,16 +56,16 @@ When implementing from scratch, AI agents need to:
 | hit-detection.md | 14 | 8 | 5 | 1 | 0 |
 | melee.md | 14 | 6 | 6 | 2 | 0 |
 | player.md | 14 | 8 | 5 | 1 | 0 |
-| match.md | 13 | 8 | 4 | 1 | 0 |
+| match.md | 13 | 3 | 5 | 5 | 0 |
 | arena.md | 12 | 5 | 5 | 2 | 0 |
-| shooting.md | 12 | 7 | 4 | 1 | 0 |
+| shooting.md | 12 | 5 | 5 | 2 | 0 |
 | ui.md | 12 | 4 | 6 | 2 | 0 |
 | audio.md | 10 | 2 | 6 | 2 | 0 |
-| messages.md | 10 | 6 | 3 | 1 | 0 |
+| messages.md | 10 | 5 | 3 | 2 | 0 |
 | movement.md | 10 | 6 | 3 | 1 | 0 |
 | networking.md | 10 | 6 | 3 | 1 | 0 |
-| rooms.md | 10 | 8 | 2 | 0 | 0 |
-| server-architecture.md | 10 | 8 | 2 | 0 | 0 |
+| rooms.md | 10 | 2 | 6 | 2 | 0 |
+| server-architecture.md | 10 | 6 | 4 | 0 | 0 |
 | weapons.md | 10 | 5 | 4 | 1 | 0 |
 | client-architecture.md | 8 | 4 | 3 | 1 | 0 |
 | constants.md | 5 | 3 | 2 | 0 | 0 |
@@ -190,17 +192,17 @@ When implementing from scratch, AI agents need to:
 | ID | Category | Priority | Description |
 |----|----------|----------|-------------|
 | TS-MATCH-001 | Integration | Critical | Match starts when 2 players join |
-| TS-MATCH-002 | Unit | Critical | Timer counts down from 420 seconds |
-| TS-MATCH-003 | Integration | Critical | match:timer sent every second |
+| TS-MATCH-002 | Unit | High | Timer counts down from 420 seconds |
+| TS-MATCH-003 | Integration | High | match:timer sent every second |
 | TS-MATCH-004 | Integration | Critical | Match ends when player reaches 20 kills |
 | TS-MATCH-005 | Integration | Critical | Match ends when timer reaches 0 |
-| TS-MATCH-006 | Unit | Critical | Highest kills wins on time limit |
+| TS-MATCH-006 | Unit | High | Highest kills wins on time limit |
 | TS-MATCH-007 | Unit | High | Tie results in multiple winners |
-| TS-MATCH-008 | Integration | Critical | match:ended includes all player scores |
-| TS-MATCH-009 | Unit | High | match:ended reason is kill_target or time_limit |
-| TS-MATCH-010 | Integration | High | TEST_MODE uses 2 kills and 10 seconds |
-| TS-MATCH-011 | Unit | High | Players with 0 kills included in final scores |
-| TS-MATCH-012 | Integration | Critical | RegisteredPlayers set includes all players |
+| TS-MATCH-008 | Integration | High | match:ended includes all player scores |
+| TS-MATCH-009 | Unit | Medium | match:ended reason is kill_target or time_limit |
+| TS-MATCH-010 | Unit | Medium | TEST_MODE uses 2 kills and 10 seconds |
+| TS-MATCH-011 | Unit | Medium | Players with 0 kills included in final scores |
+| TS-MATCH-012 | Unit | Medium | RegisteredPlayers set includes all players |
 | TS-MATCH-013 | Unit | Medium | Match state machine prevents re-ending |
 
 ### Melee Tests (melee.md)
@@ -228,14 +230,14 @@ When implementing from scratch, AI agents need to:
 |----|----------|----------|-------------|
 | TS-MSG-001 | Integration | Critical | input:state updates player movement |
 | TS-MSG-002 | Integration | Critical | player:shoot creates projectile |
-| TS-MSG-003 | Integration | Critical | shoot:failed sent when shooting blocked |
+| TS-MSG-003 | Unit | High | shoot:failed sent when shooting blocked |
 | TS-MSG-004 | Integration | Critical | player:damaged sent on hit |
 | TS-MSG-005 | Integration | Critical | player:death sent on kill |
 | TS-MSG-006 | Integration | Critical | player:respawn sent after delay |
-| TS-MSG-007 | Integration | High | weapon:pickup_confirmed sent on pickup |
-| TS-MSG-008 | Integration | High | match:ended sent on win condition |
+| TS-MSG-007 | Integration | Medium | weapon:pickup_confirmed sent on pickup |
+| TS-MSG-008 | Integration | Medium | match:ended sent on win condition |
 | TS-MSG-009 | Unit | High | Message timestamp is Unix milliseconds |
-| TS-MSG-010 | Unit | Medium | Unknown message type ignored |
+| TS-MSG-010 | Unit | High | Unknown message type ignored |
 
 ### Movement Tests (movement.md)
 
@@ -320,16 +322,16 @@ When implementing from scratch, AI agents need to:
 
 | ID | Category | Priority | Description |
 |----|----------|----------|-------------|
-| TS-ROOM-001 | Integration | Critical | Room created when 2 players waiting |
-| TS-ROOM-002 | Unit | Critical | Room accepts up to 8 players |
-| TS-ROOM-003 | Unit | Critical | Room rejects 9th player |
+| TS-ROOM-001 | Unit | Critical | Room created when 2 players waiting |
+| TS-ROOM-002 | Unit | High | Room accepts up to 8 players |
+| TS-ROOM-003 | Unit | High | Room rejects 9th player |
 | TS-ROOM-004 | Integration | Critical | room:joined sent to both players |
-| TS-ROOM-005 | Integration | Critical | player:left sent when player disconnects |
-| TS-ROOM-006 | Integration | Critical | Empty room is destroyed |
-| TS-ROOM-007 | Unit | Critical | Player mapped to correct room |
-| TS-ROOM-008 | Integration | Critical | Broadcast reaches all room members |
+| TS-ROOM-005 | Integration | High | player:left sent when player disconnects |
+| TS-ROOM-006 | Unit | High | Empty room is destroyed |
+| TS-ROOM-007 | Unit | Medium | Player mapped to correct room |
+| TS-ROOM-008 | Unit | High | Broadcast reaches all room members |
 | TS-ROOM-009 | Integration | High | Disconnected player removed from room |
-| TS-ROOM-010 | Integration | High | New players matched to waiting queue |
+| TS-ROOM-010 | Unit | Medium | New players matched to waiting queue |
 
 ### Server Architecture Tests (server-architecture.md)
 
@@ -337,31 +339,31 @@ When implementing from scratch, AI agents need to:
 |----|----------|----------|-------------|
 | TS-SERVER-001 | Unit | Critical | Game loop runs at 60Hz |
 | TS-SERVER-002 | Unit | Critical | Broadcast runs at 20Hz |
-| TS-SERVER-003 | Unit | Critical | Physics updates each tick |
+| TS-SERVER-003 | Unit | High | Physics updates each tick |
 | TS-SERVER-004 | Integration | Critical | Collisions detected each tick |
 | TS-SERVER-005 | Unit | High | Messages routed to correct handler |
 | TS-SERVER-006 | Integration | Critical | Concurrent access is thread-safe |
 | TS-SERVER-007 | Integration | High | Graceful shutdown completes |
 | TS-SERVER-008 | Integration | Critical | Client messages processed |
-| TS-SERVER-009 | Unit | Critical | Callback events fire correctly |
+| TS-SERVER-009 | Unit | High | Callback events fire correctly |
 | TS-SERVER-010 | Integration | Critical | Room isolation maintained |
 
 ### Shooting Tests (shooting.md)
 
 | ID | Category | Priority | Description |
 |----|----------|----------|-------------|
-| TS-SHOOT-001 | Integration | Critical | Successful shot creates projectile |
+| TS-SHOOT-001 | Unit | Critical | Successful shot creates projectile |
 | TS-SHOOT-002 | Unit | Critical | Shot decrements ammo |
 | TS-SHOOT-003 | Unit | Critical | Empty magazine returns shoot:failed |
 | TS-SHOOT-004 | Unit | Critical | Cooldown enforced between shots |
-| TS-SHOOT-005 | Unit | Critical | Reloading blocks shooting |
-| TS-SHOOT-006 | Unit | Critical | Dead player cannot shoot |
-| TS-SHOOT-007 | Unit | High | Spread applied to projectile angle |
-| TS-SHOOT-008 | Unit | High | Recoil accumulates on rapid fire |
-| TS-SHOOT-009 | Unit | High | Recoil recovers over time |
-| TS-SHOOT-010 | Unit | High | Sprint increases spread by 1.5x |
-| TS-SHOOT-011 | Integration | Critical | Reload restores full ammo |
-| TS-SHOOT-012 | Unit | Medium | Reload takes correct duration |
+| TS-SHOOT-005 | Unit | High | Reloading blocks shooting |
+| TS-SHOOT-006 | Unit | High | Projectile velocity from aim angle |
+| TS-SHOOT-007 | Unit | High | Projectile expires after lifetime |
+| TS-SHOOT-008 | Unit | High | Reload completes and restores ammo |
+| TS-SHOOT-009 | Unit | High | Shotgun creates 8 pellets |
+| TS-SHOOT-010 | Unit | Medium | Sprint applies accuracy penalty |
+| TS-SHOOT-011 | Unit | Medium | Vertical recoil accumulates |
+| TS-SHOOT-012 | Unit | Critical | Dead player cannot shoot |
 
 ### UI Tests (ui.md)
 
@@ -547,7 +549,7 @@ Tests that verify rendering output using Playwright screenshots.
 
 ## Tests by Priority
 
-### Critical (65 tests)
+### Critical (~97 tests)
 
 **Must pass for the game to be playable.**
 
@@ -559,7 +561,7 @@ These tests verify:
 
 **If any critical test fails:** Game is broken and unplayable.
 
-### High (85 tests)
+### High (~78 tests)
 
 **Must pass for the game to be fun.**
 
@@ -640,3 +642,4 @@ Use this checklist to track test implementation progress:
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification |
 | 1.1.0 | 2026-02-15 | Added 15 Epic 4 Netcode test scenarios (prediction, reconciliation, interpolation, delta compression, lag compensation, network simulator). Updated total from 179 to 194 tests. Fixed deceleration reference from 50 to 1500 px/s². |
+| 1.1.1 | 2026-02-16 | Fixed test priorities/categories for shooting.md, rooms.md, server-architecture.md, match.md, and messages.md to match source spec definitions. Corrected systematically inflated Critical counts. Removed phantom Low priority count (0 Low tests exist). |
