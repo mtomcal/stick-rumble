@@ -123,7 +123,7 @@ The specs in `specs/` were bulk-updated and then validated by a prior Ralph job.
 - [x] 21. server-architecture.md — Add PingTracker field to Player struct
 - [x] 22. server-architecture.md — Fix ManualClock mutex type (RWMutex, not Mutex)
 - [x] 29. hit-detection.md — Fix client handleHitConfirmed (no audio, only showHitMarker)
-- [ ] 39. shooting.md — Fix client canShoot() check order (reload, ammo, cooldown)
+- [x] 39. shooting.md — Fix client canShoot() check order (reload, ammo, cooldown)
 - [ ] 40. shooting.md — Fix IsExpired operator (>= not >)
 - [ ] 44. weapons.md — Add projectile sub-field to WeaponVisuals interface
 - [ ] 47. overview.md — Fix GDD.md path (docs/GDD.md, not root)
