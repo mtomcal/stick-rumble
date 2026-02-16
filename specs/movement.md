@@ -568,21 +568,21 @@ Each client frame in `GameScene.update()`:
 4. Render local player at predicted position
 ```
 
-**PredictionEngine.predictPosition()** mirrors server physics exactly:
+**PredictionEngine.predictPosition()** (`PredictionEngine.ts:100-170`):
 
 ```typescript
 predictPosition(position, velocity, input, deltaTime):
     // 1. Calculate normalized input direction from WASD
     direction = getInputDirection(input)
 
-    // 2. Accelerate or decelerate
+    // 2. Accelerate or decelerate (always uses MOVEMENT.SPEED = 200)
     if direction != (0,0):
         targetVel = direction * MOVEMENT.SPEED
         newVel = accelerateToward(velocity, targetVel, ACCELERATION, dt)
     else:
         newVel = accelerateToward(velocity, (0,0), DECELERATION, dt)
 
-    // 3. Cap velocity to max speed
+    // 3. Cap velocity to MOVEMENT.SPEED (200 px/s)
     if magnitude(newVel) > MOVEMENT.SPEED:
         newVel = normalize(newVel) * MOVEMENT.SPEED
 
@@ -592,7 +592,7 @@ predictPosition(position, velocity, input, deltaTime):
     return { position: newPos, velocity: newVel }
 ```
 
-**Critical invariant**: PredictionEngine uses identical math to the server's `Physics.UpdatePlayer()`. Any divergence causes visible corrections.
+> **Known asymmetry:** The client PredictionEngine always uses `MOVEMENT.SPEED` (200 px/s). It does NOT check `input.isSprinting` or use `SPRINT_SPEED` (300 px/s). The server's `Physics.UpdatePlayer()` does use `SprintSpeed` when sprinting. This means sprinting players will experience visible reconciliation corrections as the server position advances faster than the client prediction. The client constants (`constants.ts`) also lack `SPRINT_SPEED` and `SPRINT_MULTIPLIER` definitions.
 
 ### Server Reconciliation
 
@@ -943,3 +943,4 @@ func TestDiagonalNormalization(t *testing.T) {
 | 1.0.0 | 2026-02-02 | Initial specification extracted from codebase |
 | 1.1.0 | 2026-02-15 | Updated DECELERATION from 50→1500 px/s². Rewrote Client-Side Prediction section to document PredictionEngine, server reconciliation (with input sequence replay), and InterpolationEngine. Updated deceleration test scenario timing. Added file location table for new physics modules. |
 | 1.1.1 | 2026-02-16 | Removed nonexistent `sanitizeDeltaTime` function from Error Handling section to match source code (raw delta used) |
+| 1.1.2 | 2026-02-16 | Documented client prediction sprint asymmetry — PredictionEngine always uses MOVEMENT.SPEED (200), ignores sprint. Server uses SprintSpeed (300) when sprinting. |
