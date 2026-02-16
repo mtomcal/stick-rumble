@@ -104,18 +104,24 @@ type GameServer struct {
     projectileManager  *ProjectileManager
     weaponCrateManager *WeaponCrateManager
     weaponStates       map[string]*WeaponState  // playerID → weapon
+    weaponMu           sync.RWMutex             // Protects weaponStates
+    positionHistory    *PositionHistory          // Position history for lag compensation
+    tickRate           time.Duration             // 16.67ms (60Hz)
+    updateRate         time.Duration             // 50ms (20Hz)
+    clock              Clock                     // Injectable for testing
 
-    tickRate   time.Duration  // 16.67ms (60Hz)
-    updateRate time.Duration  // 50ms (20Hz)
-
-    broadcastFunc func([]PlayerState)  // Injected for decoupling
+    broadcastFunc func(playerStates []PlayerStateSnapshot)  // Injected for decoupling
 
     // Event callbacks for network layer
-    onReloadComplete  func(playerID string, state WeaponState)
-    onHit             func(attackerID, victimID string, damage int, newHealth int)
-    onRespawn         func(playerID string, pos Vector2, health int)
-    onWeaponRespawn   func(crateID string, weaponType string, pos Vector2)
-    onRollEnd         func(playerID string, reason string)
+    onReloadComplete func(playerID string)
+    onHit            func(hit HitEvent)
+    getRTT           func(playerID string) int64
+    onRespawn        func(playerID string, position Vector2)
+    onMatchTimer     func(roomID string, remainingSeconds int)
+    onCheckTimeLimit func()
+    onWeaponPickup   func(playerID, crateID, weaponType string, respawnTime time.Time)
+    onWeaponRespawn  func(crate *WeaponCrate)
+    onRollEnd        func(playerID string, reason string)
 
     running bool
     mu      sync.RWMutex
@@ -1265,3 +1271,4 @@ func TestConcurrentAccess(t *testing.T) {
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification |
 | 1.1.0 | 2026-02-15 | Added Lag Compensation Subsystem section (PingTracker, PositionHistory, DeltaTracker, NetworkSimulator, WeaponFactory). Updated directory tree with 5 new files. Removed non-existent auth/ and db/ dirs. Added deltaTracker and networkSimulator to WebSocketHandler struct. Updated handleInputState with sequence field. Updated handlePlayerShoot with clientTimestamp for lag compensation. |
+| 1.1.1 | 2026-02-16 | Fixed GameServer struct — corrected callback signatures to match `gameserver.go:27-72`: `broadcastFunc` takes `[]PlayerStateSnapshot` not `[]PlayerState`, `onReloadComplete` takes only `playerID` (no WeaponState), `onHit` takes `HitEvent` struct not individual params, `onRespawn` has no `health` param, `onWeaponRespawn` takes `*WeaponCrate`. Added missing fields: `weaponMu`, `positionHistory`, `clock`, `getRTT`, `onMatchTimer`, `onCheckTimeLimit`, `onWeaponPickup`. |
