@@ -355,32 +355,41 @@ The fundamental rule: **Never trust data from clients.**
 Every client action is validated server-side:
 
 ```go
-// Example: Shoot validation
-func (s *GameServer) PlayerShoot(playerID, aimAngle) ShootResult {
-    player := s.World.GetPlayer(playerID)
-
-    // 1. Player exists and is alive
-    if player == nil || player.IsDead {
+// Example: Shoot validation (simplified from gameserver.go:336)
+func (gs *GameServer) PlayerShoot(playerID string, aimAngle float64, clientTimestamp int64) ShootResult {
+    // 1. Player exists (no IsDead check — only existence is verified)
+    player, exists := gs.world.GetPlayer(playerID)
+    if !exists {
         return ShootResult{Success: false, Reason: "no_player"}
     }
 
-    // 2. Not currently reloading
-    if player.Weapon.IsReloading {
+    // 2. Weapon state from separate map (not player struct)
+    gs.weaponMu.RLock()
+    ws := gs.weaponStates[playerID]
+    gs.weaponMu.RUnlock()
+    if ws == nil {
+        return ShootResult{Success: false, Reason: "no_player"}
+    }
+
+    // 3. Not currently reloading
+    if ws.IsReloading {
         return ShootResult{Success: false, Reason: "reloading"}
     }
 
-    // 3. Has ammo
-    if player.Weapon.CurrentAmmo <= 0 {
+    // 4. Has ammo (auto-reload on empty)
+    if ws.IsEmpty() {
+        ws.StartReload()
         return ShootResult{Success: false, Reason: "empty"}
     }
 
-    // 4. Fire rate cooldown
-    if !player.Weapon.CanShoot() {
+    // 5. Fire rate cooldown
+    if !ws.CanShoot() {
         return ShootResult{Success: false, Reason: "cooldown"}
     }
 
-    // All checks passed - create projectile
-    return s.createProjectile(player, aimAngle)
+    // All checks passed - record shot and create projectile
+    ws.RecordShot()
+    // ... hitscan or projectile path
 }
 ```
 
@@ -685,6 +694,7 @@ func (s *Server) Serve(ctx context.Context) error {
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification |
 | 1.0.1 | 2026-02-16 | Fixed GameServer struct — replaced nonexistent Room/Match/ticker/broadcaster fields with actual callbacks and duration configs from `gameserver.go`. |
+| 1.0.2 | 2026-02-16 | Fixed anti-cheat PlayerShoot pseudocode — no `IsDead` check (only `!exists`), weapon state via `gs.weaponStates` map (not `player.Weapon`). |
 
 ---
 

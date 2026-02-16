@@ -52,7 +52,7 @@ The specs in `specs/` were bulk-updated and then validated by a prior Ralph job.
 - [x] 36. shooting.md — Fix StartReload IsMelee check (actually checks IsReloading + full magazine)
 - [x] 42. weapons.md — Fix Uzi visual config values (muzzleFlashSize=8, duration=50)
 - [x] 49. overview.md — Fix GameServer struct (no Room/Match/ticker/broadcaster fields)
-- [ ] 50. overview.md — Fix anti-cheat PlayerShoot pseudocode (no IsDead check, weaponStates map)
+- [x] 50. overview.md — Fix anti-cheat PlayerShoot pseudocode (no IsDead check, weaponStates map)
 - [ ] 53. rooms.md — Fix room:joined data payload (includes roomId from server)
 - [ ] 87. test-index.md — Fix priority counts per spec (systematically inflated Critical counts)
 - [ ] 88. test-index.md — Fix summary statistics totals
