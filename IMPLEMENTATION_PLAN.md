@@ -115,7 +115,7 @@ The specs in `specs/` were bulk-updated and then validated by a prior Ralph job.
 **What to Check:** Version numbers, line counts, file paths, formatting, operator typos. Quick cross-reference against source or filesystem.
 
 - [x] 4. networking.md — Fix typebox version (0.34.x, not 0.32.x)
-- [ ] 9. messages.md — Clarify InputState sequence field extraction
+- [x] 9. messages.md — Clarify InputState sequence field extraction
 - [ ] 12. client-architecture.md — Fix directory tree (no MatchTimer.ts, add xpCalculator.ts)
 - [ ] 13. client-architecture.md — Fix camera follow (startFollow once, not per-frame lerp)
 - [ ] 14. client-architecture.md — Fix update() method signatures (no delta param)

@@ -157,16 +157,18 @@ interface InputStateData {
 
 **Go:**
 ```go
-type InputStateData struct {
+// InputState struct (player.go) — does NOT include sequence
+type InputState struct {
     Up          bool    `json:"up"`
     Down        bool    `json:"down"`
     Left        bool    `json:"left"`
     Right       bool    `json:"right"`
     AimAngle    float64 `json:"aimAngle"`
     IsSprinting bool    `json:"isSprinting"`
-    Sequence    int     `json:"sequence"`
 }
 ```
+
+> **Note:** The `sequence` field is present in the JSON payload but is NOT part of the Go `InputState` struct. It is extracted separately in `message_processor.go` via direct type assertion (`dataMap["sequence"].(float64)`) and passed to `UpdatePlayerInputWithSequence(playerID, input, sequence)`.
 
 **Why `sequence`?** The sequence number enables client-side prediction reconciliation. The server echoes `lastProcessedSequence` in state broadcasts so the client knows which inputs have been applied server-side and can replay only unprocessed inputs. See [movement.md](movement.md#server-reconciliation).
 
@@ -1805,4 +1807,5 @@ Client                          Server
 | 1.1.0 | 2026-02-15 | Added `sequence` field to `input:state`. Added `clientTimestamp` field to `player:shoot`. Added `lastProcessedSequence` and `correctedPlayers` to `player:move`. Added new `state:snapshot` and `state:delta` message types for delta compression. Updated server→client count from 20 to 22. |
 | 1.1.1 | 2026-02-16 | Fixed `projectile:spawn` Go section — server broadcast omits `weaponType` (only sends id, ownerId, position, velocity) |
 | 1.1.2 | 2026-02-16 | Fixed `weapon:pickup_confirmed` `nextRespawnTime` — is Unix epoch timestamp in seconds (via `respawnTime.Unix()`), not duration in milliseconds |
+| 1.1.4 | 2026-02-16 | Clarified `input:state` Go struct — `sequence` is not part of `InputState` struct, extracted separately in `message_processor.go` |
 | 1.1.3 | 2026-02-16 | Fixed `player:damaged` — melee path omits `projectileId` entirely; projectile path includes it. Made `projectileId` optional in TypeScript interface. |
