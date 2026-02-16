@@ -822,22 +822,35 @@ Announces that a player took damage.
 **TypeScript:**
 ```typescript
 interface PlayerDamagedData {
-  victimId: string;     // Player who took damage
-  attackerId: string;   // Player who dealt damage
-  damage: number;       // Amount of damage
-  newHealth: number;    // Victim's health after damage
-  projectileId: string; // Projectile that caused damage (or "melee")
+  victimId: string;      // Player who took damage
+  attackerId: string;    // Player who dealt damage
+  damage: number;        // Amount of damage
+  newHealth: number;     // Victim's health after damage
+  projectileId?: string; // Present for projectile/hitscan hits; ABSENT for melee hits
 }
 ```
 
 **Go:**
+
+> **Note:** No shared struct. The projectile hit path (`onHit` in `message_processor.go:112-117`) constructs the map inline with `projectileId`. The melee path (`broadcastPlayerDamaged` in `broadcast_helper.go:669-674`) omits `projectileId` entirely.
+
 ```go
-type PlayerDamagedData struct {
-    VictimID     string `json:"victimId"`
-    AttackerID   string `json:"attackerId"`
-    Damage       int    `json:"damage"`
-    NewHealth    int    `json:"newHealth"`
-    ProjectileID string `json:"projectileId"`
+// Projectile hit path (message_processor.go:112-117):
+data := map[string]interface{}{
+    "victimId":     hit.VictimID,
+    "attackerId":   hit.AttackerID,
+    "damage":       damage,
+    "newHealth":    victimState.Health,
+    "projectileId": hit.ProjectileID,
+}
+
+// Melee hit path (broadcast_helper.go:669-674):
+data := map[string]interface{}{
+    "victimId":   victimID,
+    "attackerId": attackerID,
+    "damage":     damage,
+    "newHealth":  newHealth,
+    // projectileId is NOT included
 }
 ```
 
@@ -1792,3 +1805,4 @@ Client                          Server
 | 1.1.0 | 2026-02-15 | Added `sequence` field to `input:state`. Added `clientTimestamp` field to `player:shoot`. Added `lastProcessedSequence` and `correctedPlayers` to `player:move`. Added new `state:snapshot` and `state:delta` message types for delta compression. Updated server→client count from 20 to 22. |
 | 1.1.1 | 2026-02-16 | Fixed `projectile:spawn` Go section — server broadcast omits `weaponType` (only sends id, ownerId, position, velocity) |
 | 1.1.2 | 2026-02-16 | Fixed `weapon:pickup_confirmed` `nextRespawnTime` — is Unix epoch timestamp in seconds (via `respawnTime.Unix()`), not duration in milliseconds |
+| 1.1.3 | 2026-02-16 | Fixed `player:damaged` — melee path omits `projectileId` entirely; projectile path includes it. Made `projectileId` optional in TypeScript interface. |

@@ -67,7 +67,7 @@ The specs in `specs/` were bulk-updated and then validated by a prior Ralph job.
 **What to Check:** Prose descriptions that contradict source behavior, missing fields/params, wrong method names. Verify the spec's narrative matches actual control flow.
 
 - [x] 3. movement.md — Fix client-side prediction asymmetries (velocity cap, sprint speed)
-- [ ] 8. messages.md — Fix player:damaged melee path (missing projectileId)
+- [x] 8. messages.md — Fix player:damaged melee path (missing projectileId)
 - [ ] 10. client-architecture.md — Fix dodge roll visual (rotation+flicker, not alpha)
 - [ ] 11. client-architecture.md — Fix ShootingManager.shoot() vs meleeAttack() separation
 - [ ] 16. server-architecture.md — Fix tick() deltaTime (real elapsed, not fixed from tickRate)
