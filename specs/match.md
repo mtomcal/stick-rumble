@@ -854,27 +854,28 @@ wsClient.on('match:timer', (data: { remainingSeconds: number }) => {
 ### Match End Handling
 
 ```typescript
-// On match:ended message
-wsClient.on('match:ended', (data: MatchEndedData) => {
-  matchEnded = true;
+// In GameSceneEventHandlers.ts — match:ended handler
+const matchEndedHandler = (data: unknown) => {
+  const messageData = data as MatchEndedData;
 
-  // Disable input
-  inputManager?.disable();
-  shootingManager?.disable();
+  // Set flag to stop processing player:move messages
+  this.matchEnded = true;
 
-  // Display results
-  const isWinner = data.winners.includes(localPlayerId);
-  const isTie = data.winners.length > 1;
-
-  if (isTie) {
-    showEndScreen('TIE!', data.finalScores);
-  } else if (isWinner) {
-    showEndScreen('YOU WIN!', data.finalScores);
-  } else {
-    showEndScreen('YOU LOSE', data.finalScores);
+  // Freeze gameplay by disabling input
+  if (this.inputManager) {
+    // ... disable input handlers
   }
-});
+
+  // Bridge to React via window.onMatchEnd (React renders MatchEndScreen)
+  const localPlayerId = this.playerManager.getLocalPlayerId();
+  if (localPlayerId && window.onMatchEnd) {
+    window.onMatchEnd(messageData as MatchEndData, localPlayerId);
+  }
+};
+this.wsClient.on('match:ended', matchEndedHandler);
 ```
+
+> **Note:** There is no `showEndScreen()` in Phaser. Match end display is handled by React via `window.onMatchEnd` — a bridge function set up by the React `PhaserGame` component. React renders the `MatchEndScreen` modal overlay.
 
 **WHY set matchEnded flag**:
 - Prevents processing `player:move` messages after match ends

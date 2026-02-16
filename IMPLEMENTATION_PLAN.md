@@ -94,7 +94,7 @@ The specs in `specs/` were bulk-updated and then validated by a prior Ralph job.
 - [x] 60. ui.md — Fix ammo low-ammo color (no color change logic exists)
 - [x] 61. ui.md — Fix connection status reconnecting UI (console only, no visible text)
 - [x] 67. match.md — Fix client timer red threshold (< 60, not < 30)
-- [ ] 68. match.md — Fix client match end mechanism (window.onMatchEnd bridge, not showEndScreen)
+- [x] 68. match.md — Fix client match end mechanism (window.onMatchEnd bridge, not showEndScreen)
 - [ ] 69. dodge-roll.md — Fix UpdatePlayer return type (UpdatePlayerResult struct, not bool)
 - [ ] 73. melee.md — Fix PlayerMeleeAttack (direct world.players access, not GetAllPlayers)
 - [ ] 74. arena.md — Fix NewWeaponCrateManager (map, computed positions, different ID format)
