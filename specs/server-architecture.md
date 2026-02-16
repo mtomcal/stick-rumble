@@ -819,26 +819,42 @@ if player == nil {
 
 ### Invalid Data (NaN/Inf)
 
-**Handling**: Sanitize to safe defaults
+**Handling**: Sanitize to safe defaults via `sanitizeVector2` in `physics.go`
 
 ```go
-func sanitizePosition(pos Vector2) Vector2 {
-    if math.IsNaN(pos.X) || math.IsInf(pos.X, 0) {
-        pos.X = ArenaWidth / 2  // Center of arena
+// sanitizeVector2 ensures a Vector2 contains no NaN or Inf values
+// If NaN or Inf is detected, it's replaced with 0 and logged as an error
+func sanitizeVector2(v Vector2, context string) Vector2 {
+    result := v
+    sanitized := false
+
+    if math.IsNaN(v.X) || math.IsInf(v.X, 0) {
+        log.Printf("ERROR: %s contains invalid X value: %v, replacing with 0", context, v.X)
+        result.X = 0
+        sanitized = true
     }
-    if math.IsNaN(pos.Y) || math.IsInf(pos.Y, 0) {
-        pos.Y = ArenaHeight / 2
+    if math.IsNaN(v.Y) || math.IsInf(v.Y, 0) {
+        log.Printf("ERROR: %s contains invalid Y value: %v, replacing with 0", context, v.Y)
+        result.Y = 0
+        sanitized = true
     }
-    return pos
+
+    if sanitized {
+        log.Printf("WARNING: %s sanitized from %+v to %+v", context, v, result)
+    }
+
+    return result
 }
 ```
+
+This function is called in `UpdatePlayer` for both velocity and position sanitization. The broadcast layer (`broadcast_helper.go`) also independently sanitizes `aimAngle` NaN/Inf values to 0 before JSON marshaling.
 
 **Why Sanitize (Not Reject)?**
 
 - NaN can propagate from physics calculations
 - Rejecting would cause visible player teleportation
 - Sanitizing maintains game continuity
-- Logged for debugging: `[WARN] Sanitized NaN position for player X`
+- Logged as ERROR for debugging
 
 ---
 
@@ -1256,3 +1272,4 @@ func TestConcurrentAccess(t *testing.T) {
 | 1.1.0 | 2026-02-15 | Added Lag Compensation Subsystem section (PingTracker, PositionHistory, DeltaTracker, NetworkSimulator, WeaponFactory). Updated directory tree with 5 new files. Removed non-existent auth/ and db/ dirs. Added deltaTracker and networkSimulator to WebSocketHandler struct. Updated handleInputState with sequence field. Updated handlePlayerShoot with clientTimestamp for lag compensation. |
 | 1.1.1 | 2026-02-16 | Fixed GameServer struct — corrected callback signatures to match `gameserver.go:27-72`: `broadcastFunc` takes `[]PlayerStateSnapshot` not `[]PlayerState`, `onReloadComplete` takes only `playerID` (no WeaponState), `onHit` takes `HitEvent` struct not individual params, `onRespawn` has no `health` param, `onWeaponRespawn` takes `*WeaponCrate`. Added missing fields: `weaponMu`, `positionHistory`, `clock`, `getRTT`, `onMatchTimer`, `onCheckTimeLimit`, `onWeaponPickup`. |
 | 1.1.2 | 2026-02-16 | Fixed setupCallbacks section — callbacks are registered as method references in the constructor (not a separate `setupCallbacks()` method), added `SetGetRTT` and `SetOnWeaponRespawn` registrations. |
+| 1.1.3 | 2026-02-16 | Replaced nonexistent `sanitizePosition` with actual `sanitizeVector2` from `physics.go:208` — NaN/Inf replaced with 0 (not arena center). |

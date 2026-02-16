@@ -44,7 +44,7 @@ The specs in `specs/` were bulk-updated and then validated by a prior Ralph job.
 - [x] 7. messages.md — Fix weapon:pickup_confirmed nextRespawnTime (Unix timestamp, not ms duration)
 - [x] 15. server-architecture.md — Fix GameServer callback signatures (broadcastFunc, onReloadComplete, onHit, onRespawn)
 - [x] 19. server-architecture.md — Fix setupCallbacks method references and signatures
-- [ ] 24. server-architecture.md — Remove nonexistent `sanitizePosition` function docs
+- [x] 24. server-architecture.md — Remove nonexistent `sanitizePosition` function docs
 - [ ] 26. hit-detection.md — Fix checkHitDetection onHit call signature (HitEvent struct, not individual params)
 - [ ] 28. hit-detection.md — Fix hitscan invulnerability check (doesn't check IsInvulnerable/IsInvincibleFromRoll)
 - [ ] 32. shooting.md — Fix ShootResult.FailReason to .Reason
