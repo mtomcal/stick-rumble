@@ -923,34 +923,31 @@ update(): void {
 
 **Pseudocode:**
 ```
+// Separate methods for ranged and melee — NOT a single shoot() with isMelee check
 function shoot():
-    if not canShoot():
-        return
-
-    wsClient.send({
-        type: weaponState.isMelee ? 'player:melee_attack' : 'player:shoot',
-        data: { aimAngle: inputManager.aimAngle }
-    })
+    if not canShoot(): return
     lastShotTime = now()
+    wsClient.send({ type: 'player:shoot', data: { aimAngle, clientTimestamp: now() } })
+
+function meleeAttack():
+    if not canMeleeAttack(): return
+    lastMeleeTime = now()
+    wsClient.send({ type: 'player:melee_attack', data: { aimAngle } })
 
 function canShoot():
     if weaponState.isReloading: return false
     if weaponState.currentAmmo <= 0: return false
-
     cooldownMs = 1000 / weaponConfig.fireRate
     if now() - lastShotTime < cooldownMs: return false
-
     return true
 
-function reload():
-    if weaponState.isReloading: return
-    if weaponState.currentAmmo >= weaponState.maxAmmo: return
-
-    wsClient.send({ type: 'player:reload' })
+function canMeleeAttack():
+    meleeCooldown = MELEE_COOLDOWNS[weaponType]
+    if now() - lastMeleeTime < meleeCooldown: return false
+    return true
 
 function updateWeaponState(state):
     weaponState = state
-    // Recalculate cooldown for new weapon
     cooldownMs = 1000 / getWeaponConfig(state.weaponType).fireRate
 
 function isAutomatic():
@@ -960,17 +957,26 @@ function isAutomatic():
 
 **TypeScript:**
 ```typescript
-shoot(): void {
-  if (!this.canShoot()) return;
-
-  const messageType = this.weaponState.isMelee ? 'player:melee_attack' : 'player:shoot';
+shoot(): boolean {
+  if (!this.isEnabled || !this.canShoot()) return false;
+  this.lastShotTime = this.clock.now();
   this.wsClient.send({
-    type: messageType,
-    timestamp: Date.now(),
-    data: { aimAngle: this.inputManager.getAimAngle() }
+    type: 'player:shoot',
+    timestamp: this.clock.now(),
+    data: { aimAngle: this.aimAngle, clientTimestamp: this.clock.now() }
   });
+  return true;
+}
 
-  this.lastShotTime = Date.now();
+meleeAttack(): boolean {
+  if (!this.isEnabled || !this.canMeleeAttack()) return false;
+  this.lastMeleeTime = this.clock.now();
+  this.wsClient.send({
+    type: 'player:melee_attack',
+    timestamp: this.clock.now(),
+    data: { aimAngle: this.aimAngle }
+  });
+  return true;
 }
 
 canShoot(): boolean {
@@ -1777,3 +1783,4 @@ it('should follow local player with camera', () => {
 | 1.0.0 | 2026-02-02 | Initial specification |
 | 1.1.0 | 2026-02-15 | Added new directories: physics/, simulation/, ui/debug/. Added subsystem descriptions: PredictionEngine, InterpolationEngine, GameSimulation, NetworkSimulator, DebugNetworkPanel. Updated directory tree with new files (RangedWeapon.ts, MeleeWeapon.ts, GameSceneSpectator.ts, urlParams.ts). Updated rendering pipeline with prediction/interpolation steps. Updated async message flow for state:snapshot/state:delta. |
 | 1.1.1 | 2026-02-16 | Fixed dodge roll visual — uses `setRotation` (360deg spin) + `setVisible` flicker (not `setAlpha(0.5)`) per `PlayerManager.ts:264-278`. |
+| 1.1.2 | 2026-02-16 | Fixed ShootingManager — separate `shoot()` and `meleeAttack()` methods (not single `shoot()` checking `isMelee`). Added `clientTimestamp` to shoot data. |

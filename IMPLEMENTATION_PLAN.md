@@ -69,7 +69,7 @@ The specs in `specs/` were bulk-updated and then validated by a prior Ralph job.
 - [x] 3. movement.md — Fix client-side prediction asymmetries (velocity cap, sprint speed)
 - [x] 8. messages.md — Fix player:damaged melee path (missing projectileId)
 - [x] 10. client-architecture.md — Fix dodge roll visual (rotation+flicker, not alpha)
-- [ ] 11. client-architecture.md — Fix ShootingManager.shoot() vs meleeAttack() separation
+- [x] 11. client-architecture.md — Fix ShootingManager.shoot() vs meleeAttack() separation
 - [ ] 16. server-architecture.md — Fix tick() deltaTime (real elapsed, not fixed from tickRate)
 - [ ] 18. server-architecture.md — Fix handleInputState (direct type assertions, no NaN sanitization)
 - [ ] 20. server-architecture.md — Fix Room.Broadcast (non-blocking select, not blocking channel)
