@@ -76,7 +76,7 @@ The specs in `specs/` were bulk-updated and then validated by a prior Ralph job.
 - [x] 23. server-architecture.md — Fix main.go pattern (global singleton, not explicit handler)
 - [x] 25. hit-detection.md — Fix Projectile SpawnPosition json tag (json:"-", not "spawnPosition")
 - [x] 27. hit-detection.md — Fix death trigger (inline in onHit, not separate handleDeath method)
-- [ ] 30. hit-detection.md — Fix client handlePlayerDeath (setVisible+spectator, not death animation)
+- [x] 30. hit-detection.md — Fix client handlePlayerDeath (setVisible+spectator, not death animation)
 - [ ] 31. hit-detection.md — Fix tick() method (9 steps, not 4)
 - [x] 33. shooting.md — Fix PlayerShoot locking (weaponMu.RLock, not gs.mu.Lock)
 - [x] 35. shooting.md — Fix projectile creation (CreateProjectile, not NewProjectile+AddProjectile)

@@ -702,13 +702,25 @@ handleHitConfirmed(data: HitConfirmedData) {
   this.ui.showHitmarker();
 }
 
-handlePlayerDeath(data: PlayerDeathData) {
-  const victim = this.playerManager.getPlayer(data.victimId);
-  if (victim) {
-    victim.playDeathAnimation();
-    this.killFeed.addEntry(data.attackerId, data.victimId);
+// player:death handler
+const playerDeathHandler = (data: unknown) => {
+  const messageData = data as PlayerDeathData;
+
+  // If LOCAL player died, hide sprite and enter spectator mode
+  if (messageData.victimId === this.playerManager.getLocalPlayerId()) {
+    this.playerManager.setPlayerVisible(messageData.victimId, false);
+    this.spectator.enterSpectatorMode();
   }
-}
+};
+
+// player:kill_credit handler (separate from death — adds to kill feed)
+const playerKillCreditHandler = (data: unknown) => {
+  const messageData = data as PlayerKillCreditData;
+  this.killFeedUI.addKill(
+    messageData.killerId.substring(0, 8),
+    messageData.victimId.substring(0, 8)
+  );
+};
 ```
 
 ### Go (Server)
