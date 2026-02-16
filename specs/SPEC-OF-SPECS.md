@@ -1825,7 +1825,7 @@ Organized by category with tables:
 
    Format: "MM:SS"
        - Font: 32px monospace
-       - Color: #FFFFFF (normal), #FF0000 (< 30 seconds)
+       - Color: #FFFFFF (normal), #FFFF00 (< 120 seconds), #FF0000 (< 60 seconds)
 
    Alignment: Center
    ```
@@ -1914,7 +1914,7 @@ Organized by category with tables:
 - TS-UI-004: Ammo counter updates on shoot
 - TS-UI-005: Reload indicator shows during reload
 - TS-UI-006: Timer counts down correctly
-- TS-UI-007: Timer turns red under 30 seconds
+- TS-UI-007: Timer turns red under 60 seconds
 - TS-UI-008: Score updates on kill
 - TS-UI-009: Pickup prompt appears near crates
 - TS-UI-010: Dodge cooldown shows progress
