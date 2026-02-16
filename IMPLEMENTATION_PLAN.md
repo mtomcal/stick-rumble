@@ -70,7 +70,7 @@ All spec files are at `docs/archive/20251125-055521-pre-bmm/specs/`.
 - [x] 6. main-scene.md
 - [x] 7. combat.md
 - [x] 8. ai.md
-- [ ] 9. graphics.md
+- [x] 9. graphics.md
 - [ ] 10. pathfinder.md
 - [ ] 11. level-generator.md
 - [ ] 12. texture-generator.md
