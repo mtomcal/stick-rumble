@@ -633,25 +633,35 @@ func (w *World) SomeMethod() {
 }
 ```
 
-**Pattern 2: Recover from Channel Panics**
+**Pattern 2: Recover from Channel Panics + Non-Blocking Send**
 ```go
-func (r *Room) Broadcast(msg []byte) {
+func (r *Room) Broadcast(message []byte, excludePlayerID string) {
     r.mu.RLock()
     defer r.mu.RUnlock()
 
     for _, player := range r.Players {
-        func() {
-            defer func() {
-                if r := recover(); r != nil {
-                    // Channel was closed - player disconnected
-                    log.Printf("Send failed to player %s", player.ID)
+        if player.ID != excludePlayerID {
+            func() {
+                defer func() {
+                    if rec := recover(); rec != nil {
+                        // Channel was closed - player disconnected
+                        log.Printf("Warning: Could not send message to player %s (channel closed)", player.ID)
+                    }
+                }()
+
+                select {
+                case player.SendChan <- message:
+                    // Message sent successfully
+                default:
+                    log.Printf("Warning: Could not send message to player %s (channel full)", player.ID)
                 }
             }()
-            player.SendChan <- msg
-        }()
+        }
     }
 }
 ```
+
+> **Note:** The `select` with `default` makes the send non-blocking — if the player's channel buffer is full, the message is dropped with a log warning rather than blocking the broadcast loop.
 
 ---
 
