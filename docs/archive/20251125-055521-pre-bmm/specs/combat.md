@@ -642,3 +642,4 @@ When the player takes damage:
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-15 | Initial specification documenting pre-BMM archive snapshot |
+| 1.0.1 | 2026-02-16 | Verified against source — all weapon stats, line numbers, spread values, and combat mechanics match |

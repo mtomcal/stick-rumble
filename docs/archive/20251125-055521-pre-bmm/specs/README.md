@@ -55,19 +55,19 @@ React (App.tsx) ←EventBus→ Phaser (MainScene.ts)
 
 | # | File | Lines | Purpose |
 |---|------|-------|---------|
-| 1 | `App.tsx` | 194 | React root: game lifecycle, HUD, EventBus wiring, Gemini integration |
+| 1 | `App.tsx` | 193 | React root: game lifecycle, HUD, EventBus wiring, Gemini integration |
 | 2 | `index.tsx` | ~10 | React DOM entry point |
 | 3 | `index.html` | 40 | Bootstrap HTML, CDN import maps (Phaser, React, Tailwind, Gemini SDK) |
-| 4 | `types.ts` | 45 | Shared types: `GameStats`, `ChatMessage`, `WeaponType` enum, `EVENTS` |
+| 4 | `types.ts` | 44 | Shared types: `GameStats`, `ChatMessage`, `WeaponType` enum, `EVENTS` |
 | 5 | `package.json` | 24 | Dependencies and scripts |
-| 6 | `vite.config.ts` | ~15 | Dev server config, env vars |
-| 7 | `tsconfig.json` | ~20 | TypeScript config |
+| 6 | `vite.config.ts` | ~23 | Dev server config, env vars |
+| 7 | `tsconfig.json` | ~28 | TypeScript config |
 | 8 | `components/ChatBox.tsx` | ~35 | Chat message display (last 5 messages) |
-| 9 | `components/Joystick.tsx` | ~100 | Virtual joystick for mobile (touch + mouse) |
+| 9 | `components/Joystick.tsx` | ~193 | Virtual joystick for mobile (touch + mouse) |
 | 10 | `services/geminiService.ts` | ~50 | Gemini 2.5 Flash API for bot trash-talk |
-| 11 | `game/phaserGame.ts` | 26 | Phaser game factory (config, physics, scene) |
-| 12 | `game/EventBus.ts` | 4 | Singleton event emitter bridging React and Phaser |
-| 13 | `game/scenes/MainScene.ts` | ~890 | Central game loop: movement, combat, AI, rendering |
+| 11 | `game/phaserGame.ts` | 25 | Phaser game factory (config, physics, scene) |
+| 12 | `game/EventBus.ts` | 3 | Singleton event emitter bridging React and Phaser |
+| 13 | `game/scenes/MainScene.ts` | ~989 | Central game loop: movement, combat, AI, rendering |
 | 14 | `game/objects/StickFigure.ts` | ~465 | Player/enemy entity: rendering, animation, damage, death |
 | 15 | `game/systems/Pathfinder.ts` | ~171 | A* pathfinding on 50px grid |
 | 16 | `game/utils/TextureGenerator.ts` | ~77 | Procedural sprite generation (bullets, pickups, reticle) |
@@ -82,17 +82,18 @@ Read the specs in this order. Each spec lists its dependencies so you can also n
 1. **[overview.md](overview.md)** — High-level architecture, data flow, design patterns
 2. **[types-and-events.md](types-and-events.md)** — Shared types, enums, event constants
 3. **[config.md](config.md)** — Build tooling, CDN setup, Phaser game config
-4. **[stick-figure.md](stick-figure.md)** — StickFigure class: rendering, animation, weapons, damage
+4. **[player.md](player.md)** — StickFigure class: rendering, animation, weapons, damage
 5. **[main-scene.md](main-scene.md)** — MainScene game loop, player movement, aiming, collision setup
 6. **[combat.md](combat.md)** — Melee and ranged attacks, damage, cooldowns, reload, weapon stats
-7. **[ai.md](ai.md)** — Enemy AI: spawning, target selection, pathfinding, LOS, attacks
-8. **[pathfinder.md](pathfinder.md)** — A* algorithm, nav grid, wall detection, path smoothing
-9. **[level-generator.md](level-generator.md)** — Office arena layout, wall placement, floor grid
-10. **[texture-generator.md](texture-generator.md)** — Procedural texture creation: sprites, projectiles, pickups
-11. **[rendering.md](rendering.md)** — Minimap, tracers, hit markers, damage numbers, blood particles
-12. **[input.md](input.md)** — WASD + mouse (desktop), dual virtual joysticks (mobile), aim sway
-13. **[ui.md](ui.md)** — React HUD, start/death screens, health bar, ammo, chat, EventBus bridge
-14. **[gemini-service.md](gemini-service.md)** — Gemini API integration: bot taunts, wave announcements
+7. **[graphics.md](graphics.md)** — Procedural stick figure rendering, draw methods, colors, animations
+8. **[ai.md](ai.md)** — Enemy AI: spawning, target selection, pathfinding, LOS, attacks
+9. **[pathfinder.md](pathfinder.md)** — A* algorithm, nav grid, wall detection, path smoothing
+10. **[level-generator.md](level-generator.md)** — Office arena layout, wall placement, floor grid
+11. **[texture-generator.md](texture-generator.md)** — Procedural texture creation: sprites, projectiles, pickups
+12. **[rendering.md](rendering.md)** — Minimap, tracers, hit markers, damage numbers, blood particles
+13. **[input.md](input.md)** — WASD + mouse (desktop), dual virtual joysticks (mobile), aim sway
+14. **[ui.md](ui.md)** — React HUD, start/death screens, health bar, ammo, chat, EventBus bridge
+15. **[gemini-service.md](gemini-service.md)** — Gemini API integration: bot taunts, wave announcements
 
 ---
 
@@ -102,21 +103,21 @@ Read the specs in this order. Each spec lists its dependencies so you can also n
                       types-and-events.md
                        /       |       \
                       /        |        \
-              config.md   stick-figure.md   overview.md
+              config.md      player.md      overview.md
                             /        \
                            /          \
                   main-scene.md    combat.md
-                   /    |    \         |
-                  /     |     \        |
-             ai.md  input.md  rendering.md
-              |                    |
-         pathfinder.md         ui.md
-              |
-      level-generator.md
-              |
-      texture-generator.md
+                /    |    \    \        |
+               /     |     \    \       |
+          ai.md  input.md  rendering.md  graphics.md
+           |                    |
+      pathfinder.md         ui.md
+           |
+   level-generator.md
+           |
+   texture-generator.md
 
-      gemini-service.md (standalone, called from App.tsx)
+   gemini-service.md (standalone, called from App.tsx)
 ```
 
 Arrows flow downward: a spec depends on specs above it.
@@ -130,9 +131,10 @@ Arrows flow downward: a spec depends on specs above it.
 | [overview.md](overview.md) | Architecture, data flow, key design decisions |
 | [types-and-events.md](types-and-events.md) | `GameStats`, `ChatMessage`, `WeaponType`, `EVENTS` constants |
 | [config.md](config.md) | `package.json`, Vite config, TypeScript config, CDN import maps |
-| [stick-figure.md](stick-figure.md) | `StickFigure` class: procedural stick figure, weapons, hit/death animations |
+| [player.md](player.md) | `StickFigure` class: procedural stick figure, weapons, hit/death animations |
 | [main-scene.md](main-scene.md) | `MainScene`: create/update loop, physics groups, camera, collision wiring |
 | [combat.md](combat.md) | Weapon stats table, melee/ranged attack flow, reload, damage application |
+| [graphics.md](graphics.md) | Procedural stick figure drawing, draw methods, colors, line widths, animations |
 | [ai.md](ai.md) | Bot spawning, wave system, target selection, movement strategies, attack logic |
 | [pathfinder.md](pathfinder.md) | A* on 50px grid, nav grid construction, wall avoidance, step limit |
 | [level-generator.md](level-generator.md) | `LevelGenerator`: floor grid, office walls, desk obstacles |
@@ -202,3 +204,4 @@ This prototype differs fundamentally from the current multiplayer Stick Rumble:
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-15 | Initial specification index |
+| 1.0.1 | 2026-02-16 | Fix stick-figure.md → player.md links, correct line counts, add missing graphics.md to reading order/reference table/dependency graph |

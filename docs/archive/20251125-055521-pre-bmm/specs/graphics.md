@@ -966,3 +966,4 @@ There is no server in the pre-BMM codebase. The game is entirely client-side.
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-15 | Initial spec documenting pre-BMM archive snapshot |
+| 1.0.1 | 2026-02-16 | Verified against source — all constants, colors, dimensions, line references match |
