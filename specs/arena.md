@@ -319,20 +319,22 @@ function updatePosition(player: Player, newPos: Vector2): void {
 }
 ```
 
-**Go:**
+**Go (inline in `UpdatePlayer`, not a separate method):**
 ```go
-func (p *Physics) UpdatePlayerPosition(player *PlayerState, newPos Vector2) {
-    clampedPos := clampToArena(newPos)
+// Inside func (p *Physics) UpdatePlayer(player *PlayerState, deltaTime float64) UpdatePlayerResult:
+clampedPos := clampToArena(newPos)
 
-    if player.IsRolling() {
-        if clampedPos.X != newPos.X || clampedPos.Y != newPos.Y {
-            player.EndDodgeRoll() // Wall collision during roll
-        }
-    }
-
-    player.SetPosition(clampedPos)
+isRolling := player.IsRolling()
+if isRolling && (clampedPos.X != newPos.X || clampedPos.Y != newPos.Y) {
+    player.EndDodgeRoll()
+    result.RollCancelled = true
 }
+
+clampedPos = sanitizeVector2(clampedPos, "UpdatePlayer position")
+player.SetPosition(clampedPos)
 ```
+
+> **Note:** There is no separate `UpdatePlayerPosition` method. Wall-collision roll termination is inline in `UpdatePlayer` alongside normal movement, anti-cheat validation, and position sanitization.
 
 ---
 
@@ -441,16 +443,16 @@ function getBalancedSpawnPoint(players: Player[]): Vector2 {
 
 **Go:**
 ```go
-func (w *World) getBalancedSpawnPointLocked() Vector2 {
+func (w *World) getBalancedSpawnPointLocked(excludePlayerID string) Vector2 {
     const spawnMargin = 100.0
     minX, maxX := spawnMargin, ArenaWidth-spawnMargin
     minY, maxY := spawnMargin, ArenaHeight-spawnMargin
 
-    // Collect living enemy positions
-    var enemies []Vector2
-    for _, p := range w.Players {
-        if !p.IsDead() {
-            enemies = append(enemies, p.GetPosition())
+    // Collect living enemy positions (excluding the respawning player)
+    enemyPositions := make([]Vector2, 0)
+    for id, player := range w.players {
+        if id != excludePlayerID && !player.IsDead() {
+            enemyPositions = append(enemyPositions, player.GetPosition())
         }
     }
 
@@ -527,14 +529,33 @@ Weapon crates spawn at **5 fixed positions** arranged in a pentagon pattern.
 **Go:**
 ```go
 func NewWeaponCrateManager() *WeaponCrateManager {
-    return &WeaponCrateManager{
-        Crates: []*WeaponCrate{
-            {ID: "uzi-1", Position: Vector2{X: 960, Y: 216}, WeaponType: WeaponTypeUzi, IsAvailable: true},
-            {ID: "ak47-1", Position: Vector2{X: 480, Y: 540}, WeaponType: WeaponTypeAK47, IsAvailable: true},
-            {ID: "shotgun-1", Position: Vector2{X: 1440, Y: 540}, WeaponType: WeaponTypeShotgun, IsAvailable: true},
-            {ID: "katana-1", Position: Vector2{X: 960, Y: 864}, WeaponType: WeaponTypeKatana, IsAvailable: true},
-            {ID: "bat-1", Position: Vector2{X: 288, Y: 162}, WeaponType: WeaponTypeBat, IsAvailable: true},
-        },
+    manager := &WeaponCrateManager{
+        crates: make(map[string]*WeaponCrate),  // map, not slice
+    }
+    manager.InitializeDefaultSpawns()
+    return manager
+}
+
+func (wcm *WeaponCrateManager) InitializeDefaultSpawns() {
+    spawns := []struct {
+        Position   Vector2
+        WeaponType string
+    }{
+        {Position: Vector2{X: ArenaWidth / 2, Y: ArenaHeight * 0.2}, WeaponType: "uzi"},
+        {Position: Vector2{X: ArenaWidth * 0.25, Y: ArenaHeight / 2}, WeaponType: "ak47"},
+        {Position: Vector2{X: ArenaWidth * 0.75, Y: ArenaHeight / 2}, WeaponType: "shotgun"},
+        {Position: Vector2{X: ArenaWidth / 2, Y: ArenaHeight * 0.8}, WeaponType: "katana"},
+        {Position: Vector2{X: ArenaWidth * 0.15, Y: ArenaHeight * 0.15}, WeaponType: "bat"},
+    }
+
+    for i, spawn := range spawns {
+        crateID := fmt.Sprintf("crate_%s_%d", spawn.WeaponType, i)
+        wcm.crates[crateID] = &WeaponCrate{
+            ID:          crateID,       // e.g., "crate_uzi_0"
+            Position:    spawn.Position,
+            WeaponType:  spawn.WeaponType,
+            IsAvailable: true,
+        }
     }
 }
 ```
@@ -657,9 +678,9 @@ func (p *Physics) CanPickupWeapon(player *PlayerState, crate *WeaponCrate) bool 
 ### Invalid Position Recovery
 
 **Trigger**: Player position somehow becomes NaN or Infinity (rare edge case)
-**Detection**: Check for `isNaN()` or `isInfinity()` before using position
-**Response**: Reset to arena center (960, 540)
-**Why**: Prevents cascading errors in physics calculations
+**Detection**: `sanitizeVector2()` checks `math.IsNaN()` and `math.IsInf()` on each component
+**Response**: Replace NaN/Inf component with **0** (not arena center)
+**Why**: Prevents cascading errors in physics calculations. Uses 0 as a safe fallback since arena clamping handles positioning afterward.
 
 ### Out-of-Bounds Recovery
 
