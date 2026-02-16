@@ -580,10 +580,11 @@ function updatePlayers(states: PlayerState[]):
         else:
             player.setColor(playerColor)
 
-        // Dodge roll visual (rotation + transparency)
+        // Dodge roll visual (rotation + flicker)
         if state.isRolling:
-            player.setAlpha(0.5)
-            player.setRotation(rollRotation)  // 360° spin
+            rollAngle = (clock.now() % 400) / 400 * 2PI  // 360° over 400ms
+            player.setRotation(rollAngle)
+            player.setVisible(clock.now() % 200 < 100)  // Flicker every 100ms
 ```
 
 **TypeScript:**
@@ -622,9 +623,12 @@ updatePlayers(states: PlayerState[]): void {
     }
 
     if (state.isRolling) {
-      player.setAlpha(0.5);
-    } else {
-      player.setAlpha(1.0);
+      const rollAngle = ((this._clock.now() % 400) / 400) * Math.PI * 2;
+      player.setRotation(rollAngle);
+      player.setVisible(this._clock.now() % 200 < 100); // Flicker
+    } else if (state.deathTime === undefined) {
+      player.setRotation(0);
+      player.setVisible(true);
     }
   }
 }
@@ -1772,3 +1776,4 @@ it('should follow local player with camera', () => {
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification |
 | 1.1.0 | 2026-02-15 | Added new directories: physics/, simulation/, ui/debug/. Added subsystem descriptions: PredictionEngine, InterpolationEngine, GameSimulation, NetworkSimulator, DebugNetworkPanel. Updated directory tree with new files (RangedWeapon.ts, MeleeWeapon.ts, GameSceneSpectator.ts, urlParams.ts). Updated rendering pipeline with prediction/interpolation steps. Updated async message flow for state:snapshot/state:delta. |
+| 1.1.1 | 2026-02-16 | Fixed dodge roll visual — uses `setRotation` (360deg spin) + `setVisible` flicker (not `setAlpha(0.5)`) per `PlayerManager.ts:264-278`. |
