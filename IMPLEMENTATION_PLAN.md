@@ -145,12 +145,12 @@ The specs in `specs/` were bulk-updated and then validated by a prior Ralph job.
 - [x] 82. README.md — Remove TODO markers from complete specs
 - [x] 85. README.md — Fix approximate line counts
 - [x] 86. README.md — Fix broken markdown bold formatting
-- [ ] 93. spec-of-specs-plan.md — Fix line count estimates
-- [ ] 94. spec-of-specs-plan.md — Fix work log message counts
-- [ ] 95. spec-of-specs-plan.md — Fix work log test priority counts
-- [ ] 96. spec-of-specs-plan.md — Fix final validation summary counts
-- [ ] 103. SPEC-OF-SPECS.md — Add spec-of-specs-plan.md to table of contents
-- [ ] 104. SPEC-OF-SPECS.md — Add changelog/update date
+- [x] 93. spec-of-specs-plan.md — Fix line count estimates
+- [x] 94. spec-of-specs-plan.md — Fix work log message counts
+- [x] 95. spec-of-specs-plan.md — Fix work log test priority counts
+- [x] 96. spec-of-specs-plan.md — Fix final validation summary counts
+- [x] 103. SPEC-OF-SPECS.md — Add spec-of-specs-plan.md to table of contents
+- [x] 104. SPEC-OF-SPECS.md — Add changelog/update date
 
 ## Findings Reference
 
