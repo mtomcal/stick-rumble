@@ -352,7 +352,7 @@ Three complementary indicators for reload state:
 
 **Visual Specification:**
 - Radius: 20px
-- Line style: 3px, green (#00ff00)
+- Line style: 3px, green (#00ff00), 1.0 alpha (fully opaque)
 - Arc: Starts at 270° (top), sweeps clockwise
 - Depth: 1002
 
@@ -1244,6 +1244,7 @@ it('should sort scoreboard by kills descending, deaths ascending', () => {
 | 1.0.0 | 2026-02-02 | Initial specification |
 | 1.1.0 | 2026-02-15 | Added Debug Network Panel section (DebugNetworkPanel.tsx for testing netcode under degraded conditions). |
 | 1.1.1 | 2026-02-16 | Fixed kill feed ordering — actual uses `push` (add to end) + `shift` (remove oldest from front), not `unshift` + `pop`. Uses KillEntry objects with container, not raw text with setScrollFactor. |
+| 1.1.6 | 2026-02-16 | Clarified reload circle alpha — explicitly 1.0 (fully opaque) per `GameSceneUI.ts:168` |
 | 1.1.5 | 2026-02-16 | Fixed match timer boundary conditions — uses `< 60` and `< 120` (not `> 120` and `> 60`), checks red first |
 | 1.1.4 | 2026-02-16 | Added font size (14px) to connection status specification |
 | 1.1.3 | 2026-02-16 | Fixed kill feed player ID method — `slice(0, 8)` → `substring(0, 8)` to match source |
