@@ -460,6 +460,26 @@ export class PlayerManager {
       // Update walk cycle animation based on velocity
       const isMoving = Math.sqrt(renderVelocity.x ** 2 + renderVelocity.y ** 2) > 0.1;
       playerGraphics.update(delta, isMoving);
+
+      // Spawn healing particles during health regeneration (15% chance per tick)
+      if (state.isRegenerating && Math.random() < 0.15) {
+        const offsetX = (Math.random() - 0.5) * 50; // ±25px spread
+        const offsetY = (Math.random() - 0.5) * 50;
+        const particle = this.scene.add.circle(
+          renderPosition.x + offsetX,
+          renderPosition.y + offsetY,
+          2,
+          0x00ff00
+        );
+        particle.setDepth(60);
+        this.scene.tweens.add({
+          targets: particle,
+          y: particle.y - 20,
+          alpha: 0,
+          duration: 600,
+          onComplete: () => particle.destroy(),
+        });
+      }
     }
   }
 

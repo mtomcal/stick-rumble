@@ -168,15 +168,15 @@ The following discrepancies were found between this plan and the spec diff (c7dd
 
 > **Current state**: `HealthBarUI.ts` only pulses health bar alpha. No floating particles.
 
-- [ ] **Detect isRegenerating state**: Check each update tick
-- [ ] **15% chance per tick**: `Math.random() > 0.85`
-- [ ] **Create green circle**: 0x00FF00, 2px radius
-- [ ] **Random offset**: ±25px from player center (use `(Math.random() - 0.5) * 50`)
-- [ ] **Float-up tween**: y -= 20, alpha: 0, duration: 600ms, onComplete: destroy
-- [ ] **Test TS-GFX-016**: Healing particles appear during regen
-- [ ] **Spec validation**: Verify against `constants.md` lines 277-282 — color=0x00FF00, radius=2, chance=0.15, spread=25, floatDistance=20, duration=600. Note: use `(Math.random() - 0.5) * 50` for ±25px (spec code has ±12.5px bug)
-- [ ] **Assertion quality**: Tests assert exact color `0x00FF00` in `fillStyle`, exact tween params `{y: '-=20', alpha: 0, duration: 600}`, circle radius exactly 2 — not `toBeTruthy()` on particle object
-- [ ] **Coverage gate**: Healing particle creation + probability gate code path ≥90% statements/lines/functions
+- [x] **Detect isRegenerating state**: Check each update tick
+- [x] **15% chance per tick**: `Math.random() > 0.85`
+- [x] **Create green circle**: 0x00FF00, 2px radius
+- [x] **Random offset**: ±25px from player center (use `(Math.random() - 0.5) * 50`)
+- [x] **Float-up tween**: y -= 20, alpha: 0, duration: 600ms, onComplete: destroy
+- [x] **Test TS-GFX-016**: Healing particles appear during regen
+- [x] **Spec validation**: Verify against `constants.md` lines 277-282 — color=0x00FF00, radius=2, chance=0.15, spread=25, floatDistance=20, duration=600. Note: use `(Math.random() - 0.5) * 50` for ±25px (spec code has ±12.5px bug)
+- [x] **Assertion quality**: Tests assert exact color `0x00FF00` in `fillStyle`, exact tween params `{y: '-=20', alpha: 0, duration: 600}`, circle radius exactly 2 — not `toBeTruthy()` on particle object
+- [x] **Coverage gate**: Healing particle creation + probability gate code path ≥90% statements/lines/functions
 
 #### System 6a — Client: Gun Recoil Visual (PlayerManager.ts)
 
@@ -446,3 +446,9 @@ Follow these steps for each system section:
 - [2026-02-16] **System 5 — 6 test files needed showCameraShake mock**: Adding `showCameraShake()` to `GameSceneUI` required updating the mock in 6 test files: `GameSceneEventHandlers.test.ts`, `GameSceneEventHandlers.audio.test.ts`, `GameSceneEventHandlers.recoil.test.ts`, `GameSceneEventHandlers.reconciliation.test.ts`, `GameSceneUI.test.ts`, and `GameScene.connection.test.ts`.
 - [2026-02-16] **System 2 — Sway implemented via InputManager offset**: Rather than adding sway directly into PlayerManager's update of weapon rotation (which would affect remote players), sway is computed in `PlayerManager.update()` for the local player only, then applied via `InputManager.setAimSwayOffset()`. This ensures sway affects: (a) `getAimAngle()` for visual weapon rotation, (b) `input:state` aimAngle sent to server, (c) `player:shoot` aimAngle for projectile trajectory. All three angles are sway-affected consistently.
 - [2026-02-16] **System 2 — No new files created**: The plan mentioned "Maybe" for new files. No new files were needed — sway state lives in `PlayerManager.ts` (computation), with the offset applied in `InputManager.ts` (integration) and `GameScene.ts` (wiring).
+- [2026-02-16] **System 3b — RenderedPlayer fields not needed**: Errata mentioned `lastDamageTime` and `lastDamageSourceAngle` fields for blood particles. These weren't needed — the `player:damaged` handler gets `attackerId` and `victimId`, and `PlayerManager.getPlayerPosition()` provides both positions to compute the direction on the fly.
+- [2026-02-16] **System 3b — Blood particles use tweens not physics**: Spec shows physics bodies but used tweens (matching HitEffectManager patterns) for testability and consistency. Simulated movement with `effectiveDistance = speed * (duration / 1000) * 0.5`.
+- [2026-02-16] **System 3b — Plan spec line refs wrong**: Plan said "constants.md lines 262-269" for blood particle constants, but those lines are AK47 weapon constants. Actual blood constants at lines ~406. Healing particle constants at lines 421-430 (also mislabeled as lines 277-282 in the plan; those are shotgun constants).
+- [2026-02-16] **System 3c — Placed in PlayerManager.update() not HealthBarUI**: HealthBarUI is a HUD element with scrollFactor=0, unsuitable for spawning world-position particles. Healing particles are spawned in `PlayerManager.update()` which has access to player world positions via renderPosition.
+- [2026-02-16] **System 3c — Particles spawn for all regenerating players**: Implementation creates healing particles for both local and remote players when isRegenerating is true, matching spec's intent of visible feedback for any healing player.
+- [2026-02-16] **System 3c — Test uses absolute y not relative**: Spec shows `y: part.y - 20` (relative) in tween config. Implementation uses `particle.y - 20` as absolute target because Phaser circle objects store their position as plain numbers (not Phaser's `'-=20'` string syntax). Tests assert the computed absolute value.

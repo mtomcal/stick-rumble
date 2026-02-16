@@ -46,6 +46,13 @@ const createMockScene = () => {
     rotation: number;
   }> = [];
 
+  const circles: Array<{
+    x: number;
+    y: number;
+    setDepth: ReturnType<typeof vi.fn>;
+    destroy: ReturnType<typeof vi.fn>;
+  }> = [];
+
   const graphicsObjects: Array<{
     clear: ReturnType<typeof vi.fn>;
     lineStyle: ReturnType<typeof vi.fn>;
@@ -123,6 +130,16 @@ const createMockScene = () => {
         containers.push(container);
         return container;
       }),
+      circle: vi.fn((_x: number, _y: number, _radius: number, _color: number) => {
+        const circle = {
+          x: _x,
+          y: _y,
+          setDepth: vi.fn().mockReturnThis(),
+          destroy: vi.fn(),
+        };
+        circles.push(circle);
+        return circle;
+      }),
       rectangle: vi.fn(() => ({
         setRotation: vi.fn(),
       })),
@@ -155,6 +172,7 @@ const createMockScene = () => {
     texts,
     lines,
     containers,
+    circles,
     graphicsObjects,
   };
 };
@@ -2862,6 +2880,184 @@ describe('PlayerManager', () => {
       tweenConfig.onComplete();
 
       expect(corpseGfx.destroy).toHaveBeenCalled();
+    });
+  });
+
+  describe('TS-GFX-016: Healing particles appear during regen', () => {
+    it('should create green circle particle when player is regenerating', () => {
+      // Force Math.random to always trigger (< 0.15)
+      const originalRandom = Math.random;
+      Math.random = vi.fn()
+        .mockReturnValueOnce(0.1)   // chance check (< 0.15 → spawn)
+        .mockReturnValueOnce(0.5)   // offsetX → (0.5 - 0.5) * 50 = 0
+        .mockReturnValueOnce(0.5);  // offsetY → (0.5 - 0.5) * 50 = 0
+
+      playerManager.setLocalPlayerId('player-1');
+      const states: PlayerState[] = [
+        { id: 'player-1', position: { x: 200, y: 300 }, velocity: { x: 0, y: 0 }, isRegenerating: true },
+      ];
+      playerManager.updatePlayers(states);
+      playerManager.update(16);
+
+      // Verify circle was created with exact color 0x00ff00 and radius 2
+      expect(mockScene.add.circle).toHaveBeenCalledWith(200, 300, 2, 0x00ff00);
+
+      Math.random = originalRandom;
+    });
+
+    it('should set particle depth to 60', () => {
+      const originalRandom = Math.random;
+      Math.random = vi.fn()
+        .mockReturnValueOnce(0.1)   // chance
+        .mockReturnValueOnce(0.5)   // offsetX
+        .mockReturnValueOnce(0.5);  // offsetY
+
+      playerManager.setLocalPlayerId('player-1');
+      const states: PlayerState[] = [
+        { id: 'player-1', position: { x: 200, y: 300 }, velocity: { x: 0, y: 0 }, isRegenerating: true },
+      ];
+      playerManager.updatePlayers(states);
+      playerManager.update(16);
+
+      expect(mockScene.circles.length).toBeGreaterThan(0);
+      expect(mockScene.circles[mockScene.circles.length - 1].setDepth).toHaveBeenCalledWith(60);
+
+      Math.random = originalRandom;
+    });
+
+    it('should create tween with y -= 20, alpha: 0, duration: 600', () => {
+      const originalRandom = Math.random;
+      Math.random = vi.fn()
+        .mockReturnValueOnce(0.1)   // chance
+        .mockReturnValueOnce(0.5)   // offsetX
+        .mockReturnValueOnce(0.5);  // offsetY
+
+      playerManager.setLocalPlayerId('player-1');
+      const states: PlayerState[] = [
+        { id: 'player-1', position: { x: 200, y: 300 }, velocity: { x: 0, y: 0 }, isRegenerating: true },
+      ];
+      playerManager.updatePlayers(states);
+
+      // Clear any tweens from updatePlayers (corpse, etc.)
+      mockScene.tweens.add.mockClear();
+
+      playerManager.update(16);
+
+      // Find the healing particle tween (last tween.add call)
+      const tweenCalls = mockScene.tweens.add.mock.calls;
+      expect(tweenCalls.length).toBeGreaterThan(0);
+      const tweenConfig = tweenCalls[tweenCalls.length - 1][0];
+
+      expect(tweenConfig.y).toBe(300 - 20); // particle.y - 20
+      expect(tweenConfig.alpha).toBe(0);
+      expect(tweenConfig.duration).toBe(600);
+
+      Math.random = originalRandom;
+    });
+
+    it('should destroy particle on tween complete', () => {
+      const originalRandom = Math.random;
+      Math.random = vi.fn()
+        .mockReturnValueOnce(0.1)
+        .mockReturnValueOnce(0.5)
+        .mockReturnValueOnce(0.5);
+
+      playerManager.setLocalPlayerId('player-1');
+      const states: PlayerState[] = [
+        { id: 'player-1', position: { x: 200, y: 300 }, velocity: { x: 0, y: 0 }, isRegenerating: true },
+      ];
+      playerManager.updatePlayers(states);
+      mockScene.tweens.add.mockClear();
+      playerManager.update(16);
+
+      const tweenConfig = mockScene.tweens.add.mock.calls[mockScene.tweens.add.mock.calls.length - 1][0];
+      const particle = mockScene.circles[mockScene.circles.length - 1];
+
+      // Invoke onComplete
+      tweenConfig.onComplete();
+
+      expect(particle.destroy).toHaveBeenCalled();
+
+      Math.random = originalRandom;
+    });
+
+    it('should NOT spawn particle when random >= 0.15 (probability gate)', () => {
+      const originalRandom = Math.random;
+      Math.random = vi.fn().mockReturnValue(0.5); // >= 0.15 → no spawn
+
+      playerManager.setLocalPlayerId('player-1');
+      const states: PlayerState[] = [
+        { id: 'player-1', position: { x: 200, y: 300 }, velocity: { x: 0, y: 0 }, isRegenerating: true },
+      ];
+      playerManager.updatePlayers(states);
+
+      const circleCountBefore = mockScene.circles.length;
+      playerManager.update(16);
+
+      // No new circles created
+      expect(mockScene.circles.length).toBe(circleCountBefore);
+
+      Math.random = originalRandom;
+    });
+
+    it('should NOT spawn particle when player is not regenerating', () => {
+      const originalRandom = Math.random;
+      Math.random = vi.fn().mockReturnValue(0.1); // Would trigger if regenerating
+
+      playerManager.setLocalPlayerId('player-1');
+      const states: PlayerState[] = [
+        { id: 'player-1', position: { x: 200, y: 300 }, velocity: { x: 0, y: 0 }, isRegenerating: false },
+      ];
+      playerManager.updatePlayers(states);
+
+      const circleCountBefore = mockScene.circles.length;
+      playerManager.update(16);
+
+      expect(mockScene.circles.length).toBe(circleCountBefore);
+
+      Math.random = originalRandom;
+    });
+
+    it('should apply ±25px random offset from player center', () => {
+      const originalRandom = Math.random;
+      // offsetX: (0.0 - 0.5) * 50 = -25, offsetY: (1.0 - 0.5) * 50 = +25
+      Math.random = vi.fn()
+        .mockReturnValueOnce(0.1)   // chance
+        .mockReturnValueOnce(0.0)   // offsetX → -25
+        .mockReturnValueOnce(1.0);  // offsetY → +25
+
+      playerManager.setLocalPlayerId('player-1');
+      const states: PlayerState[] = [
+        { id: 'player-1', position: { x: 200, y: 300 }, velocity: { x: 0, y: 0 }, isRegenerating: true },
+      ];
+      playerManager.updatePlayers(states);
+      playerManager.update(16);
+
+      // Circle at (200 + (-25), 300 + 25) = (175, 325)
+      expect(mockScene.add.circle).toHaveBeenCalledWith(175, 325, 2, 0x00ff00);
+
+      Math.random = originalRandom;
+    });
+
+    it('should spawn healing particles for remote regenerating players too', () => {
+      const originalRandom = Math.random;
+      Math.random = vi.fn()
+        .mockReturnValueOnce(0.1)   // chance
+        .mockReturnValueOnce(0.5)   // offsetX
+        .mockReturnValueOnce(0.5);  // offsetY
+
+      playerManager.setLocalPlayerId('player-1');
+      const states: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 100 }, velocity: { x: 0, y: 0 } },
+        { id: 'player-2', position: { x: 400, y: 400 }, velocity: { x: 0, y: 0 }, isRegenerating: true },
+      ];
+      playerManager.updatePlayers(states);
+      playerManager.update(16);
+
+      // Should create circle at remote player's position
+      expect(mockScene.add.circle).toHaveBeenCalledWith(400, 400, 2, 0x00ff00);
+
+      Math.random = originalRandom;
     });
   });
 });
