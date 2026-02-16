@@ -143,7 +143,7 @@ The specs in `specs/` were bulk-updated and then validated by a prior Ralph job.
 - [x] 78. arena.md — Remove nonexistent isInArena function docs
 - [x] 80. arena.md — Remove nonexistent CheckAABBCollision standalone Go function
 - [x] 82. README.md — Remove TODO markers from complete specs
-- [ ] 85. README.md — Fix approximate line counts
+- [x] 85. README.md — Fix approximate line counts
 - [ ] 86. README.md — Fix broken markdown bold formatting
 - [ ] 93. spec-of-specs-plan.md — Fix line count estimates
 - [ ] 94. spec-of-specs-plan.md — Fix work log message counts
