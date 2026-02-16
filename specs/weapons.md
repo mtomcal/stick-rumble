@@ -1,7 +1,7 @@
 # Weapons
 
-> **Spec Version**: 1.0.0
-> **Last Updated**: 2026-02-02
+> **Spec Version**: 1.1.0
+> **Last Updated**: 2026-02-16
 > **Depends On**: [constants.md](constants.md), [arena.md](arena.md), [player.md](player.md)
 > **Depended By**: [shooting.md](shooting.md), [melee.md](melee.md), [hit-detection.md](hit-detection.md)
 
@@ -207,10 +207,12 @@ type WeaponCrate struct {
 | **Uzi** | Ranged | 8 | 10.0/s | 30 | 1500ms | 800 px/s | 600px | 5° | 0° | 0 |
 | **AK47** | Ranged | 20 | 6.0/s | 30 | 2000ms | 800 px/s | 800px | 3° | 0° | 0 |
 | **Shotgun** | Ranged | 60* | 1.0/s | 6 | 2500ms | 800 px/s | 300px | 0° | 15° | 0 |
-| **Bat** | Melee | 25 | 2.0/s | ∞ | N/A | N/A | 64px | 0° | 90° | 40px |
-| **Katana** | Melee | 45 | 1.25/s | ∞ | N/A | N/A | 80px | 0° | 90° | 0 |
+| **Bat** | Melee | 25 | 2.0/s | ∞ | N/A | N/A | 90px | 0° | 80° (±0.7 rad) | 40px |
+| **Katana** | Melee | 45 | 1.25/s | ∞ | N/A | N/A | 110px | 0° | 80° (±0.7 rad) | 0 |
 
 *Shotgun fires 8 pellets at 7.5 damage each = 60 total if all hit
+
+**Note**: Bat and Katana range values (90px and 110px respectively) updated to match prototype testing. Melee arc reduced from 90° to 80° (±0.7 rad) for more precise hit detection.
 
 ### Recoil Configuration
 
@@ -240,6 +242,8 @@ type WeaponCrate struct {
 - **Larger weapons = bigger effects** - AK47 and Shotgun have more visual impact
 - **Color coding** - Each weapon has a distinct color for instant recognition
 - **Tracer width scales with damage** - Higher damage weapons have more visible trails
+
+> **Gun Recoil Visual**: When a ranged weapon fires, the weapon container kicks backward (default -6px, shotgun -10px) with a 50ms yoyo tween. See [graphics.md § Gun Recoil](graphics.md#gun-recoil) for implementation details and [constants.md § Gun Recoil Constants](constants.md#gun-recoil-constants) for values.
 
 ---
 
@@ -379,6 +383,8 @@ Recoil affects aim angle when firing automatic weapons.
 - Prevents "spray and pray" at long range
 - Creates learning curve for each weapon's unique pattern
 
+> **Aim Sway**: Weapon aim oscillates with a composite sine wave. Moving: ±0.15 rad (~8.6°), idle: ±0.03 rad (~1.7°). Sway affects both visual weapon rotation and actual projectile trajectory. See [shooting.md § Aim Sway](shooting.md#aim-sway) and [constants.md § Aim Sway Constants](constants.md#aim-sway-constants).
+
 **Recoil Calculation:**
 ```
 function applyRecoil(baseAngle, recoil, shotsFired, isMoving, isSprinting, weapon):
@@ -441,7 +447,7 @@ Melee weapons use range + arc detection instead of projectiles.
 **Why range + arc?**
 - Feels like a "swing" rather than a point attack
 - Multiple enemies can be hit in one swing (rewarding positioning)
-- 90° arc (45° each side) matches intuitive expectation of "in front of me"
+- 80° arc (40° each side) matches intuitive expectation of "in front of me"
 
 **Detection Algorithm:**
 ```
@@ -906,7 +912,7 @@ func TestUziRecoilAccumulation(t *testing.T) {
 
 **Preconditions:**
 - Attacker at (100, 100) facing right (aimAngle = 0)
-- Bat with 64px range, 90° arc
+- Bat with 90px range, 80° arc
 
 **Input:**
 - Target at (150, 100): 50px away, 0° angle (in front)
@@ -915,8 +921,8 @@ func TestUziRecoilAccumulation(t *testing.T) {
 
 **Expected Output:**
 - First target: hit (within range and arc)
-- Second target: miss (outside 45° half-arc)
-- Third target: miss (outside 64px range)
+- Second target: miss (outside 40° half-arc)
+- Third target: miss (outside 90px range)
 
 **Go:**
 ```go
@@ -1061,6 +1067,7 @@ func TestKnockbackBoundaryClamping(t *testing.T) {
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.0.0 | 2026-02-02 | Initial specification |
+| 1.1.0 | 2026-02-16 | Updated Bat range (64→90px) and Katana range (80→110px), melee arc (90°→80°). Added cross-references to gun recoil and aim sway visual systems from pre-BMM port. |
 | 1.0.2 | 2026-02-16 | Added `ProjectileVisuals` and `WeaponVisuals` interfaces to TypeScript section, added `projectile` sub-field to JSON example |
 | 1.0.1 | 2026-02-16 | Fixed Uzi visual config — muzzleFlashSize=8 (not 6), muzzleFlashDuration=50 (not 30) per `weaponConfig.ts:199-200`. |
+| 1.0.0 | 2026-02-02 | Initial specification |

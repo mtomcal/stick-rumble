@@ -1,7 +1,7 @@
 # Melee Combat
 
-> **Spec Version**: 1.0.0
-> **Last Updated**: 2026-02-02
+> **Spec Version**: 1.1.0
+> **Last Updated**: 2026-02-16
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [hit-detection.md](hit-detection.md)
 > **Depended By**: [messages.md](messages.md), [graphics.md](graphics.md)
 
@@ -37,7 +37,7 @@ Melee combat provides close-range weapons (Bat and Katana) as alternatives to ra
 
 - [constants.md](constants.md) - Melee weapon range, arc, and damage values
 - [player.md](player.md) - Player position, aim angle, health, death handling
-- [weapons.md](weapons.md) - Weapon stats (Bat: 64px range, 25 damage; Katana: 80px range, 45 damage)
+- [weapons.md](weapons.md) - Weapon stats (Bat: 90px range, 25 damage; Katana: 110px range, 45 damage)
 - [hit-detection.md](hit-detection.md) - Damage application and death triggering
 
 ---
@@ -49,8 +49,8 @@ All melee constants are defined in [constants.md](constants.md#melee-weapon-cons
 | Constant | Bat | Katana | Description |
 |----------|-----|--------|-------------|
 | Damage | 25 | 45 | HP removed per hit |
-| Range | 64 px | 80 px | Maximum distance to target |
-| Arc | 90° | 90° | Cone width (45° each side of aim) |
+| Range | 90 px | 110 px | Maximum distance to target |
+| Arc | 80° | 80° | Cone width (40° each side of aim) |
 | Fire Rate | 2/s | 1.25/s | Swings per second |
 | Knockback | 40 px | 0 px | Distance target is pushed |
 | Cooldown | 500 ms | 800 ms | Time between swings |
@@ -58,7 +58,7 @@ All melee constants are defined in [constants.md](constants.md#melee-weapon-cons
 **Why these values:**
 - **Bat damage (25)**: 4 hits to kill (100 HP / 25 = 4), balanced by fast swing rate
 - **Katana damage (45)**: ~2-3 hits to kill, but slower swing rate
-- **90° arc**: Wide enough to catch strafing enemies, narrow enough to require aiming
+- **80° arc**: Wide enough to catch strafing enemies, narrow enough to require aiming
 - **Bat knockback (40px)**: Creates spacing after hit, prevents stunlock combos
 - **Katana no knockback**: Higher damage is the trade-off for no crowd control
 
@@ -324,7 +324,7 @@ func isInMeleeRange(attacker *PlayerState, target *PlayerState, weapon *Weapon) 
 **Why cone detection instead of rectangle/circle:**
 - **Intuitive**: Players aim with mouse, cone naturally extends from character
 - **Balanced**: Wide enough to catch nearby enemies, requires directional aim
-- **Visual match**: Swing animation draws a pie-slice arc that matches hitbox
+- **Visual match**: Swing animation draws a stroke-only arc that matches hitbox
 
 ---
 
@@ -481,69 +481,54 @@ func applyKnockback(attacker *PlayerState, target *PlayerState, knockbackDistanc
 
 **Why Katana has no knockback:**
 - Higher base damage (45 vs 25) is the trade-off
-- Longer range (80px vs 64px) provides inherent safety
+- Longer range (110px vs 90px) provides inherent safety
 - Design choice: two distinct melee playstyles
 
 ---
 
-### Swing Animation (Client)
+### Swing Animation
 
-Client displays a visual arc representing the melee attack cone.
+The melee swing uses a **white stroke-only arc** combined with a **weapon container rotation tween**. There are no per-weapon colors — all melee weapons use white.
 
-**Animation Parameters:**
-| Parameter | Value | Description |
-|-----------|-------|-------------|
-| Duration | 200 ms | Total animation time |
-| Frames | 4 | Animation keyframes |
-| Frame Duration | 50 ms | Time per frame |
-
-**TypeScript Implementation:**
+**Arc Visual**:
 ```typescript
-class MeleeWeapon {
-    private static readonly SWING_DURATION = 200;
-    private static readonly FRAME_COUNT = 4;
-
-    startSwing(aimAngle: number): boolean {
-        if (this.swinging) return false;
-
-        this.swinging = true;
-        this.swingStartTime = this.scene.time.now;
-        this.swingAimAngle = aimAngle;
-        this.graphics.setVisible(true);
-
-        return true;
-    }
-
-    showSwingAnimation(aimAngle: number): void {
-        this.graphics.clear();
-
-        const arcRadians = (this.stats.arcDegrees * Math.PI) / 180;
-        const halfArc = arcRadians / 2;
-        const startAngle = aimAngle - halfArc;
-        const endAngle = aimAngle + halfArc;
-
-        // Draw arc outline
-        this.graphics.lineStyle(3, this.stats.color, 0.8);
-        this.graphics.beginPath();
-        this.graphics.arc(this.x, this.y, this.stats.range, startAngle, endAngle, false);
-        this.graphics.strokePath();
-
-        // Draw semi-transparent fill
-        this.graphics.fillStyle(this.stats.color, 0.2);
-        this.graphics.beginPath();
-        this.graphics.moveTo(this.x, this.y);
-        this.graphics.arc(this.x, this.y, this.stats.range, startAngle, endAngle, false);
-        this.graphics.closePath();
-        this.graphics.fillPath();
-    }
-}
+const slash = this.add.graphics();
+slash.lineStyle(2, 0xffffff, 0.8);  // White, stroke-only
+slash.beginPath();
+slash.arc(attacker.x, attacker.y, range, angle - 0.7, angle + 0.7, false);
+slash.strokePath();  // NO fillPath — stroke only
+this.tweens.add({ targets: slash, alpha: 0, duration: 200, onComplete: () => slash.destroy() });
 ```
 
-**Weapon Colors:**
-| Weapon | Color | Hex | Reason |
-|--------|-------|-----|--------|
-| Bat | Brown | 0x8B4513 | Wood material |
-| Katana | Silver | 0xC0C0C0 | Metal blade |
+**Container Rotation Tween**:
+```typescript
+this.scene.tweens.add({
+    targets: this.weaponContainer,
+    angle: { from: this.weaponContainer.angle - 45, to: this.weaponContainer.angle + 60 },
+    duration: 100,
+    yoyo: true,
+    onComplete: () => {
+        this.isAttacking = false;
+        this.weaponContainer.setAngle(0);
+    }
+});
+```
+
+| Property | Value |
+|----------|-------|
+| Arc Color | 0xFFFFFF (white) — all weapons |
+| Arc Stroke Width | 2px |
+| Arc Alpha | 0.8 |
+| Arc Angle | ±0.7 rad (~80°) |
+| Arc Fade | 200ms |
+| Swing From | -45° |
+| Swing To | +60° |
+| Swing Duration | 100ms yoyo |
+| Camera Shake | 50ms, 0.001 intensity (on hit) |
+
+See [constants.md § Melee Visual Constants](constants.md#melee-visual-constants) and [graphics.md § Melee Swing Arc](graphics.md#melee-swing-arc).
+
+> **Color**: All melee weapons use white (0xFFFFFF) for the swing arc. Per-weapon coloring was removed in favor of a unified visual style matching the prototype.
 
 ---
 
@@ -717,7 +702,7 @@ func (h *WebSocketHandler) handlePlayerMeleeAttack(playerID string, data any) {
 
 **Preconditions:**
 - Attacker at position (100, 100) aiming right (0°)
-- Target at position (150, 100) - within 64px range, within 90° arc
+- Target at position (150, 100) - within 90px range, within 80° arc
 - Attacker has Bat equipped
 
 **Input:**
@@ -757,7 +742,7 @@ func TestPerformMeleeAttack_BatHitsSingleTarget(t *testing.T) {
 **Priority**: Critical
 
 **Preconditions:**
-- Attacker at (100, 100), target at (175, 100) - within 80px range
+- Attacker at (100, 100), target at (175, 100) - within 110px range
 - Attacker has Katana equipped
 
 **Expected Output:**
@@ -772,8 +757,8 @@ func TestPerformMeleeAttack_BatHitsSingleTarget(t *testing.T) {
 **Priority**: High
 
 **Preconditions:**
-- Bat equipped (64px range)
-- Target at 100px distance (beyond range)
+- Bat equipped (90px range)
+- Target at 150px distance (beyond range)
 
 **Expected Output:**
 - `HitPlayers` is empty
@@ -872,28 +857,28 @@ func TestPerformMeleeAttack_BatHitsSingleTarget(t *testing.T) {
 
 ---
 
-### TS-MELEE-010: Target at Arc Edge (45°)
+### TS-MELEE-010: Target at Arc Edge (40°)
 
 **Category**: Unit
 **Priority**: Medium
 
 **Preconditions:**
-- 90° arc = 45° on each side
-- Target at exactly 45° from aim direction
+- 80° arc = 40° on each side
+- Target at exactly 40° from aim direction
 
 **Expected Output:**
 - Target is hit (boundary inclusive)
 
 ---
 
-### TS-MELEE-011: Target Just Outside Arc (50°)
+### TS-MELEE-011: Target Just Outside Arc (45°)
 
 **Category**: Unit
 **Priority**: Medium
 
 **Preconditions:**
-- 90° arc = 45° on each side
-- Target at 50° from aim direction
+- 80° arc = 40° on each side
+- Target at 45° from aim direction
 
 **Expected Output:**
 - Target is NOT hit
@@ -914,17 +899,20 @@ func TestPerformMeleeAttack_BatHitsSingleTarget(t *testing.T) {
 
 ---
 
-### TS-MELEE-013: Swing Animation Renders 90° Arc
+### TS-MELEE-013: Melee arc renders correctly
 
 **Category**: Visual
-**Priority**: Medium
+**Priority**: High
 
 **Preconditions:**
-- Client receives `melee:hit` message
+- Player performs melee attack with any melee weapon
 
 **Expected Output:**
-- Arc drawn from (aimAngle - 45°) to (aimAngle + 45°)
-- Arc radius matches weapon range
+- Arc is stroke-only, white (0xFFFFFF), no fill
+- Arc spans ±0.7 rad from aim direction
+- Arc uses weapon range as radius (Bat: 90px, Katana: 110px)
+- Arc fades over 200ms
+- Weapon container rotates from -45° to +60° over 100ms
 
 ---
 
@@ -943,6 +931,22 @@ func TestPerformMeleeAttack_BatHitsSingleTarget(t *testing.T) {
 
 ---
 
+### TS-MELEE-015: Weapon container rotation tween on swing
+
+**Category**: Visual
+**Priority**: High
+
+**Preconditions:**
+- Player swings a melee weapon
+
+**Expected Output:**
+- Weapon container angle tweens from current-45° to current+60°
+- Duration is 100ms with yoyo (returns to 0)
+- isAttacking flag prevents overlapping swings
+- Camera shakes on melee hit (50ms, 0.001 intensity)
+
+---
+
 ---
 
 ## Changelog
@@ -951,3 +955,4 @@ func TestPerformMeleeAttack_BatHitsSingleTarget(t *testing.T) {
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification |
 | 1.0.1 | 2026-02-16 | Fixed thread safety note — `world.players` accessed directly under `world.mu.RLock()`, not via `GetAllPlayers()` |
+| 1.1.0 | 2026-02-16 | Updated Bat range (64→90px), Katana range (80→110px), melee arc (90°→80°). Replaced pie-slice arc with white stroke-only arc. Added weapon container rotation tween. Removed per-weapon color table. Added TS-MELEE-015. Ported from pre-BMM prototype. |

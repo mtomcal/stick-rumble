@@ -1,7 +1,7 @@
 # Test Index
 
-> **Spec Version**: 1.1.0
-> **Last Updated**: 2026-02-15
+> **Spec Version**: 1.2.0
+> **Last Updated**: 2026-02-16
 > **Depends On**: All specs (cross-reference document)
 > **Depended By**: None (reference document)
 
@@ -29,35 +29,35 @@ When implementing from scratch, AI agents need to:
 
 | Metric | Value |
 |--------|-------|
-| **Total Test Scenarios** | 224 |
+| **Total Test Scenarios** | 244 |
 | **Specs with Tests** | 19 (+Epic 4 cross-spec) |
-| **Average Tests per Spec** | 11.2 |
+| **Average Tests per Spec** | 12.2 |
 | **Critical Priority Tests** | 71 |
-| **High Priority Tests** | 102 |
-| **Medium Priority Tests** | 51 |
+| **High Priority Tests** | 111 |
+| **Medium Priority Tests** | 62 |
 | **Low Priority Tests** | 0 |
 
 ### By Category
 
 | Category | Count | Percentage |
 |----------|-------|------------|
-| Unit | 154 | 69% |
-| Integration | 57 | 25% |
-| Visual | 13 | 6% |
+| Unit | 155 | 64% |
+| Integration | 57 | 23% |
+| Visual | 32 | 13% |
 
 ### By Spec (Sorted by Count)
 
 | Spec | Tests | Critical | High | Medium | Low |
 |------|-------|----------|------|--------|-----|
+| graphics.md | 24 | 1 | 13 | 10 | 0 |
+| ui.md | 19 | 3 | 10 | 6 | 0 |
+| melee.md | 15 | 3 | 7 | 5 | 0 |
 | dodge-roll.md | 14 | 5 | 7 | 2 | 0 |
-| graphics.md | 14 | 1 | 8 | 5 | 0 |
 | hit-detection.md | 14 | 6 | 7 | 1 | 0 |
-| melee.md | 14 | 3 | 6 | 5 | 0 |
 | player.md | 14 | 3 | 8 | 3 | 0 |
 | match.md | 13 | 3 | 5 | 5 | 0 |
-| arena.md | 12 | 4 | 2 | 6 | 0 |
-| shooting.md | 12 | 5 | 5 | 2 | 0 |
-| ui.md | 12 | 3 | 6 | 3 | 0 |
+| arena.md | 13 | 4 | 2 | 7 | 0 |
+| shooting.md | 13 | 5 | 6 | 2 | 0 |
 | audio.md | 10 | 3 | 3 | 4 | 0 |
 | client-architecture.md | 10 | 3 | 5 | 2 | 0 |
 | messages.md | 10 | 3 | 4 | 3 | 0 |
@@ -89,6 +89,7 @@ When implementing from scratch, AI agents need to:
 | TS-ARENA-010 | Unit | Medium | Distance calculation is accurate |
 | TS-ARENA-011 | Unit | Medium | Weapon pickup radius check works |
 | TS-ARENA-012 | Unit | Medium | Player cannot pick up weapon from far away |
+| TS-ARENA-013 | Visual | Medium | Floor grid renders at correct depth and spacing |
 
 ### Audio Tests (audio.md)
 
@@ -163,10 +164,20 @@ When implementing from scratch, AI agents need to:
 | TS-GFX-008 | Visual | Medium | Weapon crate renders with glow |
 | TS-GFX-009 | Visual | Medium | Unavailable crate is faded |
 | TS-GFX-010 | Visual | High | Hit particles spawn on damage |
-| TS-GFX-011 | Visual | Medium | Player fades on death |
+| TS-GFX-011 | Visual | Medium | Death corpse renders with splayed limbs |
 | TS-GFX-012 | Visual | High | Dodge roll shows rotation |
-| TS-GFX-013 | Visual | High | Melee swing shows arc |
+| TS-GFX-013 | Visual | High | Melee arc renders as white stroke-only |
 | TS-GFX-014 | Unit | High | Object pool reuses effects |
+| TS-GFX-015 | Visual | High | Blood particles spawn on damage |
+| TS-GFX-016 | Visual | Medium | Healing particles appear during regen |
+| TS-GFX-017 | Visual | Medium | Wall spark on obstructed barrel |
+| TS-GFX-018 | Visual | High | Gun recoil on ranged fire |
+| TS-GFX-019 | Visual | High | Aim sway visual oscillation |
+| TS-GFX-020 | Visual | Medium | Reload animation pulses |
+| TS-GFX-021 | Visual | High | Directional hit indicator (outgoing) |
+| TS-GFX-022 | Visual | High | Directional hit indicator (incoming) |
+| TS-GFX-023 | Visual | Medium | Crosshair reticle texture |
+| TS-GFX-024 | Visual | Medium | Death corpse fade timing |
 
 ### Hit Detection Tests (hit-detection.md)
 
@@ -223,6 +234,7 @@ When implementing from scratch, AI agents need to:
 | TS-MELEE-012 | Integration | High | melee:hit broadcast includes all victims |
 | TS-MELEE-013 | Visual | Medium | Swing animation renders 90° arc |
 | TS-MELEE-014 | Unit | Medium | Non-melee weapon returns empty result |
+| TS-MELEE-015 | Visual | High | Weapon container rotation tween on swing |
 
 ### Messages Tests (messages.md)
 
@@ -366,6 +378,7 @@ When implementing from scratch, AI agents need to:
 | TS-SHOOT-010 | Unit | Medium | Sprint applies accuracy penalty |
 | TS-SHOOT-011 | Unit | Medium | Vertical recoil accumulates |
 | TS-SHOOT-012 | Unit | Critical | Dead player cannot shoot |
+| TS-SHOOT-013 | Unit | High | Aim sway affects projectile trajectory |
 
 ### UI Tests (ui.md)
 
@@ -383,6 +396,13 @@ When implementing from scratch, AI agents need to:
 | TS-UI-010 | Unit | Medium | Dodge cooldown shows progress |
 | TS-UI-011 | Integration | Critical | Match end screen shows winner |
 | TS-UI-012 | Unit | High | Scoreboard sorted correctly |
+| TS-UI-013 | Visual | High | Camera flash on damage received |
+| TS-UI-014 | Visual | High | Hit marker normal variant |
+| TS-UI-015 | Visual | High | Hit marker kill variant |
+| TS-UI-016 | Visual | Medium | Damage number variants |
+| TS-UI-017 | Visual | Medium | Camera shake on dealing damage |
+| TS-UI-018 | Visual | Medium | Minimap renders static layer |
+| TS-UI-019 | Visual | Medium | Minimap radar range filters enemies |
 
 ### Weapons Tests (weapons.md)
 
@@ -405,14 +425,14 @@ When implementing from scratch, AI agents need to:
 
 When implementing from scratch, execute tests in this order to verify core functionality before polish:
 
-### Phase 1: Foundation (22 tests)
+### Phase 1: Foundation (23 tests)
 
 **Priority**: These tests validate basic building blocks.
 
 1. **Constants** (TS-CONST-001 to TS-CONST-005)
    - Verify all game constants before using them
 
-2. **Arena** (TS-ARENA-001 to TS-ARENA-012)
+2. **Arena** (TS-ARENA-001 to TS-ARENA-013)
    - Boundaries must work before movement
 
 3. **Overview** (TS-OV-001 to TS-OV-005)
@@ -441,20 +461,20 @@ When implementing from scratch, execute tests in this order to verify core funct
 3. **Rooms** (TS-ROOM-001 to TS-ROOM-010)
    - Matchmaking and room management
 
-### Phase 4: Combat (50 tests)
+### Phase 4: Combat (52 tests)
 
 **Priority**: Core gameplay loop.
 
 1. **Weapons** (TS-WEAP-001 to TS-WEAP-010)
    - Weapon stats and behavior
 
-2. **Shooting** (TS-SHOOT-001 to TS-SHOOT-012)
+2. **Shooting** (TS-SHOOT-001 to TS-SHOOT-013)
    - Ranged combat
 
 3. **Hit Detection** (TS-HIT-001 to TS-HIT-014)
    - Collision and damage
 
-4. **Melee** (TS-MELEE-001 to TS-MELEE-014)
+4. **Melee** (TS-MELEE-001 to TS-MELEE-015)
    - Melee combat
 
 ### Phase 5: Advanced Mechanics (27 tests)
@@ -477,14 +497,14 @@ When implementing from scratch, execute tests in this order to verify core funct
 2. **Client Architecture** (TS-CLIENT-001 to TS-CLIENT-008)
    - Frontend systems
 
-### Phase 7: Polish (36 tests)
+### Phase 7: Polish (53 tests)
 
 **Priority**: Visual and audio feedback.
 
-1. **Graphics** (TS-GFX-001 to TS-GFX-014)
+1. **Graphics** (TS-GFX-001 to TS-GFX-024)
    - Rendering
 
-2. **UI** (TS-UI-001 to TS-UI-012)
+2. **UI** (TS-UI-001 to TS-UI-019)
    - HUD elements
 
 3. **Audio** (TS-AUDIO-001 to TS-AUDIO-010)
@@ -526,7 +546,7 @@ Tests that verify multiple systems working together.
 - Combat flow (TS-SHOOT-001, TS-HIT-007)
 - Match lifecycle (TS-MATCH-001, 003, 004)
 
-### Visual Tests (13 tests)
+### Visual Tests (32 tests)
 
 Tests that verify rendering output using Playwright screenshots.
 
@@ -537,6 +557,8 @@ Tests that verify rendering output using Playwright screenshots.
 - Slowest execution (~5s each)
 
 **Visual test IDs:**
+- TS-ARENA-013: Floor grid renders at correct depth and spacing
+- TS-CLIENT-005: Entities render correctly
 - TS-GFX-001: Player renders all body parts
 - TS-GFX-002: Walk animation oscillates legs
 - TS-GFX-005: Aim indicator points at mouse
@@ -545,11 +567,28 @@ Tests that verify rendering output using Playwright screenshots.
 - TS-GFX-008: Weapon crate renders with glow
 - TS-GFX-009: Unavailable crate is faded
 - TS-GFX-010: Hit particles spawn on damage
-- TS-GFX-011: Player fades on death
+- TS-GFX-011: Death corpse renders with splayed limbs
 - TS-GFX-012: Dodge roll shows rotation
-- TS-GFX-013: Melee swing shows arc
-- TS-CLIENT-005: Entities render correctly
+- TS-GFX-013: Melee arc renders as white stroke-only
+- TS-GFX-015: Blood particles spawn on damage
+- TS-GFX-016: Healing particles appear during regen
+- TS-GFX-017: Wall spark on obstructed barrel
+- TS-GFX-018: Gun recoil on ranged fire
+- TS-GFX-019: Aim sway visual oscillation
+- TS-GFX-020: Reload animation pulses
+- TS-GFX-021: Directional hit indicator (outgoing)
+- TS-GFX-022: Directional hit indicator (incoming)
+- TS-GFX-023: Crosshair reticle texture
+- TS-GFX-024: Death corpse fade timing
 - TS-MELEE-013: Swing animation renders 90° arc
+- TS-MELEE-015: Weapon container rotation tween on swing
+- TS-UI-013: Camera flash on damage received
+- TS-UI-014: Hit marker normal variant
+- TS-UI-015: Hit marker kill variant
+- TS-UI-016: Damage number variants
+- TS-UI-017: Camera shake on dealing damage
+- TS-UI-018: Minimap renders static layer
+- TS-UI-019: Minimap radar range filters enemies
 
 ---
 
@@ -567,7 +606,7 @@ These tests verify:
 
 **If any critical test fails:** Game is broken and unplayable.
 
-### High (102 tests)
+### High (111 tests)
 
 **Must pass for the game to be fun.**
 
@@ -576,10 +615,11 @@ These tests verify:
 - Dodge roll provides evasion
 - UI provides clear feedback
 - Audio responds to events
+- Visual effects render correctly
 
 **If any high test fails:** Game is playable but feature is broken.
 
-### Medium (51 tests)
+### Medium (62 tests)
 
 **Should pass for polish.**
 
@@ -587,6 +627,7 @@ These tests verify:
 - Edge cases handled gracefully
 - Animations smooth
 - Timing precise
+- Visual polish and effects
 
 **If any medium test fails:** Minor issues, acceptable for MVP.
 
@@ -602,7 +643,7 @@ Use this checklist to track test implementation progress:
 
 ### Foundation
 - [ ] TS-CONST-001 through TS-CONST-005 (5 tests)
-- [ ] TS-ARENA-001 through TS-ARENA-012 (12 tests)
+- [ ] TS-ARENA-001 through TS-ARENA-013 (13 tests)
 - [ ] TS-OV-001 through TS-OV-005 (5 tests)
 
 ### Core Entities
@@ -616,9 +657,9 @@ Use this checklist to track test implementation progress:
 
 ### Combat
 - [ ] TS-WEAP-001 through TS-WEAP-010 (10 tests)
-- [ ] TS-SHOOT-001 through TS-SHOOT-012 (12 tests)
+- [ ] TS-SHOOT-001 through TS-SHOOT-013 (13 tests)
 - [ ] TS-HIT-001 through TS-HIT-014 (14 tests)
-- [ ] TS-MELEE-001 through TS-MELEE-014 (14 tests)
+- [ ] TS-MELEE-001 through TS-MELEE-015 (15 tests)
 
 ### Advanced Mechanics
 - [ ] TS-ROLL-001 through TS-ROLL-014 (14 tests)
@@ -629,8 +670,8 @@ Use this checklist to track test implementation progress:
 - [ ] TS-CLIENT-001 through TS-CLIENT-010 (10 tests)
 
 ### Polish
-- [ ] TS-GFX-001 through TS-GFX-014 (14 tests)
-- [ ] TS-UI-001 through TS-UI-012 (12 tests)
+- [ ] TS-GFX-001 through TS-GFX-024 (24 tests)
+- [ ] TS-UI-001 through TS-UI-019 (19 tests)
 - [ ] TS-AUDIO-001 through TS-AUDIO-010 (10 tests)
 
 ---
@@ -643,3 +684,4 @@ Use this checklist to track test implementation progress:
 | 1.1.0 | 2026-02-15 | Added 15 Epic 4 Netcode test scenarios (prediction, reconciliation, interpolation, delta compression, lag compensation, network simulator). Updated total from 179 to 194 tests. Fixed deceleration reference from 50 to 1500 px/s². |
 | 1.1.1 | 2026-02-16 | Fixed test priorities/categories for shooting.md, rooms.md, server-architecture.md, match.md, and messages.md to match source spec definitions. Corrected systematically inflated Critical counts. Removed phantom Low priority count (0 Low tests exist). Flagged 15 netcode test IDs as index-only (no source spec entries). |
 | 1.1.2 | 2026-02-16 | Fixed priority counts and categories for all 19 specs in By Spec table to match source spec definitions. Fixed detailed catalog entries for arena, audio, client-architecture (added 009/010), constants, dodge-roll, graphics, hit-detection, melee, messages, movement, networking, overview, player, ui, and weapons. Updated implementation checklist client-architecture count from 8 to 10. |
+| 1.2.0 | 2026-02-16 | Added 20 pre-BMM visual port test scenarios. Graphics: 10 new tests (TS-GFX-015 to 024) for blood/healing particles, wall sparks, gun recoil, aim sway, reload pulse, hit indicators, crosshair, corpse fade. UI: 7 new tests (TS-UI-013 to 019) for camera flash/shake, hit markers, damage numbers, minimap. Melee: TS-MELEE-015 (weapon rotation tween). Shooting: TS-SHOOT-013 (aim sway trajectory). Arena: TS-ARENA-013 (floor grid). Updated TS-GFX-011 description (corpse with splayed limbs) and TS-GFX-013 (white stroke-only arc). Total tests: 224 → 244. Visual tests: 13 → 32. High priority: 102 → 111. Medium priority: 51 → 62. |
