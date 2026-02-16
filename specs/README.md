@@ -149,6 +149,9 @@ For an AI agent recreating Stick Rumble from scratch, read specs in this order:
 | dodge-roll.md | movement.md, arena.md | hit-detection.md |
 | match.md | player.md, rooms.md | client-architecture.md |
 | client-architecture.md | All gameplay specs | graphics.md, ui.md, audio.md |
+| graphics.md | constants.md, player.md, weapons.md, arena.md | client-architecture.md, test-index.md |
+| ui.md | constants.md, player.md, weapons.md, match.md, client-architecture.md, graphics.md | test-index.md |
+| audio.md | constants.md, weapons.md, dodge-roll.md, client-architecture.md | - (leaf spec) |
 
 ---
 
@@ -347,6 +350,7 @@ Test scenarios use the format `TS-{SPEC}-{NUMBER}`:
 |---------|------|---------|
 | 1.0.1 | 2026-02-02 | Added audio.md spec (19 specs complete) |
 | 1.0.0 | 2026-02-02 | Initial specification suite with 14 complete specs |
+| 1.1.3 | 2026-02-16 | Added graphics.md, ui.md, audio.md to Key Dependencies table |
 | 1.1.2 | 2026-02-16 | Added ui.md to Quick Reference Table |
 | 1.1.1 | 2026-02-16 | Fixed message count in Reading Order (28 total, not 26) |
 | 1.1.0 | 2026-02-15 | Updated Quick Reference Table: added server-architecture, graphics, audio, overview, test-index specs. Updated movement.md line counts (deceleration change). Updated messages.md counts (6 client→server, 22 server→client). |
