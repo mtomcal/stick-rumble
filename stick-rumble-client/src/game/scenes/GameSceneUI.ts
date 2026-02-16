@@ -27,6 +27,7 @@ export class GameSceneUI {
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
     this.generateHitMarkerTexture();
+    this.generateHitIndicatorTexture();
   }
 
   /**
@@ -41,6 +42,24 @@ export class GameSceneUI {
     gfx.moveTo(18, 2); gfx.lineTo(2, 18);
     gfx.strokePath();
     gfx.generateTexture('hitmarker', 20, 20);
+    gfx.destroy();
+  }
+
+  /**
+   * Generate the hit indicator chevron texture (16x16, white filled chevron).
+   * Called once during construction.
+   */
+  private generateHitIndicatorTexture(): void {
+    const gfx = this.scene.make.graphics({ x: 0, y: 0 }, false);
+    gfx.fillStyle(0xffffff, 1);
+    gfx.beginPath();
+    gfx.moveTo(0, 0);
+    gfx.lineTo(16, 8);
+    gfx.lineTo(0, 16);
+    gfx.lineTo(4, 8);
+    gfx.closePath();
+    gfx.fillPath();
+    gfx.generateTexture('hit_indicator', 16, 16);
     gfx.destroy();
   }
 
@@ -389,6 +408,45 @@ export class GameSceneUI {
         damageText.destroy();
       },
     });
+  }
+
+  /**
+   * Show directional hit indicator (chevron) pointing from player toward target/source.
+   * @param playerX - Local player X position
+   * @param playerY - Local player Y position
+   * @param targetX - Target/source X position
+   * @param targetY - Target/source Y position
+   * @param type - 'outgoing' (dealing damage) or 'incoming' (taking damage)
+   * @param kill - Whether this was a killing blow (only affects outgoing color)
+   */
+  showHitIndicator(playerX: number, playerY: number, targetX: number, targetY: number, type: 'outgoing' | 'incoming', kill: boolean = false): void {
+    const angle = Math.atan2(targetY - playerY, targetX - playerX);
+    const ix = playerX + Math.cos(angle) * 60;
+    const iy = playerY + Math.sin(angle) * 60;
+
+    const indicator = this.scene.add.sprite(ix, iy, 'hit_indicator');
+    indicator.setDepth(1001);
+    indicator.setRotation(angle);
+
+    if (type === 'incoming') {
+      indicator.setTint(0xff0000);
+      this.scene.tweens.add({
+        targets: indicator,
+        alpha: 0,
+        scale: 1.5,
+        duration: 400,
+        onComplete: () => indicator.destroy(),
+      });
+    } else {
+      indicator.setTint(kill ? 0xff0000 : 0xffffff);
+      this.scene.tweens.add({
+        targets: indicator,
+        alpha: 0,
+        scale: 1.5,
+        duration: 200,
+        onComplete: () => indicator.destroy(),
+      });
+    }
   }
 
   /**

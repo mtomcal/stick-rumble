@@ -250,16 +250,16 @@ The following discrepancies were found between this plan and the spec diff (c7dd
 
 > **Current state**: Not implemented.
 
-- [ ] **Generate chevron texture**: 16×16 `hit_indicator`
-- [ ] **Position**: 60px from player center, pointing toward damage source/target
-- [ ] **Outgoing (hit:confirmed)**: White, 200ms fade, scale to 1.5×; red on kill
-- [ ] **Incoming (player:damaged for local)**: Red, 400ms fade, scale to 1.5×
-- [ ] **Depth**: 1001
-- [ ] **Test TS-GFX-021**: Directional hit indicator (outgoing)
-- [ ] **Test TS-GFX-022**: Directional hit indicator (incoming)
-- [ ] **Spec validation**: Verify against `constants.md` lines 333-337 — size=16×16, distance=60, outgoingDuration=200, incomingDuration=400, depth=1001. Verify scale-up to 1.5× per `graphics.md` lines 905, 912. Verify incoming is always red, outgoing is white (red on kill)
-- [ ] **Assertion quality**: Tests assert outgoing tween duration exactly 200, incoming tween duration exactly 400, scale target exactly 1.5, depth exactly 1001, distance from player center exactly 60px. Assert incoming tint is always red regardless of kill state. No bare `toHaveBeenCalled()` on sprite creation
-- [ ] **Coverage gate**: Hit indicator outgoing + incoming + kill variant branches ≥90% statements/lines/functions
+- [x] **Generate chevron texture**: 16×16 `hit_indicator`
+- [x] **Position**: 60px from player center, pointing toward damage source/target
+- [x] **Outgoing (hit:confirmed)**: White, 200ms fade, scale to 1.5×; red on kill
+- [x] **Incoming (player:damaged for local)**: Red, 400ms fade, scale to 1.5×
+- [x] **Depth**: 1001
+- [x] **Test TS-GFX-021**: Directional hit indicator (outgoing)
+- [x] **Test TS-GFX-022**: Directional hit indicator (incoming)
+- [x] **Spec validation**: Verified against `constants.md` lines 477-485 (actual location) — size=16×16, distance=60, outgoingDuration=200, incomingDuration=400, depth=1001. Verified scale-up to 1.5× per `graphics.md` lines 983, 990. Verified incoming is always red, outgoing is white (red on kill)
+- [x] **Assertion quality**: Tests assert outgoing tween duration exactly 200, incoming tween duration exactly 400, scale target exactly 1.5, depth exactly 1001, distance from player center exactly 60px. Assert incoming tint is always red regardless of kill state. No bare `toHaveBeenCalled()` on sprite creation
+- [x] **Coverage gate**: Hit indicator outgoing + incoming + kill variant branches ≥90% statements/lines/functions
 
 ---
 
@@ -465,3 +465,9 @@ Follow these steps for each system section:
 - [2026-02-16] **System 4c — Plan spec line refs wrong**: Plan said "constants.md lines 423-431" for damage number constants, but those are healing particle constants. Actual damage number constants at lines 567-579. Also said lines 237-238 for duration/float, actual at lines 385-386.
 - [2026-02-16] **System 4c — isKill derived from newHealth**: The `player:damaged` event includes `newHealth` but no explicit kill boolean. Used `newHealth <= 0` to determine if this damage was a killing blow. `isLocal` is `attackerId === localPlayerId`.
 - [2026-02-16] **System 4c — Backward-compatible signature**: Added `isKill` and `isLocal` as optional params with defaults (`false`, `true`), so existing callers that don't pass them get the normal local variant behavior.
+- [2026-02-16] **System 4d — Plan spec line refs wrong**: Plan said "constants.md lines 333-337" for hit indicator constants, but those are aim sway constants. Actual hit indicator constants at lines 477-485.
+- [2026-02-16] **System 4d — Used Math.atan2 instead of Phaser.Math.Angle.Between**: Spec code uses `Phaser.Math.Angle.Between(player.x, player.y, target.x, target.y)` which is equivalent to `Math.atan2(target.y - player.y, target.x - player.x)`. Used `Math.atan2` directly to avoid needing to mock additional Phaser methods.
+- [2026-02-16] **System 4d — RenderedPlayer fields not needed for hit indicators**: Errata mentioned `lastDamageTime` and `lastDamageSourceAngle` fields for directional hit indicators. These weren't needed — outgoing uses `getLocalPlayerPosition()` + `getPlayerPosition(victimId)`, incoming uses `getLocalPlayerPosition()` + `getPlayerPosition(attackerId)`, computed on the fly from event data.
+- [2026-02-16] **System 4d — GameScene.test.setup.ts needed fillStyle/fillPath/closePath**: The chevron texture uses `fillStyle`, `fillPath`, and `closePath` on `make.graphics()`. Added these methods to `mockMakeGraphics` in both `GameSceneUI.test.ts` and `GameScene.test.setup.ts`.
+- [2026-02-16] **System 4d — Kill credit handler also shows outgoing indicator**: In addition to `hit:confirmed` (normal outgoing), the `player:kill_credit` handler also shows an outgoing indicator with `kill=true` for red chevron on kills.
+- [2026-02-16] **System 4d — getLocalPlayerPosition added to mockPlayerManager**: The base `mockPlayerManager` in `GameSceneEventHandlers.test.ts` was missing `getLocalPlayerPosition`. Added it alongside the existing `getPlayerPosition` mock.

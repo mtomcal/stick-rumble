@@ -37,6 +37,7 @@ describe('GameSceneEventHandlers', () => {
       setLocalPlayerId: vi.fn(),
       getLocalPlayerId: vi.fn().mockReturnValue('player-1'),
       getPlayerPosition: vi.fn().mockReturnValue({ x: 100, y: 200 }),
+      getLocalPlayerPosition: vi.fn().mockReturnValue({ x: 100, y: 200 }),
       getPlayerAimAngle: vi.fn().mockReturnValue(0),
       updatePlayerWeapon: vi.fn(),
       triggerWeaponRecoil: vi.fn(),
@@ -89,6 +90,7 @@ describe('GameSceneEventHandlers', () => {
       showDamageFlash: vi.fn(),
       showDamageNumber: vi.fn(),
       showHitMarker: vi.fn(),
+      showHitIndicator: vi.fn(),
       showCameraShake: vi.fn(),
       updateMatchTimer: vi.fn(),
     } as unknown as GameSceneUI;

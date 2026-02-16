@@ -62,19 +62,23 @@ describe('GameSceneUI', () => {
     // Create mock make.graphics for texture generation
     mockMakeGraphics = {
       lineStyle: vi.fn().mockReturnThis(),
+      fillStyle: vi.fn().mockReturnThis(),
       beginPath: vi.fn().mockReturnThis(),
       moveTo: vi.fn().mockReturnThis(),
       lineTo: vi.fn().mockReturnThis(),
+      closePath: vi.fn().mockReturnThis(),
+      fillPath: vi.fn().mockReturnThis(),
       strokePath: vi.fn().mockReturnThis(),
       generateTexture: vi.fn().mockReturnThis(),
       destroy: vi.fn(),
     };
 
-    // Create mock sprite for hit marker
+    // Create mock sprite for hit marker and hit indicator
     mockSprite = {
       setDepth: vi.fn().mockReturnThis(),
       setTint: vi.fn().mockReturnThis(),
       setScale: vi.fn().mockImplementation(function(this: any, s: number) { this.scale = s; return this; }),
+      setRotation: vi.fn().mockReturnThis(),
       scale: 1,
       destroy: vi.fn(),
     };
@@ -768,6 +772,171 @@ describe('GameSceneUI', () => {
           })
         );
       });
+    });
+  });
+
+  describe('Hit indicator texture generation', () => {
+    it('should generate hit_indicator texture with generateTexture("hit_indicator", 16, 16)', () => {
+      // Called in constructor — second call to make.graphics (after hitmarker)
+      expect(mockMakeGraphics.generateTexture).toHaveBeenCalledWith('hit_indicator', 16, 16);
+    });
+
+    it('should draw filled white chevron shape', () => {
+      expect(mockMakeGraphics.fillStyle).toHaveBeenCalledWith(0xffffff, 1);
+      expect(mockMakeGraphics.moveTo).toHaveBeenCalledWith(0, 0);
+      expect(mockMakeGraphics.lineTo).toHaveBeenCalledWith(16, 8);
+      expect(mockMakeGraphics.lineTo).toHaveBeenCalledWith(0, 16);
+      expect(mockMakeGraphics.lineTo).toHaveBeenCalledWith(4, 8);
+      expect(mockMakeGraphics.closePath).toHaveBeenCalled();
+      expect(mockMakeGraphics.fillPath).toHaveBeenCalled();
+    });
+
+    it('should destroy temp graphics after hit indicator texture generation', () => {
+      // destroy is called for both hitmarker and hit_indicator textures
+      expect(mockMakeGraphics.destroy).toHaveBeenCalled();
+    });
+  });
+
+  describe('TS-GFX-021: Directional hit indicator (outgoing)', () => {
+    it('should create sprite at 60px from player toward target with "hit_indicator" texture', () => {
+      // Player at (100, 100), target at (200, 100) — angle = 0 (east)
+      ui.showHitIndicator(100, 100, 200, 100, 'outgoing');
+
+      expect(mockScene.add.sprite).toHaveBeenCalledWith(
+        160, // 100 + cos(0) * 60 = 160
+        100, // 100 + sin(0) * 60 = 100
+        'hit_indicator'
+      );
+    });
+
+    it('should set depth to exactly 1001', () => {
+      ui.showHitIndicator(100, 100, 200, 100, 'outgoing');
+
+      expect(mockSprite.setDepth).toHaveBeenCalledWith(1001);
+    });
+
+    it('should set rotation to angle toward target', () => {
+      // Player at (100, 100), target at (200, 100) — angle = 0
+      ui.showHitIndicator(100, 100, 200, 100, 'outgoing');
+
+      expect(mockSprite.setRotation).toHaveBeenCalledWith(0);
+    });
+
+    it('should set white tint (0xFFFFFF) for normal outgoing hit', () => {
+      ui.showHitIndicator(100, 100, 200, 100, 'outgoing', false);
+
+      expect(mockSprite.setTint).toHaveBeenCalledWith(0xffffff);
+    });
+
+    it('should set red tint (0xFF0000) for kill outgoing hit', () => {
+      ui.showHitIndicator(100, 100, 200, 100, 'outgoing', true);
+
+      expect(mockSprite.setTint).toHaveBeenCalledWith(0xff0000);
+    });
+
+    it('should create tween with alpha 0, scale 1.5, duration exactly 200ms', () => {
+      ui.showHitIndicator(100, 100, 200, 100, 'outgoing');
+
+      expect(mockScene.tweens.add).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targets: mockSprite,
+          alpha: 0,
+          scale: 1.5,
+          duration: 200,
+        })
+      );
+    });
+
+    it('should destroy indicator sprite after tween completes', () => {
+      ui.showHitIndicator(100, 100, 200, 100, 'outgoing');
+
+      expect(mockSprite.destroy).toHaveBeenCalled();
+    });
+
+    it('should position correctly for diagonal angle (NE)', () => {
+      // Player at (0, 0), target at (100, 100) — angle = PI/4
+      const angle = Math.atan2(100, 100); // ~0.7854
+      ui.showHitIndicator(0, 0, 100, 100, 'outgoing');
+
+      expect(mockScene.add.sprite).toHaveBeenCalledWith(
+        Math.cos(angle) * 60,
+        Math.sin(angle) * 60,
+        'hit_indicator'
+      );
+    });
+
+    it('should default kill to false when omitted', () => {
+      ui.showHitIndicator(100, 100, 200, 100, 'outgoing');
+
+      expect(mockSprite.setTint).toHaveBeenCalledWith(0xffffff);
+    });
+  });
+
+  describe('TS-GFX-022: Directional hit indicator (incoming)', () => {
+    it('should create sprite at 60px from player toward source with "hit_indicator" texture', () => {
+      // Player at (200, 200), attacker at (100, 200) — angle = PI (west)
+      ui.showHitIndicator(200, 200, 100, 200, 'incoming');
+
+      expect(mockScene.add.sprite).toHaveBeenCalledWith(
+        140, // 200 + cos(PI) * 60 = 200 - 60 = 140
+        200, // 200 + sin(PI) * 60 ≈ 200
+        'hit_indicator'
+      );
+    });
+
+    it('should set depth to exactly 1001', () => {
+      ui.showHitIndicator(200, 200, 100, 200, 'incoming');
+
+      expect(mockSprite.setDepth).toHaveBeenCalledWith(1001);
+    });
+
+    it('should always set red tint (0xFF0000) for incoming hit', () => {
+      ui.showHitIndicator(200, 200, 100, 200, 'incoming', false);
+
+      expect(mockSprite.setTint).toHaveBeenCalledWith(0xff0000);
+    });
+
+    it('should always set red tint for incoming even when kill is true', () => {
+      ui.showHitIndicator(200, 200, 100, 200, 'incoming', true);
+
+      expect(mockSprite.setTint).toHaveBeenCalledWith(0xff0000);
+    });
+
+    it('should create tween with alpha 0, scale 1.5, duration exactly 400ms', () => {
+      ui.showHitIndicator(200, 200, 100, 200, 'incoming');
+
+      expect(mockScene.tweens.add).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targets: mockSprite,
+          alpha: 0,
+          scale: 1.5,
+          duration: 400,
+        })
+      );
+    });
+
+    it('should destroy indicator sprite after tween completes', () => {
+      ui.showHitIndicator(200, 200, 100, 200, 'incoming');
+
+      expect(mockSprite.destroy).toHaveBeenCalled();
+    });
+
+    it('should set rotation to angle toward damage source', () => {
+      // Player at (200, 200), attacker at (100, 200) — angle = PI
+      ui.showHitIndicator(200, 200, 100, 200, 'incoming');
+
+      expect(mockSprite.setRotation).toHaveBeenCalledWith(Math.PI);
+    });
+
+    it('should position at exactly 60px distance from player center', () => {
+      // Player at (300, 300), attacker at (300, 100) — angle = -PI/2 (north)
+      ui.showHitIndicator(300, 300, 300, 100, 'incoming');
+
+      expect(mockScene.add.sprite).toHaveBeenCalledWith(
+        300, // 300 + cos(-PI/2) * 60 ≈ 300
+        240, // 300 + sin(-PI/2) * 60 = 300 - 60 = 240
+        'hit_indicator'
+      );
     });
   });
 

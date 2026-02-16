@@ -391,6 +391,13 @@ export class GameSceneEventHandlers {
         this.localPlayerHealth = messageData.newHealth;
         this.getHealthBarUI().updateHealth(this.localPlayerHealth, 100, false); // Not regenerating when damaged
         this.ui.showDamageFlash();
+
+        // Show incoming directional hit indicator (red chevron pointing toward attacker)
+        const localPlayerPos = this.playerManager.getLocalPlayerPosition();
+        const attackerPosition = this.playerManager.getPlayerPosition(messageData.attackerId);
+        if (localPlayerPos && attackerPosition) {
+          this.ui.showHitIndicator(localPlayerPos.x, localPlayerPos.y, attackerPosition.x, attackerPosition.y, 'incoming');
+        }
       }
 
       // Show damage numbers above damaged player (with kill/remote variants)
@@ -426,6 +433,13 @@ export class GameSceneEventHandlers {
       console.log(`Hit confirmed! Dealt ${messageData.damage} damage to ${messageData.victimId}`);
       this.ui.showHitMarker(false);
       this.ui.showCameraShake();
+
+      // Show outgoing directional hit indicator (chevron pointing toward victim)
+      const localPos = this.playerManager.getLocalPlayerPosition();
+      const victimPos = this.playerManager.getPlayerPosition(messageData.victimId);
+      if (localPos && victimPos) {
+        this.ui.showHitIndicator(localPos.x, localPos.y, victimPos.x, victimPos.y, 'outgoing', false);
+      }
       // TODO: Audio feedback (ding sound) - deferred to audio story
     };
     this.handlerRefs.set('hit:confirmed', hitConfirmedHandler);
@@ -452,6 +466,13 @@ export class GameSceneEventHandlers {
 
       // Show kill variant hit marker (red, 2x scale)
       this.ui.showHitMarker(true);
+
+      // Show outgoing directional hit indicator with kill variant
+      const killLocalPos = this.playerManager.getLocalPlayerPosition();
+      const killVictimPos = this.playerManager.getPlayerPosition(messageData.victimId);
+      if (killLocalPos && killVictimPos) {
+        this.ui.showHitIndicator(killLocalPos.x, killLocalPos.y, killVictimPos.x, killVictimPos.y, 'outgoing', true);
+      }
 
       // Add kill to feed (using player IDs for now - will be replaced with names later)
       this.killFeedUI.addKill(messageData.killerId.substring(0, 8), messageData.victimId.substring(0, 8));

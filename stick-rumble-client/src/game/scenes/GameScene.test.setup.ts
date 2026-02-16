@@ -65,9 +65,12 @@ export const createMockScene = () => {
 
   const mockMakeGraphics = {
     lineStyle: vi.fn().mockReturnThis(),
+    fillStyle: vi.fn().mockReturnThis(),
     beginPath: vi.fn().mockReturnThis(),
     moveTo: vi.fn().mockReturnThis(),
     lineTo: vi.fn().mockReturnThis(),
+    closePath: vi.fn().mockReturnThis(),
+    fillPath: vi.fn().mockReturnThis(),
     strokePath: vi.fn().mockReturnThis(),
     generateTexture: vi.fn().mockReturnThis(),
     destroy: vi.fn(),
