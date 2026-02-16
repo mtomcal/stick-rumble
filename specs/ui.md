@@ -233,54 +233,41 @@ export class HealthBarUI {
 - Depth: 1000
 
 **Behavior:**
-1. New kill → add entry at bottom of list (push)
-2. If >= 5 entries → remove oldest from top (FIFO via shift)
-3. After 5 seconds → fade out over 1 second (Linear easing)
-4. On fade complete → splice entry from tracking array, destroy, and reposition remaining entries
+1. New kill → add entry at top
+2. If > 5 entries → remove oldest (FIFO)
+3. After 5 seconds → fade out over 1 second
+4. On fade complete → remove and reposition remaining entries
 
 **Pseudocode:**
 ```
 function addKill(killerName, victimName):
-    // Remove oldest kill if at max capacity (FIFO)
-    if entries.length >= 5:
-        oldest = entries.shift()
-        container.remove(oldest.text)
-        oldest.text.destroy()
+    // Remove oldest (front of array) if at max capacity
+    if kills.length >= 5:
+        oldest = kills.shift()
+        oldest.destroy()
 
     entry = createText("{killerName} killed {victimName}")
-    entry.position = (0, entries.length * 25)  // relative to container
-    container.add(entry)
-    entries.push(entry)
+    kills.push(entry)  // Add to end of array
 
     scheduleRemoval(entry, 5000ms)
 
 function fadeOutKill(entry):
-    tween(entry.text.alpha, 0, 1000ms, Linear)
-    onComplete:
-        splice entry from entries array
-        container.remove(entry.text)
-        entry.text.destroy()
-        updatePositions()
-
-function updatePositions():
-    for i, entry in entries:
-        entry.text.y = i * 25
+    tween(entry.alpha, 0, 1000ms)
+    onComplete: removeEntry(entry)
 ```
 
 **TypeScript:**
 ```typescript
 export class KillFeedUI {
-  private container: Phaser.GameObjects.Container;
-  private kills: KillEntry[] = [];  // KillEntry = { text, timestamp }
+  private kills: KillEntry[] = [];  // Oldest at index 0, newest at end
   private readonly MAX_KILLS = 5;
   private readonly FADE_DELAY = 5000;
-  private readonly FADE_DURATION = 1000;
   private readonly KILL_SPACING = 25;
 
   addKill(killerName: string, victimName: string): void {
-    // Remove oldest kill if at max capacity (FIFO)
+    // Remove oldest kill if at max capacity
     if (this.kills.length >= this.MAX_KILLS) {
-      const oldestKill = this.kills.shift();
+      const oldestKill = this.kills.shift();  // Remove from front
       if (oldestKill) {
         this.container.remove(oldestKill.text);
         oldestKill.text.destroy();
@@ -289,19 +276,16 @@ export class KillFeedUI {
 
     const yPosition = this.kills.length * this.KILL_SPACING;
     const killText = this.scene.add.text(
-      0,
-      yPosition,
+      0, yPosition,
       `${killerName} killed ${victimName}`,
-      {
-        fontSize: '16px', fontStyle: 'bold', color: '#ffffff',
+      { fontSize: '16px', fontStyle: 'bold', color: '#ffffff',
         stroke: '#000000', strokeThickness: 2,
-        backgroundColor: '#000000', padding: { x: 8, y: 4 }
-      }
+        backgroundColor: '#000000', padding: { x: 8, y: 4 } }
     );
     killText.setOrigin(1, 0);
-
     this.container.add(killText);
-    this.kills.push({ text: killText, timestamp: Date.now() });
+
+    this.kills.push({ text: killText, timestamp: Date.now() });  // Add to end
 
     this.scene.time.delayedCall(this.FADE_DELAY, () => this.fadeOutKill(killEntry));
   }
@@ -324,15 +308,22 @@ export class KillFeedUI {
 
 **Why hide for melee?** Melee weapons have unlimited attacks (magazineSize = 0). Showing "0/0" is confusing.
 
+> **Note:** There is no low-ammo color change logic. The ammo text stays white (#ffffff) regardless of ammo count.
+
 **TypeScript:**
 ```typescript
-function updateAmmoDisplay(currentAmmo: number, maxAmmo: number, isMelee: boolean): void {
-  if (isMelee) {
-    this.ammoText.setVisible(false);
-    return;
+updateAmmoDisplay(shootingManager: ShootingManager): void {
+  if (this.ammoText && shootingManager) {
+    const isMelee = shootingManager.isMeleeWeapon();
+
+    if (isMelee) {
+      this.ammoText.setVisible(false);
+    } else {
+      this.ammoText.setVisible(true);
+      const [current, max] = shootingManager.getAmmoInfo();
+      this.ammoText.setText(`${current}/${max}`);
+    }
   }
-  this.ammoText.setVisible(true);
-  this.ammoText.setText(`${currentAmmo}/${maxAmmo}`);
 }
 ```
 
@@ -417,8 +408,8 @@ function updateReloadUI(isReloading, isEmpty, reloadProgress, isMelee):
 **Color Coding:**
 | Remaining Time | Color | Why |
 |----------------|-------|-----|
-| >= 120 seconds | White (#ffffff) | Normal, plenty of time |
-| 60-119 seconds | Yellow (#ffff00) | Match winding down (60s is yellow, 120s is white) |
+| > 120 seconds | White (#ffffff) | Normal, plenty of time |
+| 60-120 seconds | Yellow (#ffff00) | Match winding down |
 | < 60 seconds | Red (#ff0000) | Final minute urgency |
 
 **Pseudocode:**
@@ -447,11 +438,11 @@ updateMatchTimer(remainingSeconds: number): void {
   this.matchTimerText.setText(`${minutes}:${seconds.toString().padStart(2, '0')}`);
 
   if (remainingSeconds < 60) {
-    this.matchTimerText.setColor('#ff0000');   // Red
+    this.matchTimerText.setColor('#ff0000');    // Red
   } else if (remainingSeconds < 120) {
-    this.matchTimerText.setColor('#ffff00');   // Yellow
+    this.matchTimerText.setColor('#ffff00');    // Yellow
   } else {
-    this.matchTimerText.setColor('#ffffff');   // White
+    this.matchTimerText.setColor('#ffffff');    // White
   }
 }
 ```
@@ -495,30 +486,25 @@ function updateProgress(progress):  // 0.0 to 1.0
 ```typescript
 export class DodgeRollCooldownUI {
   private graphics: Phaser.GameObjects.Graphics;
-  private x: number;
-  private y: number;
-  private radius: number = 20;
 
   updateProgress(progress: number): void {
-    progress = Math.max(0, Math.min(1, progress));
     this.graphics.clear();
 
     if (progress >= 1.0) {
       this.graphics.fillStyle(0x00ff00, 0.8);
-      this.graphics.fillCircle(this.x, this.y, this.radius);
+      this.graphics.fillCircle(0, 0, 20);
     } else {
       // Background
       this.graphics.fillStyle(0x666666, 0.5);
-      this.graphics.fillCircle(this.x, this.y, this.radius);
+      this.graphics.fillCircle(0, 0, 20);
 
-      // Progress arc (filled, not stroked)
-      const startAngle = -Math.PI / 2; // -90° (top)
+      // Progress arc
+      this.graphics.lineStyle(4, 0x00ff00, 0.6);
+      const startAngle = Phaser.Math.DegToRad(-90);
       const endAngle = startAngle + (progress * Math.PI * 2);
       this.graphics.beginPath();
-      this.graphics.arc(this.x, this.y, this.radius, startAngle, endAngle, false);
-      this.graphics.closePath();
-      this.graphics.fillStyle(0x00ff00, 0.6);
-      this.graphics.fillPath();
+      this.graphics.arc(0, 0, 18, startAngle, endAngle);
+      this.graphics.strokePath();
     }
   }
 }
@@ -662,39 +648,37 @@ showDamageFlash(): void {
 **Position**: Screen center (around crosshair)
 
 **Visual Specification:**
-- 4 white lines forming + pattern (top, bottom, left, right)
+- 4 white lines forming + pattern (crosshair: top, bottom, left, right)
 - Line length: 15px
 - Gap from center: 10px
 - Line width: 3px
 - Animation: Fade out over 200ms (Cubic.easeOut)
 - Depth: 1001
 
-**Why + pattern?** Instantly recognizable hit confirmation from FPS conventions. Small enough not to obstruct view.
+**Why + pattern?** Instantly recognizable hit confirmation from FPS conventions. Overlays the crosshair position without obstructing view.
 
 **TypeScript:**
 ```typescript
 showHitMarker(): void {
-  // Use world coordinates (camera.scrollX/Y) instead of setScrollFactor(0)
   const camera = this.scene.cameras.main;
   const centerX = camera.scrollX + camera.width / 2;
   const centerY = camera.scrollY + camera.height / 2;
+  const lineLength = 15;
   const gap = 10;
-  const len = 15;
 
+  // 4 lines forming + pattern (top, bottom, left, right)
   const lines = [
-    // Top line (vertical)
-    this.scene.add.line(0, 0, centerX, centerY - gap, centerX, centerY - gap - len, 0xffffff),
-    // Bottom line (vertical)
-    this.scene.add.line(0, 0, centerX, centerY + gap, centerX, centerY + gap + len, 0xffffff),
-    // Left line (horizontal)
-    this.scene.add.line(0, 0, centerX - gap, centerY, centerX - gap - len, centerY, 0xffffff),
-    // Right line (horizontal)
-    this.scene.add.line(0, 0, centerX + gap, centerY, centerX + gap + len, centerY, 0xffffff),
+    this.scene.add.line(0, 0, centerX, centerY - gap, centerX, centerY - gap - lineLength, 0xffffff),
+    this.scene.add.line(0, 0, centerX, centerY + gap, centerX, centerY + gap + lineLength, 0xffffff),
+    this.scene.add.line(0, 0, centerX - gap, centerY, centerX - gap - lineLength, centerY, 0xffffff),
+    this.scene.add.line(0, 0, centerX + gap, centerY, centerX + gap + lineLength, centerY, 0xffffff),
   ];
 
+  // Note: No setScrollFactor(0) — lines are positioned in world coords
+  // using camera.scrollX/scrollY offsets, so they appear at screen center.
   lines.forEach(line => {
-    line.setLineWidth(3);
     line.setDepth(1001);
+    line.setLineWidth(3);
   });
 
   this.scene.tweens.add({
@@ -775,9 +759,11 @@ showDamageNumber(victimX: number, victimY: number, damage: number): void {
 - Overflow-y: auto
 
 #### Winner Section
-- Winner text: "Winner: {PlayerName}" or "Winners: {names}" (comma-separated) or "No Winner"
-- Winner color: Gold (#ffd700)
-- No separate "MATCH ENDED" h1 (winner text serves as title)
+- Single winner: "Winner: {PlayerName}"
+- Multiple winners: "Winners: {Name1}, {Name2}"
+- No winner: "No Winner"
+- Winner name color: Gold (#ffd700)
+- No separate "MATCH ENDED" title — the winner text IS the title (`<h2 class="match-end-title">`)
 
 #### Scoreboard Table
 
@@ -818,65 +804,52 @@ showDamageNumber(victimX: number, victimY: number, damage: number): void {
 
 **TypeScript (React):**
 ```tsx
-export function MatchEndScreen({ matchData, localPlayerId, onClose, onPlayAgain }: Props) {
+export function MatchEndScreen({ matchData, localPlayerId, onClose, onPlayAgain }: MatchEndScreenProps) {
   const [countdown, setCountdown] = useState(10);
+  const hasCalledPlayAgainRef = useRef(false);
 
+  // Countdown timer (separate effect from trigger)
   useEffect(() => {
+    if (countdown <= 0) return;
     const timer = setInterval(() => {
-      setCountdown(c => {
-        if (c <= 1) {
-          onPlayAgain();
-          return 0;
-        }
-        return c - 1;
-      });
+      setCountdown(prev => Math.max(0, prev - 1));
     }, 1000);
     return () => clearInterval(timer);
-  }, [onPlayAgain]);
+  }, [countdown]);
 
-  const isLocalWinner = matchData.winners.includes(localPlayerId);
-  const sortedScores = [...matchData.finalScores].sort((a, b) =>
-    b.kills - a.kills || a.deaths - b.deaths
+  // Trigger onPlayAgain when countdown reaches 0 (ref prevents double-call)
+  useEffect(() => {
+    if (countdown === 0 && !hasCalledPlayAgainRef.current) {
+      hasCalledPlayAgainRef.current = true;
+      onPlayAgain();
+    }
+  }, [countdown, onPlayAgain]);
+
+  const rankedPlayers = [...matchData.finalScores].sort((a, b) =>
+    b.kills !== a.kills ? b.kills - a.kills : a.deaths - b.deaths
   );
 
+  const renderWinners = () => {
+    if (matchData.winners.length === 0)
+      return <h2 className="match-end-title">No Winner</h2>;
+    if (matchData.winners.length === 1)
+      return <h2 className="match-end-title">Winner: <span className="winner-name">{matchData.winners[0]}</span></h2>;
+    return <h2 className="match-end-title">Winners: <span className="winner-name">{matchData.winners.join(', ')}</span></h2>;
+  };
+
   return (
-    <div className="match-end-backdrop" onClick={onClose}>
-      <div className="match-end-modal" onClick={e => e.stopPropagation()}>
+    <div className="match-end-backdrop" onClick={handleBackdropClick}>
+      <div className="match-end-modal" role="dialog" onClick={e => e.stopPropagation()}>
         <button className="close-button" onClick={onClose}>×</button>
-
-        <h2 className="winner-text">
-          {matchData.winners.length === 0 ? 'No Winner' :
-           matchData.winners.length === 1 ? `Winner: ${matchData.winners[0]}` :
-           `Winners: ${matchData.winners.join(', ')}`}
-        </h2>
-
-        <table className="scoreboard">
-          <thead>
-            <tr><th>#</th><th>Player</th><th>Kills</th><th>Deaths</th></tr>
-          </thead>
-          <tbody>
-            {sortedScores.map((score, i) => (
-              <tr key={score.playerId}
-                  className={score.playerId === localPlayerId ? 'local-player' : ''}>
-                <td>{i + 1}</td>
-                <td>{score.playerId}</td>
-                <td>{score.kills}</td>
-                <td>{score.deaths}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <div className="countdown">Returning to lobby in {countdown}s</div>
-
-        <button className="play-again-button" onClick={onPlayAgain}>
-          Play Again
-        </button>
+        {renderWinners()}
+        {/* Rankings table, XP breakdown, countdown, play again button */}
       </div>
     </div>
   );
 }
 ```
+
+> **Note:** No "MATCH ENDED" heading — the winner text IS the title. Countdown uses a `useRef` guard to prevent calling `onPlayAgain` multiple times on re-render.
 
 ---
 
@@ -885,13 +858,13 @@ export function MatchEndScreen({ matchData, localPlayerId, onClose, onPlayAgain 
 **Position**: (10, 30), below title
 
 **Visual Specification:**
+- Font size: 14px
 - Connected: "Connected! WASD=move, Click=shoot, R=reload, E=pickup, SPACE=dodge"
   - Color: Green (#00ff00)
-  - Font size: 14px
 - Failed: "Failed to connect to server"
   - Color: Red (#ff0000)
-  - Font size: 14px
-- Reconnecting: Logged to console only, no visible UI
+- Reconnecting: **Console only** — `console.log("Reconnecting in ${delay}ms... (attempt ${n})")`
+  - No visible on-screen UI for reconnecting state
 
 **Why detailed connected message?** First-time players need control hints. Experienced players ignore it.
 
@@ -998,8 +971,8 @@ this.wsClient.on('player:move', (data) => {
 });
 
 this.wsClient.on('player:kill_credit', (data) => {
-  const killerName = data.killerId.slice(0, 8);
-  const victimName = data.victimId.slice(0, 8);
+  const killerName = data.killerId.substring(0, 8);
+  const victimName = data.victimId.substring(0, 8);
   this.killFeedUI.addKill(killerName, victimName);
 });
 
@@ -1009,9 +982,9 @@ this.wsClient.on('match:timer', (data) => {
 
 this.wsClient.on('player:damaged', (data) => {
   if (data.victimId === this.localPlayerId) {
-    // Update health bar immediately from damage event (supplements player:move updates)
+    // Health bar updated from BOTH player:move AND player:damaged
     this.localPlayerHealth = data.newHealth;
-    this.healthBarUI.updateHealth(this.localPlayerHealth, 100, false); // Not regenerating when damaged
+    this.healthBarUI.updateHealth(this.localPlayerHealth, 100, false);
     this.ui.showDamageFlash();
   }
   this.ui.showDamageNumber(this.playerManager, data.victimId, data.damage);
@@ -1073,19 +1046,19 @@ it('should display correct health bar width and color', () => {
 
 **Expected Output:**
 - 2 entries visible
-- First entry (top): "Player1 killed Player2" (oldest, added first)
-- Second entry (bottom): "Player3 killed Player4" (newest, added last)
+- First entry (top): "Player3 killed Player4"
+- Second entry: "Player1 killed Player2"
 
 **TypeScript (Vitest):**
 ```typescript
-it('should show kills in chronological order (oldest at top)', () => {
+it('should show kills in reverse chronological order', () => {
   killFeedUI.addKill('Player1', 'Player2');
   killFeedUI.addKill('Player3', 'Player4');
 
   const entries = killFeedUI.getEntries();
   expect(entries).toHaveLength(2);
-  expect(entries[0].text).toBe('Player1 killed Player2');
-  expect(entries[1].text).toBe('Player3 killed Player4');
+  expect(entries[0].text).toBe('Player3 killed Player4');
+  expect(entries[1].text).toBe('Player1 killed Player2');
 });
 ```
 
@@ -1156,7 +1129,7 @@ it('should show kills in chronological order (oldest at top)', () => {
 
 **Expected Output:**
 - Timer shows "2:00"
-- Color = White (#ffffff) (120 is at the boundary; `< 120` is false so it falls to white)
+- Color = Yellow (#ffff00)
 
 ---
 
@@ -1274,3 +1247,11 @@ it('should sort scoreboard by kills descending, deaths ascending', () => {
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification |
 | 1.1.0 | 2026-02-15 | Added Debug Network Panel section (DebugNetworkPanel.tsx for testing netcode under degraded conditions). |
+| 1.1.1 | 2026-02-16 | Fixed kill feed ordering — actual uses `push` (add to end) + `shift` (remove oldest from front), not `unshift` + `pop`. Uses KillEntry objects with container, not raw text with setScrollFactor. |
+| 1.1.8 | 2026-02-16 | Added dual-source health bar update — `player:damaged` handler also calls `updateHealth()` (not just `player:move`) |
+| 1.1.7 | 2026-02-16 | Fixed hit marker — uses world coordinates (no `setScrollFactor(0)`) per actual `GameSceneUI.ts:305-361` |
+| 1.1.6 | 2026-02-16 | Clarified reload circle alpha — explicitly 1.0 (fully opaque) per `GameSceneUI.ts:168` |
+| 1.1.5 | 2026-02-16 | Fixed match timer boundary conditions — uses `< 60` and `< 120` (not `> 120` and `> 60`), checks red first |
+| 1.1.4 | 2026-02-16 | Added font size (14px) to connection status specification |
+| 1.1.3 | 2026-02-16 | Fixed kill feed player ID method — `slice(0, 8)` → `substring(0, 8)` to match source |
+| 1.1.2 | 2026-02-16 | Fixed match end screen test expected output — winner text is "Winner: Player1", not "Player1 WINS!" |

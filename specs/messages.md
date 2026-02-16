@@ -1,7 +1,7 @@
 # Messages
 
-> **Spec Version**: 1.2.0
-> **Last Updated**: 2026-02-16
+> **Spec Version**: 1.1.0
+> **Last Updated**: 2026-02-15
 > **Depends On**: [constants.md](constants.md), [player.md](player.md)
 > **Depended By**: [networking.md](networking.md), [rooms.md](rooms.md), [weapons.md](weapons.md), [shooting.md](shooting.md), [melee.md](melee.md), [hit-detection.md](hit-detection.md), [match.md](match.md), [client-architecture.md](client-architecture.md), [server-architecture.md](server-architecture.md)
 
@@ -157,7 +157,7 @@ interface InputStateData {
 
 **Go:**
 ```go
-// InputState struct (player.go:14-22) — does NOT include sequence:
+// InputState struct (player.go) — does NOT include sequence
 type InputState struct {
     Up          bool    `json:"up"`
     Down        bool    `json:"down"`
@@ -166,13 +166,9 @@ type InputState struct {
     AimAngle    float64 `json:"aimAngle"`
     IsSprinting bool    `json:"isSprinting"`
 }
-
-// The sequence number is extracted separately from the raw message data
-// in message_processor.go:39-42 and stored as a private inputSequence
-// field on PlayerState via SetInputSequence(). It is NOT part of the
-// InputState struct. The wire format includes sequence, but the Go
-// struct used for game logic does not.
 ```
+
+> **Note:** The `sequence` field is present in the JSON payload but is NOT part of the Go `InputState` struct. It is extracted separately in `message_processor.go` via direct type assertion (`dataMap["sequence"].(float64)`) and passed to `UpdatePlayerInputWithSequence(playerID, input, sequence)`.
 
 **Why `sequence`?** The sequence number enables client-side prediction reconciliation. The server echoes `lastProcessedSequence` in state broadcasts so the client knows which inputs have been applied server-side and can replay only unprocessed inputs. See [movement.md](movement.md#server-reconciliation).
 
@@ -544,16 +540,12 @@ interface PlayerState {
   id: string;
   position: Position;
   velocity: Velocity;
-  aimAngle: number;              // Aim angle in radians (json: "aimAngle")
-  health: number;                // Current health (0-100)
-  isInvulnerable: boolean;       // Spawn protection flag
-  invulnerabilityEnd: string;    // When spawn protection ends (ISO timestamp)
-  deathTime?: string;            // When player died (ISO timestamp, null/omitted if alive)
-  kills: number;                 // Number of kills
-  deaths: number;                // Number of deaths
-  xp: number;                    // Experience points
-  isRegenerating: boolean;       // Whether health is currently regenerating
-  isRolling: boolean;            // Whether player is currently dodge rolling
+  health: number;
+  maxHealth: number;
+  rotation: number;     // Aim angle in radians
+  isDead: boolean;
+  isSprinting: boolean;
+  isRolling: boolean;
 }
 
 interface PlayerMoveData {
@@ -565,11 +557,7 @@ interface PlayerMoveData {
 
 **Go:**
 ```go
-type PlayerMoveData struct {
-    Players []PlayerStateSnapshot `json:"players"`
-}
-
-// PlayerStateSnapshot (player.go:47-62):
+// PlayerStateSnapshot is the struct serialized for each player in broadcasts
 type PlayerStateSnapshot struct {
     ID                     string     `json:"id"`
     Position               Vector2    `json:"position"`
@@ -587,6 +575,8 @@ type PlayerStateSnapshot struct {
 }
 ```
 
+> **Note:** The Go `PlayerStateSnapshot` struct serializes different JSON field names than the TypeBox `PlayerStateSchema` expects. For example, Go sends `aimAngle` while the TypeBox schema defines `rotation`; Go sends `deathTime` instead of `isDead`; Go omits `maxHealth` and `isSprinting`. This mismatch exists in the codebase and may be reconciled by the client-side handler.
+
 **Example:**
 ```json
 {
@@ -598,28 +588,22 @@ type PlayerStateSnapshot struct {
         "id": "550e8400-e29b-41d4-a716-446655440000",
         "position": { "x": 100.5, "y": 200.3 },
         "velocity": { "x": 5.0, "y": -2.5 },
-        "aimAngle": 0.785,
         "health": 85,
-        "isInvulnerable": false,
-        "invulnerabilityEnd": "0001-01-01T00:00:00Z",
-        "kills": 2,
-        "deaths": 1,
-        "xp": 200,
-        "isRegenerating": false,
+        "maxHealth": 100,
+        "rotation": 0.785,
+        "isDead": false,
+        "isSprinting": true,
         "isRolling": false
       },
       {
         "id": "660e8400-e29b-41d4-a716-446655440111",
         "position": { "x": 500.0, "y": 300.0 },
         "velocity": { "x": 0.0, "y": 0.0 },
-        "aimAngle": 3.14,
         "health": 100,
-        "isInvulnerable": false,
-        "invulnerabilityEnd": "0001-01-01T00:00:00Z",
-        "kills": 0,
-        "deaths": 0,
-        "xp": 0,
-        "isRegenerating": false,
+        "maxHealth": 100,
+        "rotation": 3.14,
+        "isDead": false,
+        "isSprinting": false,
         "isRolling": false
       }
     ]
@@ -631,7 +615,7 @@ type PlayerStateSnapshot struct {
 1. Wait for `room:joined` before processing
 2. For each player in array:
    - Create sprite if new player
-   - Update position, aimAngle, health
+   - Update position, rotation, health
    - Update local health bar if local player
 3. Remove sprites for players no longer in array
 4. Ignored after `match:ended`
@@ -653,29 +637,28 @@ Announces creation of a new projectile.
 interface ProjectileSpawnData {
   id: string;           // Unique projectile ID
   ownerId: string;      // Player who fired
+  weaponType: string;   // Weapon type (e.g., "Pistol", "AK47")
   position: Position;   // Spawn position
   velocity: Velocity;   // Direction and speed
-  // NOTE: The TypeBox schema includes a weaponType field, but the Go server
-  // does NOT send it (see broadcast_helper.go:271-276). Clients should not
-  // rely on weaponType being present in this message.
 }
 ```
 
-**Go:**
+**Go Broadcast (actual):**
+
+The Go server does **not** use a named struct for this message. Instead, `broadcast_helper.go:broadcastProjectileSpawn` builds an inline `map[string]interface{}` with only four fields:
+
 ```go
-type ProjectileSpawnData struct {
-    ID         string  `json:"id"`
-    OwnerID    string  `json:"ownerId"`
-    Position   Vector2 `json:"position"`
-    Velocity   Vector2 `json:"velocity"`
+data := map[string]interface{}{
+    "id":       proj.ID,
+    "ownerId":  proj.OwnerID,
+    "position": proj.Position,
+    "velocity": proj.Velocity,
 }
-
-// Note: The Go server does NOT include weaponType in the broadcast.
-// See broadcast_helper.go:271-276. The TypeBox schema includes weaponType,
-// but the actual server implementation omits it.
 ```
 
-**Example:**
+> **Note:** The Go broadcast omits `weaponType` even though the TypeBox `ProjectileSpawnDataSchema` defines it as a required field. This means the server sends only `id`, `ownerId`, `position`, and `velocity`. Schema validation in development mode (`ENABLE_SCHEMA_VALIDATION=true`) would flag this mismatch.
+
+**Example (actual server payload):**
 ```json
 {
   "type": "projectile:spawn",
@@ -845,16 +828,32 @@ interface PlayerDamagedData {
   attackerId: string;    // Player who dealt damage
   damage: number;        // Amount of damage
   newHealth: number;     // Victim's health after damage
-  projectileId?: string; // Projectile ID (present for projectile hits, omitted for melee)
+  projectileId?: string; // Present for projectile/hitscan hits; ABSENT for melee hits
 }
 ```
 
 **Go:**
+
+> **Note:** No shared struct. The projectile hit path (`onHit` in `message_processor.go:112-117`) constructs the map inline with `projectileId`. The melee path (`broadcastPlayerDamaged` in `broadcast_helper.go:669-674`) omits `projectileId` entirely.
+
 ```go
-// Note: The server constructs this message as a map[string]interface{},
-// not a struct. For projectile hits (message_processor.go:112-118),
-// projectileId is included. For melee hits (broadcast_helper.go:669-674),
-// projectileId is omitted entirely.
+// Projectile hit path (message_processor.go:112-117):
+data := map[string]interface{}{
+    "victimId":     hit.VictimID,
+    "attackerId":   hit.AttackerID,
+    "damage":       damage,
+    "newHealth":    victimState.Health,
+    "projectileId": hit.ProjectileID,
+}
+
+// Melee hit path (broadcast_helper.go:669-674):
+data := map[string]interface{}{
+    "victimId":   victimID,
+    "attackerId": attackerID,
+    "damage":     damage,
+    "newHealth":  newHealth,
+    // projectileId is NOT included
+}
 ```
 
 **Example:**
@@ -877,9 +876,6 @@ interface PlayerDamagedData {
 2. Show damage number floating text
 3. Show bullet impact effect at victim position
 4. If local player is victim: flash screen red
-
-**Note:** The projectileId field is only present for projectile-based damage (see message_processor.go:117).
-For melee damage, the field is omitted entirely (see broadcast_helper.go:669-674).
 
 ---
 
@@ -1239,7 +1235,7 @@ interface WeaponPickupConfirmedData {
   playerId: string;        // Player who picked up
   crateId: string;         // Crate that was picked up
   weaponType: string;      // Weapon type received
-  nextRespawnTime: number; // Unix epoch timestamp in seconds (NOT milliseconds)
+  nextRespawnTime: number; // Unix epoch timestamp in seconds when crate respawns
 }
 ```
 
@@ -1809,4 +1805,7 @@ Client                          Server
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification extracted from codebase |
 | 1.1.0 | 2026-02-15 | Added `sequence` field to `input:state`. Added `clientTimestamp` field to `player:shoot`. Added `lastProcessedSequence` and `correctedPlayers` to `player:move`. Added new `state:snapshot` and `state:delta` message types for delta compression. Updated server→client count from 20 to 22. |
-| 1.2.0 | 2026-02-16 | Fixed spec drift: updated `PlayerState` fields to match actual `PlayerStateSnapshot` struct (aimAngle not rotation, deathTime not isDead, added isInvulnerable/kills/deaths/xp/isRegenerating, removed maxHealth/isSprinting). Documented that `projectile:spawn` omits weaponType from Go broadcast. Fixed `weapon:pickup_confirmed` nextRespawnTime to document Unix epoch seconds (not ms duration). Made `player:damaged` projectileId optional (omitted for melee). Fixed Go `InputState` struct to match actual code (no sequence field). |
+| 1.1.1 | 2026-02-16 | Fixed `projectile:spawn` Go section — server broadcast omits `weaponType` (only sends id, ownerId, position, velocity) |
+| 1.1.2 | 2026-02-16 | Fixed `weapon:pickup_confirmed` `nextRespawnTime` — is Unix epoch timestamp in seconds (via `respawnTime.Unix()`), not duration in milliseconds |
+| 1.1.4 | 2026-02-16 | Clarified `input:state` Go struct — `sequence` is not part of `InputState` struct, extracted separately in `message_processor.go` |
+| 1.1.3 | 2026-02-16 | Fixed `player:damaged` — melee path omits `projectileId` entirely; projectile path includes it. Made `projectileId` optional in TypeScript interface. |

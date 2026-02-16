@@ -1,135 +1,98 @@
-# Orchestrator Playbook — Pre-BMM Spec Verification
+# Orchestrator: Spec Drift Fix Monitor
 
-> **Mode: SANDBOX ONLY** — This job runs exclusively in Docker. Never run bare metal.
+You are monitoring a `loop.sh` worker that is fixing spec drift in `specs/`. The worker edits specs to match source code based on 104 findings from a prior validation pass. Your job is to auto-check every 5 minutes and course-correct when needed by editing PROMPT.md.
 
 ## How to Run
 
-Launch the worker loop in sandbox mode from the project root:
-
 ```bash
-SANDBOX=1 ./loop.sh 20 PROMPT.md
+# Launch the worker loop in the background (sandbox mode)
+cd ../stick-rumble-worktrees/spec-fixes
+SANDBOX=1 JOB_NAME=spec-fixes ./loop.sh 110 PROMPT.md &
+
+# Or bare mode:
+cd ../stick-rumble-worktrees/spec-fixes
+JOB_NAME=spec-fixes ./loop.sh 110 PROMPT.md &
 ```
 
-To monitor from a separate Claude session, launch the loop in the background and auto-check on a blocking 5-minute interval:
+### Auto-Checking
 
-```bash
-SANDBOX=1 ./loop.sh 20 PROMPT.md &
-LOOP_PID=$!
+After launching the loop in the background, enter a blocking check cycle: `sleep 300`, run the full checklist below, then `sleep 300` again. Repeat until the job completes. No background timers — just sleep, wake, check, sleep.
 
-while kill -0 $LOOP_PID 2>/dev/null; do
-    sleep 300
-    # Run your 7 checks here (see below)
-done
-```
-
-**Do NOT run without `SANDBOX=1`.** If the loop is accidentally started bare, stop it and relaunch with the env var.
-
----
-
-## What to Check (7-Point Checklist)
+## What to Check
 
 ### 1. Progress
-Read `IMPLEMENTATION_PLAN.md`, count `[x]` vs `[ ]` in the Progress Checklist section.
 
-```bash
-grep -c '\[x\]' IMPLEMENTATION_PLAN.md   # completed
-grep -c '\[ \]' IMPLEMENTATION_PLAN.md   # remaining
-```
+Read IMPLEMENTATION_PLAN.md "Fix Checklist". Count `[x]` vs `[ ]`.
 
 ### 2. Git History
-```bash
-git log --oneline -10
-```
-**Red flags:** commits touching files outside `docs/archive/`, thrashing (same spec fixed multiple times), stuck (no new commits since last check).
+
+Run: `git log --oneline -10`
+
+Red flags:
+- Commits touching source code (this job only edits specs)
+- No plan updates in 2+ iterations (stuck)
+- Commits with wrong message format (should be "docs: Fix {spec} — ...")
+- Thrashing (same spec edited multiple times)
 
 ### 3. Latest Log
-Read the most recent `.loop-logs/iteration-*.log`. Look for:
-- Errors or exceptions
-- Worker drifting to unrelated work
-- Worker editing source code (should only edit specs)
 
-```bash
-ls -t .loop-logs/iteration-*.log | head -1
-```
+Run: `ls -t .loop-logs/iteration-*.log | head -1` then read it.
+
+Look for: which finding is being fixed, errors, whether worker is reading source code before editing spec.
 
 ### 4. Diff Size
-```bash
-git diff --stat HEAD~1
-```
-**Red flag:** 200+ lines changed in a single spec = likely rewrote it instead of targeted edits. A spec fix should typically be 5-50 lines changed.
+
+Run: `git diff --stat HEAD~1`
+
+Red flag: 200+ lines in one file = rewrite instead of targeted fix.
 
 ### 5. Discoveries
-Check if the worker added rows to the Discoveries table in `IMPLEMENTATION_PLAN.md`. If a discovery affects already-completed items, write a course correction to revisit them.
+
+Check if worker added new rows to IMPLEMENTATION_PLAN.md Discoveries section. If a discovery affects completed items, write a correction.
 
 ### 6. Container Resources
-```bash
-docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.PIDs}}" | grep ralph
-```
-**Red flags:** Memory >6g of 8g limit (OOM risk), PIDs near 512 cap, CPU pegged at 400%.
+
+Run: `docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.MemPerc}}\t{{.PIDs}}" | grep ralph-spec-fixes-*`
+
+Red flags:
+- Memory above 80% of limit (approaching OOM kill)
+- PIDs near the limit (default 512)
+- CPU pegged at 100%
 
 ### 7. Spot Check
-Read one recently-committed spec file. Verify:
-- Corrections are accurate (compare a claim against the actual source file)
-- Spec structure is preserved
-- No unnecessary rewrites or reformatting
-- Cross-references still work
 
----
+Read one recently-committed spec file. Verify the fix matches the finding description and is accurate against source code.
 
 ## Course Corrections
 
-To correct the worker, append a line to the IMPORTANT section of `PROMPT.md`:
+Append `CORRECTION: {what's wrong and what to do}` to PROMPT.md's IMPORTANT section. Worker picks it up next iteration.
 
-```
-CORRECTION: {what's wrong and what to do instead}
-```
+## Status Report
 
-The worker reads PROMPT.md fresh each iteration and checks for corrections first.
-
-**Examples:**
-```
-CORRECTION: You rewrote rendering.md from scratch — revert and make targeted edits only.
-CORRECTION: Skip SPEC-OF-SPECS.md — it's a template doc, not a code spec. Mark it done.
-CORRECTION: You missed that player.md references stick-figure.md links — fix those cross-refs.
-```
-
----
-
-## Status Report Template
+After each check, tell the user:
 
 ```
 ## Check #{N} — {time}
 
-**Progress:** {X}/17 complete ({Y} since last check)
-**Current item:** {spec name}
+**Progress:** {X}/104 findings fixed ({Y} since last check)
+**Current finding:** #{id} — {spec-name}
 **Health:** {OK | WARNING | PROBLEM}
-**Container:** {MEM usage/limit, CPU%, PIDs} (sandbox mode)
-**Recent commits:**
-- {hash} {message}
-- {hash} {message}
-**Notes:** {anything notable}
+**Container:** {MEM usage/limit, CPU%, PIDs} or "bare mode"
+**Recent commits:** {list}
 ```
 
----
+## Post-Job Completion (worktree mode)
+
+After the worker outputs `/done`:
+1. Verify the branch was pushed to the remote (`git log --oneline origin/ralph/spec-fixes -1`)
+2. If not pushed, push it: `git push -u origin ralph/spec-fixes`
+3. The worktree, branch, and job files (PROMPT.md, IMPLEMENTATION_PLAN.md, ORCHESTRATOR.md) are left intact for manual review
+4. The user will merge and clean up the worktree manually
 
 ## When to Intervene vs Let It Run
 
-### Let it run
-- Steady progress (1 spec per iteration)
-- Reasonable diff sizes (5-50 lines per spec)
-- Correct commit pattern (`docs: verify {name} against archived source`)
-- Worker checking off items in order
+**Let it run:** steady progress (1 finding per iteration), only spec files edited, reasonable diff sizes, correct commit format.
 
-### Write a correction
-- Wrong files edited (source code instead of specs, files outside archive)
-- Rewrites instead of targeted edits (200+ line changes)
-- Stuck 2+ iterations on same item
-- Skipping items without marking them done
-- Not committing at end of iteration
-- Editing PROMPT.md or IMPLEMENTATION_PLAN.md structure (should only update checklist + discoveries)
+**Write a correction:** source code edited, rewrites instead of targeted fixes, stuck 2+ iterations, skipping items, not committing, not reading source before editing.
 
-### Alert the user
-- Error loop (same error 3+ iterations)
-- Worker fundamentally misunderstands the task (e.g., trying to make specs match current multiplayer code instead of archived pre-BMM code)
-- Faking progress (checking items off without actually reading source)
-- Container resource issues (repeated OOM kills)
+**Alert the user:** error loop, worker modifying source code, garbled output, faking progress, fundamental misunderstanding of a finding.

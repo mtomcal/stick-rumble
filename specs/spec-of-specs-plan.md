@@ -11,62 +11,62 @@
 
 | Spec File | Status | Lines | Notes |
 |-----------|--------|-------|-------|
-| [README.md](README.md) | **Complete** | 353 | Entry point with reading order and dependency graph |
-| [overview.md](overview.md) | **Complete** | 700 | High-level architecture and design philosophy |
-| [constants.md](constants.md) | **Complete** | 539 | Single source of truth for all magic numbers |
-| [arena.md](arena.md) | **Complete** | 982 | Game world boundaries and spatial rules |
+| [README.md](README.md) | **Complete** | ~360 | Entry point with reading order and dependency graph |
+| [overview.md](overview.md) | **Complete** | ~710 | High-level architecture and design philosophy |
+| [constants.md](constants.md) | **Complete** | ~540 | Single source of truth for all magic numbers |
+| [arena.md](arena.md) | **Complete** | ~975 | Game world boundaries and spatial rules |
 
 ### Phase 2: Core Entities
 
 | Spec File | Status | Lines | Notes |
 |-----------|--------|-------|-------|
-| [player.md](player.md) | **Complete** | 966 | Player entity state and lifecycle |
-| [movement.md](movement.md) | **Complete** | 957 | Physics-based movement system |
+| [player.md](player.md) | **Complete** | ~966 | Player entity state and lifecycle |
+| [movement.md](movement.md) | **Complete** | ~946 | Physics-based movement system |
 
 ### Phase 3: Networking
 
 | Spec File | Status | Lines | Notes |
 |-----------|--------|-------|-------|
-| [messages.md](messages.md) | **Complete** | 1812 | Complete WebSocket message catalog |
-| [networking.md](networking.md) | **Complete** | 1146 | WebSocket protocol and connection lifecycle |
-| [rooms.md](rooms.md) | **Complete** | 887 | Room management and matchmaking |
+| [messages.md](messages.md) | **Complete** | ~1810 | Complete WebSocket message catalog |
+| [networking.md](networking.md) | **Complete** | ~1150 | WebSocket protocol and connection lifecycle |
+| [rooms.md](rooms.md) | **Complete** | ~870 | Room management and matchmaking |
 
 ### Phase 4: Combat
 
 | Spec File | Status | Lines | Notes |
 |-----------|--------|-------|-------|
-| [weapons.md](weapons.md) | **Complete** | 1056 | Complete weapon definitions and switching |
-| [shooting.md](shooting.md) | **Complete** | 1095 | Ranged attack mechanics |
-| [hit-detection.md](hit-detection.md) | **Complete** | 1150 | Collision detection and damage application |
-| [melee.md](melee.md) | **Complete** | 953 | Melee attack mechanics |
+| [weapons.md](weapons.md) | **Complete** | ~1070 | Complete weapon definitions and switching |
+| [shooting.md](shooting.md) | **Complete** | ~1090 | Ranged attack mechanics |
+| [hit-detection.md](hit-detection.md) | **Complete** | ~1200 | Collision detection and damage application |
+| [melee.md](melee.md) | **Complete** | ~950 | Melee attack mechanics |
 
 ### Phase 5: Advanced Mechanics
 
 | Spec File | Status | Lines | Notes |
 |-----------|--------|-------|-------|
-| [dodge-roll.md](dodge-roll.md) | **Complete** | 1128 | Dodge roll evasion mechanic |
-| [match.md](match.md) | **Complete** | 1327 | Match lifecycle and win conditions |
+| [dodge-roll.md](dodge-roll.md) | **Complete** | ~1150 | Dodge roll evasion mechanic |
+| [match.md](match.md) | **Complete** | ~1335 | Match lifecycle and win conditions |
 
 ### Phase 6: Client Implementation
 
 | Spec File | Status | Lines | Notes |
 |-----------|--------|-------|-------|
-| [client-architecture.md](client-architecture.md) | **Complete** | 1807 | Frontend structure and rendering pipeline |
-| [graphics.md](graphics.md) | **Complete** | 1073 | Procedural rendering specifications |
-| [ui.md](ui.md) | **Complete** | 1265 | HUD and interface elements |
-| [audio.md](audio.md) | **Complete** | 905 | Sound effects and audio system |
+| [client-architecture.md](client-architecture.md) | **Complete** | ~1790 | Frontend structure and rendering pipeline |
+| [graphics.md](graphics.md) | **Complete** | ~1070 | Procedural rendering specifications |
+| [ui.md](ui.md) | **Complete** | ~1260 | HUD and interface elements |
+| [audio.md](audio.md) | **Complete** | ~905 | Sound effects and audio system |
 
 ### Phase 7: Server Implementation
 
 | Spec File | Status | Lines | Notes |
 |-----------|--------|-------|-------|
-| [server-architecture.md](server-architecture.md) | **Complete** | 1294 | Backend structure and game loop |
+| [server-architecture.md](server-architecture.md) | **Complete** | ~1330 | Backend structure and game loop |
 
 ### Phase 8: Verification
 
 | Spec File | Status | Lines | Notes |
 |-----------|--------|-------|-------|
-| [test-index.md](test-index.md) | **Complete** | 642 | Cross-reference of all test scenarios (194 tests)
+| [test-index.md](test-index.md) | **Complete** | ~645 | Cross-reference of all test scenarios (224 tests)
 
 ---
 
@@ -75,8 +75,8 @@
 - **Total Specs**: 21
 - **Completed**: 21 (README.md, overview.md, constants.md, arena.md, player.md, movement.md, messages.md, networking.md, rooms.md, weapons.md, shooting.md, hit-detection.md, melee.md, dodge-roll.md, match.md, client-architecture.md, graphics.md, ui.md, audio.md, server-architecture.md, test-index.md)
 - **Pending**: 0
-- **Actual Total Lines**: 22,037
-- **Total Test Scenarios**: 194
+- **Actual Total Lines**: ~22,130
+- **Total Test Scenarios**: 224
 
 ---
 
@@ -236,8 +236,8 @@
 
 **Sources analyzed:**
 - `events-schema/src/schemas/common.ts` (base Message format, Position, Velocity)
-- `events-schema/src/schemas/client-to-server.ts` (all 7 client→server schemas)
-- `events-schema/src/schemas/server-to-client.ts` (all 19 server→client schemas)
+- `events-schema/src/schemas/client-to-server.ts` (all 6 client→server schemas)
+- `events-schema/src/schemas/server-to-client.ts` (all 22 server→client schemas)
 - `stick-rumble-server/internal/network/websocket_handler.go` (connection handling)
 - `stick-rumble-server/internal/network/message_processor.go` (message routing)
 - `stick-rumble-server/internal/network/broadcast_helper.go` (broadcast patterns)
@@ -258,7 +258,7 @@
 - Documented complete WebSocket connection lifecycle (client and server)
 - Connection establishment with HTTP upgrade and player ID generation
 - Message serialization (JSON over text frames) with rationale for JSON vs binary
-- Message routing via switch statement with all 7 message types
+- Message routing via switch statement with all 6 client→server message types
 - Reconnection logic: 3 attempts with exponential backoff (1s, 2s, 4s)
 - Intentional disconnect handling (shouldReconnect flag, close code 1000)
 - Graceful server shutdown: SIGTERM/SIGINT handling with 30s timeout
@@ -757,7 +757,7 @@
 - WebSocketHandler with singleton pattern for shared room state
 - World data structure with RWMutex for thread-safe player access
 - Complete game loop implementation with 8-step tick processing
-- Message routing via switch statement with all 7 message types
+- Message routing via switch statement with all 6 client→server message types
 - Event callback system for decoupling game logic from network layer
 - Concurrency model documentation with goroutine architecture diagram
 - Synchronization primitives table (RWMutex, Mutex, Channels)
@@ -799,11 +799,11 @@
 ### 2026-02-02: test-index.md
 
 **What was done:**
-- Comprehensive cross-reference index of ALL 194 test scenarios
+- Comprehensive cross-reference index of ALL 224 test scenarios
 - Summary statistics: total tests, by category, by priority, by spec
-- Complete test catalog organized by spec (19 specs with tests + Epic 4 cross-spec)
-- Tests by Category: Unit (85), Integration (85), Visual (9)
-- Tests by Priority: Critical (71), High (94), Medium (20), Low (9)
+- Complete test catalog organized by spec (19 specs with tests)
+- Tests by Category: Unit (154), Integration (57), Visual (13)
+- Tests by Priority: Critical (71), High (102), Medium (51), Low (0)
 - Critical path implementation order with 7 phases
 - Detailed tables for each spec with test ID, category, priority, description
 - Implementation checklist with checkboxes for tracking progress
@@ -814,7 +814,7 @@
 - Test scenario naming conventions from SPEC-OF-SPECS.md
 
 **Key findings:**
-- 179 total test scenarios across all specs
+- 224 total test scenarios across all specs
 - Average 9.4 tests per spec
 - Highest test count: dodge-roll.md, graphics.md, hit-detection.md, melee.md, player.md (14 each)
 - Critical tests focus on game loop, networking, and combat
@@ -835,8 +835,8 @@
 
 All 21 specification documents have been created, covering:
 - 8 implementation phases
-- 194 test scenarios
-- 22,037 lines of documentation
+- 224 test scenarios
+- ~22,130 lines of documentation
 
 The spec suite is now ready for AI agents to implement Stick Rumble from scratch.
 
@@ -914,8 +914,8 @@ The spec suite is now ready for AI agents to implement Stick Rumble from scratch
 
 | Category | Spec Count | events-schema Count | Status |
 |----------|-----------|---------------------|--------|
-| Client→Server | 7 | 6 | ✅ OK (`test` excluded) |
-| Server→Client | 20 | 20 | ✅ OK |
+| Client→Server | 6 | 6 | ✅ OK |
+| Server→Client | 22 | 22 | ✅ OK |
 
 **Summary:** All production message types are fully captured. The `test` message is intentionally omitted from TypeBox schemas as it's only used for development/debugging.
 
@@ -1018,14 +1018,14 @@ The spec suite is now ready for AI agents to implement Stick Rumble from scratch
 
 ---
 
-## Final Validation Summary (2026-02-02)
+## Final Validation Summary (2026-02-15)
 
 All contracts have been validated and are in sync:
 
 | Validation Area | Status | Details |
 |-----------------|--------|---------|
-| WebSocket Messages | ✅ Complete | 6 Client→Server, 22 Server→Client (28 total) |
-| events-schema | ✅ Complete | 211 JSON schemas generated and validated |
+| WebSocket Messages | ✅ Complete | 6 Client→Server, 22 Server→Client |
+| events-schema | ✅ Complete | JSON schemas generated and validated |
 | Weapon Configs | ✅ Complete | All 6 weapons match across JSON/server/client |
 | Game Constants | ✅ Complete | All constants documented in specs/constants.md |
 
@@ -1056,8 +1056,8 @@ Before marking a spec as complete, verify:
 
 Final verification confirms:
 - **21 spec documents** created (excluding meta docs)
-- **194 test scenarios** documented across all specs
-- **211 JSON schemas** generated and validated (via `make schema-validate`)
+- **224 test scenarios** documented across all specs
+- **JSON schemas** generated and validated (via `make schema-validate`)
 - **All contracts synchronized** between specs, events-schema, and implementation
 - **"Why" rationale** captured in every spec for design decisions
 

@@ -1,7 +1,7 @@
 # Server Architecture
 
-> **Spec Version**: 1.2.0
-> **Last Updated**: 2026-02-16
+> **Spec Version**: 1.1.0
+> **Last Updated**: 2026-02-15
 > **Depends On**: [overview.md](overview.md), [constants.md](constants.md), [networking.md](networking.md), [rooms.md](rooms.md), [messages.md](messages.md)
 > **Depended By**: None (leaf spec)
 
@@ -104,22 +104,24 @@ type GameServer struct {
     projectileManager  *ProjectileManager
     weaponCrateManager *WeaponCrateManager
     weaponStates       map[string]*WeaponState  // playerID → weapon
-    weaponMu           sync.RWMutex             // Separate mutex for weapon states
-    positionHistory    *PositionHistory          // Position rewind buffer for lag compensation
-
-    tickRate   time.Duration  // 16.67ms (60Hz)
-    updateRate time.Duration  // 50ms (20Hz)
-    clock      Clock          // Injectable for testing
+    weaponMu           sync.RWMutex             // Protects weaponStates
+    positionHistory    *PositionHistory          // Position history for lag compensation
+    tickRate           time.Duration             // 16.67ms (60Hz)
+    updateRate         time.Duration             // 50ms (20Hz)
+    clock              Clock                     // Injectable for testing
 
     broadcastFunc func(playerStates []PlayerStateSnapshot)  // Injected for decoupling
 
     // Event callbacks for network layer
-    onReloadComplete  func(playerID string)
-    onHit             func(hit HitEvent)
-    getRTT            func(playerID string) int64  // Get player RTT for lag compensation
-    onRespawn         func(playerID string, position Vector2)
-    onWeaponRespawn   func(crate *WeaponCrate)
-    onRollEnd         func(playerID string, reason string)
+    onReloadComplete func(playerID string)
+    onHit            func(hit HitEvent)
+    getRTT           func(playerID string) int64
+    onRespawn        func(playerID string, position Vector2)
+    onMatchTimer     func(roomID string, remainingSeconds int)
+    onCheckTimeLimit func()
+    onWeaponPickup   func(playerID, crateID, weaponType string, respawnTime time.Time)
+    onWeaponRespawn  func(crate *WeaponCrate)
+    onRollEnd        func(playerID string, reason string)
 
     running bool
     mu      sync.RWMutex
@@ -207,8 +209,9 @@ function tickLoop(ctx):
         select:
             case <- ctx.Done():
                 return  // Shutdown signal
-            case <- ticker.C:
-                deltaTime = 16.67ms
+            case now <- ticker.C:
+                deltaTime = now - lastTick  // Real elapsed, not fixed 16.67ms
+                lastTick = now
 
                 // 1. Update all player positions
                 for player in world.players:
@@ -230,13 +233,13 @@ function tickLoop(ctx):
                 // 4. Check reload completions
                 for playerID, weaponState in weaponStates:
                     if weaponState.CheckReloadComplete():
-                        onReloadComplete(playerID)
+                        onReloadComplete(playerID, weaponState)
 
                 // 5. Check respawns
                 for player in world.players:
                     if player.ShouldRespawn():
                         player.Respawn()
-                        onRespawn(player.ID, player.Position)
+                        onRespawn(player.ID, player.Position, player.Health)
 
                 // 6. Check dodge roll durations
                 for player in world.players:
@@ -261,32 +264,72 @@ function tickLoop(ctx):
 
 **Go:**
 ```go
-func (gs *GameServer) tickLoop(ctx context.Context) {
+func (gs *GameServer) runTickLoop(ctx context.Context) {
     defer gs.wg.Done()
     ticker := time.NewTicker(gs.tickRate)
     defer ticker.Stop()
-    lastTick := gs.clock.Now()
 
     for {
         select {
         case <-ctx.Done():
             return
-        case now := <-ticker.C:
-            deltaTime := now.Sub(lastTick).Seconds()
-            lastTick = now
-
-            gs.updateAllPlayers(deltaTime)
-            gs.recordPositionSnapshots(now)
-            gs.projectileManager.Update(deltaTime)
-            gs.checkHitDetection()
-            gs.checkReloads()
-            gs.checkRespawns()
-            gs.checkRollDuration()
-            gs.updateInvulnerability()
-            gs.updateHealthRegeneration(deltaTime)
-            gs.checkWeaponRespawns()
+        case <-ticker.C:
+            gs.tick()
         }
     }
+}
+
+// Note: No separate tick() method — logic is inline in runTickLoop
+// deltaTime uses real elapsed time, not fixed from tickRate
+case now := <-ticker.C:
+    deltaTime := now.Sub(lastTick).Seconds()
+    lastTick = now
+
+    // Update physics for all players
+    gs.world.ForEachPlayer(func(p *PlayerState) {
+        gs.physics.UpdatePlayer(p, deltaTime)
+    })
+
+    // Update projectiles and check collisions
+    gs.projectileManager.Update(deltaTime)
+    hits := gs.physics.CheckAllProjectileCollisions(
+        gs.projectileManager.GetAll(),
+        gs.world.GetAllPlayers(),
+    )
+    for _, hit := range hits {
+        gs.processHit(hit)
+    }
+
+    // Check reload completions
+    gs.mu.RLock()
+    for playerID, ws := range gs.weaponStates {
+        if ws.CheckReloadComplete() && gs.onReloadComplete != nil {
+            gs.onReloadComplete(playerID, *ws)
+        }
+    }
+    gs.mu.RUnlock()
+
+    // Check respawns
+    gs.world.ForEachPlayer(func(p *PlayerState) {
+        if p.ShouldRespawn() {
+            p.Respawn()
+            if gs.onRespawn != nil {
+                gs.onRespawn(p.GetID(), p.GetPosition(), p.GetHealth())
+            }
+        }
+    })
+
+    // Check dodge roll completions
+    gs.checkRollDurations()
+
+    // Update invulnerability and health regen
+    gs.world.ForEachPlayer(func(p *PlayerState) {
+        p.UpdateInvulnerability()
+        p.UpdateHealthRegen(deltaTime)
+    })
+
+    // Check weapon crate respawns
+    gs.weaponCrateManager.CheckRespawns(gs.onWeaponRespawn)
 }
 ```
 
@@ -362,25 +405,22 @@ When a WebSocket message arrives, it's routed by type:
 
 **Go:**
 ```go
-// Inside HandleWebSocket read loop:
-switch msg.Type {
-case "input:state":
-    h.handleInputState(playerID, msg.Data)
-case "player:shoot":
-    h.handlePlayerShoot(playerID, msg.Data)
-case "player:reload":
-    h.handlePlayerReload(playerID)
-case "weapon:pickup_attempt":
-    h.handleWeaponPickup(playerID, msg.Data)
-case "player:dodge_roll":
-    h.handlePlayerDodgeRoll(playerID)
-case "player:melee_attack":
-    h.handlePlayerMeleeAttack(playerID, msg.Data)
-default:
-    // Broadcast other messages to room (backward compatibility)
-    room := h.roomManager.GetRoomByPlayerID(playerID)
-    if room != nil {
-        room.Broadcast(messageBytes, playerID)
+func (h *WebSocketHandler) handleMessage(msg Message, playerID string) {
+    switch msg.Type {
+    case "input:state":
+        h.handleInputState(msg, playerID)
+    case "player:shoot":
+        h.handlePlayerShoot(msg, playerID)
+    case "player:reload":
+        h.handlePlayerReload(msg, playerID)
+    case "weapon:pickup_attempt":
+        h.handleWeaponPickup(msg, playerID)
+    case "player:dodge_roll":
+        h.handlePlayerDodgeRoll(msg, playerID)
+    case "player:melee_attack":
+        h.handlePlayerMeleeAttack(msg, playerID)
+    default:
+        log.Printf("Unknown message type: %s", msg.Type)
     }
 }
 ```
@@ -394,16 +434,22 @@ Each message type has a dedicated handler that validates input and calls GameSer
 **Go:**
 ```go
 func (h *WebSocketHandler) handleInputState(playerID string, data any) {
-    // 1. Validate message schema (returns early on failure)
+    // 1. Reject input if match has ended
+    room := h.roomManager.GetRoomByPlayerID(playerID)
+    if room != nil && room.Match.IsEnded() {
+        return
+    }
+
+    // 2. Validate data against JSON schema (returns early on failure)
     if err := h.validator.Validate("input-state-data", data); err != nil {
         log.Printf("Schema validation failed for input:state from %s: %v", playerID, err)
         return
     }
 
-    // 2. Extract data from message via direct type assertions
+    // 3. Direct type assertions (no helper functions — schema validation guarantees types)
     dataMap := data.(map[string]interface{})
 
-    input := InputState{
+    input := game.InputState{
         Up:          dataMap["up"].(bool),
         Down:        dataMap["down"].(bool),
         Left:        dataMap["left"].(bool),
@@ -412,14 +458,17 @@ func (h *WebSocketHandler) handleInputState(playerID string, data any) {
         IsSprinting: dataMap["isSprinting"].(bool),
     }
 
-    // Extract sequence number for client-side prediction reconciliation
+    // 4. Extract sequence number (optional, for client-side prediction reconciliation)
     var sequence uint64
     if seqFloat, ok := dataMap["sequence"].(float64); ok {
         sequence = uint64(seqFloat)
     }
 
-    // 3. Update game server with sequence for prediction reconciliation
-    h.gameServer.UpdatePlayerInputWithSequence(playerID, input, sequence)
+    // 5. Update game server with input and sequence
+    success := h.gameServer.UpdatePlayerInputWithSequence(playerID, input, sequence)
+    if !success {
+        log.Printf("Failed to update input for player %s", playerID)
+    }
 }
 ```
 
@@ -427,17 +476,14 @@ func (h *WebSocketHandler) handleInputState(playerID string, data any) {
 
 **Go:**
 ```go
-func (h *WebSocketHandler) handlePlayerShoot(playerID string, data any) {
-    // Validate data against JSON schema
-    if err := h.validator.Validate("player-shoot-data", data); err != nil {
-        log.Printf("Schema validation failed for player:shoot from %s: %v", playerID, err)
+func (h *WebSocketHandler) handlePlayerShoot(msg Message, playerID string) {
+    data, ok := msg.Data.(map[string]interface{})
+    if !ok {
         return
     }
 
-    // After validation, we can safely type assert
-    dataMap := data.(map[string]interface{})
-    aimAngle := dataMap["aimAngle"].(float64)
-    clientTimestamp := int64(dataMap["clientTimestamp"].(float64))
+    aimAngle := getFloat64(data, "aimAngle")
+    clientTimestamp := getInt64(data, "clientTimestamp")
 
     // Attempt shoot via game server (clientTimestamp used for lag compensation)
     result := h.gameServer.PlayerShoot(playerID, aimAngle, clientTimestamp)
@@ -446,7 +492,7 @@ func (h *WebSocketHandler) handlePlayerShoot(playerID string, data any) {
         // Broadcast projectile spawn to all players
         h.broadcastProjectileSpawn(result.Projectile)
         // Send updated weapon state to shooter
-        h.sendWeaponState(playerID)
+        h.sendWeaponState(playerID, result.WeaponState)
     } else {
         // Send failure reason to shooter only
         h.sendShootFailed(playerID, result.Reason)
@@ -456,42 +502,17 @@ func (h *WebSocketHandler) handlePlayerShoot(playerID string, data any) {
 
 ### Event Callbacks
 
-The network layer registers callbacks with GameServer to receive events during handler initialization:
+The network layer registers callbacks with GameServer directly in the constructor (`websocket_handler.go:74-90`), passing method references rather than wrapping in anonymous functions:
 
 **Go:**
 ```go
-// In NewWebSocketHandlerWithConfig:
+// In NewWebSocketHandler() constructor — not a separate setupCallbacks() method
 handler.gameServer.SetOnReloadComplete(handler.onReloadComplete)
 handler.gameServer.SetOnHit(handler.onHit)
 handler.gameServer.SetOnRespawn(handler.onRespawn)
 handler.gameServer.SetOnWeaponRespawn(handler.onWeaponRespawn)
 handler.gameServer.SetOnRollEnd(handler.broadcastRollEnd)
 handler.gameServer.SetGetRTT(handler.getPlayerRTT)
-
-// Callback implementations:
-func (h *WebSocketHandler) onReloadComplete(playerID string) {
-    h.sendWeaponState(playerID)
-}
-
-func (h *WebSocketHandler) onHit(hit HitEvent) {
-    // Get victim's current state (including updated health)
-    victimState, victimExists := h.gameServer.GetPlayerState(hit.VictimID)
-    if !victimExists {
-        return
-    }
-    // Broadcast damage to all players in room
-    h.broadcastPlayerDamaged(hit.VictimID, hit.AttackerID, damage, victimState.Health)
-    // Send hit confirmation to attacker only
-    h.sendHitConfirmed(hit.AttackerID, hit.VictimID)
-
-    if victimState.Health <= 0 {
-        h.processDeath(hit.VictimID, hit.AttackerID)
-    }
-}
-
-func (h *WebSocketHandler) onRespawn(playerID string, position Vector2) {
-    h.broadcastPlayerRespawn(playerID, position)
-}
 ```
 
 **Why Callbacks (Not Direct Calls)?**
@@ -568,8 +589,8 @@ Each player has a buffered send channel:
 ```go
 type Player struct {
     ID          string
-    SendChan    chan []byte  // 256-message buffer
-    PingTracker *PingTracker // Tracks RTT for lag compensation
+    SendChan    chan []byte    // 256-message buffer
+    PingTracker *PingTracker  // Tracks RTT for lag compensation
 }
 
 // Non-blocking send (prevents slowdown from one slow client)
@@ -613,30 +634,35 @@ func (w *World) SomeMethod() {
 }
 ```
 
-**Pattern 2: Recover from Channel Panics**
+**Pattern 2: Recover from Channel Panics + Non-Blocking Send**
 ```go
-func (r *Room) Broadcast(msg []byte) {
+func (r *Room) Broadcast(message []byte, excludePlayerID string) {
     r.mu.RLock()
     defer r.mu.RUnlock()
 
     for _, player := range r.Players {
-        func() {
-            defer func() {
-                if r := recover(); r != nil {
-                    // Channel was closed - player disconnected
-                    log.Printf("Send failed to player %s", player.ID)
+        if player.ID != excludePlayerID {
+            func() {
+                defer func() {
+                    if rec := recover(); rec != nil {
+                        // Channel was closed - player disconnected
+                        log.Printf("Warning: Could not send message to player %s (channel closed)", player.ID)
+                    }
+                }()
+
+                select {
+                case player.SendChan <- message:
+                    // Message sent successfully
+                default:
+                    log.Printf("Warning: Could not send message to player %s (channel full)", player.ID)
                 }
             }()
-            select {
-            case player.SendChan <- msg:
-                // Message sent successfully
-            default:
-                log.Printf("Warning: Could not send message to player %s (channel full)", player.ID)
-            }
-        }()
+        }
     }
 }
 ```
+
+> **Note:** The `select` with `default` makes the send non-blocking — if the player's channel buffer is full, the message is dropped with a log warning rather than blocking the broadcast loop.
 
 ---
 
@@ -646,62 +672,45 @@ The server handles SIGTERM and SIGINT for clean shutdown.
 
 **Pseudocode:**
 ```
+function startServer(ctx):
+    port = env("PORT") or "8080"
+
+    mux = http.NewServeMux()
+    mux.HandleFunc("/health", healthHandler)
+    mux.HandleFunc("/ws", network.HandleWebSocket)  // global singleton
+
+    // Start game server (global handler)
+    network.StartGlobalHandler(ctx)
+
+    // Start HTTP server in goroutine
+    go server.ListenAndServe()
+
+    // Wait for ctx cancellation or server error
+    select:
+        case server error → return error
+        case ctx.Done() →
+            network.StopGlobalHandler()
+            server.Shutdown(30s timeout)
+
 function main():
     ctx, cancel = context.WithCancel(context.Background())
 
     // Start shutdown listener
     go func():
-        signals = waitForSignal(SIGTERM, SIGINT)
-        log.Print("Shutdown signal received")
-        cancel()  // Trigger shutdown
+        signals = waitForSignal(SIGINT, SIGTERM)
+        cancel()
 
-    // Start game loops
-    gameServer.Start(ctx)
+    // Start server in background
+    go startServer(ctx)
 
-    // Start HTTP server
-    server.ListenAndServe()
-
-    // Wait for shutdown
-    <- ctx.Done()
-
-    // Graceful shutdown with timeout
-    shutdownCtx, _ = context.WithTimeout(context.Background(), 30s)
-    server.Shutdown(shutdownCtx)
-
-    // Wait for game loops to finish
-    gameServer.Stop()
+    // Wait for signal or server completion
+    select:
+        case signal → cancel(); wait for server
+        case server done → exit
 ```
 
 **Go:**
 ```go
-func main() {
-    ctx, cancel := context.WithCancel(context.Background())
-    defer cancel()
-
-    // Signal handling
-    sigChan := make(chan os.Signal, 1)
-    signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-
-    // Start server in background via startServer()
-    serverDone := make(chan error, 1)
-    go func() {
-        serverDone <- startServer(ctx)
-    }()
-
-    // Wait for shutdown signal or server error
-    select {
-    case sig := <-sigChan:
-        log.Printf("Received signal: %v", sig)
-        cancel()
-        <-serverDone  // Wait for graceful shutdown
-    case err := <-serverDone:
-        if err != nil {
-            log.Fatalf("Server error: %v", err)
-        }
-    }
-}
-
-// startServer initializes HTTP server with health and WebSocket endpoints
 func startServer(ctx context.Context) error {
     port := os.Getenv("PORT")
     if port == "" {
@@ -709,8 +718,11 @@ func startServer(ctx context.Context) error {
     }
 
     mux := http.NewServeMux()
-    mux.HandleFunc("/health", healthHandler)
-    mux.HandleFunc("/ws", network.HandleWebSocket)
+    mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+        w.WriteHeader(http.StatusOK)
+        w.Write([]byte("OK"))
+    })
+    mux.HandleFunc("/ws", network.HandleWebSocket) // global singleton
 
     server := &http.Server{
         Addr:         ":" + port,
@@ -720,29 +732,59 @@ func startServer(ctx context.Context) error {
         IdleTimeout:  60 * time.Second,
     }
 
-    // Start global handler (singleton pattern)
     network.StartGlobalHandler(ctx)
 
+    serverErrors := make(chan error, 1)
     go func() {
+        log.Printf("Starting server on port %s", port)
         if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-            // ...
+            serverErrors <- err
         }
     }()
 
-    // Wait for context cancellation
-    <-ctx.Done()
+    select {
+    case err := <-serverErrors:
+        return err
+    case <-ctx.Done():
+        shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+        defer cancel()
+        log.Println("Shutting down server...")
+        network.StopGlobalHandler()
+        if err := server.Shutdown(shutdownCtx); err != nil {
+            log.Printf("Server shutdown error: %v", err)
+            return err
+        }
+        log.Println("Server stopped")
+        return nil
+    }
+}
 
-    // Graceful shutdown
-    shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+func main() {
+    ctx, cancel := context.WithCancel(context.Background())
     defer cancel()
 
-    network.StopGlobalHandler()
-    server.Shutdown(shutdownCtx)
+    sigChan := make(chan os.Signal, 1)
+    signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
-    log.Println("Server stopped")
-    return nil
+    serverDone := make(chan error, 1)
+    go func() {
+        serverDone <- startServer(ctx)
+    }()
+
+    select {
+    case sig := <-sigChan:
+        log.Printf("Received signal: %v", sig)
+        cancel()
+        <-serverDone
+    case err := <-serverDone:
+        if err != nil {
+            log.Fatalf("Server error: %v", err)
+        }
+    }
 }
 ```
+
+> **Note:** The server uses a **global singleton** pattern — `network.HandleWebSocket`, `network.StartGlobalHandler`, and `network.StopGlobalHandler` are package-level functions that delegate to a lazily-initialized global `WebSocketHandler`. There is no explicit `handler := network.NewWebSocketHandler()` in `main.go`.
 
 **Why 30-Second Timeout?**
 
@@ -830,7 +872,7 @@ if player == nil {
 
 ### Invalid Data (NaN/Inf)
 
-**Handling**: Sanitize to safe defaults
+**Handling**: Sanitize to safe defaults via `sanitizeVector2` in `physics.go`
 
 ```go
 // sanitizeVector2 ensures a Vector2 contains no NaN or Inf values
@@ -858,12 +900,14 @@ func sanitizeVector2(v Vector2, context string) Vector2 {
 }
 ```
 
+This function is called in `UpdatePlayer` for both velocity and position sanitization. The broadcast layer (`broadcast_helper.go`) also independently sanitizes `aimAngle` NaN/Inf values to 0 before JSON marshaling.
+
 **Why Sanitize (Not Reject)?**
 
 - NaN can propagate from physics calculations
 - Rejecting would cause visible player teleportation
 - Sanitizing maintains game continuity
-- Used in physics.go for velocity and position vectors
+- Logged as ERROR for debugging
 
 ---
 
@@ -951,10 +995,10 @@ type ManualClock struct {
     mu          sync.RWMutex
 }
 
-func (c *ManualClock) Advance(d time.Duration) {
-    c.mu.Lock()
-    defer c.mu.Unlock()
-    c.currentTime = c.currentTime.Add(d)
+func (mc *ManualClock) Advance(d time.Duration) {
+    mc.mu.Lock()
+    defer mc.mu.Unlock()
+    mc.currentTime = mc.currentTime.Add(d)
 }
 ```
 
@@ -982,19 +1026,22 @@ func TestRespawnDelay(t *testing.T) {
 GameServer accepts a broadcast function instead of importing network code:
 
 ```go
-func NewGameServer(broadcastFunc func([]PlayerStateSnapshot)) *GameServer {
+func NewGameServer(broadcastFunc func([]PlayerState)) *GameServer {
     return &GameServer{
         broadcastFunc: broadcastFunc,
         // ...
     }
 }
 
-// In production (NewWebSocketHandlerWithConfig creates both together):
-handler.gameServer = game.NewGameServer(handler.broadcastPlayerStates)
+// In production:
+handler := NewWebSocketHandler()
+gameServer := NewGameServer(func(states []PlayerState) {
+    handler.BroadcastPlayerStates(states)
+})
 
 // In tests:
-var capturedStates []PlayerStateSnapshot
-gameServer := NewGameServer(func(states []PlayerStateSnapshot) {
+var capturedStates []PlayerState
+gameServer := NewGameServer(func(states []PlayerState) {
     capturedStates = states
 })
 ```
@@ -1183,7 +1230,7 @@ func TestConcurrentAccess(t *testing.T) {
         wg.Add(1)
         go func() {
             defer wg.Done()
-            _ = world.GetAllPlayerStates()
+            _ = world.GetAllPlayers()
         }()
     }
 
@@ -1276,4 +1323,11 @@ func TestConcurrentAccess(t *testing.T) {
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification |
 | 1.1.0 | 2026-02-15 | Added Lag Compensation Subsystem section (PingTracker, PositionHistory, DeltaTracker, NetworkSimulator, WeaponFactory). Updated directory tree with 5 new files. Removed non-existent auth/ and db/ dirs. Added deltaTracker and networkSimulator to WebSocketHandler struct. Updated handleInputState with sequence field. Updated handlePlayerShoot with clientTimestamp for lag compensation. |
-| 1.2.0 | 2026-02-16 | Fixed 10 spec drift findings: GameServer struct (added weaponMu, positionHistory, clock, getRTT fields), callback signatures in tick code (onReloadComplete takes playerID only, onRespawn has no health param), tick loop refactored to match actual helper methods, message handler signatures (playerID + data params, not msg), handlePlayerShoot uses direct type assertions, pseudocode callbacks aligned, ManualClock field name (currentTime), main.go updated to startServer pattern with os.Interrupt, broadcast injection uses PlayerStateSnapshot type. |
+| 1.1.1 | 2026-02-16 | Fixed GameServer struct — corrected callback signatures to match `gameserver.go:27-72`: `broadcastFunc` takes `[]PlayerStateSnapshot` not `[]PlayerState`, `onReloadComplete` takes only `playerID` (no WeaponState), `onHit` takes `HitEvent` struct not individual params, `onRespawn` has no `health` param, `onWeaponRespawn` takes `*WeaponCrate`. Added missing fields: `weaponMu`, `positionHistory`, `clock`, `getRTT`, `onMatchTimer`, `onCheckTimeLimit`, `onWeaponPickup`. |
+| 1.1.2 | 2026-02-16 | Fixed setupCallbacks section — callbacks are registered as method references in the constructor (not a separate `setupCallbacks()` method), added `SetGetRTT` and `SetOnWeaponRespawn` registrations. |
+| 1.1.3 | 2026-02-16 | Replaced nonexistent `sanitizePosition` with actual `sanitizeVector2` from `physics.go:208` — NaN/Inf replaced with 0 (not arena center). |
+| 1.1.4 | 2026-02-16 | Fixed tick() deltaTime — uses real elapsed `now.Sub(lastTick).Seconds()` not fixed from tickRate. Logic is inline in loop, not separate `tick()` method. |
+| 1.1.8 | 2026-02-16 | Fixed ManualClock — `sync.Mutex` → `sync.RWMutex`, field `current` → `currentTime` to match clock.go |
+| 1.1.7 | 2026-02-16 | Added missing `PingTracker *PingTracker` field to Player struct |
+| 1.1.6 | 2026-02-16 | Fixed broadcastLoop and test code — `GetAllPlayerStates()` → `GetAllPlayers()` to match actual world.go method name |
+| 1.1.5 | 2026-02-16 | Fixed handleInputState — correct signature `(playerID string, data any)` not `(msg Message, playerID string)`, direct type assertions instead of `getBool`/`getFloat64`/`getInt` helpers, no NaN/Inf sanitization (schema validation guarantees types), validation returns early on failure (not non-blocking). |

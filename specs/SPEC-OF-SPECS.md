@@ -476,7 +476,7 @@ Organized by category with tables:
    - Rate limit (if any)
    - Example JSON
 
-   Messages (formally defined with schemas):
+   Messages:
    - `input:state`
    - `player:shoot`
    - `player:reload`
@@ -513,8 +513,8 @@ Organized by category with tables:
    - `melee:hit`
    - `roll:start`
    - `roll:end`
-   - `state:snapshot`
-   - `state:delta`
+   - `state:snapshot` (Epic 4: full player state for delta compression)
+   - `state:delta` (Epic 4: partial player state updates)
 
 4. **Message Flow Diagrams**
    - Connection sequence
@@ -895,18 +895,18 @@ Organized by category with tables:
    - `dead` - Player is dead
 
 **Test Scenarios**:
-- TS-SHOOT-001: Successful Shot Creates Projectile
-- TS-SHOOT-002: Shot Decrements Ammo
-- TS-SHOOT-003: Empty Magazine Returns shoot:failed
-- TS-SHOOT-004: Fire Rate Cooldown Enforced
-- TS-SHOOT-005: Reloading Blocks Shooting
-- TS-SHOOT-006: Projectile Velocity From Aim Angle
-- TS-SHOOT-007: Projectile Expires After Lifetime
-- TS-SHOOT-008: Reload Completes And Restores Ammo
-- TS-SHOOT-009: Shotgun Creates 8 Pellets
-- TS-SHOOT-010: Sprint Applies Accuracy Penalty
-- TS-SHOOT-011: Vertical Recoil Accumulates
-- TS-SHOOT-012: Dead Player Cannot Shoot
+- TS-SHOOT-001: Successful shot creates projectile
+- TS-SHOOT-002: Shot decrements ammo
+- TS-SHOOT-003: Empty magazine returns shoot:failed
+- TS-SHOOT-004: Fire rate cooldown enforced
+- TS-SHOOT-005: Reloading blocks shooting
+- TS-SHOOT-006: Projectile velocity from aim angle
+- TS-SHOOT-007: Projectile expires after lifetime
+- TS-SHOOT-008: Reload completes and restores ammo
+- TS-SHOOT-009: Shotgun creates 8 pellets
+- TS-SHOOT-010: Sprint applies accuracy penalty
+- TS-SHOOT-011: Vertical recoil accumulates
+- TS-SHOOT-012: Dead player cannot shoot
 
 **Estimated Length**: 450-550 lines
 
@@ -1958,32 +1958,23 @@ Organized by category with tables:
    - By category
    - By priority
 
-**Estimated Length**: 642 lines
+**Estimated Length**: 300-400 lines (depends on total test count)
 
 ---
 
 ### spec-of-specs-plan.md
 
-**Purpose**: Planning document that outlines the spec verification process and tracks progress.
+**Purpose**: Track progress on generating specification documents from this blueprint.
 
 **Required Content**:
 
-1. **Verification Methodology**
-   - How specs are validated against actual codebase
-   - Categories of drift (HIGH, MEDIUM, LOW priority)
-   - Resolution process
+1. **Implementation Status** — Phase tables showing each spec file's completion status and line count
+2. **Progress Summary** — Total specs, completed count, total lines, total test scenarios
+3. **Completed Work Log** — Per-spec log of what was documented, sources analyzed, key findings
+4. **Contract Validation** — Records of cross-validation between specs, schemas, and source code
+5. **Final Validation Summary** — Current sync status of all contract types
 
-2. **Verification Progress**
-   - List of all specs with verification status
-   - Issues found and their resolution status
-   - Timestamps of verification passes
-
-3. **Meta Information**
-   - Version history of the spec suite
-   - Contributors and reviewers
-   - Maintenance guidelines
-
-**Estimated Length**: 1,064 lines
+**Estimated Length**: ~1,000 lines (grows with each completed spec)
 
 ---
 
@@ -2058,33 +2049,34 @@ For an AI agent recreating from scratch, implement in this order:
 
 ---
 
-## Estimated Total Length
+## Actual Total Length
 
-| Spec | Actual Lines |
-|------|--------------|
-| README.md | 353 |
-| overview.md | 700 |
-| constants.md | 539 |
-| messages.md | 1,812 |
-| arena.md | 985 |
+| Spec | Lines |
+|------|-------|
+| README.md | 356 |
+| overview.md | 708 |
+| constants.md | 540 |
+| messages.md | 1808 |
+| arena.md | 1001 |
 | player.md | 966 |
-| movement.md | 957 |
-| dodge-roll.md | 1,130 |
-| weapons.md | 1,056 |
-| shooting.md | 1,095 |
+| movement.md | 946 |
+| dodge-roll.md | 1142 |
+| weapons.md | 1045 |
+| shooting.md | 1093 |
 | melee.md | 953 |
-| hit-detection.md | 1,150 |
-| match.md | 1,327 |
-| rooms.md | 887 |
-| networking.md | 1,146 |
-| client-architecture.md | 1,807 |
-| server-architecture.md | 1,294 |
+| hit-detection.md | 1200 |
+| match.md | 1335 |
+| rooms.md | 871 |
+| networking.md | 1146 |
+| client-architecture.md | 1786 |
+| server-architecture.md | 1329 |
 | audio.md | 905 |
-| graphics.md | 1,073 |
-| ui.md | 1,249 |
-| test-index.md | 642 |
-| spec-of-specs-plan.md | 1,064 |
-| **TOTAL** | **~24,924 lines** |
+| graphics.md | 1073 |
+| ui.md | 1243 |
+| test-index.md | 645 |
+| spec-of-specs-plan.md | 1064 |
+| SPEC-OF-SPECS.md | 2074 |
+| **TOTAL** | **~25,229 lines** |
 
 ---
 
@@ -2103,8 +2095,8 @@ After reviewing this spec-of-specs:
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.0.0 | 2026-02-02 | Initial specification blueprint |
-| 1.1.0 | 2026-02-16 | Spec drift corrections: Updated DECELERATION from 50 to 1500 px/s², corrected Server→Client message count from 19 to 22 (added state:snapshot and state:delta), updated Client→Server count from 7 to 6 (removed informal `test` message), corrected match timer color threshold from <30s to <60s for red, updated shooting test descriptions to match actual spec, updated line count estimates to actual values (~24,924 total), added spec-of-specs-plan.md to table of contents |
+| 1.1.0 | 2026-02-16 | Added spec-of-specs-plan.md to ToC and file specs; added Last Updated and Changelog; fixed C→S count to 6, S→C to 22; updated line count estimates to actual; fixed shooting test scenario descriptions; fixed UI timer thresholds |
+| 1.0.0 | 2026-02-02 | Initial blueprint for all 21 specification documents |
 
 ---
 
