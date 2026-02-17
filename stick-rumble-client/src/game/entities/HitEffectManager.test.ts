@@ -31,11 +31,11 @@ describe('HitEffectManager', () => {
           alpha: 1,
           visible: false,
         })),
-        circle: vi.fn((_x: number, _y: number, _radius: number, _color: number) => ({
+        circle: vi.fn((x: number, y: number) => ({
           setDepth: vi.fn().mockReturnThis(),
           destroy: vi.fn(),
-          x: _x,
-          y: _y,
+          x,
+          y,
         })),
       },
       tweens: {
@@ -382,11 +382,11 @@ describe('HitEffectManager', () => {
           ...scene,
           add: {
             ...scene.add,
-            circle: vi.fn((_x: number, _y: number, _radius: number, _color: number) => ({
+            circle: vi.fn((x: number, y: number) => ({
               setDepth: vi.fn().mockReturnThis(),
               destroy: vi.fn(),
-              x: _x,
-              y: _y,
+              x,
+              y,
             })),
           },
           tweens: scene.tweens,
@@ -422,11 +422,11 @@ describe('HitEffectManager', () => {
         ...scene,
         add: {
           ...scene.add,
-          circle: vi.fn((_x: number, _y: number, _radius: number, _color: number) => ({
+          circle: vi.fn((x: number, y: number) => ({
             setDepth: vi.fn().mockReturnThis(),
             destroy: vi.fn(),
-            x: _x,
-            y: _y,
+            x,
+            y,
           })),
         },
         tweens: {
@@ -470,11 +470,11 @@ describe('HitEffectManager', () => {
         ...scene,
         add: {
           ...scene.add,
-          circle: vi.fn((_x: number, _y: number, _radius: number, _color: number) => ({
+          circle: vi.fn((x: number, y: number) => ({
             setDepth: vi.fn().mockReturnThis(),
             destroy: vi.fn(),
-            x: _x,
-            y: _y,
+            x,
+            y,
           })),
         },
         tweens: {

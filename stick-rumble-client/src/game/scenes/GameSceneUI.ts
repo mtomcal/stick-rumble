@@ -82,6 +82,7 @@ export class GameSceneUI {
    * Create damage flash overlay — no-op, kept for backward compatibility.
    * Damage flash now uses cameras.main.flash() directly.
    */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   createDamageFlashOverlay(_width: number, _height: number): void {
     // No overlay needed — showDamageFlash() uses cameras.main.flash()
   }

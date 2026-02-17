@@ -61,6 +61,7 @@ export class Crosshair {
    * @param _isMoving - Unused (spread removed)
    * @param _spreadDegrees - Unused (spread removed)
    */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   update(_isMoving: boolean, _spreadDegrees: number): void {
     if (!this.sprite || !this.visible) {
       return;

@@ -130,10 +130,10 @@ const createMockScene = () => {
         containers.push(container);
         return container;
       }),
-      circle: vi.fn((_x: number, _y: number, _radius: number, _color: number) => {
+      circle: vi.fn((x: number, y: number) => {
         const circle = {
-          x: _x,
-          y: _y,
+          x,
+          y,
           setDepth: vi.fn().mockReturnThis(),
           destroy: vi.fn(),
         };
