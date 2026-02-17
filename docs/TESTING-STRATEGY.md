@@ -17,19 +17,17 @@ AI-generated code faces unique validation challenges:
 flowchart TB
     subgraph Pyramid["Test Pyramid"]
         direction TB
-        Visual["Visual Regression - 40 screenshots"]
         Integration["Integration Tests - WebSocket E2E"]
         Unit["Unit Tests - 1,400+ tests"]
     end
 
-    Visual --> Integration --> Unit
+    Integration --> Unit
 ```
 
 | Layer | Count | Purpose | Catches |
 |-------|-------|---------|---------|
 | Unit | 1,400+ | Logic verification | Algorithm bugs, edge cases |
 | Integration | ~50 | System communication | Protocol errors, timing issues |
-| Visual | 40 | Rendering correctness | UI bugs, rendering failures |
 
 ## Unit Tests
 
@@ -120,123 +118,6 @@ it('should receive health updates after damage', async () => {
 });
 ```
 
-## Visual Regression Tests
-
-**The critical insight**: Unit tests mock the rendering engine. A test like `expect(graphics.arc).toHaveBeenCalled()` passes even if nothing renders on screen.
-
-Visual regression tests run a real browser with real Phaser rendering. Screenshots capture actual pixels.
-
-```mermaid
-flowchart LR
-    subgraph Test["Visual Test"]
-        Launch["Launch Browser"]
-        Navigate["Load Test Page"]
-        Interact["Call window API"]
-        Screenshot["Capture Screenshot"]
-        Compare["Compare to Baseline"]
-    end
-
-    Launch --> Navigate --> Interact --> Screenshot --> Compare
-```
-
-### Running Visual Tests
-
-```bash
-# Install Playwright (first time)
-make test-visual-install
-
-# Run tests
-make test-visual
-
-# Update baselines after fixing bugs
-make test-visual-update
-```
-
-### Test Harness Architecture
-
-```
-stick-rumble-client/
-├── public/
-│   └── ui-test-entities.html     # Test harness page
-├── src/
-│   └── entity-test-scene.ts      # Exposes window.* functions
-└── tests/
-    ├── visual/                    # Playwright specs
-    │   ├── player-sprites.spec.ts
-    │   ├── melee-animation.spec.ts
-    │   └── ...
-    └── screenshots/               # Baseline images (committed)
-        ├── health-bar.spec.ts/
-        ├── kill-feed.spec.ts/
-        └── ...
-```
-
-### Test Scene API
-
-The entity test scene exposes functions for Playwright to call:
-
-```typescript
-// entity-test-scene.ts
-declare global {
-  interface Window {
-    spawnPlayer: (id: string, x: number, y: number) => void;
-    removePlayer: (id: string) => void;
-    damagePlayer: (id: string, amount: number) => void;
-    triggerMeleeAttack: (id: string) => void;
-    advanceFrames: (count: number) => void;
-    restartScene: () => void;
-    // ... more functions
-  }
-}
-```
-
-### Example Visual Test
-
-```typescript
-// health-bar.spec.ts
-import { test, expect } from '@playwright/test';
-
-test('health bar shows correct fill at 50%', async ({ page }) => {
-  await page.goto('http://localhost:5173/ui-test-entities.html');
-  await page.waitForFunction(() => window.gameReady);
-
-  // Spawn player at full health
-  await page.evaluate(() => window.spawnPlayer('test', 400, 300));
-
-  // Damage to 50%
-  await page.evaluate(() => window.damagePlayer('test', 50));
-
-  // Wait for render
-  await page.evaluate(() => window.advanceFrames(2));
-
-  // Screenshot and compare
-  await expect(page).toHaveScreenshot('health-bar-50-percent.png');
-});
-```
-
-### When to Update Baselines
-
-Update baselines when:
-1. **Bug fix** - The old screenshot showed incorrect rendering
-2. **Intentional change** - Design updated, new assets added
-3. **New feature** - Adding new visual tests
-
-**Never update baselines** without visually verifying the new screenshot is correct.
-
-### Verifying Screenshots
-
-After updating baselines, use Claude Code's Read tool to visually verify:
-
-```bash
-# Update baselines
-make test-visual-update
-
-# Then in Claude Code conversation:
-# "Read the screenshot at stick-rumble-client/tests/screenshots/health-bar.spec.ts/..."
-```
-
-Claude can see images and verify they show correct rendering.
-
 ## Coverage Requirements
 
 | Component | Minimum Coverage |
@@ -244,7 +125,6 @@ Claude can see images and verify they show correct rendering.
 | Client business logic | 90% statement |
 | Server game logic | 90% statement |
 | Network handlers | 90% statement |
-| Visual regression | All UI components |
 
 ### Measuring Coverage
 
@@ -265,7 +145,6 @@ go tool cover -html=coverage.out
 |----------|------|-------------|
 | Unit | <30s | Every change |
 | Integration | ~2min | Before commit |
-| Visual | ~5min | Before PR |
 
 ### By Purpose
 
@@ -274,12 +153,10 @@ flowchart TB
     subgraph "What They Catch"
         Unit["Unit Tests"]
         Integration["Integration Tests"]
-        Visual["Visual Tests"]
     end
 
     Unit --> Logic["Logic errors, edge cases, algorithm bugs"]
     Integration --> Protocol["Protocol errors, timing issues, state sync"]
-    Visual --> Rendering["Rendering bugs, UI layout, animations"]
 ```
 
 ## CI/CD Integration
@@ -295,7 +172,6 @@ jobs:
       - make typecheck     # Type safety
       - make test-client   # Client unit tests
       - make test-server   # Server unit tests
-      - make test-visual   # Visual regression
 ```
 
 ## Common Testing Patterns
@@ -344,17 +220,6 @@ expect(mockWs.send).toHaveBeenCalledWith(
 );
 ```
 
-### Visual Test Isolation
-
-```typescript
-// Each visual test starts with clean scene
-test.beforeEach(async ({ page }) => {
-  await page.goto('http://localhost:5173/ui-test-entities.html');
-  await page.waitForFunction(() => window.gameReady);
-  await page.evaluate(() => window.restartScene());
-});
-```
-
 ## Debugging Test Failures
 
 ### Unit Test Failures
@@ -375,57 +240,16 @@ DEBUG=true make dev-server
 npm run test:integration -- WebSocketClient.integration.test.ts
 ```
 
-### Visual Test Failures
-
-1. Check the diff image in `test-results/`
-2. Use `make test-visual-update` to capture new baseline
-3. **Read the new screenshot** to verify correctness
-4. Commit only if the new screenshot is correct
-
-## Philosophy
-
-### Why Visual Tests Matter Most for AI
-
-When AI generates rendering code, it can:
-- Call the right functions in the wrong order
-- Pass incorrect parameters that still type-check
-- Create logic that "works" but renders incorrectly
-
-Unit tests catch logic errors. Visual tests catch rendering errors.
-
-### The Feedback Loop
-
-```mermaid
-flowchart LR
-    AI["AI Generates Code"]
-    Unit["Unit Tests"]
-    Visual["Visual Tests"]
-    Human["Human Verifies"]
-    Fix["Fix Issues"]
-
-    AI --> Unit
-    Unit -->|Pass| Visual
-    Unit -->|Fail| Fix
-    Visual -->|Pass| Human
-    Visual -->|Fail| Fix
-    Human -->|Approve| Done
-    Human -->|Reject| Fix
-    Fix --> AI
-```
-
-This creates a tight feedback loop where AI-generated code is verified at multiple levels before being accepted.
-
 ## The Limits of Automated Testing
 
 ### Why Human Playtesting Remains Essential
 
-Despite 1,400+ automated tests and visual regression infrastructure, **human playtesting is often the only way to catch certain classes of bugs** in real-time multiplayer games.
+Despite 1,400+ automated tests, **human playtesting is often the only way to catch certain classes of bugs** in real-time multiplayer games.
 
 ```mermaid
 flowchart TB
     subgraph Automated["What Automated Tests Can Do"]
         Unit["Unit Tests: Discrete logic"]
-        Visual["Visual Tests: Static frames"]
         Integration["Integration Tests: Message flow"]
     end
 
@@ -450,32 +274,6 @@ AI agents (including LLMs) have fundamental limitations when testing real-time s
 | **Animation smoothness** | Frame-by-frame screenshots miss interpolation issues |
 | **Emergent gameplay** | 8 players creating chaos produces untestable combinations |
 
-### Visual Test Complexity Ceiling
-
-Visual regression tests work well for:
-- Static UI components (health bars, kill feeds)
-- Predictable animations (melee swings with `advanceFrames()`)
-- Isolated entity rendering
-
-But they struggle with:
-- **Complex state combinations** - Testing every weapon × every player state × every UI element creates combinatorial explosion
-- **Animation interpolation** - Screenshots capture frames, not the smoothness between them
-- **Dynamic multiplayer scenarios** - 8 players moving, shooting, dying simultaneously
-- **Network-induced artifacts** - Rubber-banding, prediction errors, desync
-
-```mermaid
-flowchart LR
-    subgraph "Visual Test Sweet Spot"
-        Simple["Simple UI: Health bar, Kill feed"]
-    end
-
-    subgraph "Complexity Wall"
-        Complex["Complex: 8-player combat, desync"]
-    end
-
-    Simple -->|"Diminishing returns"| Complex
-```
-
 ### The Pragmatic Solution: Player Feedback Loop
 
 When automated tests pass but something still feels wrong, **human playtesting is the final arbiter**:
@@ -485,7 +283,6 @@ flowchart TB
     subgraph Development["Development Cycle"]
         Code["Write Code"]
         Auto["Automated Tests"]
-        Visual["Visual Regression"]
     end
 
     subgraph QA["Human QA"]
@@ -499,7 +296,7 @@ flowchart TB
         Ship["Ship Fix"]
     end
 
-    Code --> Auto --> Visual --> Play
+    Code --> Auto --> Play
     Play --> Feedback
     Feedback --> Investigate --> NewTest --> Ship
     Feedback --> Investigate --> Ship
@@ -583,8 +380,7 @@ After completing an epic with AI agents:
 The workflow acknowledges this reality:
 
 1. **Automated tests** gate code quality and catch regressions
-2. **Visual tests** verify rendering correctness for testable scenarios
-3. **Epic completion** triggers a dedicated playtesting session
+2. **Epic completion** triggers a dedicated playtesting session
 4. **Player feedback** becomes bug fixes for the next cycle
 
 The workflow follows a **rhythm**: build epic → playtest → bug bash → playtest → ship. AI handles the implementation volume; humans validate the integrated experience.

@@ -39,7 +39,7 @@ The Stick Rumble client is a browser-based game built with Phaser 3 and React. T
 | TypeScript | 5.9.3 | Type safety and better tooling |
 | Vite | 7.2.4 | Fast development server and bundler |
 | Vitest | 4.0.13 | Unit testing framework |
-| Playwright | 1.57.0 | Visual regression testing |
+
 | AJV | latest | JSON Schema validation for messages |
 
 ### Spec Dependencies
@@ -281,8 +281,7 @@ stick-rumble-client/
 ├── src/ui/
 │   └── debug/                            # [NEW: Epic 4] Network debug tools
 │       └── DebugNetworkPanel.tsx         # React panel for network simulation
-└── tests/
-    └── visual/                           # Playwright visual tests
+└── tests/                                # Test setup and mocks
 ```
 
 **Why This Structure:**
@@ -1475,8 +1474,6 @@ Depth 0:     Background, arena floor
 
 1. **Unit Tests:** Each manager tested in isolation with mocked dependencies
 2. **Integration Tests:** Full scene lifecycle with real WebSocket
-3. **Visual Tests:** Playwright screenshots for rendering validation
-4. **Test Harness:** `entity-test-scene.ts` exposes window functions for Playwright
 
 ---
 

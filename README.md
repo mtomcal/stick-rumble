@@ -34,7 +34,7 @@ Stick Rumble is a real-time multiplayer stick figure arena shooter demonstrating
 
 **Netcode**: Full client-side prediction pipeline, smooth interpolation for other players, delta compression for bandwidth optimization, and lag compensation for fair hit detection. Includes an artificial latency testing tool for development.
 
-**Visuals**: Procedural character and weapon sprites, health bars, hit effects, kill feed, and match end screens — all validated by visual regression tests.
+**Visuals**: Procedural character and weapon sprites, health bars, hit effects, kill feed, and match end screens.
 
 ### Known Rough Edges
 
@@ -54,7 +54,7 @@ This is an active development project. Current limitations:
 | Metric | Value |
 |--------|-------|
 | **Test Cases** | 2,000+ (1,340 client + 682 server) |
-| **Visual Regression Screenshots** | 44 baseline images |
+
 | **WebSocket Message Types** | 28 (22 server→client, 6 client→server) |
 | **Test Coverage Target** | >90% statement coverage |
 
@@ -77,11 +77,11 @@ This is an active development project. Current limitations:
 │                                                                      │
 │  ┌──────────────────────────────────────────────────────────────────┐   │
 │  │                    VALIDATION INFRASTRUCTURE                  │   │
-│  │  ┌─────────────┐  ┌─────────────┐  ┌──────────────────────┐  │   │
-│  │  │ Unit Tests  │  │ Integration │  │ Visual Regression    │  │   │
-│  │  │ (Vitest)    │  │ Tests       │  │ (Playwright)         │  │   │
-│  │  │ 2,000+      │  │ WebSocket   │  │ 44 screenshots       │  │   │
-│  │  └─────────────┘  └─────────────┘  └──────────────────────┘  │   │
+│  │  ┌─────────────┐  ┌─────────────┐                              │   │
+│  │  │ Unit Tests  │  │ Integration │                              │   │
+│  │  │ (Vitest)    │  │ Tests       │                              │   │
+│  │  │ 2,000+      │  │ WebSocket   │                              │   │
+│  │  └─────────────┘  └─────────────┘                              │   │
 │  └──────────────────────────────────────────────────────────────┘   │
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
@@ -100,9 +100,6 @@ make dev
 
 # Run all tests
 make test
-
-# Run visual regression tests
-make test-visual
 ```
 
 **Client**: http://localhost:5173
@@ -129,7 +126,6 @@ make test-visual
 - **events-schema** - Shared message type definitions
 
 ### Testing
-- **Playwright** - Visual regression testing
 - **Vitest** - Client unit/integration tests
 - **Go testing** - Server unit tests
 
@@ -140,7 +136,7 @@ make test-visual
 | Document | Description |
 |----------|-------------|
 | [Architecture](docs/ARCHITECTURE.md) | System design, data flow, and component diagrams |
-| [Testing Strategy](docs/TESTING-STRATEGY.md) | Validation infrastructure and visual regression |
+| [Testing Strategy](docs/TESTING-STRATEGY.md) | Validation infrastructure and testing approach |
 | [CLAUDE.md](CLAUDE.md) | AI agent instructions and project context |
 
 ---
@@ -160,7 +156,6 @@ All game state lives on the server. Clients send inputs, server calculates resul
 ### Comprehensive Test Coverage
 - **Unit tests** verify business logic (2,000+ tests)
 - **Integration tests** validate WebSocket communication
-- **Visual regression tests** catch rendering bugs that unit tests miss
 - **Human playtesting** remains essential—real-time games require human perception for final validation
 
 ---
@@ -177,8 +172,7 @@ stick-rumble/
 │   │   │   ├── network/     # WebSocket client
 │   │   │   └── ui/          # In-game UI
 │   │   └── ui/              # React components
-│   └── tests/
-│       └── visual/          # Playwright visual tests
+│   └── tests/               # Test setup and mocks
 │
 ├── stick-rumble-server/     # Go WebSocket server
 │   ├── cmd/server/          # Entry point
@@ -208,8 +202,6 @@ make test             # All tests
 make test-client      # Client unit tests
 make test-server      # Server unit tests
 make test-integration # WebSocket integration tests
-make test-visual      # Visual regression tests
-
 # Code Quality
 make lint             # ESLint + go vet + gofmt
 make typecheck        # TypeScript checking

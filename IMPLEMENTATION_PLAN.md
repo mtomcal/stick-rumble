@@ -90,7 +90,7 @@ The following discrepancies were found between this plan and the spec diff (c7dd
 - [x] **Assertion quality**: Tests verify exact color (`toHaveBeenCalledWith(2, 0xFFFFFF, 0.8)`), exact tween params (`duration: 200`, `angle: {from: -45, to: 60}`), not bare `toHaveBeenCalled()` without args
 - [x] **Assertion quality**: No `toBeDefined()` on graphics objects — assert specific draw calls with exact stroke width (2), alpha (0.8), and arc angle (80° / ±0.7 rad)
 - [x] **Coverage gate**: MeleeWeapon.ts ≥90% statements/lines/functions in coverage report
-- [ ] **Visual test**: `make test-visual` — read screenshots to verify white arc appearance — DEFERRED (HUMAN ONLY equivalent)
+- [ ] **Manual playtest**: Verify white arc appearance in browser — HUMAN ONLY
 
 #### System 3a — Client: Death Corpse (PlayerManager.ts)
 
@@ -332,7 +332,7 @@ The following discrepancies were found between this plan and the spec diff (c7dd
 #### Automated Tests
 - [x] `make test-server` — all server tests pass
 - [x] `make test-client` — all client tests pass (1491 passed, 24 skipped)
-- [ ] `make test-visual` — visual regression tests pass *(DEFERRED: requires Playwright browser install; HUMAN ONLY)*
+- [ ] Manual playtest — verify visual rendering in browser *(HUMAN ONLY)*
 - [x] `make lint` — 14 pre-existing lint errors (all `_unused` params in mock functions from earlier branches); zero new errors introduced
 - [x] `make typecheck` — no type errors
 
