@@ -1,7 +1,7 @@
 # Constants
 
-> **Spec Version**: 1.2.0
-> **Last Updated**: 2026-02-16
+> **Spec Version**: 1.3.0
+> **Last Updated**: 2026-02-17
 > **Depends On**: None (foundational spec)
 > **Depended By**: [arena.md](arena.md), [player.md](player.md), [movement.md](movement.md), [dodge-roll.md](dodge-roll.md), [weapons.md](weapons.md), [shooting.md](shooting.md), [melee.md](melee.md), [hit-detection.md](hit-detection.md), [match.md](match.md), [rooms.md](rooms.md), [networking.md](networking.md), [audio.md](audio.md), [ui.md](ui.md), [graphics.md](graphics.md)
 
@@ -413,7 +413,7 @@ Fixed positions for weapon crates. Coordinates based on arena percentages.
 | BLOOD_RADIUS_MAX | 5 | px | Largest particle size. Variety in burst. |
 | BLOOD_SPEED_MIN | 50 | px/s | Slow particles linger near impact. |
 | BLOOD_SPEED_MAX | 150 | px/s | Fast particles spray outward. |
-| BLOOD_DRAG | 200 | px/s² | Decelerates particles naturally. |
+| BLOOD_DRAG_FACTOR | 0.5 | ratio | Drag approximation factor -- effective distance = `speed * (duration/1000) * 0.5`. No physics body used; tween interpolates to pre-calculated endpoint. |
 | BLOOD_DURATION | 500 | ms | Fade-out time. Brief but visible. |
 
 ---
@@ -448,10 +448,41 @@ Fixed positions for weapon crates. Coordinates based on arena percentages.
 
 ## Camera Effects Constants
 
+### Hit Feedback Shake
+
+Triggered by `hit:confirmed` event (server-authoritative). Confirms the local player's shot landed.
+
 | Constant | Value | Unit | Why |
 |----------|-------|------|-----|
-| CAMERA_SHAKE_DURATION | 50 | ms | Brief shake when dealing damage. |
-| CAMERA_SHAKE_INTENSITY | 0.001 | ratio | Subtle. Felt not seen. |
+| HIT_FEEDBACK_SHAKE_DURATION | 50 | ms | Brief shake when dealing damage. Server-confirmed hit feedback. |
+| HIT_FEEDBACK_SHAKE_INTENSITY | 0.001 | ratio | Subtle. Felt not seen. |
+
+### Per-Weapon Recoil Shake
+
+Triggered by `projectile:spawn` event (fires immediately on client). Provides instant tactile feedback per weapon type. Only applies to ranged weapons with meaningful recoil — Pistol, Bat, and Katana have no recoil shake.
+
+| Constant | Value | Unit | Why |
+|----------|-------|------|-----|
+| RECOIL_SHAKE_DURATION | 100 | ms | Longer than hit feedback shake; sells the "kick" of firing. |
+| RECOIL_SHAKE_UZI | 0.005 | ratio | Light spray weapon. Mild shake per bullet. |
+| RECOIL_SHAKE_AK47 | 0.007 | ratio | Medium assault rifle. Moderate shake. |
+| RECOIL_SHAKE_SHOTGUN | 0.012 | ratio | Heavy single shot. Strongest recoil shake. |
+
+**Why separate from hit feedback?** Recoil shake is immediate client-side feedback on firing. Hit feedback shake is server-confirmed damage. They serve different purposes and can overlap (fire + hit in same frame).
+
+### Bat Melee Hit Shake
+
+Triggered on melee hit with the Bat weapon. Heavier than the standard hit feedback shake to sell the physicality of a melee swing connecting.
+
+| Constant | Value | Unit | Why |
+|----------|-------|------|-----|
+| MELEE_HIT_SHAKE_DURATION | 150 | ms | Longer than ranged hit feedback. Emphasizes melee impact. |
+| MELEE_HIT_SHAKE_INTENSITY | 0.008 | ratio | 8x stronger than hit feedback. Melee hits should feel heavy. |
+
+### Camera Flash (Damage Received)
+
+| Constant | Value | Unit | Why |
+|----------|-------|------|-----|
 | CAMERA_FLASH_DURATION | 100 | ms | Red flash when taking damage. |
 | CAMERA_FLASH_R | 128 | 0-255 | Half-intensity red. Not blinding. |
 | CAMERA_FLASH_G | 0 | 0-255 | No green component. |
@@ -734,3 +765,4 @@ if (distance > maxRange * 0.5):
 | 1.1.0 | 2026-02-15 | Updated DECELERATION from 50 to 1500 px/s² to match source code (changed during Epic 4 client-side prediction work). Updated rationale text and code snippets. |
 | 1.1.1 | 2026-02-16 | Fixed HEALTH_BAR_WIDTH (40→32) and HEALTH_BAR_HEIGHT (6→4) to match HealthBar.ts source code. |
 | 1.2.0 | 2026-02-16 | Added 14 new constant tables for ported pre-BMM visual systems: melee visual, blood particles, healing particles, death corpse, camera effects, crosshair/reticle, hit indicators, hit markers, gun recoil, aim sway, reload animation, floor grid, minimap, damage numbers. Updated Bat range (64→90px), Katana range (80→110px), melee arc (90°→80°). |
+| 1.3.0 | 2026-02-17 | Expanded Camera Effects Constants into four subsections: Hit Feedback Shake (renamed from generic CAMERA_SHAKE), Per-Weapon Recoil Shake (Uzi=0.005, AK47=0.007, Shotgun=0.012, 100ms duration), Bat Melee Hit Shake (150ms/0.008), Camera Flash. |

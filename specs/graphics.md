@@ -118,8 +118,7 @@ interface RenderedPlayer {
   rollStartTime?: number;  // When roll started (for animation)
   health: number;       // 0-100
   weaponType: string;   // Current weapon name
-  lastDamageTime?: number;       // Timestamp of last damage received (for hit indicators)
-  lastDamageSourceAngle?: number; // Angle from attacker (radians, for directional indicators)
+  // Damage direction computed on-the-fly from attacker/victim positions in event handlers
 }
 ```
 
@@ -790,22 +789,28 @@ scene.tweens.add({
 
 When a player takes damage, 5 blood particles burst from the impact point, spraying away from the damage source.
 
-**Implementation**:
+**Implementation** (tween-based, no physics bodies):
 ```typescript
 // On damage received
 for (let i = 0; i < 5; i++) {
-    const blood = this.add.circle(player.x, player.y, Phaser.Math.Between(2, 5), 0xcc0000);
+    const circle = this.add.circle(player.x, player.y, Phaser.Math.Between(2, 5), 0xcc0000);
     const angle = Phaser.Math.Angle.Between(sourceX, sourceY, player.x, player.y) + (Math.random() - 0.5);
     const speed = Phaser.Math.Between(50, 150);
-    const vec = this.physics.velocityFromRotation(angle, speed);
+    const duration = 500;
 
-    this.physics.add.existing(blood);
-    (blood.body as Phaser.Physics.Arcade.Body).setVelocity(vec.x, vec.y);
-    (blood.body as Phaser.Physics.Arcade.Body).setDrag(200);
+    // Pre-calculate end position (approximates drag deceleration)
+    const effectiveDistance = speed * (duration / 1000) * 0.5;
+    const endX = player.x + Math.cos(angle) * effectiveDistance;
+    const endY = player.y + Math.sin(angle) * effectiveDistance;
 
     this.tweens.add({
-        targets: blood, alpha: 0, scale: 0, duration: 500,
-        onComplete: () => blood.destroy()
+        targets: circle,
+        x: endX,
+        y: endY,
+        alpha: 0,
+        scale: 0,
+        duration,
+        onComplete: () => circle.destroy(),
     });
 }
 ```
@@ -815,9 +820,9 @@ for (let i = 0; i < 5; i++) {
 | Count | 5 per hit | `constants.md § Blood Particle Constants` |
 | Color | 0xCC0000 (dark red) | — |
 | Radius | 2-5px random | — |
-| Speed | 50-150 px/s random | — |
+| Speed | 50-150 px/s random | Used to compute effective distance |
 | Direction | Away from damage source ±0.5 rad | — |
-| Drag | 200 px/s² | Natural deceleration |
+| Effective Distance | `speed × (duration/1000) × 0.5` | Approximates drag deceleration |
 | Duration | 500ms fade + shrink | — |
 
 **Constants**: See [constants.md § Blood Particle Constants](constants.md#blood-particle-constants).
@@ -855,11 +860,13 @@ if (Math.random() > 0.85) {
 
 ### Wall Spark
 
-When a bullet's barrel position is obstructed by a wall (barrel inside wall geometry), a spark effect appears instead of firing the bullet.
+When a bullet's barrel position extends outside the arena boundaries, a spark effect appears instead of firing the bullet.
+
+> **Note:** Currently the arena has no internal walls -- obstruction detection checks arena bounds only. "Wall" in this context means the arena boundary edges (0, 0, 1920, 1080). Internal wall geometry support is a future enhancement.
 
 **Implementation**:
 ```typescript
-// When bullet spawn point is inside a wall
+// When bullet spawn point is outside the arena boundaries
 const spark = this.add.circle(startPos.x, startPos.y, 3, 0xffff00);
 this.tweens.add({
     targets: spark, alpha: 0, scale: 2, duration: 100,
@@ -1336,7 +1343,9 @@ test "player renders all body parts":
 **Priority**: Medium
 
 **Preconditions:**
-- Player fires with barrel position inside wall geometry
+- Player fires with barrel position extending outside the arena boundaries
+
+> **Note:** "Wall" here means arena boundary edges. No internal wall geometry exists yet.
 
 **Expected Output:**
 - Yellow spark (0xFFFF00) appears at barrel position

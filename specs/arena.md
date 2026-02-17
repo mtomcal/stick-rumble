@@ -164,6 +164,8 @@ const (
 
 Players cannot move outside the arena. Position is **clamped** to valid bounds after every physics update.
 
+> **Note:** "Wall" in this context refers to the arena boundary edges (the 1920x1080 rectangle). No internal wall geometry currently exists. All "wall-sliding" and "wall collision" behavior described in this spec refers to the arena boundaries only.
+
 **Why clamp rather than bounce?** Clamping creates predictable "wall-sliding" behavior. Bouncing would cause chaotic movement near walls and feel uncontrolled.
 
 **Algorithm:**
@@ -258,6 +260,8 @@ func (p *Projectile) IsOutOfBounds() bool {
 ### Dodge Roll Boundary Termination
 
 When a player hits a wall during a dodge roll, the roll ends immediately.
+
+> **Note:** "Wall" here refers to the arena boundary edges. No internal wall geometry currently exists -- roll termination is triggered only when the player reaches the arena bounds.
 
 **Why terminate roll on wall hit?** Allowing players to "slide" along walls during a roll would provide unintended mobility. Termination creates a cost for misjudging distance.
 

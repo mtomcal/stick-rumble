@@ -1,7 +1,7 @@
 # UI System
 
-> **Spec Version**: 1.2.0
-> **Last Updated**: 2026-02-16
+> **Spec Version**: 1.3.0
+> **Last Updated**: 2026-02-17
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [match.md](match.md), [client-architecture.md](client-architecture.md), [graphics.md](graphics.md)
 > **Depended By**: [test-index.md](test-index.md)
 
@@ -54,8 +54,14 @@ All UI constants are defined here and referenced in [constants.md](constants.md#
 | DODGE_ROLL_UI_RADIUS | 20 | px | Cooldown indicator radius |
 | CAMERA_FLASH_DURATION | 100 | ms | Camera flash on damage received |
 | CAMERA_FLASH_COLOR | RGB(128,0,0) | color | Dark red camera flash |
-| CAMERA_SHAKE_DURATION | 50 | ms | Camera shake on dealing damage |
-| CAMERA_SHAKE_INTENSITY | 0.001 | ratio | Camera shake magnitude |
+| HIT_FEEDBACK_SHAKE_DURATION | 50 | ms | Camera shake on server-confirmed hit |
+| HIT_FEEDBACK_SHAKE_INTENSITY | 0.001 | ratio | Hit feedback shake magnitude |
+| RECOIL_SHAKE_DURATION | 100 | ms | Camera shake on firing (client-side) |
+| RECOIL_SHAKE_UZI | 0.005 | ratio | Uzi recoil shake intensity |
+| RECOIL_SHAKE_AK47 | 0.007 | ratio | AK47 recoil shake intensity |
+| RECOIL_SHAKE_SHOTGUN | 0.012 | ratio | Shotgun recoil shake intensity |
+| MELEE_HIT_SHAKE_DURATION | 150 | ms | Bat melee hit shake duration |
+| MELEE_HIT_SHAKE_INTENSITY | 0.008 | ratio | Bat melee hit shake magnitude |
 | HIT_MARKER_TEXTURE_SIZE | 20 | px | Hit marker X texture dimensions |
 | HIT_MARKER_NORMAL_SCALE | 1.2 | ratio | Normal hit marker scale |
 | HIT_MARKER_KILL_SCALE | 2.0 | ratio | Kill hit marker scale (red) |
@@ -712,17 +718,61 @@ this.tweens.add({
 
 ### Camera Shake
 
-The camera shakes briefly when the local player deals damage (hit or melee strike).
+Three distinct camera shake triggers exist, each serving a different feedback purpose. They differ in trigger source, timing, and intensity.
 
-**Implementation**:
+#### Hit Feedback Shake (Server-Confirmed)
+
+Triggered by the `hit:confirmed` event from the server. Confirms the local player's shot or melee strike dealt damage. This is server-authoritative — the shake only fires after the server validates the hit.
+
+**Implementation** (in `GameSceneUI.ts`):
 ```typescript
 this.cameras.main.shake(50, 0.001);
 ```
 
 | Property | Value | Source |
 |----------|-------|--------|
-| Duration | 50ms | `constants.md § Camera Effects Constants` |
+| Duration | 50ms | `constants.md § Hit Feedback Shake` |
 | Intensity | 0.001 | Subtle, felt but not disorienting |
+
+#### Per-Weapon Recoil Shake (Client-Side, Immediate)
+
+Triggered by the `projectile:spawn` event. Fires immediately on the client when the local player shoots, providing instant tactile feedback without waiting for server confirmation. Intensity varies per weapon to match the weapon's perceived weight.
+
+Only applies to Uzi, AK47, and Shotgun. Pistol has no recoil shake (too light). Melee weapons (Bat, Katana) do not fire projectiles and are not affected.
+
+**Implementation** (in `ScreenShake.ts`):
+```typescript
+// Intensity varies by weapon type
+const recoilIntensity = {
+  uzi: 0.005,
+  ak47: 0.007,
+  shotgun: 0.012,
+};
+this.cameras.main.shake(100, recoilIntensity[weaponType]);
+```
+
+| Property | Value | Source |
+|----------|-------|--------|
+| Duration | 100ms (all weapons) | `constants.md § Per-Weapon Recoil Shake` |
+| Intensity (Uzi) | 0.005 | Light spray weapon |
+| Intensity (AK47) | 0.007 | Medium assault rifle |
+| Intensity (Shotgun) | 0.012 | Heavy single shot, strongest recoil |
+
+**Why separate from hit feedback?** Recoil shake is immediate client-side feedback tied to firing. Hit feedback shake is delayed until the server confirms the hit landed. They can overlap — firing and hitting in the same frame produces both shakes.
+
+#### Bat Melee Hit Shake
+
+Triggered on a successful melee hit with the Bat weapon. Heavier and longer than the standard hit feedback shake to sell the physicality of a blunt melee weapon connecting. This is distinct from the generic `hit:confirmed` shake and replaces it for Bat hits.
+
+**Implementation** (in `ScreenShake.ts`):
+```typescript
+this.cameras.main.shake(150, 0.008);
+```
+
+| Property | Value | Source |
+|----------|-------|--------|
+| Duration | 150ms | `constants.md § Bat Melee Hit Shake` |
+| Intensity | 0.008 | 8x stronger than hit feedback shake |
 
 **Constants**: See [constants.md § Camera Effects Constants](constants.md#camera-effects-constants).
 
@@ -1362,16 +1412,39 @@ it('should sort scoreboard by kills descending, deaths ascending', () => {
 - Remote: white 16px, 0.7× scale, 0.8 alpha
 - All float up 50px and fade over 800ms
 
-### TS-UI-017: Camera shake on dealing damage
+### TS-UI-017: Camera shake — hit feedback
 
 **Category**: Visual
 **Priority**: Medium
 
 **Preconditions:**
-- Player hits an enemy
+- Player hits an enemy, `hit:confirmed` received from server
 
 **Expected Output:**
 - Camera shakes for 50ms at 0.001 intensity
+
+### TS-UI-020: Camera shake — per-weapon recoil
+
+**Category**: Visual
+**Priority**: Medium
+
+**Preconditions:**
+- Player fires a ranged weapon (Uzi, AK47, or Shotgun)
+
+**Expected Output:**
+- Camera shakes for 100ms at weapon-specific intensity (Uzi=0.005, AK47=0.007, Shotgun=0.012)
+- Pistol firing does NOT trigger recoil shake
+
+### TS-UI-021: Camera shake — bat melee hit
+
+**Category**: Visual
+**Priority**: Medium
+
+**Preconditions:**
+- Player hits an enemy with the Bat weapon
+
+**Expected Output:**
+- Camera shakes for 150ms at 0.008 intensity
 
 ### TS-UI-018: Minimap renders static layer
 
@@ -1418,3 +1491,4 @@ it('should sort scoreboard by kills descending, deaths ascending', () => {
 | 1.1.3 | 2026-02-16 | Fixed kill feed player ID method — `slice(0, 8)` → `substring(0, 8)` to match source |
 | 1.1.2 | 2026-02-16 | Fixed match end screen test expected output — winner text is "Winner: Player1", not "Player1 WINS!" |
 | 1.2.0 | 2026-02-16 | Replaced damage flash overlay with camera flash. Replaced procedural hit marker with texture-based 20×20 X. Updated damage numbers with kill/remote variants. Added camera shake, minimap sections. Added tests TS-UI-013 through TS-UI-019. Ported from pre-BMM prototype. |
+| 1.3.0 | 2026-02-17 | Expanded camera shake section to document all three shake systems: hit feedback shake (server-confirmed, 50ms/0.001), per-weapon recoil shake (client-side, 100ms, Uzi=0.005/AK47=0.007/Shotgun=0.012), and bat melee hit shake (150ms/0.008). Renamed constants from generic CAMERA_SHAKE to specific HIT_FEEDBACK_SHAKE. Added tests TS-UI-020 and TS-UI-021. |

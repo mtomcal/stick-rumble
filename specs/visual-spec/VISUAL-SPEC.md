@@ -76,7 +76,7 @@
 - Circular radar ring border (teal/green outline)
 - Green dot = local player
 - Red dots = enemies
-- Shows simplified map layout with dark rectangles for walls/platforms
+- Shows simplified map layout with dark rectangles for walls/platforms *(from prototype -- minimap wall rendering is currently a no-op since no internal wall geometry exists)*
 - **Ref frames**: `02-gameplay-respawn-full-hud.jpg`
 
 ### Health Bar (top-center-left)
@@ -271,7 +271,10 @@
 - Grid lines form large squares (lighter gray)
 - Provides spatial reference for movement
 
-### Platforms (Brown Blocks)
+### Platforms (Brown Blocks) -- *From Prototype -- Not Yet Implemented*
+
+> **Note:** The following platform geometry was observed in the prototype video but has not been implemented. The current arena is a flat 1920x1080 rectangle with no internal geometry.
+
 - Dark brown/maroon (`#7A4A3A`)
 - Rectangular, ~170x80-100px each
 - Arranged in grid patterns (typically 3x2 rows)
@@ -279,7 +282,10 @@
 - Players can stand on top, walk between gaps
 - **Ref frames**: `31-platform-grid-layout-visible.jpg`
 
-### Walls (Dark Structures)
+### Walls (Dark Structures) -- *From Prototype -- Not Yet Implemented*
+
+> **Note:** The following wall geometry was observed in the prototype video but has not been implemented. The current arena has boundary-edge collision only (the outer 1920x1080 rectangle). There are no internal walls, corridors, or rooms.
+
 - Dark charcoal/slate (`#4A5A5A`)
 - Large horizontal bars and vertical bars
 - Form corridors and enclosed rooms
@@ -288,7 +294,10 @@
   - **Corridor areas**: Tight passages formed by walls
 - **Ref frames**: `38-walled-corridor-area.jpg`
 
-### Map Zones
+### Map Zones -- *From Prototype -- Not Yet Implemented*
+
+> **Note:** The following zone layout was observed in the prototype video but has not been implemented. The current arena is a single open zone with no internal structures.
+
 The level has two distinct zone types:
 1. **Open platform grid**: Brown blocks in 3x2 arrangements with open space between them
 2. **Walled corridors**: Dark charcoal walls forming L-shapes, rooms, and narrow passages
