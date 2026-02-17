@@ -52,6 +52,7 @@ describe('GameSceneEventHandlers - Audio Integration', () => {
       getPlayerPosition: vi.fn().mockReturnValue({ x: 100, y: 200 }),
       getPlayerAimAngle: vi.fn().mockReturnValue(0),
       updatePlayerWeapon: vi.fn(),
+      triggerWeaponRecoil: vi.fn(),
     } as unknown as PlayerManager;
 
     mockProjectileManager = {
@@ -84,6 +85,7 @@ describe('GameSceneEventHandlers - Audio Integration', () => {
       showBulletImpact: vi.fn(),
       showMeleeHit: vi.fn(),
       showMuzzleFlash: vi.fn(),
+      showBloodParticles: vi.fn(),
       destroy: vi.fn(),
     } as any;
 
@@ -100,6 +102,7 @@ describe('GameSceneEventHandlers - Audio Integration', () => {
       showDamageFlash: vi.fn(),
       showDamageNumber: vi.fn(),
       showHitMarker: vi.fn(),
+      showCameraShake: vi.fn(),
       updateMatchTimer: vi.fn(),
     } as unknown as GameSceneUI;
 

@@ -5,13 +5,41 @@ import { Crosshair } from './Crosshair';
 describe('Crosshair', () => {
   let scene: Phaser.Scene;
   let crosshair: Crosshair;
-  let mockGraphics: Phaser.GameObjects.Graphics;
+  let mockSprite: Phaser.GameObjects.Sprite;
+  let mockMakeGraphics: any;
 
   beforeEach(() => {
+    // Create mock sprite
+    mockSprite = {
+      setScrollFactor: vi.fn().mockReturnThis(),
+      setDepth: vi.fn().mockReturnThis(),
+      setAlpha: vi.fn().mockReturnThis(),
+      setPosition: vi.fn().mockReturnThis(),
+      setVisible: vi.fn().mockReturnThis(),
+      destroy: vi.fn(),
+    } as unknown as Phaser.GameObjects.Sprite;
+
+    // Create mock make.graphics for texture generation
+    mockMakeGraphics = {
+      lineStyle: vi.fn().mockReturnThis(),
+      strokeCircle: vi.fn().mockReturnThis(),
+      beginPath: vi.fn().mockReturnThis(),
+      moveTo: vi.fn().mockReturnThis(),
+      lineTo: vi.fn().mockReturnThis(),
+      strokePath: vi.fn().mockReturnThis(),
+      fillStyle: vi.fn().mockReturnThis(),
+      fillCircle: vi.fn().mockReturnThis(),
+      generateTexture: vi.fn().mockReturnThis(),
+      destroy: vi.fn(),
+    };
+
     // Create mock scene
     scene = {
       add: {
-        graphics: vi.fn(() => mockGraphics),
+        sprite: vi.fn(() => mockSprite),
+      },
+      make: {
+        graphics: vi.fn(() => mockMakeGraphics),
       },
       input: {
         activePointer: {
@@ -19,145 +47,108 @@ describe('Crosshair', () => {
           y: 300,
         },
       },
-      cameras: {
-        main: {
-          scrollX: 0,
-          scrollY: 0,
-          width: 800,
-          height: 600,
-        },
-      },
     } as unknown as Phaser.Scene;
-
-    // Create mock graphics
-    mockGraphics = {
-      clear: vi.fn(),
-      lineStyle: vi.fn(),
-      strokeCircle: vi.fn(),
-      beginPath: vi.fn(),
-      moveTo: vi.fn(),
-      lineTo: vi.fn(),
-      strokePath: vi.fn(),
-      setScrollFactor: vi.fn(),
-      setDepth: vi.fn(),
-      setVisible: vi.fn(),
-      destroy: vi.fn(),
-      visible: true,
-    } as unknown as Phaser.GameObjects.Graphics;
 
     crosshair = new Crosshair(scene);
   });
 
-  describe('constructor', () => {
-    it('should create graphics object with correct settings', () => {
-      expect(scene.add.graphics).toHaveBeenCalled();
-      expect(mockGraphics.setScrollFactor).toHaveBeenCalledWith(0);
-      expect(mockGraphics.setDepth).toHaveBeenCalledWith(1000);
+  describe('TS-GFX-023: Crosshair reticle texture renders correctly', () => {
+    it('should generate reticle texture with generateTexture("reticle", 32, 32)', () => {
+      expect(mockMakeGraphics.generateTexture).toHaveBeenCalledWith('reticle', 32, 32);
     });
 
+    it('should draw outer ring with strokeCircle(16, 16, 10)', () => {
+      expect(mockMakeGraphics.strokeCircle).toHaveBeenCalledWith(16, 16, 10);
+    });
+
+    it('should draw ring with 2px white stroke', () => {
+      expect(mockMakeGraphics.lineStyle).toHaveBeenCalledWith(2, 0xffffff, 1);
+    });
+
+    it('should draw red center dot with fillCircle(16, 16, 2) and color 0xFF0000', () => {
+      expect(mockMakeGraphics.fillStyle).toHaveBeenCalledWith(0xff0000, 1);
+      expect(mockMakeGraphics.fillCircle).toHaveBeenCalledWith(16, 16, 2);
+    });
+
+    it('should draw 4 cardinal tick marks (6px each)', () => {
+      // Top tick: (16, 2) to (16, 8) — 6px
+      expect(mockMakeGraphics.moveTo).toHaveBeenCalledWith(16, 2);
+      expect(mockMakeGraphics.lineTo).toHaveBeenCalledWith(16, 8);
+      // Bottom tick: (16, 24) to (16, 30)
+      expect(mockMakeGraphics.moveTo).toHaveBeenCalledWith(16, 24);
+      expect(mockMakeGraphics.lineTo).toHaveBeenCalledWith(16, 30);
+      // Left tick: (2, 16) to (8, 16)
+      expect(mockMakeGraphics.moveTo).toHaveBeenCalledWith(2, 16);
+      expect(mockMakeGraphics.lineTo).toHaveBeenCalledWith(8, 16);
+      // Right tick: (24, 16) to (30, 16)
+      expect(mockMakeGraphics.moveTo).toHaveBeenCalledWith(24, 16);
+      expect(mockMakeGraphics.lineTo).toHaveBeenCalledWith(30, 16);
+    });
+
+    it('should create sprite with "reticle" texture', () => {
+      expect(scene.add.sprite).toHaveBeenCalledWith(0, 0, 'reticle');
+    });
+
+    it('should set sprite depth to exactly 100', () => {
+      expect(mockSprite.setDepth).toHaveBeenCalledWith(100);
+    });
+
+    it('should set sprite alpha to exactly 0.8', () => {
+      expect(mockSprite.setAlpha).toHaveBeenCalledWith(0.8);
+    });
+
+    it('should set sprite scrollFactor to 0 (HUD element)', () => {
+      expect(mockSprite.setScrollFactor).toHaveBeenCalledWith(0);
+    });
+
+    it('should destroy temp graphics after texture generation', () => {
+      expect(mockMakeGraphics.destroy).toHaveBeenCalled();
+    });
+  });
+
+  describe('constructor', () => {
     it('should initialize as visible by default', () => {
       expect(crosshair.isVisible()).toBe(true);
     });
   });
 
   describe('update', () => {
-    it('should follow mouse cursor position', () => {
+    it('should position sprite at cursor position', () => {
       scene.input.activePointer.x = 500;
       scene.input.activePointer.y = 400;
 
       crosshair.update(false, 0);
 
-      // Graphics should be drawn at cursor position
-      expect(mockGraphics.clear).toHaveBeenCalled();
+      expect(mockSprite.setPosition).toHaveBeenCalledWith(500, 400);
     });
 
-    it('should render static crosshair when player is stationary', () => {
-      const isMoving = false;
-      const spreadDegrees = 5;
-
-      crosshair.update(isMoving, spreadDegrees);
-
-      // Should draw base crosshair lines
-      expect(mockGraphics.lineStyle).toHaveBeenCalled();
-      expect(mockGraphics.moveTo).toHaveBeenCalled();
-      expect(mockGraphics.lineTo).toHaveBeenCalled();
-    });
-
-    it('should expand crosshair when player is moving', () => {
-      const isMoving = true;
-      const spreadDegrees = 5;
-
-      // Update multiple times to let interpolation reach target
-      for (let i = 0; i < 10; i++) {
-        crosshair.update(isMoving, spreadDegrees);
-      }
-
-      // Should draw expanded spread indicator
-      expect(mockGraphics.clear).toHaveBeenCalled();
-      expect(mockGraphics.strokeCircle).toHaveBeenCalled();
-    });
-
-    it('should use weapon-specific spread for Uzi (5 degrees)', () => {
-      crosshair.setWeaponType('Uzi');
-
-      // Update multiple times to let interpolation reach target
-      for (let i = 0; i < 10; i++) {
-        crosshair.update(true, 5);
-      }
-
-      // Should draw spread indicator with radius approaching 5 degrees * 2 pixels/degree + 5px gap = 15px
-      const calls = (mockGraphics.strokeCircle as any).mock.calls;
-      expect(calls.length).toBeGreaterThan(0);
-      const lastCall = calls[calls.length - 1];
-      const [, , radius] = lastCall;
-      // After 10 frames with LERP_SPEED=0.2, radius should be close to 15px (within 2px due to interpolation)
-      expect(radius).toBeGreaterThan(13);
-      expect(radius).toBeLessThan(16);
-    });
-
-    it('should use weapon-specific spread for AK47 (3 degrees)', () => {
-      crosshair.setWeaponType('AK47');
-
-      // Update multiple times to let interpolation reach target
-      for (let i = 0; i < 10; i++) {
-        crosshair.update(true, 3);
-      }
-
-      // Should draw spread indicator with radius approaching 3 degrees * 2 pixels/degree + 5px gap = 11px
-      const calls = (mockGraphics.strokeCircle as any).mock.calls;
-      expect(calls.length).toBeGreaterThan(0);
-      const lastCall = calls[calls.length - 1];
-      const [, , radius] = lastCall;
-      // After 10 frames with LERP_SPEED=0.2, radius should be close to 11px (within 1px due to interpolation)
-      expect(radius).toBeGreaterThan(10);
-      expect(radius).toBeLessThan(12);
-    });
-
-    it('should use weapon-specific spread for Shotgun (15 degrees cone)', () => {
-      crosshair.setWeaponType('Shotgun');
-
-      // Update multiple times to let interpolation reach target
-      for (let i = 0; i < 10; i++) {
-        crosshair.update(true, 15);
-      }
-
-      // Should draw spread indicator with radius approaching 15 degrees * 2 pixels/degree + 5px gap = 35px
-      const calls = (mockGraphics.strokeCircle as any).mock.calls;
-      expect(calls.length).toBeGreaterThan(0);
-      const lastCall = calls[calls.length - 1];
-      const [, , radius] = lastCall;
-      // After 10 frames with LERP_SPEED=0.2, radius should be close to 35px (within 4px due to interpolation)
-      expect(radius).toBeGreaterThan(31);
-      expect(radius).toBeLessThan(36);
-    });
-
-    it('should not render when hidden', () => {
+    it('should not update when hidden', () => {
       crosshair.hide();
-      mockGraphics.clear = vi.fn(); // Reset mock
+      (mockSprite.setPosition as ReturnType<typeof vi.fn>).mockClear();
 
       crosshair.update(true, 5);
 
-      expect(mockGraphics.clear).not.toHaveBeenCalled();
+      expect(mockSprite.setPosition).not.toHaveBeenCalled();
+    });
+
+    it('should not update when pointer is not available', () => {
+      const sceneNoPointer = {
+        add: { sprite: vi.fn(() => mockSprite) },
+        make: { graphics: vi.fn(() => mockMakeGraphics) },
+        input: { activePointer: null },
+      } as unknown as Phaser.Scene;
+
+      const crosshairNoPointer = new Crosshair(sceneNoPointer);
+      (mockSprite.setPosition as ReturnType<typeof vi.fn>).mockClear();
+
+      crosshairNoPointer.update(true, 5);
+
+      expect(mockSprite.setPosition).not.toHaveBeenCalled();
+    });
+
+    it('should not throw when sprite is null (after destroy)', () => {
+      crosshair.destroy();
+      expect(() => crosshair.update(true, 5)).not.toThrow();
     });
   });
 
@@ -193,14 +184,14 @@ describe('Crosshair', () => {
       crosshair.hide();
       crosshair.show();
 
-      expect(mockGraphics.setVisible).toHaveBeenCalledWith(true);
+      expect(mockSprite.setVisible).toHaveBeenCalledWith(true);
       expect(crosshair.isVisible()).toBe(true);
     });
 
     it('should hide crosshair', () => {
       crosshair.hide();
 
-      expect(mockGraphics.setVisible).toHaveBeenCalledWith(false);
+      expect(mockSprite.setVisible).toHaveBeenCalledWith(false);
       expect(crosshair.isVisible()).toBe(false);
     });
 
@@ -216,10 +207,17 @@ describe('Crosshair', () => {
     });
   });
 
+  describe('spread removed', () => {
+    it('should always return 0 for getCurrentSpreadRadius', () => {
+      crosshair.update(true, 10);
+      expect(crosshair.getCurrentSpreadRadius()).toBe(0);
+    });
+  });
+
   describe('destroy', () => {
-    it('should destroy graphics object', () => {
+    it('should destroy sprite', () => {
       crosshair.destroy();
-      expect(mockGraphics.destroy).toHaveBeenCalled();
+      expect(mockSprite.destroy).toHaveBeenCalled();
     });
 
     it('should handle multiple destroy calls safely', () => {
@@ -228,111 +226,7 @@ describe('Crosshair', () => {
     });
   });
 
-  describe('spread indicator rendering', () => {
-    it('should render larger spread circle for moving player', () => {
-      const stationaryRadius = 10;
-
-      // Stationary - small spread
-      crosshair.update(false, 0);
-      let calls = (mockGraphics.strokeCircle as any).mock.calls;
-      if (calls.length > 0) {
-        const [, , radius] = calls[calls.length - 1];
-        expect(radius).toBeLessThanOrEqual(stationaryRadius);
-      }
-
-      // Moving - larger spread
-      mockGraphics.strokeCircle = vi.fn(); // Reset
-      crosshair.update(true, 5);
-      calls = (mockGraphics.strokeCircle as any).mock.calls;
-      if (calls.length > 0) {
-        const [, , radius] = calls[calls.length - 1];
-        expect(radius).toBeGreaterThan(stationaryRadius);
-      }
-    });
-
-    it('should interpolate spread smoothly', () => {
-      // Test that spread changes gradually, not instantly
-      const radiusValues: number[] = [];
-
-      // Capture spread radius over multiple frames
-      for (let i = 0; i < 5; i++) {
-        crosshair.update(true, 5);
-        radiusValues.push(crosshair.getCurrentSpreadRadius());
-      }
-
-      // Verify spread increases gradually (not instantly to target)
-      expect(radiusValues[0]).toBeLessThan(radiusValues[1]);
-      expect(radiusValues[1]).toBeLessThan(radiusValues[2]);
-      expect(radiusValues[2]).toBeLessThan(radiusValues[3]);
-
-      // First frame should not be at full spread (interpolation not instant)
-      const targetSpread = 5 * 2; // 5 degrees * 2 pixels/degree = 10px
-      expect(radiusValues[0]).toBeLessThan(targetSpread);
-    });
-  });
-
-  describe('visual feedback', () => {
-    it('should use white color for crosshair lines', () => {
-      crosshair.update(false, 0);
-
-      const lineStyleCalls = (mockGraphics.lineStyle as any).mock.calls;
-      expect(lineStyleCalls.length).toBeGreaterThan(0);
-      // First arg is width, second is color
-      const color = lineStyleCalls[0][1];
-      expect(color).toBe(0xffffff); // White
-    });
-
-    it('should show red spread indicator when moving', () => {
-      // Update multiple times to let spread build up
-      for (let i = 0; i < 10; i++) {
-        crosshair.update(true, 5);
-      }
-
-      const lineStyleCalls = (mockGraphics.lineStyle as any).mock.calls;
-      // When moving, should draw red spread indicator
-      const hasRedIndicator = lineStyleCalls.some((call: any) => call[1] === 0xff0000);
-      expect(hasRedIndicator).toBe(true);
-    });
-  });
-
-  describe('edge cases and branch coverage', () => {
-    it('should use fallback spread degrees when weapon type is unknown', () => {
-      // Set an unknown weapon type
-      crosshair.setWeaponType('UnknownWeapon' as any);
-      crosshair.update(true, 10);
-
-      // Should use fallback spread degrees (10)
-      expect(mockGraphics.strokeCircle).toHaveBeenCalled();
-    });
-
-    it('should not update when graphics is null', () => {
-      crosshair.destroy();
-      crosshair.update(true, 5);
-
-      // Should not throw error
-      expect(mockGraphics.clear).not.toHaveBeenCalled();
-    });
-
-    it('should not update when pointer is not available', () => {
-      // Create a scene with no active pointer
-      const sceneNoPointer = {
-        add: {
-          graphics: vi.fn(() => mockGraphics),
-        },
-        input: {
-          activePointer: null,
-        },
-      } as unknown as Phaser.Scene;
-
-      const crosshairNoPointer = new Crosshair(sceneNoPointer);
-      mockGraphics.clear = vi.fn(); // Reset mock
-
-      crosshairNoPointer.update(true, 5);
-
-      // Should handle gracefully
-      expect(mockGraphics.clear).not.toHaveBeenCalled();
-    });
-
+  describe('edge cases', () => {
     it('should show crosshair for ranged weapon after switching from melee', () => {
       crosshair.setWeaponType('Bat');
       expect(crosshair.isVisible()).toBe(false);

@@ -37,8 +37,12 @@ describe('GameSceneEventHandlers', () => {
       setLocalPlayerId: vi.fn(),
       getLocalPlayerId: vi.fn().mockReturnValue('player-1'),
       getPlayerPosition: vi.fn().mockReturnValue({ x: 100, y: 200 }),
+      getLocalPlayerPosition: vi.fn().mockReturnValue({ x: 100, y: 200 }),
       getPlayerAimAngle: vi.fn().mockReturnValue(0),
+      getLivingPlayers: vi.fn().mockReturnValue([]),
       updatePlayerWeapon: vi.fn(),
+      triggerWeaponRecoil: vi.fn(),
+      triggerReloadPulse: vi.fn(),
     } as unknown as PlayerManager;
 
     mockProjectileManager = {
@@ -71,6 +75,7 @@ describe('GameSceneEventHandlers', () => {
       showBulletImpact: vi.fn(),
       showMeleeHit: vi.fn(),
       showMuzzleFlash: vi.fn(),
+      showBloodParticles: vi.fn(),
       destroy: vi.fn(),
     } as any;
 
@@ -87,6 +92,11 @@ describe('GameSceneEventHandlers', () => {
       showDamageFlash: vi.fn(),
       showDamageNumber: vi.fn(),
       showHitMarker: vi.fn(),
+      showHitIndicator: vi.fn(),
+      showWallSpark: vi.fn(),
+      setupMinimap: vi.fn(),
+      updateMinimap: vi.fn(),
+      showCameraShake: vi.fn(),
       updateMatchTimer: vi.fn(),
     } as unknown as GameSceneUI;
 
@@ -470,10 +480,13 @@ describe('GameSceneEventHandlers', () => {
       expect(mockHealthBarUI.updateHealth).not.toHaveBeenCalled();
 
       // Should still show damage numbers for other players
+      // isKill=false (newHealth 75 > 0), isLocal=false (attacker != player-1)
       expect(mockGameSceneUI.showDamageNumber).toHaveBeenCalledWith(
         mockPlayerManager,
         'other-player',
-        25
+        25,
+        false,
+        false
       );
     });
 
@@ -1327,6 +1340,8 @@ describe('GameSceneEventHandlers', () => {
       const mockShootingManager = {
         updateWeaponState: vi.fn(),
         setWeaponType: vi.fn(),
+        isReloading: vi.fn().mockReturnValue(false),
+        isMeleeWeapon: vi.fn().mockReturnValue(false),
       };
 
       eventHandlers.setShootingManager(mockShootingManager as any);
@@ -1493,10 +1508,65 @@ describe('GameSceneEventHandlers', () => {
       expect(mockHitEffectManager.showMeleeHit).not.toHaveBeenCalled();
     });
 
+    it('should trigger blood particles on player:damaged with attacker and victim positions (TS-GFX-015)', () => {
+      eventHandlers.setupEventHandlers();
+
+      // Mock getPlayerPosition to return different positions for victim and attacker
+      mockPlayerManager.getPlayerPosition = vi.fn((id: string) => {
+        if (id === 'victim-1') return { x: 200, y: 300 };
+        if (id === 'attacker-1') return { x: 100, y: 300 };
+        return null;
+      });
+
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const playerDamagedHandler = handlerRefs.get('player:damaged');
+
+      const data = {
+        victimId: 'victim-1',
+        attackerId: 'attacker-1',
+        damage: 25,
+        newHealth: 75,
+        projectileId: 'proj-123',
+      };
+
+      playerDamagedHandler?.(data);
+
+      // Should call showBloodParticles with victim position and attacker position
+      expect(mockHitEffectManager.showBloodParticles).toHaveBeenCalledWith(200, 300, 100, 300);
+    });
+
+    it('should not trigger blood particles when attacker position is null', () => {
+      eventHandlers.setupEventHandlers();
+
+      // Victim position available but attacker position null
+      mockPlayerManager.getPlayerPosition = vi.fn((id: string) => {
+        if (id === 'victim-1') return { x: 200, y: 300 };
+        return null;
+      });
+
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const playerDamagedHandler = handlerRefs.get('player:damaged');
+
+      const data = {
+        victimId: 'victim-1',
+        attackerId: 'unknown-attacker',
+        damage: 25,
+        newHealth: 75,
+        projectileId: 'proj-123',
+      };
+
+      playerDamagedHandler?.(data);
+
+      // Blood particles should NOT be called (no attacker position)
+      expect(mockHitEffectManager.showBloodParticles).not.toHaveBeenCalled();
+    });
+
     it('should handle weapon:state with Bat melee weapon type', () => {
       const mockShootingManager = {
         updateWeaponState: vi.fn(),
         setWeaponType: vi.fn(),
+        isReloading: vi.fn().mockReturnValue(false),
+        isMeleeWeapon: vi.fn().mockReturnValue(true),
       };
 
       eventHandlers.setShootingManager(mockShootingManager as any);
@@ -1521,6 +1591,8 @@ describe('GameSceneEventHandlers', () => {
       const mockShootingManager = {
         updateWeaponState: vi.fn(),
         setWeaponType: vi.fn(),
+        isReloading: vi.fn().mockReturnValue(false),
+        isMeleeWeapon: vi.fn().mockReturnValue(true),
       };
 
       eventHandlers.setShootingManager(mockShootingManager as any);
@@ -1695,6 +1767,25 @@ describe('GameSceneEventHandlers', () => {
       expect(mockPlayerManager.updatePlayers).toHaveBeenCalledWith(data.players, { isDelta: true });
     });
 
+    it('should trigger camera shake on hit:confirmed (TS-UI-017)', () => {
+      eventHandlers.setupEventHandlers();
+
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const hitConfirmedHandler = handlerRefs.get('hit:confirmed');
+
+      const data = {
+        victimId: 'other-player',
+        damage: 25,
+      };
+
+      hitConfirmedHandler?.(data);
+
+      // Should call showCameraShake (which calls cameras.main.shake(50, 0.001))
+      expect(mockGameSceneUI.showCameraShake).toHaveBeenCalled();
+      // Should also show hit marker
+      expect(mockGameSceneUI.showHitMarker).toHaveBeenCalled();
+    });
+
     it('should process queued weapon spawns on room:joined', () => {
       // Create event handlers without local player initially
       let localPlayerId: string | null = null;
@@ -1741,6 +1832,40 @@ describe('GameSceneEventHandlers', () => {
       expect(mockWeaponCrateManager.spawnCrate).toHaveBeenCalledWith(
         { id: 'crate-1', position: { x: 100, y: 200 }, weaponType: 'AK47', isAvailable: true }
       );
+    });
+  });
+
+  describe('gun recoil on projectile:spawn', () => {
+    it('should trigger weapon recoil for the firing player on projectile:spawn', () => {
+      eventHandlers.setupEventHandlers();
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const projectileSpawnHandler = handlerRefs.get('projectile:spawn');
+
+      projectileSpawnHandler?.({
+        id: 'proj-1',
+        ownerId: 'player-1',
+        position: { x: 100, y: 200 },
+        velocity: { x: 10, y: 0 },
+        damage: 25,
+      });
+
+      expect(mockPlayerManager.triggerWeaponRecoil).toHaveBeenCalledWith('player-1');
+    });
+
+    it('should trigger weapon recoil for remote players too', () => {
+      eventHandlers.setupEventHandlers();
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const projectileSpawnHandler = handlerRefs.get('projectile:spawn');
+
+      projectileSpawnHandler?.({
+        id: 'proj-2',
+        ownerId: 'player-2',
+        position: { x: 300, y: 400 },
+        velocity: { x: -10, y: 0 },
+        damage: 25,
+      });
+
+      expect(mockPlayerManager.triggerWeaponRecoil).toHaveBeenCalledWith('player-2');
     });
   });
 });

@@ -118,15 +118,85 @@ describe('GameScene - Connection & Initialization', () => {
 
       scene.create();
 
-      // Should create 5 rectangles (arena bg, arena border, health bar bg, health bar, damage flash)
+      // Should create 4 rectangles (arena bg, arena border, health bar bg, health bar)
+      // Damage flash overlay was removed — now uses cameras.main.flash()
       const rectangleCalls = mockSceneContext.add.rectangle.mock.calls;
-      expect(rectangleCalls.length).toBe(5);
+      expect(rectangleCalls.length).toBe(4);
       // Second rectangle is the arena border
       expect(rectangleCalls[1]).toEqual([0, 0, 1920, 1080, 0xffffff, 0]);
 
       // Verify setStrokeStyle was called on the border rectangle
       const borderRectangle = mockSceneContext.add.rectangle.mock.results[1].value;
       expect(borderRectangle.setStrokeStyle).toHaveBeenCalledWith(2, 0xffffff);
+    });
+
+    describe('TS-ARENA-013: Floor grid renders at correct depth and spacing', () => {
+      it('should create graphics object for floor grid', () => {
+        const mockSceneContext = createMockScene();
+        Object.assign(scene, mockSceneContext);
+
+        scene.create();
+
+        expect(mockSceneContext.add.graphics).toHaveBeenCalled();
+      });
+
+      it('should set lineStyle with exact values (1, 0xB0BEC5, 0.5)', () => {
+        const mockSceneContext = createMockScene();
+        Object.assign(scene, mockSceneContext);
+
+        scene.create();
+
+        const graphics = mockSceneContext.add.graphics.mock.results[0].value;
+        expect(graphics.lineStyle).toHaveBeenCalledWith(1, 0xb0bec5, 0.5);
+      });
+
+      it('should draw correct number of vertical lines (x=0 to 1900, step 100 = 20)', () => {
+        const mockSceneContext = createMockScene();
+        Object.assign(scene, mockSceneContext);
+
+        scene.create();
+
+        const graphics = mockSceneContext.add.graphics.mock.results[0].value;
+        // Vertical lines: lineTo(x, ARENA.HEIGHT=1080) for each x
+        const lineToCalls = graphics.lineTo.mock.calls;
+        const verticalLines = lineToCalls.filter((call: number[]) => call[1] === 1080);
+        expect(verticalLines.length).toBe(20);
+      });
+
+      it('should draw correct number of horizontal lines (ARENA.HEIGHT / 100 + 1 = 11)', () => {
+        const mockSceneContext = createMockScene();
+        Object.assign(scene, mockSceneContext);
+
+        scene.create();
+
+        const graphics = mockSceneContext.add.graphics.mock.results[0].value;
+        // 1080 / 100 + 1 = 11 horizontal lines (y=0,100,...,1000)
+        // But 1080 is not evenly divisible: y=0,100,...,1000,1080 — wait, 1080/100=10.8
+        // for y = 0; y <= 1080; y += 100 → y=0,100,200,...,1000 = 11 lines
+        const lineToCalls = graphics.lineTo.mock.calls;
+        const horizontalLines = lineToCalls.filter((call: number[]) => call[0] === 1920);
+        expect(horizontalLines.length).toBe(11);
+      });
+
+      it('should call strokePath to render the grid lines', () => {
+        const mockSceneContext = createMockScene();
+        Object.assign(scene, mockSceneContext);
+
+        scene.create();
+
+        const graphics = mockSceneContext.add.graphics.mock.results[0].value;
+        expect(graphics.strokePath).toHaveBeenCalled();
+      });
+
+      it('should set depth to -1 (below all game objects)', () => {
+        const mockSceneContext = createMockScene();
+        Object.assign(scene, mockSceneContext);
+
+        scene.create();
+
+        const graphics = mockSceneContext.add.graphics.mock.results[0].value;
+        expect(graphics.setDepth).toHaveBeenCalledWith(-1);
+      });
     });
 
     it('should add title text', () => {

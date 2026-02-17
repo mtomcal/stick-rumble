@@ -27,6 +27,9 @@ describe('GameSceneUI', () => {
   let mockLine: any;
   let createdTexts: any[];
   let createdGraphics: any[];
+  let mockMakeGraphics: any;
+  let mockSprite: any;
+  let mockCircle: any;
 
   beforeEach(() => {
     createdTexts = [];
@@ -38,6 +41,8 @@ describe('GameSceneUI', () => {
       height: 1080,
       scrollX: 100,
       scrollY: 50,
+      flash: vi.fn(),
+      shake: vi.fn(),
     };
 
     // Create mock damage flash overlay
@@ -55,6 +60,35 @@ describe('GameSceneUI', () => {
       destroy: vi.fn(),
     };
 
+    // Create mock make.graphics for texture generation
+    mockMakeGraphics = {
+      lineStyle: vi.fn().mockReturnThis(),
+      fillStyle: vi.fn().mockReturnThis(),
+      beginPath: vi.fn().mockReturnThis(),
+      moveTo: vi.fn().mockReturnThis(),
+      lineTo: vi.fn().mockReturnThis(),
+      closePath: vi.fn().mockReturnThis(),
+      fillPath: vi.fn().mockReturnThis(),
+      strokePath: vi.fn().mockReturnThis(),
+      generateTexture: vi.fn().mockReturnThis(),
+      destroy: vi.fn(),
+    };
+
+    // Create mock sprite for hit marker and hit indicator
+    mockSprite = {
+      setDepth: vi.fn().mockReturnThis(),
+      setTint: vi.fn().mockReturnThis(),
+      setScale: vi.fn().mockImplementation(function(this: any, s: number) { this.scale = s; return this; }),
+      setRotation: vi.fn().mockReturnThis(),
+      scale: 1,
+      destroy: vi.fn(),
+    };
+
+    // Create mock circle for wall spark
+    mockCircle = {
+      destroy: vi.fn(),
+    };
+
     // Create mock scene
     mockScene = {
       sys: {
@@ -69,6 +103,8 @@ describe('GameSceneUI', () => {
             setColor: vi.fn().mockReturnThis(),
             setVisible: vi.fn().mockReturnThis(),
             setDepth: vi.fn().mockReturnThis(),
+            setScale: vi.fn().mockReturnThis(),
+            setAlpha: vi.fn().mockReturnThis(),
             destroy: vi.fn(),
           };
           createdTexts.push(text);
@@ -76,12 +112,19 @@ describe('GameSceneUI', () => {
         }),
         rectangle: vi.fn().mockReturnValue(mockDamageFlashOverlay),
         line: vi.fn().mockReturnValue(mockLine),
+        sprite: vi.fn().mockReturnValue(mockSprite),
+        circle: vi.fn().mockReturnValue(mockCircle),
         graphics: vi.fn().mockImplementation(() => {
           const graphics = {
             fillStyle: vi.fn().mockReturnThis(),
             fillRect: vi.fn().mockReturnThis(),
+            fillCircle: vi.fn().mockReturnThis(),
             lineStyle: vi.fn().mockReturnThis(),
+            strokeRect: vi.fn().mockReturnThis(),
+            strokeCircle: vi.fn().mockReturnThis(),
             beginPath: vi.fn().mockReturnThis(),
+            moveTo: vi.fn().mockReturnThis(),
+            lineTo: vi.fn().mockReturnThis(),
             arc: vi.fn().mockReturnThis(),
             strokePath: vi.fn().mockReturnThis(),
             clear: vi.fn().mockReturnThis(),
@@ -94,8 +137,19 @@ describe('GameSceneUI', () => {
           return graphics;
         }),
       },
+      make: {
+        graphics: vi.fn().mockReturnValue(mockMakeGraphics),
+      },
       cameras: {
         main: mockCamera,
+      },
+      input: {
+        activePointer: {
+          x: 500,
+          y: 400,
+          worldX: 600,
+          worldY: 450,
+        },
       },
       tweens: {
         add: vi.fn().mockImplementation((config) => {
@@ -127,12 +181,11 @@ describe('GameSceneUI', () => {
   });
 
   describe('createDamageFlashOverlay', () => {
-    it('should create damage flash overlay with specified dimensions', () => {
+    it('should be a no-op (flash now uses cameras.main.flash)', () => {
       ui.createDamageFlashOverlay(1920, 1080);
 
-      expect(mockScene.add.rectangle).toHaveBeenCalledWith(960, 540, 1920, 1080, 0xff0000, 0);
-      expect(mockDamageFlashOverlay.setScrollFactor).toHaveBeenCalledWith(0);
-      expect(mockDamageFlashOverlay.setDepth).toHaveBeenCalledWith(999);
+      // No rectangle should be created — damage flash uses cameras.main.flash()
+      expect(mockScene.add.rectangle).not.toHaveBeenCalled();
     });
   });
 
@@ -395,135 +448,507 @@ describe('GameSceneUI', () => {
     });
   });
 
-  describe('showDamageFlash', () => {
-    it('should show damage flash with fade out animation', () => {
-      ui.createDamageFlashOverlay(1920, 1080);
-
+  describe('showDamageFlash (TS-UI-013)', () => {
+    it('should call cameras.main.flash with exact args (100, 128, 0, 0)', () => {
       ui.showDamageFlash();
 
-      expect(mockDamageFlashOverlay.setAlpha).toHaveBeenCalledWith(0.5);
-      expect(mockScene.tweens.add).toHaveBeenCalledWith(
-        expect.objectContaining({
-          targets: mockDamageFlashOverlay,
-          alpha: 0,
-          duration: 200,
-          ease: 'Linear',
-        })
-      );
+      expect(mockCamera.flash).toHaveBeenCalledWith(100, 128, 0, 0);
     });
 
-    it('should not throw if damage flash overlay not created', () => {
-      // Don't create damage flash overlay first
-      expect(() => ui.showDamageFlash()).not.toThrow();
-    });
-  });
+    it('should flash with duration 100ms', () => {
+      ui.showDamageFlash();
 
-  describe('showHitMarker', () => {
-    it('should create 4 crosshair lines at screen center', () => {
-      ui.showHitMarker();
-
-      // Should create 4 lines (top, bottom, left, right)
-      expect(mockScene.add.line).toHaveBeenCalledTimes(4);
+      const args = mockCamera.flash.mock.calls[0];
+      expect(args[0]).toBe(100);
     });
 
-    it('should set high depth on all lines', () => {
-      ui.showHitMarker();
+    it('should flash with RGB(128, 0, 0) — dark red, not blinding', () => {
+      ui.showDamageFlash();
 
-      // Each line should have depth set
-      expect(mockLine.setDepth).toHaveBeenCalledWith(1001);
-      expect(mockLine.setDepth).toHaveBeenCalledTimes(4);
+      const args = mockCamera.flash.mock.calls[0];
+      expect(args[1]).toBe(128); // R
+      expect(args[2]).toBe(0);   // G
+      expect(args[3]).toBe(0);   // B
     });
 
-    it('should set line width on all lines', () => {
-      ui.showHitMarker();
+    it('should not use screen overlay rectangle (uses cameras.main.flash)', () => {
+      ui.showDamageFlash();
 
-      expect(mockLine.setLineWidth).toHaveBeenCalledWith(3);
-      expect(mockLine.setLineWidth).toHaveBeenCalledTimes(4);
-    });
-
-    it('should animate and destroy lines', () => {
-      ui.showHitMarker();
-
-      // Tween should be created with fade out
-      expect(mockScene.tweens.add).toHaveBeenCalledWith(
-        expect.objectContaining({
-          alpha: 0,
-          duration: 200,
-          ease: 'Cubic.easeOut',
-        })
-      );
-
-      // Lines should be destroyed after animation (mock calls onComplete immediately)
-      expect(mockLine.destroy).toHaveBeenCalledTimes(4);
+      // No rectangle or tween should be created
+      expect(mockScene.add.rectangle).not.toHaveBeenCalled();
+      expect(mockScene.tweens.add).not.toHaveBeenCalled();
     });
   });
 
-  describe('showDamageNumber', () => {
-    it('should show damage number above damaged player', () => {
-      const mockPlayerManager = {
-        getPlayerPosition: vi.fn().mockReturnValue({ x: 500, y: 300 }),
-      } as unknown as PlayerManager;
+  describe('showCameraShake (TS-UI-017)', () => {
+    it('should call cameras.main.shake with exact args (50, 0.001)', () => {
+      ui.showCameraShake();
 
-      ui.showDamageNumber(mockPlayerManager, 'victim-1', 25);
-
-      expect(mockScene.add.text).toHaveBeenCalledWith(
-        500,
-        270, // y - 30
-        '-25',
-        expect.objectContaining({
-          fontSize: '24px',
-          color: '#ff0000',
-        })
-      );
+      expect(mockCamera.shake).toHaveBeenCalledWith(50, 0.001);
     });
 
-    it('should animate damage number floating up and fading', () => {
-      const mockPlayerManager = {
-        getPlayerPosition: vi.fn().mockReturnValue({ x: 500, y: 300 }),
-      } as unknown as PlayerManager;
+    it('should shake with duration 50ms', () => {
+      ui.showCameraShake();
 
-      ui.showDamageNumber(mockPlayerManager, 'victim-1', 25);
+      const args = mockCamera.shake.mock.calls[0];
+      expect(args[0]).toBe(50);
+    });
+
+    it('should shake with intensity 0.001 — subtle, felt not seen', () => {
+      ui.showCameraShake();
+
+      const args = mockCamera.shake.mock.calls[0];
+      expect(args[1]).toBe(0.001);
+    });
+  });
+
+  describe('TS-GFX-025: Hit marker texture generation', () => {
+    it('should generate hitmarker texture with generateTexture("hitmarker", 20, 20)', () => {
+      expect(mockMakeGraphics.generateTexture).toHaveBeenCalledWith('hitmarker', 20, 20);
+    });
+
+    it('should draw X with 3px white stroke', () => {
+      expect(mockMakeGraphics.lineStyle).toHaveBeenCalledWith(3, 0xffffff, 1);
+    });
+
+    it('should draw two diagonal lines forming X shape', () => {
+      // First diagonal: (2,2) to (18,18)
+      expect(mockMakeGraphics.moveTo).toHaveBeenCalledWith(2, 2);
+      expect(mockMakeGraphics.lineTo).toHaveBeenCalledWith(18, 18);
+      // Second diagonal: (18,2) to (2,18)
+      expect(mockMakeGraphics.moveTo).toHaveBeenCalledWith(18, 2);
+      expect(mockMakeGraphics.lineTo).toHaveBeenCalledWith(2, 18);
+    });
+
+    it('should destroy temp graphics after texture generation', () => {
+      expect(mockMakeGraphics.destroy).toHaveBeenCalled();
+    });
+  });
+
+  describe('TS-UI-014: Hit marker normal variant', () => {
+    it('should create sprite at pointer world position with "hitmarker" texture', () => {
+      ui.showHitMarker(false);
+
+      expect(mockScene.add.sprite).toHaveBeenCalledWith(600, 450, 'hitmarker');
+    });
+
+    it('should set depth to exactly 1000', () => {
+      ui.showHitMarker(false);
+
+      expect(mockSprite.setDepth).toHaveBeenCalledWith(1000);
+    });
+
+    it('should set white tint (0xFFFFFF) for normal hit', () => {
+      ui.showHitMarker(false);
+
+      expect(mockSprite.setTint).toHaveBeenCalledWith(0xffffff);
+    });
+
+    it('should set scale to exactly 1.2 for normal hit', () => {
+      ui.showHitMarker(false);
+
+      expect(mockSprite.setScale).toHaveBeenCalledWith(1.2);
+    });
+
+    it('should create tween with alpha 0, scale 0.6 (1.2 * 0.5), duration 150ms', () => {
+      ui.showHitMarker(false);
 
       expect(mockScene.tweens.add).toHaveBeenCalledWith(
         expect.objectContaining({
-          y: 220, // position.y - 80 = 300 - 80 = 220
+          targets: mockSprite,
           alpha: 0,
-          duration: 1000,
-          ease: 'Cubic.easeOut',
+          scale: 0.6, // 1.2 * 0.5
+          duration: 150,
         })
       );
     });
 
-    it('should destroy damage text after animation', () => {
-      const mockPlayerManager = {
-        getPlayerPosition: vi.fn().mockReturnValue({ x: 500, y: 300 }),
-      } as unknown as PlayerManager;
+    it('should destroy marker sprite after tween completes', () => {
+      ui.showHitMarker(false);
 
-      ui.showDamageNumber(mockPlayerManager, 'victim-1', 25);
+      // Mock calls onComplete immediately
+      expect(mockSprite.destroy).toHaveBeenCalled();
+    });
+  });
 
-      // The text created for damage should be destroyed
-      expect(createdTexts[0].destroy).toHaveBeenCalled();
+  describe('TS-UI-015: Hit marker kill variant', () => {
+    it('should set red tint (0xFF0000) for kill hit', () => {
+      ui.showHitMarker(true);
+
+      expect(mockSprite.setTint).toHaveBeenCalledWith(0xff0000);
     });
 
-    it('should not show damage number if player position not found', () => {
-      const mockPlayerManager = {
-        getPlayerPosition: vi.fn().mockReturnValue(null),
-      } as unknown as PlayerManager;
+    it('should set scale to exactly 2.0 for kill hit', () => {
+      ui.showHitMarker(true);
 
-      ui.showDamageNumber(mockPlayerManager, 'nonexistent', 25);
-
-      // Should not create any text
-      expect(mockScene.add.text).not.toHaveBeenCalled();
+      expect(mockSprite.setScale).toHaveBeenCalledWith(2.0);
     });
 
-    it('should set origin on damage text', () => {
-      const mockPlayerManager = {
-        getPlayerPosition: vi.fn().mockReturnValue({ x: 500, y: 300 }),
-      } as unknown as PlayerManager;
+    it('should create tween with scale 1.0 (2.0 * 0.5) for kill variant', () => {
+      ui.showHitMarker(true);
 
-      ui.showDamageNumber(mockPlayerManager, 'victim-1', 25);
+      expect(mockScene.tweens.add).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targets: mockSprite,
+          alpha: 0,
+          scale: 1.0, // 2.0 * 0.5
+          duration: 150,
+        })
+      );
+    });
 
-      expect(createdTexts[0].setOrigin).toHaveBeenCalledWith(0.5);
+    it('should set depth to 1000 for kill variant (same as normal)', () => {
+      ui.showHitMarker(true);
+
+      expect(mockSprite.setDepth).toHaveBeenCalledWith(1000);
+    });
+  });
+
+  describe('showHitMarker edge cases', () => {
+    it('should not throw when pointer is null', () => {
+      (mockScene as any).input.activePointer = null;
+
+      expect(() => ui.showHitMarker(false)).not.toThrow();
+    });
+
+    it('should fall back to pointer.x + scrollX when worldX is undefined', () => {
+      (mockScene as any).input.activePointer = {
+        x: 500,
+        y: 400,
+        worldX: undefined,
+        worldY: undefined,
+      };
+
+      ui.showHitMarker(false);
+
+      // worldX fallback: 500 + scrollX(100) = 600, worldY fallback: 400 + scrollY(50) = 450
+      expect(mockScene.add.sprite).toHaveBeenCalledWith(600, 450, 'hitmarker');
+    });
+
+    it('should default to normal variant when kill param is omitted', () => {
+      ui.showHitMarker();
+
+      expect(mockSprite.setTint).toHaveBeenCalledWith(0xffffff);
+      expect(mockSprite.setScale).toHaveBeenCalledWith(1.2);
+    });
+  });
+
+  describe('TS-UI-016: Damage number variants', () => {
+    const mockPlayerManager = () => ({
+      getPlayerPosition: vi.fn().mockReturnValue({ x: 500, y: 300 }),
+    }) as unknown as PlayerManager;
+
+    describe('Normal hit variant (default)', () => {
+      it('should use white color (#ffffff) and 16px font', () => {
+        ui.showDamageNumber(mockPlayerManager(), 'victim-1', 25);
+
+        expect(mockScene.add.text).toHaveBeenCalledWith(
+          500, 270, '-25',
+          expect.objectContaining({
+            fontSize: '16px',
+            color: '#ffffff',
+          })
+        );
+      });
+
+      it('should use 2px black stroke (not 3px)', () => {
+        ui.showDamageNumber(mockPlayerManager(), 'victim-1', 25);
+
+        expect(mockScene.add.text).toHaveBeenCalledWith(
+          500, 270, '-25',
+          expect.objectContaining({
+            stroke: '#000000',
+            strokeThickness: 2,
+          })
+        );
+      });
+
+      it('should set depth to exactly 1000', () => {
+        ui.showDamageNumber(mockPlayerManager(), 'victim-1', 25);
+
+        expect(createdTexts[0].setDepth).toHaveBeenCalledWith(1000);
+      });
+
+      it('should not apply remote scaling for local player damage', () => {
+        ui.showDamageNumber(mockPlayerManager(), 'victim-1', 25, false, true);
+
+        expect(createdTexts[0].setScale).not.toHaveBeenCalled();
+        expect(createdTexts[0].setAlpha).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('Kill hit variant', () => {
+      it('should use red color (#ff0000) and 24px font for kill', () => {
+        ui.showDamageNumber(mockPlayerManager(), 'victim-1', 25, true);
+
+        expect(mockScene.add.text).toHaveBeenCalledWith(
+          500, 270, '-25',
+          expect.objectContaining({
+            fontSize: '24px',
+            color: '#ff0000',
+          })
+        );
+      });
+
+      it('should use 2px black stroke for kill variant', () => {
+        ui.showDamageNumber(mockPlayerManager(), 'victim-1', 25, true);
+
+        expect(mockScene.add.text).toHaveBeenCalledWith(
+          500, 270, '-25',
+          expect.objectContaining({
+            stroke: '#000000',
+            strokeThickness: 2,
+          })
+        );
+      });
+
+      it('should set depth to 1000 for kill variant', () => {
+        ui.showDamageNumber(mockPlayerManager(), 'victim-1', 25, true);
+
+        expect(createdTexts[0].setDepth).toHaveBeenCalledWith(1000);
+      });
+    });
+
+    describe('Remote (non-local) variant', () => {
+      it('should set scale to 0.7 for remote damage', () => {
+        ui.showDamageNumber(mockPlayerManager(), 'victim-1', 25, false, false);
+
+        expect(createdTexts[0].setScale).toHaveBeenCalledWith(0.7);
+      });
+
+      it('should set alpha to 0.8 for remote damage', () => {
+        ui.showDamageNumber(mockPlayerManager(), 'victim-1', 25, false, false);
+
+        expect(createdTexts[0].setAlpha).toHaveBeenCalledWith(0.8);
+      });
+
+      it('should use white 16px for remote damage', () => {
+        ui.showDamageNumber(mockPlayerManager(), 'victim-1', 25, false, false);
+
+        expect(mockScene.add.text).toHaveBeenCalledWith(
+          500, 270, '-25',
+          expect.objectContaining({
+            fontSize: '16px',
+            color: '#ffffff',
+          })
+        );
+      });
+    });
+
+    describe('Tween animation', () => {
+      it('should float up 50px and fade over 800ms (not 1000ms)', () => {
+        ui.showDamageNumber(mockPlayerManager(), 'victim-1', 25);
+
+        expect(mockScene.tweens.add).toHaveBeenCalledWith(
+          expect.objectContaining({
+            y: 220, // position.y(300) - 80 = 220
+            alpha: 0,
+            duration: 800,
+            ease: 'Cubic.easeOut',
+          })
+        );
+      });
+
+      it('should destroy text after tween completes', () => {
+        ui.showDamageNumber(mockPlayerManager(), 'victim-1', 25);
+
+        expect(createdTexts[0].destroy).toHaveBeenCalled();
+      });
+
+      it('should set origin to 0.5 (centered)', () => {
+        ui.showDamageNumber(mockPlayerManager(), 'victim-1', 25);
+
+        expect(createdTexts[0].setOrigin).toHaveBeenCalledWith(0.5);
+      });
+    });
+
+    describe('Edge cases', () => {
+      it('should not show damage number if player position not found', () => {
+        const noPositionManager = {
+          getPlayerPosition: vi.fn().mockReturnValue(null),
+        } as unknown as PlayerManager;
+
+        ui.showDamageNumber(noPositionManager, 'nonexistent', 25);
+
+        expect(mockScene.add.text).not.toHaveBeenCalled();
+      });
+
+      it('should default to normal variant when isKill and isLocal are omitted', () => {
+        ui.showDamageNumber(mockPlayerManager(), 'victim-1', 25);
+
+        expect(mockScene.add.text).toHaveBeenCalledWith(
+          500, 270, '-25',
+          expect.objectContaining({
+            fontSize: '16px',
+            color: '#ffffff',
+          })
+        );
+      });
+    });
+  });
+
+  describe('Hit indicator texture generation', () => {
+    it('should generate hit_indicator texture with generateTexture("hit_indicator", 16, 16)', () => {
+      // Called in constructor — second call to make.graphics (after hitmarker)
+      expect(mockMakeGraphics.generateTexture).toHaveBeenCalledWith('hit_indicator', 16, 16);
+    });
+
+    it('should draw filled white chevron shape', () => {
+      expect(mockMakeGraphics.fillStyle).toHaveBeenCalledWith(0xffffff, 1);
+      expect(mockMakeGraphics.moveTo).toHaveBeenCalledWith(0, 0);
+      expect(mockMakeGraphics.lineTo).toHaveBeenCalledWith(16, 8);
+      expect(mockMakeGraphics.lineTo).toHaveBeenCalledWith(0, 16);
+      expect(mockMakeGraphics.lineTo).toHaveBeenCalledWith(4, 8);
+      expect(mockMakeGraphics.closePath).toHaveBeenCalled();
+      expect(mockMakeGraphics.fillPath).toHaveBeenCalled();
+    });
+
+    it('should destroy temp graphics after hit indicator texture generation', () => {
+      // destroy is called for both hitmarker and hit_indicator textures
+      expect(mockMakeGraphics.destroy).toHaveBeenCalled();
+    });
+  });
+
+  describe('TS-GFX-021: Directional hit indicator (outgoing)', () => {
+    it('should create sprite at 60px from player toward target with "hit_indicator" texture', () => {
+      // Player at (100, 100), target at (200, 100) — angle = 0 (east)
+      ui.showHitIndicator(100, 100, 200, 100, 'outgoing');
+
+      expect(mockScene.add.sprite).toHaveBeenCalledWith(
+        160, // 100 + cos(0) * 60 = 160
+        100, // 100 + sin(0) * 60 = 100
+        'hit_indicator'
+      );
+    });
+
+    it('should set depth to exactly 1001', () => {
+      ui.showHitIndicator(100, 100, 200, 100, 'outgoing');
+
+      expect(mockSprite.setDepth).toHaveBeenCalledWith(1001);
+    });
+
+    it('should set rotation to angle toward target', () => {
+      // Player at (100, 100), target at (200, 100) — angle = 0
+      ui.showHitIndicator(100, 100, 200, 100, 'outgoing');
+
+      expect(mockSprite.setRotation).toHaveBeenCalledWith(0);
+    });
+
+    it('should set white tint (0xFFFFFF) for normal outgoing hit', () => {
+      ui.showHitIndicator(100, 100, 200, 100, 'outgoing', false);
+
+      expect(mockSprite.setTint).toHaveBeenCalledWith(0xffffff);
+    });
+
+    it('should set red tint (0xFF0000) for kill outgoing hit', () => {
+      ui.showHitIndicator(100, 100, 200, 100, 'outgoing', true);
+
+      expect(mockSprite.setTint).toHaveBeenCalledWith(0xff0000);
+    });
+
+    it('should create tween with alpha 0, scale 1.5, duration exactly 200ms', () => {
+      ui.showHitIndicator(100, 100, 200, 100, 'outgoing');
+
+      expect(mockScene.tweens.add).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targets: mockSprite,
+          alpha: 0,
+          scale: 1.5,
+          duration: 200,
+        })
+      );
+    });
+
+    it('should destroy indicator sprite after tween completes', () => {
+      ui.showHitIndicator(100, 100, 200, 100, 'outgoing');
+
+      expect(mockSprite.destroy).toHaveBeenCalled();
+    });
+
+    it('should position correctly for diagonal angle (NE)', () => {
+      // Player at (0, 0), target at (100, 100) — angle = PI/4
+      const angle = Math.atan2(100, 100); // ~0.7854
+      ui.showHitIndicator(0, 0, 100, 100, 'outgoing');
+
+      expect(mockScene.add.sprite).toHaveBeenCalledWith(
+        Math.cos(angle) * 60,
+        Math.sin(angle) * 60,
+        'hit_indicator'
+      );
+    });
+
+    it('should default kill to false when omitted', () => {
+      ui.showHitIndicator(100, 100, 200, 100, 'outgoing');
+
+      expect(mockSprite.setTint).toHaveBeenCalledWith(0xffffff);
+    });
+  });
+
+  describe('TS-GFX-022: Directional hit indicator (incoming)', () => {
+    it('should create sprite at 60px from player toward source with "hit_indicator" texture', () => {
+      // Player at (200, 200), attacker at (100, 200) — angle = PI (west)
+      ui.showHitIndicator(200, 200, 100, 200, 'incoming');
+
+      expect(mockScene.add.sprite).toHaveBeenCalledWith(
+        140, // 200 + cos(PI) * 60 = 200 - 60 = 140
+        200, // 200 + sin(PI) * 60 ≈ 200
+        'hit_indicator'
+      );
+    });
+
+    it('should set depth to exactly 1001', () => {
+      ui.showHitIndicator(200, 200, 100, 200, 'incoming');
+
+      expect(mockSprite.setDepth).toHaveBeenCalledWith(1001);
+    });
+
+    it('should always set red tint (0xFF0000) for incoming hit', () => {
+      ui.showHitIndicator(200, 200, 100, 200, 'incoming', false);
+
+      expect(mockSprite.setTint).toHaveBeenCalledWith(0xff0000);
+    });
+
+    it('should always set red tint for incoming even when kill is true', () => {
+      ui.showHitIndicator(200, 200, 100, 200, 'incoming', true);
+
+      expect(mockSprite.setTint).toHaveBeenCalledWith(0xff0000);
+    });
+
+    it('should create tween with alpha 0, scale 1.5, duration exactly 400ms', () => {
+      ui.showHitIndicator(200, 200, 100, 200, 'incoming');
+
+      expect(mockScene.tweens.add).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targets: mockSprite,
+          alpha: 0,
+          scale: 1.5,
+          duration: 400,
+        })
+      );
+    });
+
+    it('should destroy indicator sprite after tween completes', () => {
+      ui.showHitIndicator(200, 200, 100, 200, 'incoming');
+
+      expect(mockSprite.destroy).toHaveBeenCalled();
+    });
+
+    it('should set rotation to angle toward damage source', () => {
+      // Player at (200, 200), attacker at (100, 200) — angle = PI
+      ui.showHitIndicator(200, 200, 100, 200, 'incoming');
+
+      expect(mockSprite.setRotation).toHaveBeenCalledWith(Math.PI);
+    });
+
+    it('should position at exactly 60px distance from player center', () => {
+      // Player at (300, 300), attacker at (300, 100) — angle = -PI/2 (north)
+      ui.showHitIndicator(300, 300, 300, 100, 'incoming');
+
+      expect(mockScene.add.sprite).toHaveBeenCalledWith(
+        300, // 300 + cos(-PI/2) * 60 ≈ 300
+        240, // 300 + sin(-PI/2) * 60 = 300 - 60 = 240
+        'hit_indicator'
+      );
     });
   });
 
@@ -660,12 +1085,11 @@ describe('GameSceneUI', () => {
       expect(timerText.destroy).toHaveBeenCalled();
     });
 
-    it('should destroy damage flash overlay when destroyed', () => {
+    it('should not crash on destroy even without damage flash overlay (no-op)', () => {
       ui.createDamageFlashOverlay(1920, 1080);
 
-      ui.destroy();
-
-      expect(mockDamageFlashOverlay.destroy).toHaveBeenCalled();
+      // No game object to destroy — flash is a camera effect
+      expect(() => ui.destroy()).not.toThrow();
     });
 
     it('should destroy reload progress bar when destroyed', () => {
@@ -695,6 +1119,255 @@ describe('GameSceneUI', () => {
       expect(() => {
         emptyUI.destroy();
       }).not.toThrow();
+    });
+  });
+
+  describe('TS-GFX-017: Wall spark on obstructed barrel', () => {
+    it('should create yellow circle at barrel position with radius 3', () => {
+      ui.showWallSpark(50, 60);
+
+      expect(mockScene.add.circle).toHaveBeenCalledWith(50, 60, 3, 0xffff00);
+    });
+
+    it('should create tween with alpha 0 and scale 2', () => {
+      ui.showWallSpark(100, 200);
+
+      expect(mockScene.tweens.add).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targets: mockCircle,
+          alpha: 0,
+          scale: 2,
+        })
+      );
+    });
+
+    it('should use exactly 100ms duration', () => {
+      ui.showWallSpark(100, 200);
+
+      expect(mockScene.tweens.add).toHaveBeenCalledWith(
+        expect.objectContaining({
+          duration: 100,
+        })
+      );
+    });
+
+    it('should destroy spark on tween complete', () => {
+      ui.showWallSpark(100, 200);
+
+      // tweens.add mock calls onComplete immediately
+      expect(mockCircle.destroy).toHaveBeenCalled();
+    });
+
+    it('should use exact color 0xFFFF00', () => {
+      ui.showWallSpark(0, 0);
+
+      const callArgs = (mockScene.add.circle as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(callArgs[3]).toBe(0xffff00);
+    });
+
+    it('should use exact radius 3', () => {
+      ui.showWallSpark(0, 0);
+
+      const callArgs = (mockScene.add.circle as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(callArgs[2]).toBe(3);
+    });
+
+    it('should have complete tween config with all spec values', () => {
+      ui.showWallSpark(100, 200);
+
+      expect(mockScene.tweens.add).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targets: mockCircle,
+          alpha: 0,
+          scale: 2,
+          duration: 100,
+        })
+      );
+    });
+  });
+
+  describe('TS-UI-018: Minimap renders static layer', () => {
+    it('should create static graphics at depth 1999 with scrollFactor 0', () => {
+      ui.setupMinimap();
+
+      // First graphics call is the static layer
+      const staticGraphics = createdGraphics[0];
+      expect(staticGraphics.setScrollFactor).toHaveBeenCalledWith(0);
+      expect(staticGraphics.setDepth).toHaveBeenCalledWith(1999);
+    });
+
+    it('should draw black background at (20, 20) with 120x120 size', () => {
+      ui.setupMinimap();
+
+      const staticGraphics = createdGraphics[0];
+      expect(staticGraphics.fillStyle).toHaveBeenCalledWith(0x000000, 0.7);
+      expect(staticGraphics.fillRect).toHaveBeenCalledWith(20, 20, 120, 120);
+    });
+
+    it('should draw white border with 2px stroke at 0.5 alpha', () => {
+      ui.setupMinimap();
+
+      const staticGraphics = createdGraphics[0];
+      expect(staticGraphics.lineStyle).toHaveBeenCalledWith(2, 0xffffff, 0.5);
+      expect(staticGraphics.strokeRect).toHaveBeenCalledWith(20, 20, 120, 120);
+    });
+
+    it('should create dynamic graphics at depth 2000 with scrollFactor 0', () => {
+      ui.setupMinimap();
+
+      // Second graphics call is the dynamic layer
+      const dynamicGraphics = createdGraphics[1];
+      expect(dynamicGraphics.setScrollFactor).toHaveBeenCalledWith(0);
+      expect(dynamicGraphics.setDepth).toHaveBeenCalledWith(2000);
+    });
+
+    it('should position minimap at exactly (20, 20)', () => {
+      ui.setupMinimap();
+
+      const staticGraphics = createdGraphics[0];
+      const fillRectCalls = staticGraphics.fillRect.mock.calls;
+      expect(fillRectCalls[0][0]).toBe(20);
+      expect(fillRectCalls[0][1]).toBe(20);
+    });
+  });
+
+  describe('TS-UI-019: Minimap radar range filters enemies', () => {
+    let mockPlayerManager: any;
+
+    beforeEach(() => {
+      mockPlayerManager = {
+        getLocalPlayerPosition: vi.fn().mockReturnValue({ x: 500, y: 500 }),
+        getLocalPlayerId: vi.fn().mockReturnValue('player-1'),
+        getPlayerAimAngle: vi.fn().mockReturnValue(0),
+        getLivingPlayers: vi.fn().mockReturnValue([
+          { id: 'player-1', position: { x: 500, y: 500 } },
+          { id: 'enemy-near', position: { x: 700, y: 500 } },  // 200px away
+          { id: 'enemy-far', position: { x: 1200, y: 500 } },  // 700px away
+        ]),
+      };
+    });
+
+    it('should show enemy within 600px as red dot (radius 3)', () => {
+      ui.setupMinimap();
+      const dynamicGraphics = createdGraphics[1];
+
+      ui.updateMinimap(mockPlayerManager);
+
+      // enemy-near at 200px distance should be shown
+      expect(dynamicGraphics.fillStyle).toHaveBeenCalledWith(0xff0000, 1);
+      expect(dynamicGraphics.fillCircle).toHaveBeenCalledWith(
+        20 + 700 * 0.075,  // mapX + enemy.x * scale
+        20 + 500 * 0.075,  // mapY + enemy.y * scale
+        3
+      );
+    });
+
+    it('should NOT show enemy beyond 600px', () => {
+      ui.setupMinimap();
+      const dynamicGraphics = createdGraphics[1];
+
+      ui.updateMinimap(mockPlayerManager);
+
+      // enemy-far at 700px distance should NOT be shown
+      expect(dynamicGraphics.fillCircle).not.toHaveBeenCalledWith(
+        20 + 1200 * 0.075,
+        20 + 500 * 0.075,
+        3
+      );
+    });
+
+    it('should show local player as green dot (radius 4)', () => {
+      ui.setupMinimap();
+      const dynamicGraphics = createdGraphics[1];
+
+      ui.updateMinimap(mockPlayerManager);
+
+      expect(dynamicGraphics.fillStyle).toHaveBeenCalledWith(0x00ff00, 1);
+      expect(dynamicGraphics.fillCircle).toHaveBeenCalledWith(
+        20 + 500 * 0.075,
+        20 + 500 * 0.075,
+        4
+      );
+    });
+
+    it('should show radar range ring at 0.15 alpha', () => {
+      ui.setupMinimap();
+      const dynamicGraphics = createdGraphics[1];
+
+      ui.updateMinimap(mockPlayerManager);
+
+      expect(dynamicGraphics.lineStyle).toHaveBeenCalledWith(1, 0x00ff00, 0.15);
+      expect(dynamicGraphics.strokeCircle).toHaveBeenCalledWith(
+        20 + 500 * 0.075,
+        20 + 500 * 0.075,
+        600 * 0.075
+      );
+    });
+
+    it('should clear dynamic graphics before redrawing', () => {
+      ui.setupMinimap();
+      const dynamicGraphics = createdGraphics[1];
+
+      ui.updateMinimap(mockPlayerManager);
+
+      expect(dynamicGraphics.clear).toHaveBeenCalled();
+    });
+
+    it('should show enemy at exactly 600px distance (boundary test)', () => {
+      mockPlayerManager.getLivingPlayers.mockReturnValue([
+        { id: 'player-1', position: { x: 500, y: 500 } },
+        { id: 'enemy-boundary', position: { x: 1100, y: 500 } },  // exactly 600px away
+      ]);
+
+      ui.setupMinimap();
+      const dynamicGraphics = createdGraphics[1];
+
+      ui.updateMinimap(mockPlayerManager);
+
+      // Exactly 600px should be included (dist <= 600)
+      expect(dynamicGraphics.fillCircle).toHaveBeenCalledWith(
+        20 + 1100 * 0.075,
+        20 + 500 * 0.075,
+        3
+      );
+    });
+
+    it('should NOT show enemy at 601px distance (boundary test)', () => {
+      mockPlayerManager.getLivingPlayers.mockReturnValue([
+        { id: 'player-1', position: { x: 500, y: 500 } },
+        { id: 'enemy-beyond', position: { x: 1101, y: 500 } },  // 601px away
+      ]);
+
+      ui.setupMinimap();
+      const dynamicGraphics = createdGraphics[1];
+
+      ui.updateMinimap(mockPlayerManager);
+
+      // 601px should NOT be included
+      expect(dynamicGraphics.fillCircle).not.toHaveBeenCalledWith(
+        20 + 1101 * 0.075,
+        20 + 500 * 0.075,
+        3
+      );
+    });
+
+    it('should draw aim direction line', () => {
+      ui.setupMinimap();
+      const dynamicGraphics = createdGraphics[1];
+
+      ui.updateMinimap(mockPlayerManager);
+
+      expect(dynamicGraphics.lineStyle).toHaveBeenCalledWith(1, 0x00ff00, 0.8);
+      expect(dynamicGraphics.beginPath).toHaveBeenCalled();
+      expect(dynamicGraphics.strokePath).toHaveBeenCalled();
+    });
+
+    it('should not draw if minimap not setup', () => {
+      // Don't call setupMinimap
+      ui.updateMinimap(mockPlayerManager);
+
+      // Should return early without errors
+      expect(mockPlayerManager.getLocalPlayerPosition).not.toHaveBeenCalled();
     });
   });
 });

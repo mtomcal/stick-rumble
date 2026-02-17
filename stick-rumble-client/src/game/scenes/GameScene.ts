@@ -78,6 +78,20 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0, 0)
       .setStrokeStyle(2, 0xffffff);
 
+    // Draw floor grid
+    const gridGraphics = this.add.graphics();
+    gridGraphics.lineStyle(1, 0xb0bec5, 0.5);
+    for (let x = 0; x <= ARENA.WIDTH; x += 100) {
+      gridGraphics.moveTo(x, 0);
+      gridGraphics.lineTo(x, ARENA.HEIGHT);
+    }
+    for (let y = 0; y <= ARENA.HEIGHT; y += 100) {
+      gridGraphics.moveTo(0, y);
+      gridGraphics.lineTo(ARENA.WIDTH, y);
+    }
+    gridGraphics.strokePath();
+    gridGraphics.setDepth(-1);
+
     // Add title (fixed to screen)
     const titleText = this.add.text(10, 10, 'Stick Rumble - WASD to move', {
       fontSize: '18px',
@@ -219,7 +233,12 @@ export class GameScene extends Phaser.Scene {
                   }
                 }
               } else {
-                this.shootingManager.shoot();
+                const obstructed = this.getObstructedBarrelPosition(aimAngle);
+                if (obstructed) {
+                  this.ui.showWallSpark(obstructed.x, obstructed.y);
+                } else {
+                  this.shootingManager.shoot();
+                }
               }
             }
           });
@@ -309,6 +328,9 @@ export class GameScene extends Phaser.Scene {
 
           // Create crosshair system
           this.ui.createCrosshair();
+
+          // Setup minimap
+          this.ui.setupMinimap();
         })
         .catch(err => {
           console.error('Failed to connect:', err);
@@ -333,6 +355,8 @@ export class GameScene extends Phaser.Scene {
 
     // Update input manager to send player input to server (only when not spectating)
     if (this.inputManager && this.spectator && !this.spectator.isActive()) {
+      // Apply aim sway offset before sending input to server
+      this.inputManager.setAimSwayOffset(this.playerManager.getLocalPlayerAimSway());
       this.inputManager.update();
 
       // Client-side prediction for local player (Story stick-rumble-nki)
@@ -371,7 +395,12 @@ export class GameScene extends Phaser.Scene {
       // Handle automatic fire for automatic weapons when pointer held
       if (this.isPointerHeld && this.shootingManager && !this.shootingManager.isMeleeWeapon() && this.shootingManager.isAutomatic()) {
         this.shootingManager.setAimAngle(currentAimAngle);
-        this.shootingManager.shoot();
+        const obstructed = this.getObstructedBarrelPosition(currentAimAngle);
+        if (obstructed) {
+          this.ui.showWallSpark(obstructed.x, obstructed.y);
+        } else {
+          this.shootingManager.shoot();
+        }
       }
 
       // Check for nearby weapon crates
@@ -425,6 +454,11 @@ export class GameScene extends Phaser.Scene {
       this.ui.updateCrosshair(isMoving, spreadDegrees, weaponType);
     }
 
+    // Update minimap
+    if (this.ui && this.playerManager) {
+      this.ui.updateMinimap(this.playerManager);
+    }
+
     // Update spectator mode
     if (this.spectator && this.spectator.isActive()) {
       this.spectator.updateSpectatorMode();
@@ -438,6 +472,25 @@ export class GameScene extends Phaser.Scene {
         this.ui.setCrosshairSpectating(false);
       }
     }
+  }
+
+  /**
+   * Check if the weapon barrel position is inside arena wall geometry.
+   * Returns the barrel position if obstructed, or null if clear.
+   */
+  private getObstructedBarrelPosition(aimAngle: number): { x: number; y: number } | null {
+    const playerPos = this.playerManager.getLocalPlayerPosition();
+    if (!playerPos) return null;
+
+    const barrelOffset = 30;
+    const barrelX = playerPos.x + Math.cos(aimAngle) * barrelOffset;
+    const barrelY = playerPos.y + Math.sin(aimAngle) * barrelOffset;
+
+    if (barrelX < 0 || barrelX > ARENA.WIDTH || barrelY < 0 || barrelY > ARENA.HEIGHT) {
+      return { x: barrelX, y: barrelY };
+    }
+
+    return null;
   }
 
   /**

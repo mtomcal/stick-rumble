@@ -27,7 +27,11 @@ describe('MeleeWeaponManager', () => {
           destroy: vi.fn(),
           setVisible: vi.fn().mockReturnThis(),
           setDepth: vi.fn().mockReturnThis(),
+          setAlpha: vi.fn().mockReturnThis(),
         }),
+      },
+      tweens: {
+        add: vi.fn(),
       },
       time: {
         now: 0,
@@ -186,14 +190,14 @@ describe('MeleeWeaponManager', () => {
       expect(() => manager.update()).not.toThrow();
     });
 
-    it('should handle swing completion', () => {
+    it('should handle swing completion via tween onComplete', () => {
       const playerId = 'player-1';
       manager.createWeapon(playerId, 'Bat', { x: 100, y: 200 });
       manager.startSwing(playerId, 0);
 
-      // Simulate animation completion (200ms)
-      scene.time.now = 200;
-      manager.update();
+      // Manually invoke the tween onComplete to simulate animation finishing
+      const tweenCall = (scene.tweens.add as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      tweenCall.onComplete();
 
       // Should be able to swing again
       const result = manager.startSwing(playerId, 0);

@@ -63,12 +63,29 @@ export const createMockScene = () => {
     setDepth: vi.fn().mockReturnThis(),
   };
 
+  const mockMakeGraphics = {
+    lineStyle: vi.fn().mockReturnThis(),
+    fillStyle: vi.fn().mockReturnThis(),
+    beginPath: vi.fn().mockReturnThis(),
+    moveTo: vi.fn().mockReturnThis(),
+    lineTo: vi.fn().mockReturnThis(),
+    closePath: vi.fn().mockReturnThis(),
+    fillPath: vi.fn().mockReturnThis(),
+    strokePath: vi.fn().mockReturnThis(),
+    generateTexture: vi.fn().mockReturnThis(),
+    destroy: vi.fn(),
+  };
+
   const mockGraphics = {
     fillStyle: vi.fn().mockReturnThis(),
     fillRect: vi.fn().mockReturnThis(),
     fillCircle: vi.fn().mockReturnThis(),
     lineStyle: vi.fn().mockReturnThis(),
+    strokeRect: vi.fn().mockReturnThis(),
+    strokeCircle: vi.fn().mockReturnThis(),
     beginPath: vi.fn().mockReturnThis(),
+    moveTo: vi.fn().mockReturnThis(),
+    lineTo: vi.fn().mockReturnThis(),
     arc: vi.fn().mockReturnThis(),
     closePath: vi.fn().mockReturnThis(),
     fillPath: vi.fn().mockReturnThis(),
@@ -111,6 +128,9 @@ export const createMockScene = () => {
       circle: vi.fn().mockReturnValue({ destroy: vi.fn() }),
       container: vi.fn().mockReturnValue(mockContainer),
       graphics: vi.fn().mockReturnValue(mockGraphics),
+    },
+    make: {
+      graphics: vi.fn().mockReturnValue(mockMakeGraphics),
     },
     load: {
       audio: vi.fn(),

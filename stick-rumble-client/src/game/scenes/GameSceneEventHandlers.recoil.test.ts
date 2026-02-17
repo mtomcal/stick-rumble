@@ -51,6 +51,7 @@ describe('GameSceneEventHandlers - Recoil Visual Feedback', () => {
       getPlayerPosition: vi.fn().mockReturnValue({ x: 100, y: 200 }),
       getPlayerAimAngle: vi.fn().mockReturnValue(0),
       updatePlayerWeapon: vi.fn(),
+      triggerWeaponRecoil: vi.fn(),
     } as unknown as PlayerManager;
 
     mockProjectileManager = {
@@ -83,6 +84,7 @@ describe('GameSceneEventHandlers - Recoil Visual Feedback', () => {
       showBulletImpact: vi.fn(),
       showMeleeHit: vi.fn(),
       showMuzzleFlash: vi.fn(),
+      showBloodParticles: vi.fn(),
       destroy: vi.fn(),
     } as any;
 
@@ -99,6 +101,7 @@ describe('GameSceneEventHandlers - Recoil Visual Feedback', () => {
       showDamageFlash: vi.fn(),
       showDamageNumber: vi.fn(),
       showHitMarker: vi.fn(),
+      showCameraShake: vi.fn(),
       updateMatchTimer: vi.fn(),
     } as unknown as GameSceneUI;
 

@@ -48,6 +48,7 @@ export class InputManager {
   private playerY: number = 540; // Default to center of arena (1080/2)
   private aimAngle: number = 0;
   private lastSentAimAngle: number = 0;
+  private aimSwayOffset: number = 0;
   private isEnabled: boolean = true;
   private sequence: number = 0; // Monotonically increasing sequence number
   private inputHistory: InputHistoryEntry[] = []; // Store pending inputs for reconciliation
@@ -96,12 +97,13 @@ export class InputManager {
     this.updateAimAngle();
 
     // Update current state from keyboard
+    // aimAngle includes sway offset so server receives sway-affected angle
     this.currentState = {
       up: this.keys.W.isDown,
       down: this.keys.S.isDown,
       left: this.keys.A.isDown,
       right: this.keys.D.isDown,
-      aimAngle: this.aimAngle,
+      aimAngle: this.aimAngle + this.aimSwayOffset,
       isSprinting: this.keys.SHIFT.isDown,
       sequence: this.sequence,
     };
@@ -148,10 +150,17 @@ export class InputManager {
   }
 
   /**
-   * Get current aim angle in radians
+   * Set aim sway offset (computed by PlayerManager)
+   */
+  setAimSwayOffset(sway: number): void {
+    this.aimSwayOffset = sway;
+  }
+
+  /**
+   * Get current aim angle in radians (includes sway offset)
    */
   getAimAngle(): number {
-    return this.aimAngle;
+    return this.aimAngle + this.aimSwayOffset;
   }
 
   /**

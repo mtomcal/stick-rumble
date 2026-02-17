@@ -45,8 +45,12 @@ export class PlayerManager {
   private healthBars: Map<string, HealthBar> = new Map();
   private localPlayerId: string | null = null;
   private playerStates: Map<string, PlayerState> = new Map();
+  private corpseGraphics: Map<string, Phaser.GameObjects.Graphics> = new Map();
   // Interpolation engine for smooth movement of other players (Story 4.3)
   private interpolationEngine: InterpolationEngine = new InterpolationEngine();
+  // Aim sway state for local player
+  private swayTime: number = 0;
+  private aimSway: number = 0;
   // Client-side predicted state for local player (Story stick-rumble-nki)
   private localPlayerPredictedState: {
     position: { x: number; y: number };
@@ -182,6 +186,9 @@ export class PlayerManager {
 
           this.weaponTypes.delete(id);
 
+          // Clean up corpse graphic if any
+          this.destroyCorpse(id);
+
           // Clear interpolation data for removed player
           this.interpolationEngine.clearPlayer(id);
         }
@@ -279,18 +286,39 @@ export class PlayerManager {
 
       // Apply death visual effects
       if (state.deathTime !== undefined) {
-        // Dead player: gray color
-        playerGraphics.setColor(0x888888);
+        // Hide normal player graphics on death
+        playerGraphics.setVisible(false);
+
+        // Hide associated elements
+        const label = this.playerLabels.get(state.id);
+        if (label) label.setVisible(false);
+        const aimIndicator = this.aimIndicators.get(state.id);
+        if (aimIndicator) aimIndicator.setVisible(false);
+        const weapon = this.weaponGraphics.get(state.id);
+        if (weapon) weapon.setVisible(false);
+        const health = this.healthBars.get(state.id);
+        if (health) health.setVisible(false);
+
+        // Create corpse graphic if not already created
+        if (!this.corpseGraphics.has(state.id)) {
+          this.createDeathCorpse(state);
+        }
       } else if (!state.isRolling) {
-        // Alive player (not rolling): restore original color
+        // Alive player (not rolling): restore original color and visibility
         const isLocal = state.id === this.localPlayerId;
         const color = isLocal ? 0x00ff00 : 0xff0000;
         playerGraphics.setColor(color);
+
+        // Clean up corpse if player respawned
+        this.destroyCorpse(state.id);
       } else {
         // Alive player (rolling): keep original color
         const isLocal = state.id === this.localPlayerId;
         const color = isLocal ? 0x00ff00 : 0xff0000;
         playerGraphics.setColor(color);
+
+        // Clean up corpse if player respawned
+        this.destroyCorpse(state.id);
       }
 
       // DO NOT update label, aim indicator, weapon, or health bar positions here
@@ -335,6 +363,19 @@ export class PlayerManager {
     // Skip if scene is not active
     if (!this.isSceneValid()) {
       return;
+    }
+
+    // Compute aim sway for local player
+    if (this.localPlayerId) {
+      this.swayTime += delta;
+      const localState = this.playerStates.get(this.localPlayerId);
+      if (localState) {
+        const speed = Math.sqrt(localState.velocity.x ** 2 + localState.velocity.y ** 2);
+        const isMoving = speed > 10;
+        const swaySpeed = isMoving ? 0.008 : 0.002;
+        const swayMagnitude = isMoving ? 0.15 : 0.03;
+        this.aimSway = (Math.sin(this.swayTime * swaySpeed) + Math.sin(this.swayTime * swaySpeed * 0.7)) * swayMagnitude;
+      }
     }
 
     for (const [playerId, playerGraphics] of this.players) {
@@ -397,15 +438,17 @@ export class PlayerManager {
         );
       }
 
-      // Update weapon graphics position
+      // Update weapon graphics position (including recoil offset)
       const weaponGraphics = this.weaponGraphics.get(playerId);
       if (weaponGraphics) {
         const aimAngle = state.aimAngle ?? 0;
         const weaponOffsetX = Math.cos(aimAngle) * 10;
         const weaponOffsetY = Math.sin(aimAngle) * 10;
+        const recoilX = Math.cos(aimAngle) * weaponGraphics.recoilOffset;
+        const recoilY = Math.sin(aimAngle) * weaponGraphics.recoilOffset;
         weaponGraphics.setPosition(
-          renderPosition.x + weaponOffsetX,
-          renderPosition.y + weaponOffsetY
+          renderPosition.x + weaponOffsetX + recoilX,
+          renderPosition.y + weaponOffsetY + recoilY
         );
       }
 
@@ -419,6 +462,76 @@ export class PlayerManager {
       // Update walk cycle animation based on velocity
       const isMoving = Math.sqrt(renderVelocity.x ** 2 + renderVelocity.y ** 2) > 0.1;
       playerGraphics.update(delta, isMoving);
+
+      // Spawn healing particles during health regeneration (15% chance per tick)
+      if (state.isRegenerating && Math.random() < 0.15) {
+        const offsetX = (Math.random() - 0.5) * 50; // ±25px spread
+        const offsetY = (Math.random() - 0.5) * 50;
+        const particle = this.scene.add.circle(
+          renderPosition.x + offsetX,
+          renderPosition.y + offsetY,
+          2,
+          0x00ff00
+        );
+        particle.setDepth(60);
+        this.scene.tweens.add({
+          targets: particle,
+          y: particle.y - 20,
+          alpha: 0,
+          duration: 600,
+          onComplete: () => particle.destroy(),
+        });
+      }
+    }
+  }
+
+  /**
+   * Create a splayed death corpse graphic at the player's position
+   */
+  private createDeathCorpse(state: PlayerState): void {
+    const deadGfx = this.scene.add.graphics();
+    deadGfx.lineStyle(3, 0x444444, 1);
+    const x = state.position.x;
+    const y = state.position.y;
+    const rot = state.aimAngle ?? 0;
+
+    // 4 splayed limbs at ±0.5 and ±2.5 radians from rotation
+    deadGfx.moveTo(x, y);
+    deadGfx.lineTo(x + Math.cos(rot + 0.5) * 20, y + Math.sin(rot + 0.5) * 20);
+    deadGfx.moveTo(x, y);
+    deadGfx.lineTo(x + Math.cos(rot - 0.5) * 20, y + Math.sin(rot - 0.5) * 20);
+    deadGfx.moveTo(x, y);
+    deadGfx.lineTo(x + Math.cos(rot + 2.5) * 20, y + Math.sin(rot + 2.5) * 20);
+    deadGfx.moveTo(x, y);
+    deadGfx.lineTo(x + Math.cos(rot - 2.5) * 20, y + Math.sin(rot - 2.5) * 20);
+    deadGfx.strokePath();
+
+    // Head offset along rotation axis
+    deadGfx.fillStyle(0x444444);
+    deadGfx.fillCircle(x + Math.cos(rot) * 25, y + Math.sin(rot) * 25, 10);
+
+    deadGfx.setDepth(5);
+
+    // Fade out after 5 seconds
+    this.scene.tweens.add({
+      targets: deadGfx,
+      alpha: 0,
+      duration: 2000,
+      delay: 5000,
+      onComplete: () => deadGfx.destroy()
+    });
+
+    this.corpseGraphics.set(state.id, deadGfx);
+  }
+
+  /**
+   * Destroy corpse graphic for a player (e.g., on respawn)
+   */
+  private destroyCorpse(playerId: string): void {
+    const corpse = this.corpseGraphics.get(playerId);
+    if (corpse) {
+      corpse.destroy();
+      this.corpseGraphics.delete(playerId);
     }
   }
 
@@ -450,6 +563,11 @@ export class PlayerManager {
       healthBar.destroy();
     }
     this.healthBars.clear();
+
+    for (const corpse of this.corpseGraphics.values()) {
+      corpse.destroy();
+    }
+    this.corpseGraphics.clear();
 
     this.weaponTypes.clear();
     this.playerStates.clear();
@@ -572,6 +690,13 @@ export class PlayerManager {
   }
 
   /**
+   * Get the current aim sway offset for the local player (in radians)
+   */
+  getLocalPlayerAimSway(): number {
+    return this.aimSway;
+  }
+
+  /**
    * Check if the local player is currently moving
    * A player is considered moving if their velocity is above a threshold
    */
@@ -591,6 +716,26 @@ export class PlayerManager {
     );
 
     return velocityMagnitude > MOVEMENT_THRESHOLD;
+  }
+
+  /**
+   * Trigger gun recoil animation on a player's weapon
+   */
+  triggerWeaponRecoil(playerId: string): void {
+    const weaponGraphics = this.weaponGraphics.get(playerId);
+    if (weaponGraphics) {
+      weaponGraphics.triggerRecoil();
+    }
+  }
+
+  /**
+   * Trigger reload animation pulse on a player's weapon graphics
+   */
+  triggerReloadPulse(playerId: string): void {
+    const weaponGraphics = this.weaponGraphics.get(playerId);
+    if (weaponGraphics) {
+      weaponGraphics.triggerReloadPulse();
+    }
   }
 
   /**

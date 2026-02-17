@@ -5,6 +5,7 @@ class MockGraphics {
   private _visible: boolean = true;
   private _destroyed: boolean = false;
   private _depth: number = 0;
+  private _alpha: number = 1;
 
   // Track method calls
   clear = vi.fn();
@@ -16,11 +17,14 @@ class MockGraphics {
   fillPath = vi.fn();
   moveTo = vi.fn();
   closePath = vi.fn();
-
-  setVisible(visible: boolean) {
+  setVisible = vi.fn((visible: boolean) => {
     this._visible = visible;
     return this;
-  }
+  });
+  setAlpha = vi.fn((alpha: number) => {
+    this._alpha = alpha;
+    return this;
+  });
 
   setDepth(depth: number) {
     this._depth = depth;
@@ -42,6 +46,10 @@ class MockGraphics {
 
   get depth() {
     return this._depth;
+  }
+
+  get alpha() {
+    return this._alpha;
   }
 }
 

@@ -46,6 +46,13 @@ const createMockScene = () => {
     rotation: number;
   }> = [];
 
+  const circles: Array<{
+    x: number;
+    y: number;
+    setDepth: ReturnType<typeof vi.fn>;
+    destroy: ReturnType<typeof vi.fn>;
+  }> = [];
+
   const graphicsObjects: Array<{
     clear: ReturnType<typeof vi.fn>;
     lineStyle: ReturnType<typeof vi.fn>;
@@ -123,6 +130,16 @@ const createMockScene = () => {
         containers.push(container);
         return container;
       }),
+      circle: vi.fn((x: number, y: number) => {
+        const circle = {
+          x,
+          y,
+          setDepth: vi.fn().mockReturnThis(),
+          destroy: vi.fn(),
+        };
+        circles.push(circle);
+        return circle;
+      }),
       rectangle: vi.fn(() => ({
         setRotation: vi.fn(),
       })),
@@ -148,10 +165,14 @@ const createMockScene = () => {
         return graphics;
       }),
     },
+    tweens: {
+      add: vi.fn(),
+    },
     sprites,
     texts,
     lines,
     containers,
+    circles,
     graphicsObjects,
   };
 };
@@ -576,14 +597,14 @@ describe('PlayerManager', () => {
       expect(() => playerManager.updatePlayers(deadState)).not.toThrow();
     });
 
-    it('should apply death visual effects (gray color) to dead players', () => {
+    it('should hide normal player graphics and create corpse on death', () => {
       const aliveState: PlayerState[] = [
         { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
       ];
 
       playerManager.updatePlayers(aliveState);
 
-      const graphics = mockScene.graphicsObjects[0];
+      const playerGfx = mockScene.graphicsObjects[0];
 
       // Mark as dead
       const deadState: PlayerState[] = [
@@ -592,8 +613,15 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(deadState);
 
-      // ProceduralPlayerGraphics.setColor(0x888888) triggers draw() which uses fillStyle
-      expect(graphics.fillStyle).toHaveBeenCalledWith(0x888888, 1);
+      // Normal player graphics should be hidden
+      expect(playerGfx.setVisible).toHaveBeenCalledWith(false);
+
+      // Corpse graphics should have been created (second graphics object)
+      expect(mockScene.graphicsObjects.length).toBeGreaterThanOrEqual(2);
+      const corpseGfx = mockScene.graphicsObjects[mockScene.graphicsObjects.length - 1];
+      expect(corpseGfx.lineStyle).toHaveBeenCalledWith(3, 0x444444, 1);
+      expect(corpseGfx.fillStyle).toHaveBeenCalledWith(0x444444);
+      expect(corpseGfx.setDepth).toHaveBeenCalledWith(5);
     });
 
     it('should restore visual effects when player respawns', () => {
@@ -1197,6 +1225,131 @@ describe('PlayerManager', () => {
     });
   });
 
+  describe('aim sway (TS-GFX-019)', () => {
+    it('should return 0 sway before any update', () => {
+      playerManager.setLocalPlayerId('local-player');
+      expect(playerManager.getLocalPlayerAimSway()).toBe(0);
+    });
+
+    it('should compute idle sway with speed=0.002, magnitude=0.03 when stationary', () => {
+      playerManager.setLocalPlayerId('local-player');
+      playerManager.updatePlayers([
+        { id: 'local-player', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ]);
+
+      // Advance by 500ms
+      const delta = 500;
+      playerManager.update(delta);
+
+      // Expected: (sin(500 * 0.002) + sin(500 * 0.002 * 0.7)) * 0.03
+      const t = 500;
+      const expected = (Math.sin(t * 0.002) + Math.sin(t * 0.002 * 0.7)) * 0.03;
+      expect(playerManager.getLocalPlayerAimSway()).toBeCloseTo(expected, 5);
+    });
+
+    it('should compute moving sway with speed=0.008, magnitude=0.15 when speed > 10', () => {
+      playerManager.setLocalPlayerId('local-player');
+      // Velocity magnitude = sqrt(8^2 + 8^2) = 11.3 > 10 threshold
+      playerManager.updatePlayers([
+        { id: 'local-player', position: { x: 100, y: 200 }, velocity: { x: 8, y: 8 } },
+      ]);
+
+      const delta = 500;
+      playerManager.update(delta);
+
+      const t = 500;
+      const expected = (Math.sin(t * 0.008) + Math.sin(t * 0.008 * 0.7)) * 0.15;
+      expect(playerManager.getLocalPlayerAimSway()).toBeCloseTo(expected, 5);
+    });
+
+    it('should use idle sway when speed is exactly 10 (threshold is >10)', () => {
+      playerManager.setLocalPlayerId('local-player');
+      // Velocity magnitude = sqrt(6^2 + 8^2) = 10.0 — not > 10, so idle
+      playerManager.updatePlayers([
+        { id: 'local-player', position: { x: 100, y: 200 }, velocity: { x: 6, y: 8 } },
+      ]);
+
+      const delta = 300;
+      playerManager.update(delta);
+
+      const t = 300;
+      const expected = (Math.sin(t * 0.002) + Math.sin(t * 0.002 * 0.7)) * 0.03;
+      expect(playerManager.getLocalPlayerAimSway()).toBeCloseTo(expected, 5);
+    });
+
+    it('should accumulate swayTime across multiple update calls', () => {
+      playerManager.setLocalPlayerId('local-player');
+      playerManager.updatePlayers([
+        { id: 'local-player', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ]);
+
+      // Two 250ms updates = 500ms total
+      playerManager.update(250);
+      playerManager.update(250);
+
+      const t = 500;
+      const expected = (Math.sin(t * 0.002) + Math.sin(t * 0.002 * 0.7)) * 0.03;
+      expect(playerManager.getLocalPlayerAimSway()).toBeCloseTo(expected, 5);
+    });
+
+    it('should use composite sine formula for non-periodic natural feel', () => {
+      playerManager.setLocalPlayerId('local-player');
+      playerManager.updatePlayers([
+        { id: 'local-player', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ]);
+
+      // Collect sway values at different times
+      const values: number[] = [];
+      for (let i = 0; i < 10; i++) {
+        playerManager.update(100);
+        values.push(playerManager.getLocalPlayerAimSway());
+      }
+
+      // Verify all values are within ±0.03 * 2 (two sine waves can sum to ±2)
+      for (const v of values) {
+        expect(Math.abs(v)).toBeLessThanOrEqual(0.03 * 2);
+      }
+
+      // Verify values are NOT all the same (oscillation happening)
+      const unique = new Set(values.map(v => v.toFixed(6)));
+      expect(unique.size).toBeGreaterThan(1);
+    });
+
+    it('should have larger sway magnitude when moving vs idle', () => {
+      // Test idle sway
+      playerManager.setLocalPlayerId('local-player');
+      playerManager.updatePlayers([
+        { id: 'local-player', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ]);
+      playerManager.update(200);
+      const idleSway = Math.abs(playerManager.getLocalPlayerAimSway());
+
+      // Create fresh manager for moving test
+      const mockScene2 = createMockScene();
+      const clock2 = new ManualClock();
+      const pm2 = new PlayerManager(mockScene2 as unknown as Phaser.Scene, clock2);
+      pm2.setLocalPlayerId('local-player');
+      pm2.updatePlayers([
+        { id: 'local-player', position: { x: 100, y: 200 }, velocity: { x: 50, y: 50 } },
+      ]);
+      pm2.update(200);
+      const movingSway = Math.abs(pm2.getLocalPlayerAimSway());
+
+      // Moving magnitude (0.15) is 5x idle magnitude (0.03)
+      // At same time, moving sway should be larger
+      expect(movingSway).toBeGreaterThan(idleSway);
+    });
+
+    it('should not compute sway when no local player ID is set', () => {
+      playerManager.updatePlayers([
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 50, y: 50 } },
+      ]);
+      playerManager.update(500);
+
+      expect(playerManager.getLocalPlayerAimSway()).toBe(0);
+    });
+  });
+
   describe('dodge roll and death state combination', () => {
     it('should maintain color while rolling for alive player', () => {
       playerManager.setLocalPlayerId('player-1');
@@ -1234,9 +1387,12 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(deadAndRollingState);
 
-      const graphics = mockScene.graphicsObjects[0];
-      // Death effect takes precedence - gray color
-      expect(graphics.fillStyle).toHaveBeenCalledWith(0x888888, 1);
+      const playerGfx = mockScene.graphicsObjects[0];
+      // Death effect takes precedence — player hidden, corpse created
+      expect(playerGfx.setVisible).toHaveBeenCalledWith(false);
+      // Corpse graphics created
+      const corpseGfx = mockScene.graphicsObjects[mockScene.graphicsObjects.length - 1];
+      expect(corpseGfx.lineStyle).toHaveBeenCalledWith(3, 0x444444, 1);
     });
   });
 
@@ -2297,7 +2453,7 @@ describe('PlayerManager', () => {
       expect(graphics.fillStyle).toHaveBeenCalledWith(0x00ff00, expect.any(Number));
     });
 
-    it('should use gray color for dead player even if rolling flag is set', () => {
+    it('should hide player and create corpse for dead player even if rolling flag is set', () => {
       playerManager.setLocalPlayerId('player1');
       const playerStates: PlayerState[] = [
         {
@@ -2310,10 +2466,12 @@ describe('PlayerManager', () => {
       ];
       playerManager.updatePlayers(playerStates);
 
-      const graphics = mockScene.graphicsObjects[0];
+      const playerGfx = mockScene.graphicsObjects[0];
 
-      // Verify gray color was applied (death takes priority over rolling)
-      expect(graphics.fillStyle).toHaveBeenCalledWith(0x888888, expect.any(Number));
+      // Verify player hidden and corpse created (death takes priority over rolling)
+      expect(playerGfx.setVisible).toHaveBeenCalledWith(false);
+      const corpseGfx = mockScene.graphicsObjects[mockScene.graphicsObjects.length - 1];
+      expect(corpseGfx.lineStyle).toHaveBeenCalledWith(3, 0x444444, 1);
     });
   });
 
@@ -2499,6 +2657,407 @@ describe('PlayerManager', () => {
       const setVisibleCalls = graphics.setVisible.mock.calls as boolean[][];
       const setVisibleTrueCalls = setVisibleCalls.filter(call => call[0] === true);
       expect(setVisibleTrueCalls).toHaveLength(0);
+    });
+  });
+
+  describe('TS-GFX-011: Death corpse renders with splayed limbs', () => {
+    it('should draw 4 limbs at ±0.5 and ±2.5 rad from rotation', () => {
+      const aliveState: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+      playerManager.updatePlayers(aliveState);
+
+      // Kill the player with a known aim angle
+      const aimAngle = 0;
+      const deadState: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, deathTime: clock.now(), aimAngle },
+      ];
+      playerManager.updatePlayers(deadState);
+
+      // Find the corpse graphics (last graphics object created)
+      const corpseGfx = mockScene.graphicsObjects[mockScene.graphicsObjects.length - 1];
+
+      // Verify line style: 3px, 0x444444
+      expect(corpseGfx.lineStyle).toHaveBeenCalledWith(3, 0x444444, 1);
+
+      // Verify 4 limbs drawn from center to endpoint
+      // Each limb: moveTo(x, y) + lineTo(endpoint)
+      const moveToArgs = corpseGfx.moveTo.mock.calls as number[][];
+      const lineToArgs = corpseGfx.lineTo.mock.calls as number[][];
+
+      // 4 moveTo calls to center (100, 200)
+      const centerMoves = moveToArgs.filter(
+        (call: number[]) => call[0] === 100 && call[1] === 200
+      );
+      expect(centerMoves.length).toBe(4);
+
+      // Verify 4 lineTo calls at correct angles
+      const limbAngles = [0.5, -0.5, 2.5, -2.5];
+      for (const angle of limbAngles) {
+        const expectedX = 100 + Math.cos(aimAngle + angle) * 20;
+        const expectedY = 200 + Math.sin(aimAngle + angle) * 20;
+        const matchingCall = lineToArgs.find(
+          (call: number[]) =>
+            Math.abs(call[0] - expectedX) < 0.001 &&
+            Math.abs(call[1] - expectedY) < 0.001
+        );
+        expect(matchingCall).toBeTruthy();
+      }
+
+      // Verify strokePath called
+      expect(corpseGfx.strokePath).toHaveBeenCalled();
+    });
+
+    it('should draw head circle at 25px offset along rotation axis', () => {
+      const aimAngle = Math.PI / 4; // 45 degrees
+      const aliveState: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle },
+      ];
+      playerManager.updatePlayers(aliveState);
+
+      const deadState: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, deathTime: clock.now(), aimAngle },
+      ];
+      playerManager.updatePlayers(deadState);
+
+      const corpseGfx = mockScene.graphicsObjects[mockScene.graphicsObjects.length - 1];
+
+      // Head fill color
+      expect(corpseGfx.fillStyle).toHaveBeenCalledWith(0x444444);
+
+      // Head circle at 25px offset
+      const expectedHeadX = 100 + Math.cos(aimAngle) * 25;
+      const expectedHeadY = 200 + Math.sin(aimAngle) * 25;
+      expect(corpseGfx.fillCircle).toHaveBeenCalledWith(
+        expect.closeTo(expectedHeadX, 2),
+        expect.closeTo(expectedHeadY, 2),
+        10
+      );
+    });
+
+    it('should use color 0x444444 (dark gray) for corpse', () => {
+      const aliveState: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+      playerManager.updatePlayers(aliveState);
+
+      const deadState: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, deathTime: clock.now() },
+      ];
+      playerManager.updatePlayers(deadState);
+
+      const corpseGfx = mockScene.graphicsObjects[mockScene.graphicsObjects.length - 1];
+      expect(corpseGfx.lineStyle).toHaveBeenCalledWith(3, 0x444444, 1);
+      expect(corpseGfx.fillStyle).toHaveBeenCalledWith(0x444444);
+    });
+
+    it('should set corpse depth to 5 (below live players at 50)', () => {
+      const aliveState: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+      playerManager.updatePlayers(aliveState);
+
+      const deadState: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, deathTime: clock.now() },
+      ];
+      playerManager.updatePlayers(deadState);
+
+      const corpseGfx = mockScene.graphicsObjects[mockScene.graphicsObjects.length - 1];
+      expect(corpseGfx.setDepth).toHaveBeenCalledWith(5);
+    });
+
+    it('should hide normal player graphics when corpse is created', () => {
+      const aliveState: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+      playerManager.updatePlayers(aliveState);
+
+      const playerGfx = mockScene.graphicsObjects[0];
+
+      const deadState: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, deathTime: clock.now() },
+      ];
+      playerManager.updatePlayers(deadState);
+
+      expect(playerGfx.setVisible).toHaveBeenCalledWith(false);
+    });
+
+    it('should not create duplicate corpse on repeated death state updates', () => {
+      const aliveState: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+      playerManager.updatePlayers(aliveState);
+
+      const deadState: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, deathTime: clock.now() },
+      ];
+
+      // First death update
+      playerManager.updatePlayers(deadState);
+      const countAfterFirst = mockScene.graphicsObjects.length;
+
+      // Second death update (same tick)
+      playerManager.updatePlayers(deadState);
+      const countAfterSecond = mockScene.graphicsObjects.length;
+
+      // No new graphics objects should have been created
+      expect(countAfterSecond).toBe(countAfterFirst);
+    });
+
+    it('should clean up corpse when player respawns', () => {
+      const aliveState: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+      playerManager.updatePlayers(aliveState);
+
+      const deadState: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, deathTime: clock.now() },
+      ];
+      playerManager.updatePlayers(deadState);
+
+      const corpseGfx = mockScene.graphicsObjects[mockScene.graphicsObjects.length - 1];
+
+      // Respawn
+      const respawnState: PlayerState[] = [
+        { id: 'player-1', position: { x: 500, y: 300 }, velocity: { x: 0, y: 0 } },
+      ];
+      playerManager.updatePlayers(respawnState);
+
+      // Corpse should be destroyed
+      expect(corpseGfx.destroy).toHaveBeenCalled();
+    });
+  });
+
+  describe('TS-GFX-024: Death corpse fade timing', () => {
+    it('should add fade tween with 5000ms delay and 2000ms duration', () => {
+      const aliveState: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+      playerManager.updatePlayers(aliveState);
+
+      const deadState: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, deathTime: clock.now() },
+      ];
+      playerManager.updatePlayers(deadState);
+
+      // Verify tweens.add was called
+      expect(mockScene.tweens.add).toHaveBeenCalledTimes(1);
+
+      const tweenConfig = mockScene.tweens.add.mock.calls[0][0];
+
+      // Verify tween targets the corpse graphics
+      const corpseGfx = mockScene.graphicsObjects[mockScene.graphicsObjects.length - 1];
+      expect(tweenConfig.targets).toBe(corpseGfx);
+
+      // Verify alpha fades to 0
+      expect(tweenConfig.alpha).toBe(0);
+
+      // Verify delay is 5000ms (corpse stays visible for 5s)
+      expect(tweenConfig.delay).toBe(5000);
+
+      // Verify duration is 2000ms
+      expect(tweenConfig.duration).toBe(2000);
+
+      // Verify onComplete destroys the graphics
+      expect(tweenConfig.onComplete).toBeInstanceOf(Function);
+    });
+
+    it('should destroy corpse graphics object on tween complete', () => {
+      const aliveState: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+      playerManager.updatePlayers(aliveState);
+
+      const deadState: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, deathTime: clock.now() },
+      ];
+      playerManager.updatePlayers(deadState);
+
+      const corpseGfx = mockScene.graphicsObjects[mockScene.graphicsObjects.length - 1];
+      const tweenConfig = mockScene.tweens.add.mock.calls[0][0];
+
+      // Manually invoke onComplete to simulate tween finishing
+      tweenConfig.onComplete();
+
+      expect(corpseGfx.destroy).toHaveBeenCalled();
+    });
+  });
+
+  describe('TS-GFX-016: Healing particles appear during regen', () => {
+    it('should create green circle particle when player is regenerating', () => {
+      // Force Math.random to always trigger (< 0.15)
+      const originalRandom = Math.random;
+      Math.random = vi.fn()
+        .mockReturnValueOnce(0.1)   // chance check (< 0.15 → spawn)
+        .mockReturnValueOnce(0.5)   // offsetX → (0.5 - 0.5) * 50 = 0
+        .mockReturnValueOnce(0.5);  // offsetY → (0.5 - 0.5) * 50 = 0
+
+      playerManager.setLocalPlayerId('player-1');
+      const states: PlayerState[] = [
+        { id: 'player-1', position: { x: 200, y: 300 }, velocity: { x: 0, y: 0 }, isRegenerating: true },
+      ];
+      playerManager.updatePlayers(states);
+      playerManager.update(16);
+
+      // Verify circle was created with exact color 0x00ff00 and radius 2
+      expect(mockScene.add.circle).toHaveBeenCalledWith(200, 300, 2, 0x00ff00);
+
+      Math.random = originalRandom;
+    });
+
+    it('should set particle depth to 60', () => {
+      const originalRandom = Math.random;
+      Math.random = vi.fn()
+        .mockReturnValueOnce(0.1)   // chance
+        .mockReturnValueOnce(0.5)   // offsetX
+        .mockReturnValueOnce(0.5);  // offsetY
+
+      playerManager.setLocalPlayerId('player-1');
+      const states: PlayerState[] = [
+        { id: 'player-1', position: { x: 200, y: 300 }, velocity: { x: 0, y: 0 }, isRegenerating: true },
+      ];
+      playerManager.updatePlayers(states);
+      playerManager.update(16);
+
+      expect(mockScene.circles.length).toBeGreaterThan(0);
+      expect(mockScene.circles[mockScene.circles.length - 1].setDepth).toHaveBeenCalledWith(60);
+
+      Math.random = originalRandom;
+    });
+
+    it('should create tween with y -= 20, alpha: 0, duration: 600', () => {
+      const originalRandom = Math.random;
+      Math.random = vi.fn()
+        .mockReturnValueOnce(0.1)   // chance
+        .mockReturnValueOnce(0.5)   // offsetX
+        .mockReturnValueOnce(0.5);  // offsetY
+
+      playerManager.setLocalPlayerId('player-1');
+      const states: PlayerState[] = [
+        { id: 'player-1', position: { x: 200, y: 300 }, velocity: { x: 0, y: 0 }, isRegenerating: true },
+      ];
+      playerManager.updatePlayers(states);
+
+      // Clear any tweens from updatePlayers (corpse, etc.)
+      mockScene.tweens.add.mockClear();
+
+      playerManager.update(16);
+
+      // Find the healing particle tween (last tween.add call)
+      const tweenCalls = mockScene.tweens.add.mock.calls;
+      expect(tweenCalls.length).toBeGreaterThan(0);
+      const tweenConfig = tweenCalls[tweenCalls.length - 1][0];
+
+      expect(tweenConfig.y).toBe(300 - 20); // particle.y - 20
+      expect(tweenConfig.alpha).toBe(0);
+      expect(tweenConfig.duration).toBe(600);
+
+      Math.random = originalRandom;
+    });
+
+    it('should destroy particle on tween complete', () => {
+      const originalRandom = Math.random;
+      Math.random = vi.fn()
+        .mockReturnValueOnce(0.1)
+        .mockReturnValueOnce(0.5)
+        .mockReturnValueOnce(0.5);
+
+      playerManager.setLocalPlayerId('player-1');
+      const states: PlayerState[] = [
+        { id: 'player-1', position: { x: 200, y: 300 }, velocity: { x: 0, y: 0 }, isRegenerating: true },
+      ];
+      playerManager.updatePlayers(states);
+      mockScene.tweens.add.mockClear();
+      playerManager.update(16);
+
+      const tweenConfig = mockScene.tweens.add.mock.calls[mockScene.tweens.add.mock.calls.length - 1][0];
+      const particle = mockScene.circles[mockScene.circles.length - 1];
+
+      // Invoke onComplete
+      tweenConfig.onComplete();
+
+      expect(particle.destroy).toHaveBeenCalled();
+
+      Math.random = originalRandom;
+    });
+
+    it('should NOT spawn particle when random >= 0.15 (probability gate)', () => {
+      const originalRandom = Math.random;
+      Math.random = vi.fn().mockReturnValue(0.5); // >= 0.15 → no spawn
+
+      playerManager.setLocalPlayerId('player-1');
+      const states: PlayerState[] = [
+        { id: 'player-1', position: { x: 200, y: 300 }, velocity: { x: 0, y: 0 }, isRegenerating: true },
+      ];
+      playerManager.updatePlayers(states);
+
+      const circleCountBefore = mockScene.circles.length;
+      playerManager.update(16);
+
+      // No new circles created
+      expect(mockScene.circles.length).toBe(circleCountBefore);
+
+      Math.random = originalRandom;
+    });
+
+    it('should NOT spawn particle when player is not regenerating', () => {
+      const originalRandom = Math.random;
+      Math.random = vi.fn().mockReturnValue(0.1); // Would trigger if regenerating
+
+      playerManager.setLocalPlayerId('player-1');
+      const states: PlayerState[] = [
+        { id: 'player-1', position: { x: 200, y: 300 }, velocity: { x: 0, y: 0 }, isRegenerating: false },
+      ];
+      playerManager.updatePlayers(states);
+
+      const circleCountBefore = mockScene.circles.length;
+      playerManager.update(16);
+
+      expect(mockScene.circles.length).toBe(circleCountBefore);
+
+      Math.random = originalRandom;
+    });
+
+    it('should apply ±25px random offset from player center', () => {
+      const originalRandom = Math.random;
+      // offsetX: (0.0 - 0.5) * 50 = -25, offsetY: (1.0 - 0.5) * 50 = +25
+      Math.random = vi.fn()
+        .mockReturnValueOnce(0.1)   // chance
+        .mockReturnValueOnce(0.0)   // offsetX → -25
+        .mockReturnValueOnce(1.0);  // offsetY → +25
+
+      playerManager.setLocalPlayerId('player-1');
+      const states: PlayerState[] = [
+        { id: 'player-1', position: { x: 200, y: 300 }, velocity: { x: 0, y: 0 }, isRegenerating: true },
+      ];
+      playerManager.updatePlayers(states);
+      playerManager.update(16);
+
+      // Circle at (200 + (-25), 300 + 25) = (175, 325)
+      expect(mockScene.add.circle).toHaveBeenCalledWith(175, 325, 2, 0x00ff00);
+
+      Math.random = originalRandom;
+    });
+
+    it('should spawn healing particles for remote regenerating players too', () => {
+      const originalRandom = Math.random;
+      Math.random = vi.fn()
+        .mockReturnValueOnce(0.1)   // chance
+        .mockReturnValueOnce(0.5)   // offsetX
+        .mockReturnValueOnce(0.5);  // offsetY
+
+      playerManager.setLocalPlayerId('player-1');
+      const states: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 100 }, velocity: { x: 0, y: 0 } },
+        { id: 'player-2', position: { x: 400, y: 400 }, velocity: { x: 0, y: 0 }, isRegenerating: true },
+      ];
+      playerManager.updatePlayers(states);
+      playerManager.update(16);
+
+      // Should create circle at remote player's position
+      expect(mockScene.add.circle).toHaveBeenCalledWith(400, 400, 2, 0x00ff00);
+
+      Math.random = originalRandom;
     });
   });
 });

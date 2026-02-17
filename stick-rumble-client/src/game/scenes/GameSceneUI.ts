@@ -18,15 +18,51 @@ export class GameSceneUI {
   private isSceneValid(): boolean {
     return this.scene && this.scene.sys && this.scene.sys.isActive();
   }
-  private damageFlashOverlay: Phaser.GameObjects.Rectangle | null = null;
   private reloadProgressBar: Phaser.GameObjects.Graphics | null = null;
   private reloadProgressBarBg: Phaser.GameObjects.Graphics | null = null;
   private reloadIndicatorText: Phaser.GameObjects.Text | null = null;
   private reloadCircle: Phaser.GameObjects.Graphics | null = null;
   private crosshair: Crosshair | null = null;
+  private minimapStaticGraphics: Phaser.GameObjects.Graphics | null = null;
+  private minimapDynamicGraphics: Phaser.GameObjects.Graphics | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
+    this.generateHitMarkerTexture();
+    this.generateHitIndicatorTexture();
+  }
+
+  /**
+   * Generate the hitmarker X texture (20x20, white X, 3px stroke).
+   * Called once during construction.
+   */
+  private generateHitMarkerTexture(): void {
+    const gfx = this.scene.make.graphics({ x: 0, y: 0 }, false);
+    gfx.lineStyle(3, 0xffffff, 1);
+    gfx.beginPath();
+    gfx.moveTo(2, 2); gfx.lineTo(18, 18);
+    gfx.moveTo(18, 2); gfx.lineTo(2, 18);
+    gfx.strokePath();
+    gfx.generateTexture('hitmarker', 20, 20);
+    gfx.destroy();
+  }
+
+  /**
+   * Generate the hit indicator chevron texture (16x16, white filled chevron).
+   * Called once during construction.
+   */
+  private generateHitIndicatorTexture(): void {
+    const gfx = this.scene.make.graphics({ x: 0, y: 0 }, false);
+    gfx.fillStyle(0xffffff, 1);
+    gfx.beginPath();
+    gfx.moveTo(0, 0);
+    gfx.lineTo(16, 8);
+    gfx.lineTo(0, 16);
+    gfx.lineTo(4, 8);
+    gfx.closePath();
+    gfx.fillPath();
+    gfx.generateTexture('hit_indicator', 16, 16);
+    gfx.destroy();
   }
 
   /**
@@ -43,19 +79,12 @@ export class GameSceneUI {
   }
 
   /**
-   * Create damage flash overlay
+   * Create damage flash overlay — no-op, kept for backward compatibility.
+   * Damage flash now uses cameras.main.flash() directly.
    */
-  createDamageFlashOverlay(width: number, height: number): void {
-    this.damageFlashOverlay = this.scene.add.rectangle(
-      width / 2,
-      height / 2,
-      width,
-      height,
-      0xff0000,
-      0 // Fully transparent initially
-    );
-    this.damageFlashOverlay.setScrollFactor(0);
-    this.damageFlashOverlay.setDepth(999);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  createDamageFlashOverlay(_width: number, _height: number): void {
+    // No overlay needed — showDamageFlash() uses cameras.main.flash()
   }
 
   /**
@@ -280,94 +309,74 @@ export class GameSceneUI {
   }
 
   /**
-   * Show red screen flash when local player takes damage
+   * Show camera flash when local player takes damage.
+   * Uses native Phaser camera flash — 100ms, RGB(128, 0, 0).
    */
   showDamageFlash(): void {
-    if (!this.damageFlashOverlay) {
+    this.scene.cameras.main.flash(100, 128, 0, 0);
+  }
+
+  /**
+   * Trigger camera shake when local player deals damage.
+   * Uses native Phaser camera shake — 50ms, intensity 0.001.
+   */
+  showCameraShake(): void {
+    this.scene.cameras.main.shake(50, 0.001);
+  }
+
+  /**
+   * Show hit marker at reticle/pointer position.
+   * Uses pre-generated 20x20 X texture with normal and kill variants.
+   * @param kill - Whether this is a kill confirmation (red, 2x scale)
+   */
+  showHitMarker(kill: boolean = false): void {
+    const pointer = this.scene.input?.activePointer;
+    if (!pointer) {
       return;
     }
 
-    // Reset alpha to 50% opacity
-    this.damageFlashOverlay.setAlpha(0.5);
+    // World coordinates from pointer
+    const worldX = pointer.worldX ?? (pointer.x + this.scene.cameras.main.scrollX);
+    const worldY = pointer.worldY ?? (pointer.y + this.scene.cameras.main.scrollY);
 
-    // Fade out over 200ms
+    const marker = this.scene.add.sprite(worldX, worldY, 'hitmarker');
+    marker.setDepth(1000);
+
+    if (kill) {
+      marker.setTint(0xff0000);
+      marker.setScale(2.0);
+    } else {
+      marker.setTint(0xffffff);
+      marker.setScale(1.2);
+    }
+
     this.scene.tweens.add({
-      targets: this.damageFlashOverlay,
+      targets: marker,
       alpha: 0,
-      duration: 200,
-      ease: 'Linear',
+      scale: marker.scale * 0.5,
+      duration: 150,
+      onComplete: () => marker.destroy(),
     });
   }
 
   /**
-   * Show hit marker (crosshair confirmation) at screen center
+   * Show floating damage number above damaged player.
+   * Variants: normal (white 16px), kill (red 24px), remote (white 16px, scale 0.7, alpha 0.8).
+   * @param playerManager - Player manager to get victim position
+   * @param victimId - ID of damaged player
+   * @param damage - Amount of damage dealt
+   * @param isKill - Whether this damage was a killing blow
+   * @param isLocal - Whether the local player dealt this damage
    */
-  showHitMarker(): void {
-    const camera = this.scene.cameras.main;
-    const centerX = camera.scrollX + camera.width / 2;
-    const centerY = camera.scrollY + camera.height / 2;
-    const lineLength = 15;
-    const gap = 10; // Gap from center
-
-    // Create 4 lines forming a crosshair (top, bottom, left, right)
-    const lines = [
-      // Top line
-      this.scene.add.line(
-        0, 0,
-        centerX, centerY - gap,
-        centerX, centerY - gap - lineLength,
-        0xffffff
-      ),
-      // Bottom line
-      this.scene.add.line(
-        0, 0,
-        centerX, centerY + gap,
-        centerX, centerY + gap + lineLength,
-        0xffffff
-      ),
-      // Left line
-      this.scene.add.line(
-        0, 0,
-        centerX - gap, centerY,
-        centerX - gap - lineLength, centerY,
-        0xffffff
-      ),
-      // Right line
-      this.scene.add.line(
-        0, 0,
-        centerX + gap, centerY,
-        centerX + gap + lineLength, centerY,
-        0xffffff
-      ),
-    ];
-
-    // Set high depth so crosshair appears above everything
-    lines.forEach(line => {
-      line.setDepth(1001);
-      line.setLineWidth(3);
-    });
-
-    // Animate: expand slightly and fade out, then clean up
-    this.scene.tweens.add({
-      targets: lines,
-      alpha: 0,
-      duration: 200,
-      ease: 'Cubic.easeOut',
-      onComplete: () => {
-        // Clean up lines after animation
-        lines.forEach(line => line.destroy());
-      },
-    });
-  }
-
-  /**
-   * Show floating damage number above damaged player
-   */
-  showDamageNumber(playerManager: PlayerManager, victimId: string, damage: number): void {
+  showDamageNumber(playerManager: PlayerManager, victimId: string, damage: number, isKill: boolean = false, isLocal: boolean = true): void {
     const position = playerManager.getPlayerPosition(victimId);
     if (!position) {
       return; // Player not found or already removed
     }
+
+    // Determine variant: kill uses red 24px, normal/remote uses white 16px
+    const fontSize = isKill ? '24px' : '16px';
+    const color = isKill ? '#ff0000' : '#ffffff';
 
     // Create damage number text
     const damageText = this.scene.add.text(
@@ -375,25 +384,183 @@ export class GameSceneUI {
       position.y - 30, // Above player
       `-${damage}`,
       {
-        fontSize: '24px',
-        color: '#ff0000',
+        fontSize,
+        color,
         fontStyle: 'bold',
         stroke: '#000000',
-        strokeThickness: 3,
+        strokeThickness: 2,
       }
     );
     damageText.setOrigin(0.5);
+    damageText.setDepth(1000);
 
-    // Animate: float up and fade out
+    // Remote variant: smaller and more transparent
+    if (!isLocal) {
+      damageText.setScale(0.7);
+      damageText.setAlpha(0.8);
+    }
+
+    // Animate: float up 50px and fade out over 800ms
     this.scene.tweens.add({
       targets: damageText,
-      y: position.y - 80, // Move up 50 pixels
-      alpha: 0, // Fade to transparent
-      duration: 1000, // 1 second
+      y: position.y - 80, // Move up 50 pixels (from y-30 to y-80)
+      alpha: 0,
+      duration: 800,
       ease: 'Cubic.easeOut',
       onComplete: () => {
-        damageText.destroy(); // Clean up after animation
+        damageText.destroy();
       },
+    });
+  }
+
+  /**
+   * Show directional hit indicator (chevron) pointing from player toward target/source.
+   * @param playerX - Local player X position
+   * @param playerY - Local player Y position
+   * @param targetX - Target/source X position
+   * @param targetY - Target/source Y position
+   * @param type - 'outgoing' (dealing damage) or 'incoming' (taking damage)
+   * @param kill - Whether this was a killing blow (only affects outgoing color)
+   */
+  showHitIndicator(playerX: number, playerY: number, targetX: number, targetY: number, type: 'outgoing' | 'incoming', kill: boolean = false): void {
+    const angle = Math.atan2(targetY - playerY, targetX - playerX);
+    const ix = playerX + Math.cos(angle) * 60;
+    const iy = playerY + Math.sin(angle) * 60;
+
+    const indicator = this.scene.add.sprite(ix, iy, 'hit_indicator');
+    indicator.setDepth(1001);
+    indicator.setRotation(angle);
+
+    if (type === 'incoming') {
+      indicator.setTint(0xff0000);
+      this.scene.tweens.add({
+        targets: indicator,
+        alpha: 0,
+        scale: 1.5,
+        duration: 400,
+        onComplete: () => indicator.destroy(),
+      });
+    } else {
+      indicator.setTint(kill ? 0xff0000 : 0xffffff);
+      this.scene.tweens.add({
+        targets: indicator,
+        alpha: 0,
+        scale: 1.5,
+        duration: 200,
+        onComplete: () => indicator.destroy(),
+      });
+    }
+  }
+
+  /**
+   * Set up the minimap static layer (background and border).
+   * Called once during scene creation.
+   */
+  setupMinimap(): void {
+    const scale = 0.075;
+    const mapX = 20;
+    const mapY = 20;
+    const mapSize = 1600 * scale; // 120px
+
+    // Static layer — drawn once
+    this.minimapStaticGraphics = this.scene.add.graphics();
+    this.minimapStaticGraphics.setScrollFactor(0);
+    this.minimapStaticGraphics.setDepth(1999);
+
+    // Background
+    this.minimapStaticGraphics.fillStyle(0x000000, 0.7);
+    this.minimapStaticGraphics.fillRect(mapX, mapY, mapSize, mapSize);
+
+    // Border
+    this.minimapStaticGraphics.lineStyle(2, 0xffffff, 0.5);
+    this.minimapStaticGraphics.strokeRect(mapX, mapY, mapSize, mapSize);
+
+    // Dynamic layer — cleared and redrawn each frame
+    this.minimapDynamicGraphics = this.scene.add.graphics();
+    this.minimapDynamicGraphics.setScrollFactor(0);
+    this.minimapDynamicGraphics.setDepth(2000);
+  }
+
+  /**
+   * Update the minimap dynamic layer with current player positions.
+   * Called every frame from GameScene.update().
+   */
+  updateMinimap(playerManager: PlayerManager): void {
+    if (!this.minimapDynamicGraphics) return;
+
+    const scale = 0.075;
+    const mapX = 20;
+    const mapY = 20;
+
+    this.minimapDynamicGraphics.clear();
+
+    const localPos = playerManager.getLocalPlayerPosition();
+    if (!localPos) return;
+
+    const localId = playerManager.getLocalPlayerId();
+    const livingPlayers = playerManager.getLivingPlayers();
+
+    // Enemy dots (within radar range only)
+    for (const player of livingPlayers) {
+      if (player.id === localId) continue;
+      const dx = localPos.x - player.position.x;
+      const dy = localPos.y - player.position.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist <= 600) {
+        this.minimapDynamicGraphics.fillStyle(0xff0000, 1);
+        this.minimapDynamicGraphics.fillCircle(
+          mapX + player.position.x * scale,
+          mapY + player.position.y * scale,
+          3
+        );
+      }
+    }
+
+    // Player dot
+    this.minimapDynamicGraphics.fillStyle(0x00ff00, 1);
+    this.minimapDynamicGraphics.fillCircle(
+      mapX + localPos.x * scale,
+      mapY + localPos.y * scale,
+      4
+    );
+
+    // Radar range ring
+    this.minimapDynamicGraphics.lineStyle(1, 0x00ff00, 0.15);
+    this.minimapDynamicGraphics.strokeCircle(
+      mapX + localPos.x * scale,
+      mapY + localPos.y * scale,
+      600 * scale
+    );
+
+    // Aim direction line
+    const localAimAngle = playerManager.getPlayerAimAngle(localId ?? '');
+    if (localAimAngle !== null) {
+      this.minimapDynamicGraphics.lineStyle(1, 0x00ff00, 0.8);
+      this.minimapDynamicGraphics.beginPath();
+      this.minimapDynamicGraphics.moveTo(
+        mapX + localPos.x * scale,
+        mapY + localPos.y * scale
+      );
+      this.minimapDynamicGraphics.lineTo(
+        mapX + localPos.x * scale + Math.cos(localAimAngle) * 10,
+        mapY + localPos.y * scale + Math.sin(localAimAngle) * 10
+      );
+      this.minimapDynamicGraphics.strokePath();
+    }
+  }
+
+  /**
+   * Show wall spark effect when barrel is obstructed by wall geometry.
+   * Yellow circle that scales up and fades out.
+   */
+  showWallSpark(x: number, y: number): void {
+    const spark = this.scene.add.circle(x, y, 3, 0xffff00);
+    this.scene.tweens.add({
+      targets: spark,
+      alpha: 0,
+      scale: 2,
+      duration: 100,
+      onComplete: () => spark.destroy(),
     });
   }
 
@@ -408,9 +575,7 @@ export class GameSceneUI {
     if (this.matchTimerText) {
       this.matchTimerText.destroy();
     }
-    if (this.damageFlashOverlay) {
-      this.damageFlashOverlay.destroy();
-    }
+    // damageFlashOverlay removed — flash is now a camera effect (no game object to destroy)
     if (this.reloadProgressBar) {
       this.reloadProgressBar.destroy();
     }
@@ -425,6 +590,12 @@ export class GameSceneUI {
     }
     if (this.crosshair) {
       this.crosshair.destroy();
+    }
+    if (this.minimapStaticGraphics) {
+      this.minimapStaticGraphics.destroy();
+    }
+    if (this.minimapDynamicGraphics) {
+      this.minimapDynamicGraphics.destroy();
     }
   }
 }
