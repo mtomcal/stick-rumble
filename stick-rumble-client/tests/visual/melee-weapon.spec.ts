@@ -23,8 +23,8 @@ test.describe('Melee Weapon Visual Regression', () => {
       return (window as any).getMeleeWeaponState('bat');
     });
 
-    expect(batState.range).toBe(64); // Bat range
-    expect(batState.arcDegrees).toBe(90); // 90 degree arc
+    expect(batState.range).toBe(90); // Bat range
+    expect(batState.arcDegrees).toBe(80); // 80 degree arc
     expect(batState.isSwinging).toBe(false);
   });
 
@@ -34,8 +34,8 @@ test.describe('Melee Weapon Visual Regression', () => {
       return (window as any).getMeleeWeaponState('katana');
     });
 
-    expect(katanaState.range).toBe(80); // Katana range (longer than bat)
-    expect(katanaState.arcDegrees).toBe(90); // 90 degree arc
+    expect(katanaState.range).toBe(110); // Katana range (longer than bat)
+    expect(katanaState.arcDegrees).toBe(80); // 80 degree arc
     expect(katanaState.isSwinging).toBe(false);
   });
 
