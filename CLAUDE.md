@@ -12,6 +12,13 @@ The architecture prioritizes server-authoritative gameplay to prevent cheating w
 
 **IMPORTANT FOR AGENTS: Always use the root-level Makefile commands (e.g., `make test`, `make dev-server`) instead of cd-ing into subdirectories. The Makefile handles all directory navigation automatically.**
 
+**IMPORTANT: Git Identity — Before making any commits, agents MUST ensure the git identity is set correctly:**
+```bash
+git config user.name "mtomcal"
+git config user.email "mtomcal@users.noreply.github.com"
+```
+**Do NOT use any other git identity (e.g., "Ralph", "Claude", etc.). All commits must be authored by `mtomcal`.**
+
 ## Development Commands
 
 ### Quick Start (Root-level Makefile)
