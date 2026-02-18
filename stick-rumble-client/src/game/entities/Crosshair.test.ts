@@ -65,24 +65,25 @@ describe('Crosshair', () => {
       expect(mockMakeGraphics.lineStyle).toHaveBeenCalledWith(2, 0xffffff, 1);
     });
 
-    it('should draw red center dot with fillCircle(16, 16, 2) and color 0xFF0000', () => {
-      expect(mockMakeGraphics.fillStyle).toHaveBeenCalledWith(0xff0000, 1);
-      expect(mockMakeGraphics.fillCircle).toHaveBeenCalledWith(16, 16, 2);
+    it('should NOT draw red center dot', () => {
+      expect(mockMakeGraphics.fillStyle).not.toHaveBeenCalledWith(0xff0000, 1);
+      expect(mockMakeGraphics.fillCircle).not.toHaveBeenCalled();
     });
 
-    it('should draw 4 cardinal tick marks (6px each)', () => {
-      // Top tick: (16, 2) to (16, 8) — 6px
-      expect(mockMakeGraphics.moveTo).toHaveBeenCalledWith(16, 2);
-      expect(mockMakeGraphics.lineTo).toHaveBeenCalledWith(16, 8);
-      // Bottom tick: (16, 24) to (16, 30)
-      expect(mockMakeGraphics.moveTo).toHaveBeenCalledWith(16, 24);
-      expect(mockMakeGraphics.lineTo).toHaveBeenCalledWith(16, 30);
-      // Left tick: (2, 16) to (8, 16)
-      expect(mockMakeGraphics.moveTo).toHaveBeenCalledWith(2, 16);
-      expect(mockMakeGraphics.lineTo).toHaveBeenCalledWith(8, 16);
-      // Right tick: (24, 16) to (30, 16)
-      expect(mockMakeGraphics.moveTo).toHaveBeenCalledWith(24, 16);
-      expect(mockMakeGraphics.lineTo).toHaveBeenCalledWith(30, 16);
+    it('should NOT draw old cardinal tick marks', () => {
+      // Old ticks went to coords 2, 8, 24, 30 — these should not appear
+      expect(mockMakeGraphics.moveTo).not.toHaveBeenCalledWith(16, 2);
+      expect(mockMakeGraphics.moveTo).not.toHaveBeenCalledWith(2, 16);
+    });
+
+    it('should draw vertical bar from (16,6) to (16,26)', () => {
+      expect(mockMakeGraphics.moveTo).toHaveBeenCalledWith(16, 6);
+      expect(mockMakeGraphics.lineTo).toHaveBeenCalledWith(16, 26);
+    });
+
+    it('should draw horizontal bar from (6,16) to (26,16)', () => {
+      expect(mockMakeGraphics.moveTo).toHaveBeenCalledWith(6, 16);
+      expect(mockMakeGraphics.lineTo).toHaveBeenCalledWith(26, 16);
     });
 
     it('should create sprite with "reticle" texture', () => {

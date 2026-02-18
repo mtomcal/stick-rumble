@@ -7,8 +7,7 @@ type WeaponType = 'Uzi' | 'AK47' | 'Shotgun' | 'Bat' | 'Katana' | 'Pistol';
 
 /**
  * Crosshair UI class using pre-generated reticle texture.
- * Renders a ring with cardinal tick marks and red center dot.
- * No dynamic spread circle.
+ * Renders a white '+' shape (crosshair) inside a ring.
  */
 export class Crosshair {
   private scene: Phaser.Scene;
@@ -40,17 +39,11 @@ export class Crosshair {
     gfx.lineStyle(2, 0xffffff, 1);
     gfx.strokeCircle(16, 16, 10);
 
-    // Cardinal tick marks (6px each)
+    // White '+' cross lines
     gfx.beginPath();
-    gfx.moveTo(16, 2); gfx.lineTo(16, 8);   // Top tick
-    gfx.moveTo(16, 24); gfx.lineTo(16, 30); // Bottom tick
-    gfx.moveTo(2, 16); gfx.lineTo(8, 16);   // Left tick
-    gfx.moveTo(24, 16); gfx.lineTo(30, 16); // Right tick
+    gfx.moveTo(16, 6); gfx.lineTo(16, 26);  // Vertical bar
+    gfx.moveTo(6, 16); gfx.lineTo(26, 16);  // Horizontal bar
     gfx.strokePath();
-
-    // Red center dot (radius 2)
-    gfx.fillStyle(0xff0000, 1);
-    gfx.fillCircle(16, 16, 2);
 
     gfx.generateTexture('reticle', 32, 32);
     gfx.destroy();
