@@ -73,17 +73,17 @@ All graphics constants are documented here for single-source-of-truth. These val
 
 | Constant | Hex Value | RGB | Description |
 |----------|-----------|-----|-------------|
-| LOCAL_PLAYER_COLOR | 0x00ff00 | Green | Local player stick figure |
-| ENEMY_PLAYER_COLOR | 0xff0000 | Red | Other player stick figures |
-| DEAD_PLAYER_COLOR | 0x888888 | Gray | Dead player overlay |
+| PLAYER_HEAD_COLOR | 0x2A2A2A | Dark Gray | Local player head |
+| ENEMY_HEAD_COLOR | 0xFF0000 | Red | Enemy player head |
+| DEAD_HEAD_COLOR | 0x888888 | Gray | Dead player head |
+| BODY_COLOR | 0x000000 | Black | All player body/limbs |
 | BULLET_IMPACT_COLOR | 0xffff00 | Yellow | Bullet hit effect |
 | MELEE_IMPACT_COLOR | 0xffffff | White | Melee hit effect |
-| MUZZLE_FLASH_COLOR | 0xffa500 | Orange | Generic muzzle flash |
-| HEALTH_BAR_FULL | 0x00ff00 | Green | Health bar at >60% |
-| HEALTH_BAR_MEDIUM | 0xffff00 | Yellow | Health bar at 30-60% |
-| HEALTH_BAR_LOW | 0xff0000 | Red | Health bar at <30% |
-| WEAPON_CRATE_COLOR | 0x996633 | Brown | Weapon crate box |
-| WEAPON_CRATE_GLOW | 0xffff00 | Yellow | Crate availability glow |
+| MUZZLE_FLASH_COLOR | 0xFFD700 | Bright Yellow | Generic muzzle flash |
+| HEALTH_BAR_FULL | 0x00CC00 | Green | Health bar at ≥20% |
+| HEALTH_BAR_LOW | 0xFF0000 | Red | Health bar at <20% |
+| WEAPON_CRATE_COLOR | 0xCCCC00 | Yellow | Weapon crate circle outline |
+| WEAPON_CRATE_GLOW | 0xCCCC00 | Yellow | Crate circle (same as crate) |
 
 ---
 
@@ -171,7 +171,7 @@ function renderStickFigure(player, walkCycle):
             y: cy + localX * sin(rot) + localY * cos(rot)
         }
 
-    // LEGS (animated with walk cycle)
+    // LEGS (animated with walk cycle) — black for all players
     stride = 16
     footSideOffset = 8
     leftLegProgress = sin(walkCycle)
@@ -180,24 +180,24 @@ function renderStickFigure(player, walkCycle):
     leftFootPos = calcPoint(leftLegProgress * stride, -footSideOffset)
     rightFootPos = calcPoint(rightLegProgress * stride, footSideOffset)
 
-    graphics.lineStyle(3, playerColor)
+    graphics.lineStyle(3, 0x000000)  // Black body
     drawLine(cx, cy, leftFootPos)
     drawLine(cx, cy, rightFootPos)
     graphics.fillCircle(leftFootPos, 3)
     graphics.fillCircle(rightFootPos, 3)
 
-    // ARMS
+    // ARMS — black for all players
     leftHandPos = calcPoint(20, -3)
     rightHandPos = calcPoint(20, 3)
 
-    graphics.lineStyle(2, playerColor)
+    graphics.lineStyle(2, 0x000000)  // Black body
     drawLine(cx, cy, leftHandPos)
     drawLine(cx, cy, rightHandPos)
     graphics.fillCircle(leftHandPos, 3)
     graphics.fillCircle(rightHandPos, 3)
 
-    // HEAD
-    graphics.fillStyle(playerColor)
+    // HEAD — type-specific color (local: 0x2A2A2A, enemy: 0xFF0000, dead: 0x888888)
+    graphics.fillStyle(headColor)
     graphics.fillCircle(cx, cy, 13)
     graphics.lineStyle(1, 0x000000, 0.3)
     graphics.strokeCircle(cx, cy, 13)
@@ -215,8 +215,9 @@ private draw(): void {
     y: cy + (localX * Math.sin(rot) + localY * Math.cos(rot)),
   });
 
-  // Legs
-  this.graphics.lineStyle(3, this.color, 1);
+  // Legs — black for all players
+  const bodyColor = 0x000000;
+  this.graphics.lineStyle(3, bodyColor, 1);
   const stride = 16;
   const footSideOffset = 8;
   const leftLegProgress = Math.sin(this.walkCycle);
@@ -235,12 +236,12 @@ private draw(): void {
   this.graphics.lineTo(rightFootPos.x, rightFootPos.y);
   this.graphics.strokePath();
 
-  this.graphics.fillStyle(this.color, 1);
+  this.graphics.fillStyle(bodyColor, 1);
   this.graphics.fillCircle(leftFootPos.x, leftFootPos.y, 3);
   this.graphics.fillCircle(rightFootPos.x, rightFootPos.y, 3);
 
-  // Arms
-  this.graphics.lineStyle(2, this.color, 1);
+  // Arms — black for all players
+  this.graphics.lineStyle(2, bodyColor, 1);
   const leftHandPos = calcPoint(20, -3);
   const rightHandPos = calcPoint(20, 3);
 
@@ -257,8 +258,8 @@ private draw(): void {
   this.graphics.fillCircle(leftHandPos.x, leftHandPos.y, 3);
   this.graphics.fillCircle(rightHandPos.x, rightHandPos.y, 3);
 
-  // Head
-  this.graphics.fillStyle(this.color, 1);
+  // Head — type-specific color (local: 0x2A2A2A, enemy: 0xFF0000, dead: 0x888888)
+  this.graphics.fillStyle(this.headColor, 1);
   this.graphics.fillCircle(cx, cy, 13);
   this.graphics.lineStyle(1, 0x000000, 0.3);
   this.graphics.strokeCircle(cx, cy, 13);
@@ -296,24 +297,29 @@ update(delta: number, isMoving: boolean): void {
 
 ### Player Colors
 
-**Why These Colors?**
-- Green for local player: Universal "friendly" color, high visibility
-- Red for enemies: Universal "danger" color, immediate recognition
-- Gray for dead: Indicates inactive state without removing visibility
+**Head-Only Color Distinction:**
+Only the **head** uses a type-specific color to distinguish players. All body parts (torso, arms, legs) are drawn in black (`0x000000`) for all player types.
 
-| State | Color | Hex |
-|-------|-------|-----|
-| Local player (alive) | Green | 0x00ff00 |
-| Enemy player (alive) | Red | 0xff0000 |
-| Dead player | Gray | 0x888888 |
+- Local player head: Dark gray (`COLORS.PLAYER_HEAD` / `0x2A2A2A`)
+- Enemy player head: Red (`COLORS.ENEMY_HEAD` / `0xFF0000`) — immediate threat recognition
+- Dead player head: Gray (`COLORS.DEAD_HEAD` / `0x888888`) — inactive state
+
+| Part | Local Player | Enemy Player | Dead Player |
+|------|-------------|-------------|-------------|
+| Head | 0x2A2A2A (dark gray) | 0xFF0000 (red) | 0x888888 (gray) |
+| Body/Limbs | 0x000000 (black) | 0x000000 (black) | 0x000000 (black) |
 
 **TypeScript:**
 ```typescript
-private getPlayerColor(playerId: string, isDead: boolean): number {
+private getHeadColor(playerId: string, isDead: boolean): number {
   if (isDead) {
-    return 0x888888; // Gray for dead
+    return 0x888888; // COLORS.DEAD_HEAD
   }
-  return playerId === this.localPlayerId ? 0x00ff00 : 0xff0000;
+  return playerId === this.localPlayerId ? 0x2A2A2A : 0xFF0000;
+}
+
+private getBodyColor(): number {
+  return 0x000000; // Black for all player types
 }
 ```
 
@@ -464,8 +470,8 @@ Players need to see enemy health at a glance during combat without looking away 
 - Centered horizontally on player
 
 **Colors:**
-- Background: 0x888888 (gray)
-- Health fill: 0x00ff00 (green)
+- Background (depleted): `COLORS.HEALTH_DEPLETED_BG` / `0x333333` (dark)
+- Health fill: `COLORS.HEALTH_FULL` / `0x00CC00` (green)
 - Fill width: (health / 100) * 32px
 
 **TypeScript:**
@@ -474,13 +480,13 @@ render(x: number, y: number, health: number): void {
   const barX = x - 16;  // Center horizontally
   const barY = y - 32 - 8;  // Above head
 
-  // Background
-  this.graphics.fillStyle(0x888888, 1);
+  // Background (depleted portion)
+  this.graphics.fillStyle(0x333333, 1);  // COLORS.HEALTH_DEPLETED_BG
   this.graphics.fillRect(barX, barY, 32, 4);
 
   // Health fill
   const healthWidth = (health / 100) * 32;
-  this.graphics.fillStyle(0x00ff00, 1);
+  this.graphics.fillStyle(0x00CC00, 1);  // COLORS.HEALTH_FULL
   this.graphics.fillRect(barX, barY, healthWidth, 4);
 }
 ```
@@ -497,15 +503,15 @@ The world-space bar is too small for precise health reading. The HUD bar provide
 - Bar height: 30px
 - Background: 40px wider with 2px padding
 
-**Dynamic Colors:**
-- >60% health: 0x00ff00 (green)
-- 30-60% health: 0xffff00 (yellow)
-- <30% health: 0xff0000 (red)
+**Dynamic Colors (2-tier):**
+- ≥20% health: `COLORS.HEALTH_FULL` / `0x00CC00` (green)
+- <20% health: `COLORS.HEALTH_CRITICAL` / `0xFF0000` (red) — critical threshold
 
 **Components:**
-1. Black background rectangle (0x000000, 0.7 alpha)
-2. Colored health bar (scales with health)
-3. White text: "100/100" format
+1. Heartbeat/EKG icon to the left of the bar
+2. Depleted portion background: `COLORS.HEALTH_DEPLETED_BG` / `0x333333`
+3. Colored health bar (scales with health)
+4. White text: "N%" format (e.g., "100%", "76%") to the right of the bar
 
 **Regeneration Effect:**
 - Pulsing animation when regenerating
@@ -516,22 +522,26 @@ The world-space bar is too small for precise health reading. The HUD bar provide
 ### Aim Indicator
 
 **Why Aim Lines?**
-Shows where each player is aiming, essential for predicting enemy shots and tracking local aim direction.
+Shows where the local player is aiming, essential for tracking aim direction.
 
 **Visual:**
-- Shape: Line from player center
-- Length: 50 pixels in aim direction
-- Color: Green (0x00ff00) for local, Yellow (0xffff00) for enemies
+- Shape: Line from player center through crosshair cursor position
+- Color: White (`#FFFFFF`) for local player
+- Length: No cap — extends from player position to crosshair/cursor position
+- Visible during active aiming (local player only; enemies may not display aim lines)
 
 **Formula:**
 ```
-endX = playerX + cos(aimAngle) * 50
-endY = playerY + sin(aimAngle) * 50
+// Line from player to crosshair — no fixed length cap
+startX = playerX
+startY = playerY
+endX = crosshairX
+endY = crosshairY
 ```
 
 ### Crosshair / Reticle
 
-The crosshair is a **pre-generated texture** (not procedural per-frame). It consists of a ring with cardinal tick marks and a red center dot. There is NO dynamic spread circle.
+The crosshair is a **pre-generated texture** (not procedural per-frame). It consists of a white outer circle with a white "+" (cross) shape inside. All elements are white (`#FFFFFF`). There is no red center dot.
 
 **Texture Generation** (32×32, generated once in `preload()`):
 
@@ -539,21 +549,20 @@ The crosshair is a **pre-generated texture** (not procedural per-frame). It cons
 // TextureGenerator.ts — reticle texture
 const gfx = scene.make.graphics({ x: 0, y: 0 }, false);
 gfx.lineStyle(2, 0xffffff, 1);
-gfx.strokeCircle(16, 16, 10);           // Outer ring (radius 10)
+gfx.strokeCircle(16, 16, 10);           // Outer circle (radius 10)
 
+// White "+" cross shape
 gfx.beginPath();
-gfx.moveTo(16, 2); gfx.lineTo(16, 8);   // Top tick
-gfx.moveTo(16, 24); gfx.lineTo(16, 30); // Bottom tick
-gfx.moveTo(2, 16); gfx.lineTo(8, 16);   // Left tick
-gfx.moveTo(24, 16); gfx.lineTo(30, 16); // Right tick
+gfx.moveTo(16, 6); gfx.lineTo(16, 26);  // Vertical bar
+gfx.moveTo(6, 16); gfx.lineTo(26, 16);  // Horizontal bar
 gfx.strokePath();
 
-gfx.fillStyle(0xff0000, 1);
-gfx.fillCircle(16, 16, 2);              // Red center dot
 gfx.generateTexture('reticle', 32, 32);
 ```
 
 **Placement**: Sprite at cursor/aim position, depth 100, alpha 0.8.
+
+**Crosshair Bloom**: Crosshair diameter expands dynamically during firing. Base size: ~40px diameter. Expanded: ~60-80px. Snaps to expanded on shot, eases back over 200-300ms. Also expands proportionally during movement based on aim sway magnitude.
 
 **Constants**: See [constants.md § Crosshair / Reticle Constants](constants.md#crosshair--reticle-constants).
 
@@ -562,17 +571,12 @@ gfx.generateTexture('reticle', 32, 32);
 **Why Bobbing Animation?**
 Draws attention to pickups, makes them feel valuable and interactive.
 
-**Crate Box:**
-- Shape: Rectangle (48×48 pixels)
-- Color: 0x996633 (brown)
+**Crate Shape:**
+- Shape: Circle outline (~40px diameter, radius 20px)
+- Color: `COLORS.WEAPON_CRATE` / `0xCCCC00` (yellow)
+- Stroke: 2px
 - Origin: Center
-
-**Glow Effect:**
-- Shape: Circle outline
-- Radius: 32px
-- Color: 0xffff00 (yellow)
-- Stroke: 2px, 0.5 alpha
-- Visible only when available
+- A small dark cross/icon is drawn inside the circle to indicate it is a pickup
 
 **Bobbing Animation:**
 - Distance: 5px up/down
@@ -581,8 +585,8 @@ Draws attention to pickups, makes them feel valuable and interactive.
 - Type: Yoyo (repeat forever)
 
 **Availability States:**
-- Available: Alpha 1.0, glow visible
-- Unavailable: Alpha 0.3, glow hidden
+- Available: Alpha 1.0, yellow circle fully visible
+- Unavailable: Alpha 0.3, yellow circle remains visible (faded) as a ghostly respawning indicator
 
 ### Melee Swing Arc
 
@@ -649,7 +653,7 @@ During 8-player combat, many hit effects spawn simultaneously. Pre-creating a po
 **Muzzle Flash Effect:**
 - Shape: Elongated diamond pointing right
 - Vertices: (0,0) → (8,-3) → (12,0) → (8,3)
-- Color: 0xffa500 (orange)
+- Color: `COLORS.MUZZLE_FLASH` / 0xFFD700 (bright yellow)
 - Rotated to match weapon direction
 - Scale: 1.0 → 1.5 during fade
 - Fade: 100ms
@@ -793,7 +797,7 @@ When a player takes damage, 5 blood particles burst from the impact point, spray
 ```typescript
 // On damage received
 for (let i = 0; i < 5; i++) {
-    const circle = this.add.circle(player.x, player.y, Phaser.Math.Between(2, 5), 0xcc0000);
+    const circle = this.add.circle(player.x, player.y, Phaser.Math.Between(2, 5), 0xCC3333);
     const angle = Phaser.Math.Angle.Between(sourceX, sourceY, player.x, player.y) + (Math.random() - 0.5);
     const speed = Phaser.Math.Between(50, 150);
     const duration = 500;
@@ -818,7 +822,7 @@ for (let i = 0; i < 5; i++) {
 | Property | Value | Source |
 |----------|-------|--------|
 | Count | 5 per hit | `constants.md § Blood Particle Constants` |
-| Color | 0xCC0000 (dark red) | — |
+| Color | `COLORS.BLOOD` / 0xCC3333 (pink-red) | — |
 | Radius | 2-5px random | — |
 | Speed | 50-150 px/s random | Used to compute effective distance |
 | Direction | Away from damage source ±0.5 rad | — |
@@ -992,19 +996,93 @@ this.tweens.add({ targets: indicator, alpha: 0, scale: 1.5, duration: 200, onCom
 
 **Incoming Hit Indicator** (taking damage):
 ```typescript
-// Same positioning but longer duration (400ms) and always red
-indicator.setTint(0xff0000);
+// Same positioning but longer duration (400ms) and always pinkish-red
+indicator.setTint(0xCC3333);  // COLORS.HIT_CHEVRON
 this.tweens.add({ targets: indicator, alpha: 0, scale: 1.5, duration: 400, onComplete: () => indicator.destroy() });
 ```
 
 | Property | Outgoing | Incoming | Source |
 |----------|----------|----------|--------|
 | Distance | 60px from center | 60px from center | `constants.md` |
-| Color | White (normal) / Red (kill) | Always red | — |
+| Color | White (normal) / Red (kill) | `COLORS.HIT_CHEVRON` / 0xCC3333 (pinkish-red) | — |
 | Duration | 200ms | 400ms | — |
 | Depth | 1001 | 1001 | — |
 
 **Constants**: See [constants.md § Hit Indicator Constants](constants.md#hit-indicator-constants).
+
+### Spawn Invulnerability Ring
+
+When a player spawns (or respawns), they receive a brief invulnerability window. During this window, a yellow circle outline is rendered around the player.
+
+**Visual:**
+- Shape: Circle outline (stroke only)
+- Radius: ~25px
+- Color: `COLORS.SPAWN_RING` / `0xFFFF00` (yellow)
+- Stroke: 2px
+- Visible when `isInvulnerable === true` for any player (local and remote)
+- Hidden when invulnerability expires
+
+**TypeScript:**
+```typescript
+// Rendered each frame when player.isInvulnerable === true
+if (player.isInvulnerable) {
+  this.graphics.lineStyle(2, 0xFFFF00, 1);  // COLORS.SPAWN_RING
+  this.graphics.strokeCircle(player.x, player.y, 25);
+}
+```
+
+### Local Player Label
+
+A "YOU" label floats above the local player's head for quick identification.
+
+**Visual:**
+- Text: "YOU"
+- Font: Bold, ~14px
+- Color: White (`#FFFFFF`)
+- Drop shadow: Dark, for readability against any background
+- Position: `(player.x, player.y - headRadius - 5px)`, centered on X
+- Depth: Above player sprite
+
+### Remote Player Name Labels
+
+Enemy players display their name above their head.
+
+**Visual:**
+- Text: Player's display name from server state
+- Font: ~12-14px
+- Color: Gray/white
+- Position: `(player.x, player.y - headRadius - 5px)`, centered on X
+- Depth: Above player sprite
+
+### Damage Screen Flash
+
+When the local player takes damage, a full-viewport red overlay flashes to provide visceral feedback.
+
+**Visual:**
+- Shape: Full-viewport rectangle
+- Color: `COLORS.DAMAGE_FLASH` / `#FF0000`
+- Alpha: 0.3-0.4
+- Animation: Flash in immediately, fade out over 300ms
+- Triggered by `player:damaged` for local player only
+- Depth: 999 (below fixed HUD at 1000+)
+
+**TypeScript:**
+```typescript
+// On player:damaged where victimId === localPlayerId
+const overlay = this.add.rectangle(
+  camera.scrollX + camera.width / 2,
+  camera.scrollY + camera.height / 2,
+  camera.width, camera.height,
+  0xFF0000, 0.35  // COLORS.DAMAGE_FLASH
+).setDepth(999).setScrollFactor(0);
+
+this.tweens.add({
+  targets: overlay,
+  alpha: 0,
+  duration: 300,
+  onComplete: () => overlay.destroy()
+});
+```
 
 ---
 
@@ -1115,7 +1193,7 @@ test "player renders all body parts":
 
 ---
 
-### TS-GFX-003: Player Color Matches State
+### TS-GFX-003: Player Head Color Matches State (Body Always Black)
 
 **Category**: Unit
 **Priority**: High
@@ -1127,9 +1205,9 @@ test "player renders all body parts":
 - Local player ID and target player ID
 
 **Expected Output:**
-- Local player: 0x00ff00 (green)
-- Enemy player: 0xff0000 (red)
-- Dead player: 0x888888 (gray)
+- Local player head: 0x2A2A2A (dark gray), body/limbs: 0x000000 (black)
+- Enemy player head: 0xFF0000 (red), body/limbs: 0x000000 (black)
+- Dead player head: 0x888888 (gray), body/limbs: 0x000000 (black)
 
 ---
 
@@ -1144,6 +1222,8 @@ test "player renders all body parts":
 **Expected Output:**
 - Health bar fill width = 75% of total width
 - Formula: (75 / 100) * 32 = 24 pixels
+- Background (depleted portion): 0x333333 (`COLORS.HEALTH_DEPLETED_BG`)
+- Fill color: 0x00CC00 (green, since 75% ≥ 20% threshold)
 
 ---
 
@@ -1210,8 +1290,7 @@ test "player renders all body parts":
 - Crate at position (500, 500)
 
 **Expected Output:**
-- Brown rectangle (48x48)
-- Yellow glow circle (radius 32)
+- Yellow circle outline (~40px diameter, `COLORS.WEAPON_CRATE` / 0xCCCC00) with dark cross inside
 - Bobbing animation active
 
 ---
@@ -1226,7 +1305,7 @@ test "player renders all body parts":
 
 **Expected Output:**
 - Alpha = 0.3
-- Glow not visible
+- Yellow circle (glow) remains visible at reduced alpha as ghostly respawning indicator
 
 ---
 
@@ -1317,7 +1396,7 @@ test "player renders all body parts":
 
 **Expected Output:**
 - 5 particles spawn at player position
-- Particles are dark red (0xCC0000), radius 2-5px
+- Particles are pink-red (`COLORS.BLOOD` / 0xCC3333), radius 2-5px
 - Particles spray away from damage source at 50-150 px/s
 - Particles fade and shrink over 500ms
 
@@ -1422,7 +1501,7 @@ test "player renders all body parts":
 - Player receives damage from a source
 
 **Expected Output:**
-- Red chevron indicator appears 60px from player toward source
+- Pinkish-red chevron indicator (`COLORS.HIT_CHEVRON` / 0xCC3333) appears 60px from player toward source
 - Fades over 400ms (longer than outgoing)
 
 ---
@@ -1437,8 +1516,9 @@ test "player renders all body parts":
 
 **Expected Output:**
 - Reticle sprite at cursor position, depth 100, alpha 0.8
-- Contains ring (radius 10), 4 cardinal ticks, red center dot
-- No dynamic spread circle
+- Contains white outer circle (radius 10) with white "+" cross shape inside
+- No red center dot
+- Crosshair bloom: expands from ~40px to ~60-80px on firing, eases back over 200-300ms
 
 ---
 
@@ -1461,5 +1541,6 @@ test "player renders all body parts":
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.1.0 | 2026-02-18 | Art style alignment: Head-only player color distinction (body/limbs always black). Crosshair changed to white "+" in circle with bloom on firing. Weapon crate changed to yellow circle outline. Added spawn invulnerability ring, "YOU" label, enemy name labels, damage screen flash sections. Aim line changed to white, extends to crosshair. Health bar updated to 2-tier thresholds (green ≥20%, red <20%), "N%" text format, EKG icon, dark depleted background. Blood/hit indicator colors updated to 0xCC3333. Muzzle flash color updated to 0xFFD700. Unavailable weapon crate glow remains visible. Updated tests TS-GFX-003, TS-GFX-004, TS-GFX-008, TS-GFX-009, TS-GFX-015, TS-GFX-022, TS-GFX-023. |
 | 2.0.0 | 2026-02-16 | Major overhaul: Ported all pre-BMM visual systems. Replaced crosshair with pre-generated reticle texture. Replaced melee arc with white stroke-only + container tween. Replaced dead player with splayed corpse. Added blood particles, healing particles, wall spark, gun recoil, aim sway, reload animation, directional hit indicators. Updated depth table. Added tests TS-GFX-015 through TS-GFX-024. |
 | 1.0.0 | 2026-02-02 | Initial specification |
