@@ -30,6 +30,7 @@ export const COLORS = {
   DAMAGE_FLASH: 0xFF0000,
   HIT_CHEVRON: 0xCC3333,
   WEAPON_CRATE: 0xCCCC00,
+  AIM_LINE: 0xFFFFFF,
 } as const;
 
 /**

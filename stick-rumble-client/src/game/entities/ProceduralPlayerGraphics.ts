@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { COLORS } from '../../shared/constants';
 
 /**
  * ProceduralPlayerGraphics renders stick figure characters using procedural graphics
@@ -9,17 +10,22 @@ import Phaser from 'phaser';
  * - Walk cycle animation using sine waves
  * - Color customization (separate head and body colors)
  * - Rotation support for direction
+ * - Optional aim line from barrel tip to cursor (local player only)
  */
 export class ProceduralPlayerGraphics {
   // @ts-expect-error - Scene kept for future weapon attachment support
   private scene: Phaser.Scene;
   private graphics: Phaser.GameObjects.Graphics;
+  private aimLineGraphics: Phaser.GameObjects.Graphics | null = null;
   private x: number;
   private y: number;
   private rotation: number = 0;
   private headColor: number;
   private bodyColor: number;
   private walkCycle: number = 0;
+
+  // Barrel tip position relative to player center (same as hand position)
+  private static readonly BARREL_X = 20;
 
   // Animation constants (from prototype)
   private static readonly WALK_SPEED_FACTOR = 0.02;
@@ -124,6 +130,66 @@ export class ProceduralPlayerGraphics {
   }
 
   /**
+   * Get the world-space barrel tip position (where shots come from)
+   */
+  getBarrelPosition(): { x: number; y: number } {
+    return {
+      x: this.x + ProceduralPlayerGraphics.BARREL_X * Math.cos(this.rotation),
+      y: this.y + ProceduralPlayerGraphics.BARREL_X * Math.sin(this.rotation),
+    };
+  }
+
+  /**
+   * Create and show the aim line graphic (local player only)
+   */
+  createAimLine(): void {
+    if (this.aimLineGraphics) {
+      return;
+    }
+    this.aimLineGraphics = this.scene.add.graphics();
+    this.aimLineGraphics.setDepth(40);
+  }
+
+  /**
+   * Update the aim line from barrel tip toward target position
+   * @param targetX - World-space X of cursor/crosshair target
+   * @param targetY - World-space Y of cursor/crosshair target
+   */
+  updateAimLine(targetX: number, targetY: number): void {
+    if (!this.aimLineGraphics) {
+      return;
+    }
+
+    this.aimLineGraphics.clear();
+
+    const barrel = this.getBarrelPosition();
+    this.aimLineGraphics.lineStyle(1, COLORS.AIM_LINE, 0.6);
+    this.aimLineGraphics.beginPath();
+    this.aimLineGraphics.moveTo(barrel.x, barrel.y);
+    this.aimLineGraphics.lineTo(targetX, targetY);
+    this.aimLineGraphics.strokePath();
+  }
+
+  /**
+   * Hide aim line (e.g. when switching to melee or spectating)
+   */
+  hideAimLine(): void {
+    if (this.aimLineGraphics) {
+      this.aimLineGraphics.clear();
+      this.aimLineGraphics.setVisible(false);
+    }
+  }
+
+  /**
+   * Show aim line
+   */
+  showAimLine(): void {
+    if (this.aimLineGraphics) {
+      this.aimLineGraphics.setVisible(true);
+    }
+  }
+
+  /**
    * Update animation state
    * @param delta Delta time in milliseconds
    * @param isMoving Whether the player is moving
@@ -207,6 +273,10 @@ export class ProceduralPlayerGraphics {
    * Cleanup
    */
   destroy(): void {
+    if (this.aimLineGraphics) {
+      this.aimLineGraphics.destroy();
+      this.aimLineGraphics = null;
+    }
     if (this.graphics) {
       this.graphics.destroy();
     }
