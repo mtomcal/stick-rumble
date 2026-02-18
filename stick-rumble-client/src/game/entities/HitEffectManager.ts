@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { COLORS } from '../../shared/constants';
 
 /**
  * Effect type identifier
@@ -37,7 +38,7 @@ export class HitEffectManager {
   // Visual constants
   private static readonly BULLET_COLOR = 0xffff00; // Yellow
   private static readonly MELEE_COLOR = 0xffffff; // White
-  private static readonly MUZZLE_COLOR = 0xffa500; // Orange
+  private static readonly MUZZLE_COLOR = COLORS.MUZZLE_FLASH;
   private static readonly EFFECT_DEPTH = 60; // Above players (50), below UI (100+)
   private static readonly FADE_DURATION = 100; // 100ms fade
 
@@ -244,9 +245,9 @@ export class HitEffectManager {
   showBloodParticles(victimX: number, victimY: number, sourceX: number, sourceY: number): void {
     const baseAngle = Math.atan2(victimY - sourceY, victimX - sourceX);
 
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 8; i++) {
       const radius = 2 + Math.random() * 3; // 2-5px
-      const circle = this.scene.add.circle(victimX, victimY, radius, 0xCC0000);
+      const circle = this.scene.add.circle(victimX, victimY, radius, COLORS.BLOOD);
       circle.setDepth(HitEffectManager.EFFECT_DEPTH);
 
       const angle = baseAngle + (Math.random() - 0.5); // ±0.5 rad spread

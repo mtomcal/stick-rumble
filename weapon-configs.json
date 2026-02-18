@@ -17,7 +17,16 @@
       "visuals": {
         "muzzleFlashColor": "0xffdd00",
         "muzzleFlashSize": 8,
-        "muzzleFlashDuration": 50
+        "muzzleFlashDuration": 33,
+        "muzzleFlashShape": "starburst",
+        "projectile": {
+          "color": "0xffff00",
+          "diameter": 4,
+          "tracerColor": "0xffaa00",
+          "tracerWidth": 2,
+          "shape": "chevron",
+          "tracerLength": 20
+        }
       }
     },
     "Bat": {
@@ -35,7 +44,16 @@
       "visuals": {
         "muzzleFlashColor": "0x000000",
         "muzzleFlashSize": 0,
-        "muzzleFlashDuration": 0
+        "muzzleFlashDuration": 0,
+        "muzzleFlashShape": "circle",
+        "projectile": {
+          "color": "0x000000",
+          "diameter": 0,
+          "tracerColor": "0x000000",
+          "tracerWidth": 0,
+          "shape": "circle",
+          "tracerLength": 0
+        }
       }
     },
     "Katana": {
@@ -53,7 +71,16 @@
       "visuals": {
         "muzzleFlashColor": "0x000000",
         "muzzleFlashSize": 0,
-        "muzzleFlashDuration": 0
+        "muzzleFlashDuration": 0,
+        "muzzleFlashShape": "circle",
+        "projectile": {
+          "color": "0x000000",
+          "diameter": 0,
+          "tracerColor": "0x000000",
+          "tracerWidth": 0,
+          "shape": "circle",
+          "tracerLength": 0
+        }
       }
     },
     "Uzi": {
@@ -76,7 +103,16 @@
       "visuals": {
         "muzzleFlashColor": "0xffaa00",
         "muzzleFlashSize": 8,
-        "muzzleFlashDuration": 50
+        "muzzleFlashDuration": 50,
+        "muzzleFlashShape": "starburst",
+        "projectile": {
+          "color": "0xffaa00",
+          "diameter": 3,
+          "tracerColor": "0xffaa00",
+          "tracerWidth": 1.5,
+          "shape": "chevron",
+          "tracerLength": 20
+        }
       }
     },
     "AK47": {
@@ -99,7 +135,16 @@
       "visuals": {
         "muzzleFlashColor": "0xffcc00",
         "muzzleFlashSize": 12,
-        "muzzleFlashDuration": 80
+        "muzzleFlashDuration": 80,
+        "muzzleFlashShape": "starburst",
+        "projectile": {
+          "color": "0xffcc00",
+          "diameter": 5,
+          "tracerColor": "0xffcc00",
+          "tracerWidth": 2.5,
+          "shape": "chevron",
+          "tracerLength": 20
+        }
       }
     },
     "Shotgun": {
@@ -117,7 +162,16 @@
       "visuals": {
         "muzzleFlashColor": "0xff8800",
         "muzzleFlashSize": 16,
-        "muzzleFlashDuration": 100
+        "muzzleFlashDuration": 100,
+        "muzzleFlashShape": "starburst",
+        "projectile": {
+          "color": "0xff8800",
+          "diameter": 6,
+          "tracerColor": "0xff8800",
+          "tracerWidth": 3,
+          "shape": "chevron",
+          "tracerLength": 20
+        }
       }
     }
   }

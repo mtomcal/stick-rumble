@@ -108,7 +108,7 @@ describe('GameScene - Connection & Initialization', () => {
 
       // First rectangle call is the background
       expect(mockSceneContext.add.rectangle).toHaveBeenCalledWith(
-        0, 0, 1920, 1080, 0x222222
+        0, 0, 1920, 1080, 0xC8CCC8
       );
     });
 
@@ -140,14 +140,14 @@ describe('GameScene - Connection & Initialization', () => {
         expect(mockSceneContext.add.graphics).toHaveBeenCalled();
       });
 
-      it('should set lineStyle with exact values (1, 0xB0BEC5, 0.5)', () => {
+      it('should set lineStyle with COLORS.GRID_LINE (1, 0xD8DCD8, 0.5)', () => {
         const mockSceneContext = createMockScene();
         Object.assign(scene, mockSceneContext);
 
         scene.create();
 
         const graphics = mockSceneContext.add.graphics.mock.results[0].value;
-        expect(graphics.lineStyle).toHaveBeenCalledWith(1, 0xb0bec5, 0.5);
+        expect(graphics.lineStyle).toHaveBeenCalledWith(1, 0xD8DCD8, 0.5);
       });
 
       it('should draw correct number of vertical lines (x=0 to 1900, step 100 = 20)', () => {

@@ -183,14 +183,14 @@ describe('HealthBar', () => {
       healthBar = new HealthBar(scene, 100, 100);
     });
 
-    it('should use gray color (0x888888) for background', () => {
+    it('should use depleted background color (COLORS.HEALTH_DEPLETED_BG = 0x333333)', () => {
       const graphics = (scene.add.graphics as any).mock.results[0].value;
       graphics.fillStyle.mockClear();
 
       healthBar.setHealth(50);
 
-      // First fillStyle call is gray background
-      expect(graphics.fillStyle).toHaveBeenNthCalledWith(1, 0x888888);
+      // First fillStyle call is depleted background
+      expect(graphics.fillStyle).toHaveBeenNthCalledWith(1, 0x333333);
     });
 
     it('should use green color (0x00ff00) for health fill', () => {

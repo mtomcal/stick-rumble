@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { COLORS } from '../../shared/constants';
 
 /**
  * HealthBar displays a player's health as a bar above their head
@@ -62,8 +63,8 @@ export class HealthBar {
   private draw(): void {
     this.graphics.clear();
 
-    // Draw gray background
-    this.graphics.fillStyle(0x888888);
+    // Draw depleted background
+    this.graphics.fillStyle(COLORS.HEALTH_DEPLETED_BG);
     this.graphics.fillRect(0, 0, this.width, this.height);
 
     // Draw green health fill (proportional to health)

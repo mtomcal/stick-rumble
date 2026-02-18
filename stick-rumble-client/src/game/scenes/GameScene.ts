@@ -20,7 +20,7 @@ import { GameSceneSpectator } from './GameSceneSpectator';
 import { GameSceneEventHandlers } from './GameSceneEventHandlers';
 import { ScreenShake } from '../effects/ScreenShake';
 import { AudioManager } from '../audio/AudioManager';
-import { ARENA } from '../../shared/constants';
+import { ARENA, COLORS } from '../../shared/constants';
 
 export class GameScene extends Phaser.Scene {
   private wsClient!: WebSocketClient;
@@ -71,7 +71,7 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.setBounds(0, 0, ARENA.WIDTH, ARENA.HEIGHT);
 
     // Add arena background
-    this.add.rectangle(0, 0, ARENA.WIDTH, ARENA.HEIGHT, 0x222222).setOrigin(0, 0);
+    this.add.rectangle(0, 0, ARENA.WIDTH, ARENA.HEIGHT, COLORS.BACKGROUND).setOrigin(0, 0);
 
     // Add arena border
     this.add.rectangle(0, 0, ARENA.WIDTH, ARENA.HEIGHT, 0xffffff, 0)
@@ -80,7 +80,7 @@ export class GameScene extends Phaser.Scene {
 
     // Draw floor grid
     const gridGraphics = this.add.graphics();
-    gridGraphics.lineStyle(1, 0xb0bec5, 0.5);
+    gridGraphics.lineStyle(1, COLORS.GRID_LINE, 0.5);
     for (let x = 0; x <= ARENA.WIDTH; x += 100) {
       gridGraphics.moveTo(x, 0);
       gridGraphics.lineTo(x, ARENA.HEIGHT);

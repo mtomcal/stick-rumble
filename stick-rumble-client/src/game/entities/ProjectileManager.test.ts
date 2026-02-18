@@ -474,9 +474,9 @@ describe('ProjectileManager', () => {
       const tracerLine = lines[0];
       expect(tracerLine).toBeDefined();
 
-      // Verify tracer styling (width 2, yellow color)
+      // Verify tracer styling (width 2, orange-amber tracer color 0xffaa00)
       const lineObject = tracerLine as unknown as { setStrokeStyle: ReturnType<typeof vi.fn> };
-      expect(lineObject.setStrokeStyle).toHaveBeenCalledWith(2, 0xffff00);
+      expect(lineObject.setStrokeStyle).toHaveBeenCalledWith(2, 0xffaa00);
     });
 
     it('should create Uzi projectile with correct visuals (orange, 3px diameter, 1.5px tracer)', () => {

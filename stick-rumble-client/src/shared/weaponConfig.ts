@@ -123,12 +123,12 @@ function getHardcodedWeaponConfigs(): Record<string, WeaponConfig> {
       visuals: {
         muzzleFlashColor: '0xffdd00',
         muzzleFlashSize: 8,
-        muzzleFlashDuration: 50,
+        muzzleFlashDuration: 33,
         muzzleFlashShape: 'starburst',
         projectile: {
           color: '0xffff00', // Yellow
           diameter: 4,
-          tracerColor: '0xffff00',
+          tracerColor: '0xffaa00',
           tracerWidth: 2,
           shape: 'chevron',
           tracerLength: 20,

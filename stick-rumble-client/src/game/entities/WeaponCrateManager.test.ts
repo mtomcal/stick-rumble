@@ -30,6 +30,7 @@ describe('WeaponCrateManager', () => {
     mockGlow = {
       setStrokeStyle: vi.fn().mockReturnThis(),
       setVisible: vi.fn().mockReturnThis(),
+      setAlpha: vi.fn().mockReturnThis(),
       destroy: vi.fn(),
     } as unknown as Phaser.GameObjects.Arc;
 
@@ -135,10 +136,10 @@ describe('WeaponCrateManager', () => {
       expect(mockSprite.setAlpha).toHaveBeenCalledWith(0.3);
     });
 
-    it('should hide glow effect', () => {
+    it('should fade glow to UNAVAILABLE_ALPHA (0.3)', () => {
       manager.markUnavailable('crate_test_1');
 
-      expect(mockGlow.setVisible).toHaveBeenCalledWith(false);
+      expect(mockGlow.setAlpha).toHaveBeenCalledWith(0.3);
     });
 
     it('should update isAvailable flag to false', () => {

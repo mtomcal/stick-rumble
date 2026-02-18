@@ -95,7 +95,7 @@ export class WeaponCrateManager {
     }
 
     crate.sprite.setAlpha(UNAVAILABLE_ALPHA);
-    crate.glow.setVisible(false);
+    crate.glow.setAlpha(UNAVAILABLE_ALPHA);
     crate.isAvailable = false;
   }
 
