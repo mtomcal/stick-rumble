@@ -61,8 +61,11 @@ export const createMockScene = () => {
 
   const mockContainer = {
     add: vi.fn().mockReturnThis(),
+    remove: vi.fn().mockReturnThis(),
     setScrollFactor: vi.fn().mockReturnThis(),
     setDepth: vi.fn().mockReturnThis(),
+    setVisible: vi.fn().mockReturnThis(),
+    destroy: vi.fn(),
   };
 
   const mockMakeGraphics = {

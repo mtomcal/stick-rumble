@@ -21,6 +21,11 @@ import { GameSceneEventHandlers } from './GameSceneEventHandlers';
 import { ScreenShake } from '../effects/ScreenShake';
 import { AudioManager } from '../audio/AudioManager';
 import { AimLine } from '../entities/AimLine';
+import { ScoreDisplayUI } from '../ui/ScoreDisplayUI';
+import { KillCounterUI } from '../ui/KillCounterUI';
+import { DebugOverlayUI } from '../ui/DebugOverlayUI';
+import { ChatLogUI } from '../ui/ChatLogUI';
+import { PickupNotificationUI } from '../ui/PickupNotificationUI';
 import { ARENA, COLORS } from '../../shared/constants';
 
 export class GameScene extends Phaser.Scene {
@@ -50,6 +55,11 @@ export class GameScene extends Phaser.Scene {
   private nearbyWeaponCrate: { id: string; weaponType: string } | null = null;
   private isPointerHeld: boolean = false;
   private aimLine!: AimLine;
+  private scoreDisplayUI!: ScoreDisplayUI;
+  private killCounterUI!: KillCounterUI;
+  private debugOverlayUI!: DebugOverlayUI;
+  private chatLogUI!: ChatLogUI;
+  private pickupNotificationUI!: PickupNotificationUI;
 
   constructor() {
     super({ key: 'GameScene' });
@@ -137,6 +147,13 @@ export class GameScene extends Phaser.Scene {
     this.dodgeRollCooldownUI = new DodgeRollCooldownUI(this, camera.width - 50, camera.height - 50);
     this.ui.createDamageFlashOverlay(ARENA.WIDTH, ARENA.HEIGHT);
 
+    // Initialize new UI components
+    this.scoreDisplayUI = new ScoreDisplayUI(this, camera.width - 10, 10);
+    this.killCounterUI = new KillCounterUI(this, camera.width - 10, 42);
+    this.debugOverlayUI = new DebugOverlayUI(this, 10, camera.height - 80);
+    this.chatLogUI = new ChatLogUI(this, 10, camera.height - 140);
+    this.pickupNotificationUI = new PickupNotificationUI(this, camera.width / 2, camera.height / 2);
+
     // Initialize spectator module
     this.spectator = new GameSceneSpectator(this, this.playerManager, () => this.stopCameraFollow());
 
@@ -178,6 +195,12 @@ export class GameScene extends Phaser.Scene {
       this.meleeWeaponManager,
       this.hitEffectManager
     );
+
+    // Inject new UI components into event handlers
+    this.eventHandlers.setScoreDisplayUI(this.scoreDisplayUI);
+    this.eventHandlers.setKillCounterUI(this.killCounterUI);
+    this.eventHandlers.setChatLogUI(this.chatLogUI);
+    this.eventHandlers.setPickupNotificationUI(this.pickupNotificationUI);
 
     // Inject screen shake into event handlers for recoil feedback (Story 3.3 Polish)
     this.eventHandlers.setScreenShake(this.screenShake);
@@ -479,6 +502,12 @@ export class GameScene extends Phaser.Scene {
       this.ui.updateMinimap(this.playerManager);
     }
 
+    // Update debug overlay (if enabled)
+    if (this.debugOverlayUI && this.game?.loop) {
+      const fps = Math.round(this.game.loop.actualFps);
+      this.debugOverlayUI.update(fps, Math.round(this.lastDeltaTime * 1000), 0, 0, 0);
+    }
+
     // Update spectator mode
     if (this.spectator && this.spectator.isActive()) {
       this.spectator.updateSpectatorMode();
@@ -622,6 +651,21 @@ export class GameScene extends Phaser.Scene {
     }
     if (this.audioManager) {
       this.audioManager.destroy();
+    }
+    if (this.scoreDisplayUI) {
+      this.scoreDisplayUI.destroy();
+    }
+    if (this.killCounterUI) {
+      this.killCounterUI.destroy();
+    }
+    if (this.debugOverlayUI) {
+      this.debugOverlayUI.destroy();
+    }
+    if (this.chatLogUI) {
+      this.chatLogUI.destroy();
+    }
+    if (this.pickupNotificationUI) {
+      this.pickupNotificationUI.destroy();
     }
     if (this.inputManager) {
       this.inputManager.destroy();
