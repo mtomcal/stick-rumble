@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import type { ShootingManager } from '../input/ShootingManager';
 import type { PlayerManager } from '../entities/PlayerManager';
 import { Crosshair } from '../entities/Crosshair';
+import { COLORS } from '../../shared/constants';
 
 /**
  * GameSceneUI - Manages all UI elements for the game scene
@@ -10,6 +11,8 @@ import { Crosshair } from '../entities/Crosshair';
 export class GameSceneUI {
   private scene: Phaser.Scene;
   private ammoText!: Phaser.GameObjects.Text;
+  private ammoIcon: Phaser.GameObjects.Graphics | null = null;
+  private reloadingText: Phaser.GameObjects.Text | null = null;
   private matchTimerText: Phaser.GameObjects.Text | null = null;
 
   /**
@@ -88,14 +91,41 @@ export class GameSceneUI {
   }
 
   /**
-   * Create ammo text display
+   * Create ammo text display with icon and reloading text
    */
   createAmmoDisplay(x: number, y: number): void {
+    // Ammo icon (small bullet/crosshair graphic)
+    this.ammoIcon = this.scene.add.graphics();
+    this.ammoIcon.setScrollFactor(0);
+    this.ammoIcon.setDepth(1000);
+    this.drawAmmoIcon(COLORS.AMMO_READY);
+
+    // Ammo count text
     this.ammoText = this.scene.add.text(x, y, '15/15', {
       fontSize: '16px',
-      color: '#ffffff'
+      color: `#${COLORS.AMMO_READY.toString(16).padStart(6, '0')}`
     });
     this.ammoText.setScrollFactor(0);
+    this.ammoText.setDepth(1000);
+
+    // "RELOADING..." text shown during reload
+    this.reloadingText = this.scene.add.text(x + 60, y, 'RELOADING...', {
+      fontSize: '16px',
+      color: `#${COLORS.AMMO_RELOADING.toString(16).padStart(6, '0')}`
+    });
+    this.reloadingText.setScrollFactor(0);
+    this.reloadingText.setDepth(1000);
+    this.reloadingText.setVisible(false);
+  }
+
+  /**
+   * Draw ammo icon using given color
+   */
+  private drawAmmoIcon(color: number): void {
+    if (!this.ammoIcon) return;
+    this.ammoIcon.clear();
+    this.ammoIcon.fillStyle(color);
+    this.ammoIcon.fillRect(0, 0, 8, 8);
   }
 
   /**
@@ -108,10 +138,31 @@ export class GameSceneUI {
       // Hide ammo display for melee weapons, show for ranged
       if (isMelee) {
         this.ammoText.setVisible(false);
+        if (this.ammoIcon) this.ammoIcon.setVisible(false);
+        if (this.reloadingText) this.reloadingText.setVisible(false);
       } else {
         this.ammoText.setVisible(true);
+        if (this.ammoIcon) this.ammoIcon.setVisible(true);
         const [current, max] = shootingManager.getAmmoInfo();
-        this.ammoText.setText(`${current}/${max}`);
+
+        // Show "INF" for fist/infinite-ammo weapons (max === 0 or Infinity)
+        if (max === 0 || max === Infinity) {
+          this.ammoText.setText('INF');
+        } else {
+          this.ammoText.setText(`${current}/${max}`);
+        }
+
+        // Color ammo text based on reload state
+        const isReloading = shootingManager.isReloading();
+        if (isReloading) {
+          this.ammoText.setColor(`#${COLORS.AMMO_RELOADING.toString(16).padStart(6, '0')}`);
+          this.drawAmmoIcon(COLORS.AMMO_RELOADING);
+          if (this.reloadingText) this.reloadingText.setVisible(true);
+        } else {
+          this.ammoText.setColor(`#${COLORS.AMMO_READY.toString(16).padStart(6, '0')}`);
+          this.drawAmmoIcon(COLORS.AMMO_READY);
+          if (this.reloadingText) this.reloadingText.setVisible(false);
+        }
       }
 
       // Show/hide reload UI elements based on state
@@ -228,6 +279,15 @@ export class GameSceneUI {
     }
 
     this.crosshair.update(isMoving, spreadDegrees);
+  }
+
+  /**
+   * Trigger crosshair bloom animation when local player fires
+   */
+  triggerCrosshairBloom(): void {
+    if (this.crosshair) {
+      this.crosshair.triggerBloom();
+    }
   }
 
   /**
@@ -571,6 +631,12 @@ export class GameSceneUI {
     // Destroy UI elements if they exist
     if (this.ammoText) {
       this.ammoText.destroy();
+    }
+    if (this.ammoIcon) {
+      this.ammoIcon.destroy();
+    }
+    if (this.reloadingText) {
+      this.reloadingText.destroy();
     }
     if (this.matchTimerText) {
       this.matchTimerText.destroy();

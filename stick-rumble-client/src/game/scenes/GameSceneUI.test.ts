@@ -196,6 +196,22 @@ describe('GameSceneUI', () => {
       expect(mockScene.add.text).toHaveBeenCalledWith(10, 50, '15/15', expect.any(Object));
       expect(createdTexts[0].setScrollFactor).toHaveBeenCalledWith(0);
     });
+
+    it('should create ammo icon graphics', () => {
+      ui.createAmmoDisplay(10, 50);
+
+      // ammoIcon is the first graphics object created
+      expect(createdGraphics[0].setScrollFactor).toHaveBeenCalledWith(0);
+      expect(createdGraphics[0].setDepth).toHaveBeenCalledWith(1000);
+    });
+
+    it('should create RELOADING text initially hidden', () => {
+      ui.createAmmoDisplay(10, 50);
+
+      // reloadingText is createdTexts[1]
+      expect(createdTexts[1]).toBeDefined();
+      expect(createdTexts[1].setVisible).toHaveBeenCalledWith(false);
+    });
   });
 
   describe('updateAmmoDisplay', () => {
@@ -215,7 +231,7 @@ describe('GameSceneUI', () => {
       expect(createdTexts[0].setVisible).toHaveBeenCalledWith(true);
     });
 
-    it('should update ammo text when reloading (no longer shows [RELOADING] text)', () => {
+    it('should show RELOADING... text when reloading', () => {
       ui.createAmmoDisplay(10, 50);
 
       const mockShootingManager = {
@@ -227,8 +243,70 @@ describe('GameSceneUI', () => {
 
       ui.updateAmmoDisplay(mockShootingManager);
 
-      // No longer appends [RELOADING] text - reload UI uses progress bars instead
       expect(createdTexts[0].setText).toHaveBeenCalledWith('5/15');
+      // reloadingText (createdTexts[1]) should be visible during reload
+      expect(createdTexts[1].setVisible).toHaveBeenCalledWith(true);
+    });
+
+    it('should hide RELOADING... text when not reloading', () => {
+      ui.createAmmoDisplay(10, 50);
+
+      const mockShootingManager = {
+        getAmmoInfo: vi.fn().mockReturnValue([10, 15]),
+        isReloading: vi.fn().mockReturnValue(false),
+        isEmpty: vi.fn().mockReturnValue(false),
+        isMeleeWeapon: vi.fn().mockReturnValue(false),
+      } as unknown as ShootingManager;
+
+      ui.updateAmmoDisplay(mockShootingManager);
+
+      // reloadingText (createdTexts[1]) should be hidden when not reloading
+      expect(createdTexts[1].setVisible).toHaveBeenCalledWith(false);
+    });
+
+    it('should set ammo text color to COLORS.AMMO_READY when not reloading', () => {
+      ui.createAmmoDisplay(10, 50);
+
+      const mockShootingManager = {
+        getAmmoInfo: vi.fn().mockReturnValue([10, 15]),
+        isReloading: vi.fn().mockReturnValue(false),
+        isEmpty: vi.fn().mockReturnValue(false),
+        isMeleeWeapon: vi.fn().mockReturnValue(false),
+      } as unknown as ShootingManager;
+
+      ui.updateAmmoDisplay(mockShootingManager);
+
+      expect(createdTexts[0].setColor).toHaveBeenCalledWith('#e0a030');
+    });
+
+    it('should display INF for fist weapons (max === 0)', () => {
+      ui.createAmmoDisplay(10, 50);
+
+      const mockFistManager = {
+        getAmmoInfo: vi.fn().mockReturnValue([0, 0]),
+        isReloading: vi.fn().mockReturnValue(false),
+        isEmpty: vi.fn().mockReturnValue(false),
+        isMeleeWeapon: vi.fn().mockReturnValue(false),
+      } as unknown as ShootingManager;
+
+      ui.updateAmmoDisplay(mockFistManager);
+
+      expect(createdTexts[0].setText).toHaveBeenCalledWith('INF');
+    });
+
+    it('should display INF for infinite ammo weapons (max === Infinity)', () => {
+      ui.createAmmoDisplay(10, 50);
+
+      const mockInfiniteManager = {
+        getAmmoInfo: vi.fn().mockReturnValue([Infinity, Infinity]),
+        isReloading: vi.fn().mockReturnValue(false),
+        isEmpty: vi.fn().mockReturnValue(false),
+        isMeleeWeapon: vi.fn().mockReturnValue(false),
+      } as unknown as ShootingManager;
+
+      ui.updateAmmoDisplay(mockInfiniteManager);
+
+      expect(createdTexts[0].setText).toHaveBeenCalledWith('INF');
     });
 
     it('should not update if ammo text not created', () => {
@@ -312,6 +390,9 @@ describe('GameSceneUI', () => {
 
     it('should not show reload progress bar for melee weapons', () => {
       ui.createAmmoDisplay(10, 50);
+      // createAmmoDisplay creates ammoIcon at createdGraphics[0]
+      // createReloadProgressBar creates bg at [1], fg at [2]
+      // createReloadCircleIndicator creates circle at [3]
       ui.createReloadProgressBar(10, 70, 100, 10);
       ui.createReloadCircleIndicator();
 
@@ -324,10 +405,10 @@ describe('GameSceneUI', () => {
 
       ui.updateAmmoDisplay(mockMeleeManager);
 
-      // Reload UI should be hidden for melee weapons
-      expect(createdGraphics[0].setVisible).toHaveBeenCalledWith(false);
+      // Reload UI should be hidden for melee weapons (indices shifted by ammoIcon at [0])
       expect(createdGraphics[1].setVisible).toHaveBeenCalledWith(false);
       expect(createdGraphics[2].setVisible).toHaveBeenCalledWith(false);
+      expect(createdGraphics[3].setVisible).toHaveBeenCalledWith(false);
     });
 
     it('should show ammo display again when switching from melee to ranged weapon', () => {
@@ -1074,6 +1155,24 @@ describe('GameSceneUI', () => {
       ui.destroy();
 
       expect(ammoText.destroy).toHaveBeenCalled();
+    });
+
+    it('should destroy ammo icon when destroyed', () => {
+      ui.createAmmoDisplay(10, 50);
+      const ammoIcon = createdGraphics[0];
+
+      ui.destroy();
+
+      expect(ammoIcon.destroy).toHaveBeenCalled();
+    });
+
+    it('should destroy reloading text when destroyed', () => {
+      ui.createAmmoDisplay(10, 50);
+      const reloadingText = createdTexts[1];
+
+      ui.destroy();
+
+      expect(reloadingText.destroy).toHaveBeenCalled();
     });
 
     it('should destroy match timer when destroyed', () => {
