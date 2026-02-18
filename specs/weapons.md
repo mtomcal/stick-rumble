@@ -69,16 +69,19 @@ The core weapon definition structure containing all stats and behavior parameter
 **TypeScript:**
 ```typescript
 interface ProjectileVisuals {
-  color: string;              // Hex color for projectile circle
-  diameter: number;           // Projectile circle diameter (px)
+  color: string;              // Hex color for projectile
+  diameter: number;           // Projectile diameter (px)
+  shape: 'chevron' | 'circle'; // Projectile shape (chevron = directional triangle)
   tracerColor: string;        // Hex color for tracer trail
   tracerWidth: number;        // Tracer line width (px)
+  tracerLength: number;       // Tracer trail length (px), ~20px
 }
 
 interface WeaponVisuals {
   muzzleFlashColor: string;   // Hex color for muzzle flash
   muzzleFlashSize: number;    // Muzzle flash radius (px)
   muzzleFlashDuration: number; // Muzzle flash duration (ms)
+  muzzleFlashShape: 'starburst' | 'circle'; // Muzzle flash shape at barrel tip
   projectile: ProjectileVisuals; // Projectile rendering config
 }
 
@@ -231,12 +234,12 @@ type WeaponCrate struct {
 
 ### Visual Configuration
 
-| Weapon | Muzzle Color | Flash Size | Flash Duration | Projectile Color | Diameter | Tracer Width |
-|--------|--------------|------------|----------------|------------------|----------|--------------|
-| **Pistol** | 0xffdd00 | 8px | 50ms | 0xffff00 (Yellow) | 4px | 2px |
-| **Uzi** | 0xffaa00 | 8px | 50ms | 0xffaa00 (Orange) | 3px | 1.5px |
-| **AK47** | 0xffcc00 | 12px | 80ms | 0xffcc00 (Gold) | 5px | 2.5px |
-| **Shotgun** | 0xff8800 | 16px | 100ms | 0xff8800 (Orange-red) | 6px | 3px |
+| Weapon | Muzzle Color | Flash Size | Flash Duration | Flash Shape | Projectile Color | Diameter | Shape | Tracer Color | Tracer Width | Tracer Length |
+|--------|--------------|------------|----------------|-------------|------------------|----------|-------|--------------|--------------|---------------|
+| **Pistol** | 0xffdd00 | 8px | 33ms | starburst | 0xffff00 (Yellow) | 4px | chevron | 0xffaa00 (Orange) | 2px | 20px |
+| **Uzi** | 0xffaa00 | 8px | 50ms | starburst | 0xffaa00 (Orange) | 3px | chevron | 0xffaa00 (Orange) | 1.5px | 20px |
+| **AK47** | 0xffcc00 | 12px | 80ms | starburst | 0xffcc00 (Gold) | 5px | chevron | 0xffcc00 (Gold) | 2.5px | 20px |
+| **Shotgun** | 0xff8800 | 16px | 100ms | circle | 0xff8800 (Orange-red) | 6px | chevron | 0xff8800 (Orange-red) | 3px | 20px |
 
 **Why these visual choices?**
 - **Larger weapons = bigger effects** - AK47 and Shotgun have more visual impact
@@ -656,12 +659,15 @@ All weapon stats are stored in `weapon-configs.json` at the project root.
       "visuals": {
         "muzzleFlashColor": "0xffdd00",
         "muzzleFlashSize": 8,
-        "muzzleFlashDuration": 50,
+        "muzzleFlashDuration": 33,
+        "muzzleFlashShape": "starburst",
         "projectile": {
           "color": "0xffff00",
           "diameter": 4,
-          "tracerColor": "0xffff00",
-          "tracerWidth": 2
+          "shape": "chevron",
+          "tracerColor": "0xffaa00",
+          "tracerWidth": 2,
+          "tracerLength": 20
         }
       }
     }
