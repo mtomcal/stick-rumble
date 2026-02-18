@@ -80,6 +80,7 @@ describe('GameSceneUI', () => {
       setTint: vi.fn().mockReturnThis(),
       setScale: vi.fn().mockImplementation(function(this: any, s: number) { this.scale = s; return this; }),
       setRotation: vi.fn().mockReturnThis(),
+      setAlpha: vi.fn().mockReturnThis(),
       scale: 1,
       destroy: vi.fn(),
     };
@@ -181,11 +182,28 @@ describe('GameSceneUI', () => {
   });
 
   describe('createDamageFlashOverlay', () => {
-    it('should be a no-op (flash now uses cameras.main.flash)', () => {
+    it('should create a full-viewport rectangle with COLORS.DAMAGE_FLASH (0xFF0000)', () => {
       ui.createDamageFlashOverlay(1920, 1080);
 
-      // No rectangle should be created — damage flash uses cameras.main.flash()
-      expect(mockScene.add.rectangle).not.toHaveBeenCalled();
+      expect(mockScene.add.rectangle).toHaveBeenCalledWith(960, 540, 1920, 1080, 0xFF0000);
+    });
+
+    it('should set scroll factor to 0 (screen-fixed)', () => {
+      ui.createDamageFlashOverlay(1920, 1080);
+
+      expect(mockDamageFlashOverlay.setScrollFactor).toHaveBeenCalledWith(0);
+    });
+
+    it('should set depth to 999', () => {
+      ui.createDamageFlashOverlay(1920, 1080);
+
+      expect(mockDamageFlashOverlay.setDepth).toHaveBeenCalledWith(999);
+    });
+
+    it('should start fully transparent (alpha 0)', () => {
+      ui.createDamageFlashOverlay(1920, 1080);
+
+      expect(mockDamageFlashOverlay.setAlpha).toHaveBeenCalledWith(0);
     });
   });
 
@@ -530,34 +548,41 @@ describe('GameSceneUI', () => {
   });
 
   describe('showDamageFlash (TS-UI-013)', () => {
-    it('should call cameras.main.flash with exact args (100, 128, 0, 0)', () => {
+    it('should set overlay alpha to 0.35 when flash is triggered', () => {
+      ui.createDamageFlashOverlay(1920, 1080);
+      mockDamageFlashOverlay.setAlpha.mockClear();
+
       ui.showDamageFlash();
 
-      expect(mockCamera.flash).toHaveBeenCalledWith(100, 128, 0, 0);
+      expect(mockDamageFlashOverlay.setAlpha).toHaveBeenCalledWith(0.35);
     });
 
-    it('should flash with duration 100ms', () => {
+    it('should tween overlay alpha to 0 over 300ms', () => {
+      ui.createDamageFlashOverlay(1920, 1080);
+
       ui.showDamageFlash();
 
-      const args = mockCamera.flash.mock.calls[0];
-      expect(args[0]).toBe(100);
+      expect(mockScene.tweens.add).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targets: mockDamageFlashOverlay,
+          alpha: 0,
+          duration: 300,
+        })
+      );
     });
 
-    it('should flash with RGB(128, 0, 0) — dark red, not blinding', () => {
+    it('should not call cameras.main.flash (uses overlay instead)', () => {
+      ui.createDamageFlashOverlay(1920, 1080);
+
       ui.showDamageFlash();
 
-      const args = mockCamera.flash.mock.calls[0];
-      expect(args[1]).toBe(128); // R
-      expect(args[2]).toBe(0);   // G
-      expect(args[3]).toBe(0);   // B
+      expect(mockCamera.flash).not.toHaveBeenCalled();
     });
 
-    it('should not use screen overlay rectangle (uses cameras.main.flash)', () => {
-      ui.showDamageFlash();
-
-      // No rectangle or tween should be created
-      expect(mockScene.add.rectangle).not.toHaveBeenCalled();
-      expect(mockScene.tweens.add).not.toHaveBeenCalled();
+    it('should do nothing if overlay not created', () => {
+      // No createDamageFlashOverlay call — should not throw
+      expect(() => ui.showDamageFlash()).not.toThrow();
+      expect(mockCamera.flash).not.toHaveBeenCalled();
     });
   });
 
@@ -720,14 +745,14 @@ describe('GameSceneUI', () => {
     }) as unknown as PlayerManager;
 
     describe('Normal hit variant (default)', () => {
-      it('should use white color (#ffffff) and 16px font', () => {
+      it('should use COLORS.DAMAGE_NUMBER (#FF4444) and 16px font', () => {
         ui.showDamageNumber(mockPlayerManager(), 'victim-1', 25);
 
         expect(mockScene.add.text).toHaveBeenCalledWith(
           500, 270, '-25',
           expect.objectContaining({
             fontSize: '16px',
-            color: '#ffffff',
+            color: '#FF4444',
           })
         );
       });
@@ -803,28 +828,28 @@ describe('GameSceneUI', () => {
         expect(createdTexts[0].setAlpha).toHaveBeenCalledWith(0.8);
       });
 
-      it('should use white 16px for remote damage', () => {
+      it('should use COLORS.DAMAGE_NUMBER (#FF4444) 16px for remote damage', () => {
         ui.showDamageNumber(mockPlayerManager(), 'victim-1', 25, false, false);
 
         expect(mockScene.add.text).toHaveBeenCalledWith(
           500, 270, '-25',
           expect.objectContaining({
             fontSize: '16px',
-            color: '#ffffff',
+            color: '#FF4444',
           })
         );
       });
     });
 
     describe('Tween animation', () => {
-      it('should float up 50px and fade over 800ms (not 1000ms)', () => {
+      it('should float up 40px and fade over 600ms', () => {
         ui.showDamageNumber(mockPlayerManager(), 'victim-1', 25);
 
         expect(mockScene.tweens.add).toHaveBeenCalledWith(
           expect.objectContaining({
-            y: 220, // position.y(300) - 80 = 220
+            y: 230, // position.y(300) - 70 = 230
             alpha: 0,
-            duration: 800,
+            duration: 600,
             ease: 'Cubic.easeOut',
           })
         );
@@ -861,7 +886,7 @@ describe('GameSceneUI', () => {
           500, 270, '-25',
           expect.objectContaining({
             fontSize: '16px',
-            color: '#ffffff',
+            color: '#FF4444',
           })
         );
       });
@@ -927,15 +952,20 @@ describe('GameSceneUI', () => {
       expect(mockSprite.setTint).toHaveBeenCalledWith(0xff0000);
     });
 
-    it('should create tween with alpha 0, scale 1.5, duration exactly 200ms', () => {
+    it('should start invisible (alpha 0) for 3-phase animation', () => {
+      ui.showHitIndicator(100, 100, 200, 100, 'outgoing');
+
+      expect(mockSprite.setAlpha).toHaveBeenCalledWith(0);
+    });
+
+    it('should create fade-in tween with alpha 1 over 100ms as first phase', () => {
       ui.showHitIndicator(100, 100, 200, 100, 'outgoing');
 
       expect(mockScene.tweens.add).toHaveBeenCalledWith(
         expect.objectContaining({
           targets: mockSprite,
-          alpha: 0,
-          scale: 1.5,
-          duration: 200,
+          alpha: 1,
+          duration: 100,
         })
       );
     });
@@ -983,27 +1013,33 @@ describe('GameSceneUI', () => {
       expect(mockSprite.setDepth).toHaveBeenCalledWith(1001);
     });
 
-    it('should always set red tint (0xFF0000) for incoming hit', () => {
+    it('should always set COLORS.HIT_CHEVRON tint (0xCC3333) for incoming hit', () => {
       ui.showHitIndicator(200, 200, 100, 200, 'incoming', false);
 
-      expect(mockSprite.setTint).toHaveBeenCalledWith(0xff0000);
+      expect(mockSprite.setTint).toHaveBeenCalledWith(0xCC3333);
     });
 
-    it('should always set red tint for incoming even when kill is true', () => {
+    it('should always set COLORS.HIT_CHEVRON tint for incoming even when kill is true', () => {
       ui.showHitIndicator(200, 200, 100, 200, 'incoming', true);
 
-      expect(mockSprite.setTint).toHaveBeenCalledWith(0xff0000);
+      expect(mockSprite.setTint).toHaveBeenCalledWith(0xCC3333);
     });
 
-    it('should create tween with alpha 0, scale 1.5, duration exactly 400ms', () => {
+    it('should start invisible (alpha 0) for 3-phase animation', () => {
+      ui.showHitIndicator(200, 200, 100, 200, 'incoming');
+
+      // setAlpha(0) called to start invisible before fade-in
+      expect(mockSprite.setAlpha).toHaveBeenCalledWith(0);
+    });
+
+    it('should create fade-in tween with alpha 1 over 100ms as first phase', () => {
       ui.showHitIndicator(200, 200, 100, 200, 'incoming');
 
       expect(mockScene.tweens.add).toHaveBeenCalledWith(
         expect.objectContaining({
           targets: mockSprite,
-          alpha: 0,
-          scale: 1.5,
-          duration: 400,
+          alpha: 1,
+          duration: 100,
         })
       );
     });
@@ -1184,10 +1220,16 @@ describe('GameSceneUI', () => {
       expect(timerText.destroy).toHaveBeenCalled();
     });
 
-    it('should not crash on destroy even without damage flash overlay (no-op)', () => {
+    it('should destroy damage flash overlay when destroyed', () => {
       ui.createDamageFlashOverlay(1920, 1080);
 
-      // No game object to destroy — flash is a camera effect
+      ui.destroy();
+
+      expect(mockDamageFlashOverlay.destroy).toHaveBeenCalled();
+    });
+
+    it('should not crash on destroy when damage flash overlay not created', () => {
+      // Don't call createDamageFlashOverlay
       expect(() => ui.destroy()).not.toThrow();
     });
 

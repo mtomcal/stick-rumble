@@ -81,13 +81,17 @@ export class GameSceneUI {
     this.matchTimerText.setScrollFactor(0);
   }
 
+  private damageFlashOverlay: Phaser.GameObjects.Rectangle | null = null;
+
   /**
-   * Create damage flash overlay — no-op, kept for backward compatibility.
-   * Damage flash now uses cameras.main.flash() directly.
+   * Create damage flash overlay — full-viewport red rectangle, tweened to transparent.
+   * Called once during scene creation.
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  createDamageFlashOverlay(_width: number, _height: number): void {
-    // No overlay needed — showDamageFlash() uses cameras.main.flash()
+  createDamageFlashOverlay(width: number, height: number): void {
+    this.damageFlashOverlay = this.scene.add.rectangle(width / 2, height / 2, width, height, COLORS.DAMAGE_FLASH);
+    this.damageFlashOverlay.setScrollFactor(0);
+    this.damageFlashOverlay.setDepth(999);
+    this.damageFlashOverlay.setAlpha(0);
   }
 
   /**
@@ -369,11 +373,17 @@ export class GameSceneUI {
   }
 
   /**
-   * Show camera flash when local player takes damage.
-   * Uses native Phaser camera flash — 100ms, RGB(128, 0, 0).
+   * Show damage flash overlay when local player takes damage.
+   * Red rectangle, alpha 0.35, tweens to 0 over 300ms.
    */
   showDamageFlash(): void {
-    this.scene.cameras.main.flash(100, 128, 0, 0);
+    if (!this.damageFlashOverlay) return;
+    this.damageFlashOverlay.setAlpha(0.35);
+    this.scene.tweens.add({
+      targets: this.damageFlashOverlay,
+      alpha: 0,
+      duration: 300,
+    });
   }
 
   /**
@@ -434,9 +444,9 @@ export class GameSceneUI {
       return; // Player not found or already removed
     }
 
-    // Determine variant: kill uses red 24px, normal/remote uses white 16px
+    // Determine variant: kill uses red 24px, normal/remote uses COLORS.DAMAGE_NUMBER 16px
     const fontSize = isKill ? '24px' : '16px';
-    const color = isKill ? '#ff0000' : '#ffffff';
+    const color = isKill ? '#ff0000' : '#FF4444';
 
     // Create damage number text
     const damageText = this.scene.add.text(
@@ -460,12 +470,12 @@ export class GameSceneUI {
       damageText.setAlpha(0.8);
     }
 
-    // Animate: float up 50px and fade out over 800ms
+    // Animate: float up 40px and fade out over 600ms
     this.scene.tweens.add({
       targets: damageText,
-      y: position.y - 80, // Move up 50 pixels (from y-30 to y-80)
+      y: position.y - 70, // Move up 40 pixels (from y-30 to y-70)
       alpha: 0,
-      duration: 800,
+      duration: 600,
       ease: 'Cubic.easeOut',
       onComplete: () => {
         damageText.destroy();
@@ -492,22 +502,52 @@ export class GameSceneUI {
     indicator.setRotation(angle);
 
     if (type === 'incoming') {
-      indicator.setTint(0xff0000);
+      indicator.setTint(COLORS.HIT_CHEVRON);
+      indicator.setAlpha(0);
       this.scene.tweens.add({
         targets: indicator,
-        alpha: 0,
-        scale: 1.5,
-        duration: 400,
-        onComplete: () => indicator.destroy(),
+        alpha: 1,
+        duration: 100,
+        onComplete: () => {
+          this.scene.tweens.add({
+            targets: indicator,
+            alpha: 1,
+            duration: 300,
+            onComplete: () => {
+              this.scene.tweens.add({
+                targets: indicator,
+                alpha: 0,
+                scale: 1.5,
+                duration: 200,
+                onComplete: () => indicator.destroy(),
+              });
+            },
+          });
+        },
       });
     } else {
       indicator.setTint(kill ? 0xff0000 : 0xffffff);
+      indicator.setAlpha(0);
       this.scene.tweens.add({
         targets: indicator,
-        alpha: 0,
-        scale: 1.5,
-        duration: 200,
-        onComplete: () => indicator.destroy(),
+        alpha: 1,
+        duration: 100,
+        onComplete: () => {
+          this.scene.tweens.add({
+            targets: indicator,
+            alpha: 1,
+            duration: 300,
+            onComplete: () => {
+              this.scene.tweens.add({
+                targets: indicator,
+                alpha: 0,
+                scale: 1.5,
+                duration: 200,
+                onComplete: () => indicator.destroy(),
+              });
+            },
+          });
+        },
       });
     }
   }
@@ -641,7 +681,9 @@ export class GameSceneUI {
     if (this.matchTimerText) {
       this.matchTimerText.destroy();
     }
-    // damageFlashOverlay removed — flash is now a camera effect (no game object to destroy)
+    if (this.damageFlashOverlay) {
+      this.damageFlashOverlay.destroy();
+    }
     if (this.reloadProgressBar) {
       this.reloadProgressBar.destroy();
     }
