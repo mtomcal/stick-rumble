@@ -12,13 +12,10 @@ import { COLORS } from '../../shared/constants';
  * - Depth: 1000
  */
 export class KillCounterUI {
-  private scene: Phaser.Scene;
   private killText: Phaser.GameObjects.Text;
   private kills = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
-    this.scene = scene;
-
     this.killText = scene.add.text(x, y, 'KILLS: 0', {
       fontSize: '16px',
       color: `#${COLORS.KILL_COUNTER.toString(16).padStart(6, '0')}`,

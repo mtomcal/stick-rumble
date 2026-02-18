@@ -11,7 +11,6 @@ import { COLORS } from '../../shared/constants';
  * - Depth: 1000
  */
 export class DebugOverlayUI {
-  private scene: Phaser.Scene;
   private container: Phaser.GameObjects.Container;
   private lines: Phaser.GameObjects.Text[];
   private enabled: boolean;
@@ -25,7 +24,6 @@ export class DebugOverlayUI {
   private readonly LINE_HEIGHT = 16;
 
   constructor(scene: Phaser.Scene, x: number, y: number, enabled = false) {
-    this.scene = scene;
     this.enabled = enabled;
 
     this.container = scene.add.container(x, y);

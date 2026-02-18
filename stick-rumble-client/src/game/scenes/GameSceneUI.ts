@@ -197,6 +197,7 @@ export class GameSceneUI {
    * Create world-space reload progress bar graphics objects.
    * Positioned above the local player in world coordinates.
    */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   createReloadProgressBar(_x: number, _y: number, _width: number, _height: number): void {
     // Background bar (world-space — no scroll factor)
     this.reloadProgressBarBg = this.scene.add.graphics();

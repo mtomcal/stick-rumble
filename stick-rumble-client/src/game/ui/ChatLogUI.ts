@@ -59,6 +59,7 @@ export class ChatLogUI {
   /**
    * Internal: add a message, trimming oldest if over limit
    */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   private addMessage(content: string, color: string, _playerName?: string): void {
     // Remove oldest if at max capacity
     if (this.messages.length >= this.MAX_VISIBLE) {

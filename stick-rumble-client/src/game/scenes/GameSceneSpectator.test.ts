@@ -27,7 +27,6 @@ describe('GameSceneSpectator', () => {
   let mockTryAgainButton: any;
   let mockGraphics: any;
   let mockScoreText: any;
-  let mockKillsText: any;
   let mockButtonBg: any;
   let mockButtonText: any;
 
@@ -65,12 +64,6 @@ describe('GameSceneSpectator', () => {
 
     // Create mock score text
     mockScoreText = {
-      setOrigin: vi.fn().mockReturnThis(),
-      destroy: vi.fn(),
-    };
-
-    // Create mock kills text
-    mockKillsText = {
       setOrigin: vi.fn().mockReturnThis(),
       destroy: vi.fn(),
     };

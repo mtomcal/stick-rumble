@@ -11,13 +11,10 @@ import { COLORS } from '../../shared/constants';
  * - Depth: 1000
  */
 export class ScoreDisplayUI {
-  private scene: Phaser.Scene;
   private scoreText: Phaser.GameObjects.Text;
   private score = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
-    this.scene = scene;
-
     this.scoreText = scene.add.text(x, y, '000000', {
       fontSize: '28px',
       fontFamily: 'monospace',
