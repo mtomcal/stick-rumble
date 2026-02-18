@@ -248,7 +248,7 @@ When a projectile or melee attack hits a player, damage is applied server-side.
 
 **Visual Feedback on Damage:**
 - **Blood particles** spawn (5 particles, dark red, spray from impact angle) — see [graphics.md § Blood Particles](graphics.md#blood-particles)
-- **Camera flash** (100ms red) on receiving damage — see [ui.md § Damage Flash](ui.md#damage-flash)
+- **Damage screen flash** — full-viewport red overlay (`#FF0000`, 30-40% alpha), fades out over ~300ms. See [graphics.md § Damage Screen Flash](graphics.md#damage-screen-flash) for authoritative spec
 - **Directional hit indicator** shows damage source direction — see [graphics.md § Directional Hit Indicators](graphics.md#directional-hit-indicators)
 
 **Pseudocode:**
@@ -654,7 +654,7 @@ function getKDRatio(kills: number, deaths: number): number {
 
    > **Death Visual**: When a player dies, their stick figure is replaced by a splayed corpse graphic (4 limbs at ±0.5 and ±2.5 radians from rotation, gray head offset 25px along rotation axis). The corpse remains visible for 5 seconds then fades over 2 seconds. See [graphics.md § Death Corpse Rendering](graphics.md#death-corpse-rendering) for full visual specification and [constants.md § Death Corpse Constants](constants.md#death-corpse-constants) for values.
 
-5. **Invulnerability Visual**: Show blinking or shield effect during 2-second invulnerability.
+5. **Invulnerability Visual**: Render a yellow ring (`#FFFF00`, ~50px diameter circle outline) around the player sprite during the 2-second spawn invulnerability. The ring is visible for both local and remote players and is removed when invulnerability expires. See [graphics.md § Spawn Invulnerability Ring](graphics.md#spawn-invulnerability-ring) for full visual specification.
 
 ### Go (Server)
 
