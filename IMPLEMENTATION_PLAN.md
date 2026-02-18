@@ -1,488 +1,568 @@
-# Pre-BMM Visual Systems Implementation Plan
+# Art Style Implementation Plan — Code Changes
 
-> Bring code into compliance with specs v1.2.0 / v2.0.0 (commit c7dd8ef).
-> Organized by system. Each system lists spec requirements, current code state, and concrete changes.
-
----
-
-## Overview
-
-The specs were updated to port visual systems from the pre-BMM (before-multiplayer) prototype. The code still reflects the old designs. This plan brings the code into compliance across **7 work systems** spanning both client and server.
-
-### Scope Summary
-
-| # | System | Server Changes | Client Changes | New Files | Priority |
-|---|--------|---------------|----------------|-----------|----------|
-| 1 | Melee Constants & Visuals | Yes (ranges, arc) | Yes (arc rendering, swing tween) | No | High |
-| 2 | Aim Sway | No | Yes (new system) | Maybe | High |
-| 3 | Death & Damage Feedback | No | Yes (corpse, blood, healing particles) | No | High |
-| 4 | Crosshair & Hit Feedback | No | Yes (reticle, hit markers, damage numbers) | Maybe | Medium |
-| 5 | Camera Effects | No | Yes (flash, shake) | No | Medium |
-| 6 | Gun Recoil & Reload | No | Yes (weapon kickback, reload pulse) | No | Medium |
-| 7 | Arena & HUD (Floor Grid, Minimap) | No | Yes (new systems) | Maybe | Low |
+> Goal: Bring client/server code into compliance with updated spec documents (art style alignment).
+> Specs were updated in branch `ralph/art-style-specs` (merged 2026-02-18). Code has NOT been updated yet.
+> Generated: 2026-02-18
 
 ---
 
-## Comprehensive Implementation Checklist
+## Executive Summary
 
-### Validation Errata
+The spec documents now describe 60 visual changes to match the prototype art style. The source code still reflects old designs. This plan maps each spec change to concrete code modifications: exact file paths, line numbers, what to change, and dependencies.
 
-The following discrepancies were found between this plan and the spec diff (c7dd8ef). Address during implementation:
-
-- **RenderedPlayer interface**: Spec adds `lastDamageTime?: number` and `lastDamageSourceAngle?: number` fields — needed for blood particles and hit indicators
-- **Hit marker tween**: Spec includes scale-down (`scale: marker.scale * 0.5`) during 150ms fade — not just alpha fade
-- **Hit indicator tween**: Spec scales indicators to 1.5× while fading — not just alpha fade
-- **Damage number depth**: Should be set to 1000 (from `constants.md`)
-- **Healing particle spread**: Spec table says ±25px but code gives ±12.5px — use `(Math.random() - 0.5) * 50` for ±25px per table
-- **Camera shake**: Systems 1 and 5 both describe `shake(50, 0.001)` — these are the same effect triggered from melee hit AND ranged hit contexts
+**Scope:** ~25 files modified, ~9 new files created, across 6 phases.
 
 ---
 
-### Phase 1: Foundation Constants
+## Phase 0: Foundation (Constants & Config)
 
-#### System 1 — Server: Melee Range & Arc Values
+> Must land first — nearly every other change imports COLORS or depends on renamed constants.
 
-> **Current state**: Bat=64px, Katana=80px, Arc=90° in both `weapon_factory.go` and `weapon_config.go`.
+### Task 0.1: Add COLORS constant group to shared/constants.ts
 
-- [x] **weapon_factory.go — Bat range**: Change `Range: 64` → `Range: 90`
-- [x] **weapon_factory.go — Katana range**: Change `Range: 80` → `Range: 110`
-- [x] **weapon_factory.go — Bat arc**: Change `ArcDegrees: 90` → `ArcDegrees: 80`
-- [x] **weapon_factory.go — Katana arc**: Change `ArcDegrees: 90` → `ArcDegrees: 80`
-- [x] **weapon_config.go**: Apply same changes if values are duplicated
-- [x] **Server tests pass**: `make test-server` — melee range/arc detection still works
-- [x] **Spec validation**: Verify against `constants.md` line 217 (Bat=90), line 228 (Katana=110), `melee.md` line 1165 (both ranges), `weapons.md` lines 2330-2331. Arc 80° matches `constants.md` and `melee.md` ±0.7 rad
-- [x] **Assertion quality**: Server tests assert exact range/arc values (e.g., `assert.Equal(t, 90, bat.Range)`), not just `!= 0` or `require.NotNil`
-- [x] **Coverage gate**: `go test ./internal/game/... -cover` — weapon_factory.go and weapon_config.go ≥90% statement coverage
+**Spec changes covered:** #45
+**File:** `stick-rumble-client/src/shared/constants.ts` (lines 1-98, no COLORS exist)
+**Action:** Add `COLORS` export with all 22 prototype palette values:
 
-#### System 1 — Client: Melee Range & Arc Values
+```typescript
+export const COLORS = {
+  BACKGROUND: 0xC8CCC8,
+  GRID_LINE: 0xD8DCD8,
+  PLAYER_HEAD: 0x2A2A2A,
+  ENEMY_HEAD: 0xFF0000,
+  DEAD_HEAD: 0x888888,
+  BODY: 0x000000,
+  HEALTH_FULL: 0x00CC00,
+  HEALTH_CRITICAL: 0xFF0000,
+  HEALTH_DEPLETED_BG: 0x333333,
+  AMMO_READY: 0xE0A030,
+  AMMO_RELOADING: 0xCC5555,
+  SCORE: 0xFFFFFF,
+  KILL_COUNTER: 0xFF6666,
+  DEBUG_OVERLAY: 0x00FF00,
+  CHAT_SYSTEM: 0xBBA840,
+  MUZZLE_FLASH: 0xFFD700,
+  BULLET_TRAIL: 0xFFA500,
+  DAMAGE_NUMBER: 0xFF4444,
+  BLOOD: 0xCC3333,
+  SPAWN_RING: 0xFFFF00,
+  DAMAGE_FLASH: 0xFF0000,
+  HIT_CHEVRON: 0xCC3333,
+  WEAPON_CRATE: 0xCCCC00,
+} as const;
+```
 
-> **Current state**: Same stale values (64/80/90) in both `weaponConfig.ts` and `weapon-configs.json`.
-
-- [x] **weaponConfig.ts — Bat**: range=90, arc=80
-- [x] **weaponConfig.ts — Katana**: range=110, arc=80
-- [x] **weapon-configs.json — Bat**: range=90, arc=80
-- [x] **weapon-configs.json — Katana**: range=110, arc=80
-- [x] **Client tests pass**: `make test-client`
-- [x] **Spec validation**: Verify client values match server values exactly: Bat range=90, Katana range=110, both arc=80. Cross-check `weaponConfig.ts` AND `weapon-configs.json` — no stale values (64, 80, 90°) remain
-- [x] **Assertion quality**: Tests assert exact numeric values (`expect(bat.range).toBe(90)`, `expect(katana.arcDegrees).toBe(80)`), not `toBeDefined()` or `toBeTruthy()`
-- [x] **Coverage gate**: `npm run test:unit:coverage` — weaponConfig.ts ≥90% statements/lines/functions
-
----
-
-### Phase 2: Core Visual Overhauls
-
-#### System 1 — Client: Melee Arc Visual (MeleeWeapon.ts)
-
-> **Current state**: Per-weapon colors (brown/silver), fill+stroke arc, 200ms 4-frame animation.
-
-- [x] **Remove per-weapon colors**: No more brown (bat) / silver (katana) — all arcs use 0xFFFFFF white
-- [x] **Remove fill rendering**: Delete `fillStyle` / `fillPath` — stroke only
-- [x] **Stroke width**: Change from 3px to 2px
-- [x] **Stroke alpha**: Set to 0.8
-- [x] **Remove 4-frame animation**: Delete old frame-based animation approach
-- [x] **Add alpha fade tween**: `tweens.add({ targets: graphics, alpha: 0, duration: 200, onComplete: destroy })`
-- [x] **Add weapon container rotation tween**: `angle: { from: container.angle - 45, to: container.angle + 60 }, duration: 100, yoyo: true`
-- [ ] **Add camera shake on melee hit**: `cameras.main.shake(50, 0.001)` — DEFERRED to System 5 (Camera Effects)
-- [x] **Test TS-MELEE-013**: White stroke-only arc renders correctly
-- [x] **Test TS-MELEE-015**: Weapon container rotation tween works
-- [x] **Test TS-GFX-013**: Melee arc renders as white stroke-only
-- [x] **Spec validation**: Verify against `constants.md` lines 246-254 — color=0xFFFFFF, strokeWidth=2, strokeAlpha=0.8, fadeDuration=200, swingFrom=-45°, swingTo=+60°, swingDuration=100ms, yoyo=true, shakeDuration=50ms, shakeIntensity=0.001. Confirm NO fill rendering, NO per-weapon colors
-- [x] **Assertion quality**: Tests verify exact color (`toHaveBeenCalledWith(2, 0xFFFFFF, 0.8)`), exact tween params (`duration: 200`, `angle: {from: -45, to: 60}`), not bare `toHaveBeenCalled()` without args
-- [x] **Assertion quality**: No `toBeDefined()` on graphics objects — assert specific draw calls with exact stroke width (2), alpha (0.8), and arc angle (80° / ±0.7 rad)
-- [x] **Coverage gate**: MeleeWeapon.ts ≥90% statements/lines/functions in coverage report
-- [ ] **Manual playtest**: Verify white arc appearance in browser — HUMAN ONLY
-
-#### System 3a — Client: Death Corpse (PlayerManager.ts)
-
-> **Current state**: `PlayerManager.ts` sets dead player color to 0x888888 (gray). No splayed corpse.
-
-- [x] **Hide normal player graphics** on death state detection
-- [x] **Create splayed corpse Graphics object**: 4 limbs at ±0.5 and ±2.5 rad from rotation
-- [x] **Limb stroke**: 3px, 20px length
-- [x] **Head circle**: 10px radius, offset 25px along rotation axis
-- [x] **Color**: 0x444444 (dark gray)
-- [x] **Depth**: Set to 5 (below live players at 50)
-- [x] **Fade tween**: `delay: 5000, duration: 2000, alpha: 0, onComplete: destroy`
-- [x] **Test TS-GFX-011**: Death corpse renders with splayed limbs
-- [x] **Test TS-GFX-024**: Death corpse fade timing (5s visible + 2s fade)
-- [x] **Spec validation**: Verify against `graphics.md` lines 666-674 — 4 limb angles exactly [+0.5, -0.5, +2.5, -2.5] rad, and `constants.md` lines 290-297 — all 8 constants match
-- [x] **Assertion quality**: Tests assert exact limb angles (±0.5, ±2.5 rad), exact color (0x444444), exact delay/duration args — not bare `toHaveBeenCalled()` on `lineStyle`/`lineTo`
-- [x] **Coverage gate**: Death corpse rendering code path in PlayerManager.ts ≥90% statements/lines/functions
-- [ ] **Visual test**: Read screenshot to confirm corpse appearance — DEFERRED (HUMAN ONLY equivalent)
-
-#### System 5 — Client: Camera Effects (GameSceneUI.ts, ScreenShake.ts)
-
-> **Current state**: Damage flash is a red overlay rectangle at 0.5 alpha, 200ms fade in `GameSceneUI.ts`. Camera shake in `ScreenShake.ts` uses per-weapon intensities (100-150ms, 0.005-0.012).
-
-- [x] **Remove damageOverlay rectangle**: Delete rectangle creation and tween
-- [x] **Add camera flash on damage received**: `cameras.main.flash(100, 128, 0, 0)`
-- [x] **Normalize camera shake**: On dealing damage (hit:confirmed) → `cameras.main.shake(50, 0.001)`
-- [x] **Evaluate per-weapon shake**: Decided to KEEP per-weapon recoil shake (on fire) — it's a separate concern from hit feedback shake (on hit:confirmed). See discovery log.
-- [x] **Test TS-UI-013**: Camera flash on damage received
-- [x] **Test TS-UI-017**: Camera shake on dealing damage
-- [x] **Spec validation**: Verify flash args match `constants.md` lines 303-310 exactly: `flash(100, 128, 0, 0)` — duration 100ms, RGB (128, 0, 0). Verify shake matches lines 305-306: `shake(50, 0.001)`
-- [x] **Assertion quality**: Tests assert `flash` called with exact 4 args `(100, 128, 0, 0)`, `shake` called with exact `(50, 0.001)` — not bare `cameras.main.flash.toHaveBeenCalled()`
-- [x] **Coverage gate**: GameSceneUI.ts damage flash path + ScreenShake.ts shake path ≥90% statements/lines/functions
+**Complexity:** Simple
+**Tests:** Add/update constants test to verify COLORS object exists with all keys.
 
 ---
 
-### Phase 3: New Client Systems
+### Task 0.2: Add MINIMAP constants + rename HEALTH_BAR_WIDTH
 
-#### System 2 — Client: Aim Sway (PlayerManager.ts + weapon/shooting)
+**Spec changes covered:** #46, #47
+**File:** `stick-rumble-client/src/shared/constants.ts`
+**Action:**
+- Add `MINIMAP` constant group: `{ SIZE: 170, SCALE: 0.106, RADAR_RANGE: 600, BG_COLOR: 0x3A3A3A, BORDER_COLOR: 0x00CCCC }`
+- Rename `PLAYER.HEALTH_BAR_WIDTH` → `PLAYER.PLAYER_HEALTH_BAR_WIDTH` (if exists)
+- Add `PLAYER.HUD_HEALTH_BAR_WIDTH = 200`
+- Update all references to the renamed constant
 
-> **Current state**: Not implemented. Server uses raw aimAngle from client. No oscillation.
-> **Design decision**: Client-only. Sway computed in client update loop, server receives sway-affected angle via `input:state`. No server changes needed.
-
-- [x] **Add sway state**: `swayTime: number = 0`, `aimSway: number = 0` per player
-- [x] **Compute sway each frame**: Detect speed > 10px/s for moving vs idle
-- [x] **Moving params**: speed=0.008 rad/ms, magnitude=±0.15 rad
-- [x] **Idle params**: speed=0.002 rad/ms, magnitude=±0.03 rad
-- [x] **Formula**: `aimSway = (sin(time * speed) + sin(time * speed * 0.7)) * magnitude`
-- [x] **Apply to weapon rotation**: `weaponGraphics.setRotation(aimAngle + aimSway)`
-- [x] **Apply to projectile angle**: Fire with `aimAngle + aimSway` sent to server
-- [x] **Apply to barrel position**: Include sway offset in barrel calculation
-- [x] **Test TS-SHOOT-013**: Aim sway affects projectile trajectory
-- [x] **Test TS-GFX-019**: Aim sway visual oscillation visible
-- [x] **Spec validation**: Verify formula matches `constants.md` lines 369-376 exactly: speed 0.008/0.002, magnitude 0.15/0.03, threshold 10 px/s, composite sine `(sin(t*s) + sin(t*s*0.7)) * mag`. Verify `shooting.md` lines 1490-1518 — sway applied to both visual AND trajectory
-- [x] **Assertion quality**: Tests compute expected sway output for known time/speed inputs using `toBeCloseTo()` with ≥2 decimal precision — not just `expect(sway).not.toBe(0)` or `toBeDefined()`
-- [x] **Assertion quality**: Trajectory test verifies fired angle equals `aimAngle + computedSway` with `toBeCloseTo()`, not just "angle changed"
-- [x] **Coverage gate**: Aim sway computation + application code paths ≥90% statements/lines/functions
-
-#### System 3b — Client: Blood Particles (GameSceneEventHandlers.ts)
-
-> **Current state**: Not implemented. HitEffectManager exists but no blood particles.
-
-- [x] **Add RenderedPlayer fields**: `lastDamageTime?: number`, `lastDamageSourceAngle?: number` — SKIPPED: not needed, direction computed from attacker/victim positions on the fly
-- [x] **On player:damaged event**: Create 5 circles at victim position
-- [x] **Color**: 0xCC0000 (dark red)
-- [x] **Radius**: Random 2-5px per particle
-- [x] **Speed**: Random 50-150 px/s, direction away from damage source ±0.5 rad
-- [x] **Drag**: 200 px/s² — simulated via tween distance calculation
-- [x] **Fade + shrink tween**: alpha and scale to 0 over 500ms
-- [x] **Test TS-GFX-015**: Blood particles spawn on damage
-- [x] **Spec validation**: Verified count=5, color=0xCC0000, radius 2-5, speed 50-150, spread ±0.5 rad, duration=500. Constants line refs in plan were wrong (pointed to AK47 constants, not blood particle constants — the actual blood constants are around line 406 in constants.md)
-- [x] **Assertion quality**: Tests assert exactly 5 particles created (`toHaveBeenCalledTimes(5)`), assert color `0xCC0000` in `add.circle` call, assert tween duration exactly 500, alpha=0, scale=0
-- [x] **Coverage gate**: Blood particle creation + tween code path ≥90% statements/lines/functions
-
-#### System 3c — Client: Healing Particles (PlayerManager.ts or HealthBarUI)
-
-> **Current state**: `HealthBarUI.ts` only pulses health bar alpha. No floating particles.
-
-- [x] **Detect isRegenerating state**: Check each update tick
-- [x] **15% chance per tick**: `Math.random() > 0.85`
-- [x] **Create green circle**: 0x00FF00, 2px radius
-- [x] **Random offset**: ±25px from player center (use `(Math.random() - 0.5) * 50`)
-- [x] **Float-up tween**: y -= 20, alpha: 0, duration: 600ms, onComplete: destroy
-- [x] **Test TS-GFX-016**: Healing particles appear during regen
-- [x] **Spec validation**: Verify against `constants.md` lines 277-282 — color=0x00FF00, radius=2, chance=0.15, spread=25, floatDistance=20, duration=600. Note: use `(Math.random() - 0.5) * 50` for ±25px (spec code has ±12.5px bug)
-- [x] **Assertion quality**: Tests assert exact color `0x00FF00` in `fillStyle`, exact tween params `{y: '-=20', alpha: 0, duration: 600}`, circle radius exactly 2 — not `toBeTruthy()` on particle object
-- [x] **Coverage gate**: Healing particle creation + probability gate code path ≥90% statements/lines/functions
-
-#### System 6a — Client: Gun Recoil Visual (PlayerManager.ts)
-
-> **Current state**: `ScreenShake.ts` only does camera shake, no weapon container movement.
-
-- [x] **Add recoilOffset property**: `recoilOffset: number = 0` per weapon
-- [x] **On fire event**: Tween recoilOffset to -6px (default) or -10px (shotgun)
-- [x] **Tween config**: 50ms duration, yoyo: true
-- [x] **Apply offset**: `cos(rotation) * recoilOffset`, `sin(rotation) * recoilOffset` in weapon position update
-- [x] **Test TS-GFX-018**: Gun recoil on ranged fire
-- [x] **Spec validation**: Verify against `constants.md` lines 359-361 — default=-6, shotgun=-10, duration=50, yoyo=true. Verify offset formula matches `graphics.md` lines 818-820: `x += cos(rotation) * recoilOffset`, `y += sin(rotation) * recoilOffset`
-- [x] **Assertion quality**: Tests assert tween target value is exactly -6 (default) or -10 (shotgun), duration exactly 50, yoyo is `true` — not bare `toHaveBeenCalled()` on `tweens.add`
-- [x] **Coverage gate**: Recoil tween creation + offset application code path ≥90% statements/lines/functions
+**Complexity:** Simple
+**Tests:** Update constants tests.
 
 ---
 
-### Phase 4: Hit Feedback Overhaul
+### Task 0.3: Update GameConfig background color
 
-#### System 4a — Client: Crosshair → Reticle Texture (Crosshair.ts)
-
-> **Current state**: `Crosshair.ts` draws white + sign (10px, 5px gap) + red spread circle (radius = spread * 2px/deg).
-
-- [x] **Generate reticle texture**: `make.graphics()` + `generateTexture('reticle', 32, 32)`
-- [x] **Ring**: radius 10, 2px white stroke
-- [x] **4 cardinal tick marks**: 6px each
-- [x] **Red center dot**: 0xFF0000, radius 2
-- [x] **Replace procedural crosshair**: Use Sprite with 'reticle' texture
-- [x] **Remove spread circle logic**: Delete dynamic spread rendering entirely
-- [x] **Set depth 100, alpha 0.8**
-- [x] **Position at cursor/aim point each frame**
-- [x] **Test TS-GFX-023**: Crosshair reticle texture renders correctly
-- [x] **Spec validation**: Verified against `constants.md` lines 462-473 — size=32×32, ringRadius=10, ringStroke=2, dotColor=0xFF0000, dotRadius=2, tickLength=6, depth=100, alpha=0.8. Confirmed no `spread` or `spreadRadius` references remain in Crosshair.ts. Plan line refs were wrong (said 318-325, actual 462-473)
-- [x] **Assertion quality**: Tests assert `generateTexture('reticle', 32, 32)`, `strokeCircle(16, 16, 10)`, `fillCircle(16, 16, 2)` with color `0xFF0000`, depth exactly 100, alpha exactly 0.8, all 4 cardinal tick mark coordinates — no bare `toHaveBeenCalled()`
-- [x] **Coverage gate**: Crosshair.ts ≥90% statements/lines/functions
-- [ ] **Visual test**: Read screenshot to confirm reticle appearance — DEFERRED (HUMAN ONLY equivalent)
-
-#### System 4b — Client: Hit Marker → X Texture (GameSceneUI.ts)
-
-> **Current state**: `GameSceneUI.ts` draws 4 white lines forming + pattern at screen center, 200ms fade.
-
-- [x] **Generate hitmarker texture**: 20×20, two diagonal lines forming X, white 3px stroke
-- [x] **Replace line-based hit marker**: Use sprite instead of 4 procedural lines
-- [x] **Normal hit**: White tint, scale 1.2×
-- [x] **Kill hit**: Red (0xFF0000) tint, scale 2.0×
-- [x] **Position at reticle**: Not screen center — uses pointer worldX/worldY
-- [x] **Fade tween**: 150ms (not 200ms), include scale-down to `marker.scale * 0.5`
-- [x] **Test TS-UI-014**: Hit marker normal variant
-- [x] **Test TS-UI-015**: Hit marker kill variant
-- [x] **Spec validation**: Verified against `constants.md` lines 489-499 — size=20×20, stroke=3, normalScale=1.2, killScale=2.0, killColor=0xFF0000, fadeDuration=150, depth=1000. Scale-down matches `marker.scale * 0.5` per `ui.md` tween code. Position at pointer world coords (not screen center). Plan line refs were wrong (said 345-350, actual 489-499)
-- [x] **Assertion quality**: Tests assert normal scale 1.2, kill scale 2.0, kill tint 0xFF0000, tween duration 150, scale end value `initialScale * 0.5` (normal: 0.6, kill: 1.0), depth 1000
-- [x] **Coverage gate**: Hit marker creation + variant branching code path ≥90% statements/lines/functions
-
-#### System 4c — Client: Damage Number Variants (GameSceneUI.ts)
-
-> **Current state**: `GameSceneUI.ts` always renders red, 24px, 3px stroke, 1000ms. No variants.
-
-- [x] **Accept variant params**: `isKill` and `isLocal` in `showDamageNumber()`
-- [x] **Normal hit**: White (#FFFFFF), 16px font
-- [x] **Kill hit**: Red (#FF0000), 24px font
-- [x] **Remote (non-local)**: White 16px, scale 0.7×, alpha 0.8
-- [x] **Stroke thickness**: Change 3px → 2px black
-- [x] **Duration**: Change 1000ms → 800ms
-- [x] **Float distance**: 50px (unchanged)
-- [x] **Depth**: Set to 1000
-- [x] **Test TS-UI-016**: Damage number variants render correctly
-- [x] **Spec validation**: Verified against `constants.md` lines 567-579 — normalColor=#FFFFFF, normalSize=16, killColor=#FF0000, killSize=24, remoteScale=0.7, remoteAlpha=0.8, strokeWidth=2, strokeColor=#000000, depth=1000. Duration=800 and float=50 per lines 385-386. Plan line refs were wrong (said 423-431 and 237-238)
-- [x] **Assertion quality**: Tests assert each variant separately — normal white 16px, kill red 24px, remote scale 0.7 and alpha 0.8. Stroke 2px not 3px. Tween duration 800 not 1000. Depth 1000
-- [x] **Coverage gate**: `showDamageNumber()` all 3 variant branches ≥90% statements/lines/functions
-
-#### System 4d — Client: Directional Hit Indicators (GameSceneUI.ts or new utility)
-
-> **Current state**: Not implemented.
-
-- [x] **Generate chevron texture**: 16×16 `hit_indicator`
-- [x] **Position**: 60px from player center, pointing toward damage source/target
-- [x] **Outgoing (hit:confirmed)**: White, 200ms fade, scale to 1.5×; red on kill
-- [x] **Incoming (player:damaged for local)**: Red, 400ms fade, scale to 1.5×
-- [x] **Depth**: 1001
-- [x] **Test TS-GFX-021**: Directional hit indicator (outgoing)
-- [x] **Test TS-GFX-022**: Directional hit indicator (incoming)
-- [x] **Spec validation**: Verified against `constants.md` lines 477-485 (actual location) — size=16×16, distance=60, outgoingDuration=200, incomingDuration=400, depth=1001. Verified scale-up to 1.5× per `graphics.md` lines 983, 990. Verified incoming is always red, outgoing is white (red on kill)
-- [x] **Assertion quality**: Tests assert outgoing tween duration exactly 200, incoming tween duration exactly 400, scale target exactly 1.5, depth exactly 1001, distance from player center exactly 60px. Assert incoming tint is always red regardless of kill state. No bare `toHaveBeenCalled()` on sprite creation
-- [x] **Coverage gate**: Hit indicator outgoing + incoming + kill variant branches ≥90% statements/lines/functions
+**Spec changes covered:** #48
+**File:** `stick-rumble-client/src/game/config/GameConfig.ts` (or equivalent config file) line 9
+**Action:** Change `backgroundColor: '#282c34'` → `'#C8CCC8'`
+**Complexity:** Trivial
 
 ---
 
-### Phase 5: Polish & New Features
+### Task 0.4: Add isInvulnerable to client PlayerState interface
 
-#### System 6b — Client: Reload Animation Pulse (PlayerManager.ts)
-
-> **Current state**: `GameSceneUI.ts` shows progress bar + circular arc + "RELOAD!" text. No weapon container pulse.
-
-- [x] **On reload start**: Add tween to weapon container
-- [x] **Alpha pulse**: 1 → 0.5 → 1
-- [x] **Scale pulse**: 1 → 0.8 → 1
-- [x] **Timing**: 200ms per pulse, yoyo: true, repeat: 2 (3 total pulses)
-- [x] **On complete**: Reset alpha=1, scaleX=1, scaleY=1
-- [x] **Keep existing reload UI**: Progress bar, circle, text remain — this ADDS the weapon pulse
-- [x] **Test TS-GFX-020**: Reload animation pulses
-- [x] **Spec validation**: Verified against `constants.md` lines 529-536 (actual location) — alpha=0.5, scaleX=0.8, scaleY=0.8, duration=200, yoyo=true, repeat=2. Verified reset on complete per `graphics.md` lines 941-944
-- [x] **Assertion quality**: Tests assert tween config has alpha exactly 0.5, scaleX/scaleY exactly 0.8, duration exactly 200, repeat exactly 2, yoyo is `true`. Assert onComplete resets alpha to 1 and scale to 1 — not bare `tweens.add.toHaveBeenCalled()`
-- [x] **Coverage gate**: Reload pulse tween creation + completion handler ≥90% statements/lines/functions
-
-#### System 6c — Client: Wall Spark (GameScene.ts or ShootingManager)
-
-> **Current state**: Not implemented.
-
-- [x] **Check barrel overlap**: Before creating bullet client-side, test if barrel position overlaps wall geometry
-- [x] **Spark visual**: Yellow circle (0xFFFF00), 3px radius
-- [x] **Tween**: Scale 1→2, alpha fade over 100ms
-- [x] **Skip bullet creation**: No bullet created when barrel is inside wall
-- [x] **Test TS-GFX-017**: Wall spark on obstructed barrel
-- [x] **Spec validation**: Verify against `graphics.md` lines 778-790 — color=0xFFFF00, radius=3, scaleEnd=2, duration=100. Verify bullet suppression: no projectile created when barrel is obstructed
-- [x] **Assertion quality**: Tests assert spark color exactly 0xFFFF00, radius exactly 3, tween scale target exactly 2, tween duration exactly 100. Assert bullet creation was NOT called (`not.toHaveBeenCalled()` or `toHaveBeenCalledTimes(0)`) when barrel is in wall
-- [x] **Coverage gate**: Wall detection + spark creation + bullet suppression code path ≥90% statements/lines/functions
-
-#### System 7a — Client: Floor Grid (GameScene.ts)
-
-> **Current state**: `GameScene.ts` only draws background rectangle and border. No grid.
-
-- [x] **Draw in create()**: After background rectangle
-- [x] **Grid spacing**: 100px covering entire arena
-- [x] **Line style**: 1px, color 0xB0BEC5, alpha 0.5
-- [x] **Draw vertical lines**: `for x = 0 to ARENA.WIDTH step 100`
-- [x] **Draw horizontal lines**: `for y = 0 to ARENA.HEIGHT step 100`
-- [x] **Depth**: -1 (below everything)
-- [x] **Test TS-ARENA-013**: Floor grid renders at correct depth and spacing
-- [x] **Spec validation**: Verify against `constants.md` lines 396-399 and `arena.md` lines 133-137 — spacing=100, color=0xB0BEC5, alpha=0.5, lineWidth=1, depth=-1. Verify grid covers full arena (lines from 0 to ARENA.WIDTH/HEIGHT)
-- [x] **Assertion quality**: Tests assert `lineStyle` called with exact `(1, 0xB0BEC5, 0.5)`, assert `setDepth(-1)`, assert correct number of vertical lines (`ARENA.WIDTH / 100 + 1`) and horizontal lines (`ARENA.HEIGHT / 100 + 1`) — not just `graphics.strokePath.toHaveBeenCalled()`
-- [x] **Coverage gate**: Grid drawing code path ≥90% statements/lines/functions
-
-#### System 7b — Client: Minimap (GameSceneUI.ts or new MinimapUI)
-
-> **Current state**: Not implemented.
-
-- [x] **Position**: (20, 20), 120×120px
-- [x] **Scale**: 0.075 (1600px world → 120px minimap)
-- [x] **Static layer (depth 1999)**: Black bg, white border, wall positions; `setScrollFactor(0)`
-- [x] **Dynamic layer (depth 2000)**: Player/enemy dots, radar ring, aim line; `setScrollFactor(0)`
-- [x] **Player dot**: Green, 4px
-- [x] **Enemy dots**: Red, 3px; only within 600px radar range
-- [x] **Update every frame**: Clear + redraw dynamic layer
-- [x] **Test TS-UI-018**: Minimap renders static layer
-- [x] **Test TS-UI-019**: Minimap radar range filters enemies
-- [x] **Spec validation**: Verify against `constants.md` lines 407-415 — x=20, y=20, scale=0.075, size=120, radarRange=600, staticDepth=1999, dynamicDepth=2000, playerDotSize=4, enemyDotSize=3. Verify both layers use `setScrollFactor(0)` per `ui.md`
-- [x] **Assertion quality**: TS-UI-018 asserts static layer depth exactly 1999, position exactly (20,20), `setScrollFactor(0)` called. TS-UI-019 asserts enemy at 500px distance IS shown, enemy at 700px IS NOT shown (exact boundary test at 600px) — not just "some dots rendered"
-- [x] **Coverage gate**: Minimap static setup + dynamic update + radar filtering ≥90% statements/lines/functions (branch coverage on radar range filter critical)
+**Spec changes covered:** #56
+**File:** `stick-rumble-client/src/game/entities/PlayerManager.ts` lines 13-28 (PlayerState interface)
+**Action:** Add `isInvulnerable?: boolean` and `invulnerabilityEndTime?: number`
+**Note:** Server already has these fields (`stick-rumble-server/internal/game/player.go` lines 54-55)
+**Complexity:** Trivial
 
 ---
 
-### Final Verification
+### Task 0.5: Add projectile shape + tracerLength to weapon config interfaces
 
-#### Automated Tests
-- [x] `make test-server` — all server tests pass
-- [x] `make test-client` — all client tests pass (1491 passed, 24 skipped)
-- [ ] Manual playtest — verify visual rendering in browser *(HUMAN ONLY)*
-- [x] `make lint` — 14 pre-existing lint errors (all `_unused` params in mock functions from earlier branches); zero new errors introduced
-- [x] `make typecheck` — no type errors
-
-#### Global Coverage Gate
-- [x] Client overall: ≥90% statements, ≥90% lines, ≥90% functions, ≥87.8% branches (per vitest.config.ts thresholds) — each system section's per-section coverage gate was verified at commit time
-- [x] Server overall: ≥90% statement coverage on changed packages — no server changes in this branch
-- [x] No new file has <90% coverage — all new code is in existing files that already exceed thresholds
-
-#### Global Assertion Quality Audit
-- [x] Grep for `toBeDefined()` in new/modified test files — ZERO instances on graphics/tween/rendering in new code; all findings are pre-existing constructor existence checks
-- [x] Grep for bare `.toHaveBeenCalled()` (without `With`) in new/modified test files — ZERO instances in new test sections (TS-GFX-017, TS-ARENA-013, TS-UI-018, TS-UI-019); all bare calls are in pre-existing tests
-- [x] Grep for `toBeTruthy()` / `toBeFalsy()` in new/modified test files — ZERO instances across entire scenes test directory
-- [x] Every tween assertion checks at minimum: `duration`, `targets`, and primary animated property — verified for wall spark, hit marker, damage number, blood particle, healing particle tweens
-- [x] Every color assertion uses exact hex value (e.g., `0xFFFF00`, `0xFF0000`, `0x00FF00`, `0xB0BEC5`) — no fuzzy color assertions
-
-#### Global Spec Validation Audit
-- [x] Cross-reference every numeric constant in code against `specs/constants.md` — all values match exactly (verified per-section during implementation)
-- [x] Cross-reference every depth value against depth table in `specs/graphics.md` — no depth conflicts (minimap 1999/2000, grid -1, crosshair 1000, hit markers/damage numbers match spec)
-- [x] Cross-reference every test ID (TS-XXX-NNN) against `specs/test-index.md` — all referenced tests exist and descriptions match
-- [x] Verify no stale old values remain — grep for stale patterns found zero matches (arcDegrees=80 and range=90/110 in MeleeWeapon.test.ts are correct current values, not stale)
-
-#### Visual Regression (Read Screenshots) — HUMAN ONLY
-
-> **Not for agent workers.** These require a human to visually inspect screenshot PNGs and confirm rendering correctness. Agents cannot meaningfully evaluate visual output.
-
-- [ ] Melee arc: white stroke-only, correct size
-- [ ] Death corpse: splayed limbs, correct color/depth
-- [ ] Reticle crosshair: ring + ticks + red dot
-- [ ] Hit markers: X shape, correct tint on kill
-- [ ] Damage numbers: correct sizes/colors per variant
-- [ ] Floor grid: visible at correct spacing
-- [ ] Minimap: static + dynamic layers rendering
-
-#### Manual Playtest — HUMAN ONLY
-
-> **Not for agent workers.** These require a human to run the game in a browser and interactively verify gameplay feel, animation timing, and visual feedback. No automated substitute exists for these checks.
-
-- [ ] Melee swing: white arc appears and fades, weapon container rotates
-- [ ] Aim sway: weapon oscillates while moving, steadies when idle
-- [ ] Aim sway affects bullet trajectory (shots spread while moving)
-- [ ] Blood particles: spray away from damage source on hit
-- [ ] Death corpse: appears with splayed limbs, fades after 5s
-- [ ] Healing particles: green dots float up during regen
-- [ ] Camera flash: red flash on taking damage (100ms)
-- [ ] Camera shake: subtle shake on dealing damage (50ms)
-- [ ] Crosshair: pre-rendered reticle at cursor, no spread circle
-- [ ] Hit markers: white X on hit, red X on kill, at reticle position
-- [ ] Damage numbers: white 16px normal, red 24px kill, small for remote
-- [ ] Directional indicators: chevrons point toward damage source/target
-- [ ] Gun recoil: weapon kicks back on fire, snaps back
-- [ ] Reload pulse: weapon flickers during reload
-- [ ] Wall spark: yellow spark when barrel is in wall, no bullet
-- [ ] Floor grid: visible grid lines across arena
-- [ ] Minimap: shows self (green), nearby enemies (red), walls
+**Spec changes covered:** #42 (partial), #44 (partial)
+**File:** `stick-rumble-client/src/shared/weaponConfig.ts` lines 6-18
+**Action:**
+- Add `shape: 'chevron' | 'circle'` and `tracerLength: number` to `ProjectileVisuals` interface
+- Add `muzzleFlashShape: 'starburst' | 'circle'` to `WeaponVisuals` interface
+- Update all hardcoded weapon fallback defaults (lines 106-262) with new fields
+**Complexity:** Simple
 
 ---
 
-### Course Corrections
+## Phase 1: Trivial Color/Value Fixes (One-Line Changes)
 
-> **For orchestrator use only.** The orchestrator appends corrections here when the worker drifts. Worker: check this section FIRST every iteration.
+> Each is a single constant/color swap. Can be done in any order after Phase 0.
 
-_(No corrections yet.)_
+### Task 1.1: Arena background color
+
+**Spec changes covered:** #17
+**File:** `stick-rumble-client/src/game/scenes/GameScene.ts` line 74
+**Action:** Change `0x222222` → `COLORS.BACKGROUND` (0xC8CCC8)
+**Complexity:** Trivial
+
+### Task 1.2: Grid line color
+
+**Spec changes covered:** #18
+**File:** `stick-rumble-client/src/game/scenes/GameScene.ts` line 83
+**Action:** Change `0xb0bec5` → `COLORS.GRID_LINE` (0xD8DCD8)
+**Complexity:** Trivial
+
+### Task 1.3: World-space health bar background
+
+**Spec changes covered:** #10
+**File:** `stick-rumble-client/src/game/entities/HealthBar.ts` lines 63-66
+**Action:** Change `0x888888` → `COLORS.HEALTH_DEPLETED_BG` (0x333333)
+**Complexity:** Trivial
+
+### Task 1.4: Blood particle color
+
+**Spec changes covered:** #13, #37 (partial)
+**File:** `stick-rumble-client/src/game/entities/HitEffectManager.ts` line 249
+**Action:** Change `0xCC0000` → `COLORS.BLOOD` (0xCC3333). Also increase particle count from 5 to 6-10 (line 247).
+**Complexity:** Trivial
+
+### Task 1.5: Hit direction indicator color
+
+**Spec changes covered:** #14, #36 (partial)
+**File:** `stick-rumble-client/src/game/scenes/GameSceneUI.ts` line 435
+**Action:** Change `indicator.setTint(0xff0000)` → `indicator.setTint(COLORS.HIT_CHEVRON)` (0xCC3333)
+**Complexity:** Trivial
+
+### Task 1.6: Muzzle flash color constant
+
+**Spec changes covered:** #15
+**File:** `stick-rumble-client/src/game/entities/HitEffectManager.ts` line 40
+**Action:** Change `MUZZLE_COLOR = 0xffa500` → `COLORS.MUZZLE_FLASH` (0xFFD700)
+**Complexity:** Trivial
+
+### Task 1.7: Weapon crate respawn glow visible
+
+**Spec changes covered:** #16
+**File:** `stick-rumble-client/src/game/entities/WeaponCrateManager.ts` line 98
+**Action:** Change `crate.glow.setVisible(false)` → `crate.glow.setAlpha(UNAVAILABLE_ALPHA)` (keep visible, just faded)
+**Complexity:** Trivial
+
+### Task 1.8: Pistol tracer color
+
+**Spec changes covered:** #43
+**File:** `stick-rumble-client/src/shared/weaponConfig.ts` line 127
+**Action:** Change `tracerColor: '0xffff00'` → `'0xffaa00'`
+**Also:** Update both `weapon-configs.json` files (root + `stick-rumble-client/public/`) — add `projectile` sub-object to each weapon if missing.
+**Complexity:** Low
+
+### Task 1.9: Muzzle flash duration (Pistol)
+
+**Spec changes covered:** #44 (partial)
+**Files:** `stick-rumble-client/src/shared/weaponConfig.ts` line 123, both `weapon-configs.json` copies
+**Action:** Change Pistol `muzzleFlashDuration: 50` → `33`
+**Complexity:** Trivial
+
+### Task 1.10: Damage number color
+
+**Spec changes covered:** #35 (partial)
+**File:** `stick-rumble-client/src/game/scenes/GameSceneUI.ts` line 379
+**Action:** Change non-kill damage number color from `'#ffffff'` → `'#FF4444'` (COLORS.DAMAGE_NUMBER). Adjust timing from 800ms→600ms and float distance from 50px→40px.
+**Complexity:** Low
 
 ---
 
-### Per-Item Process
+## Phase 2: Small Modifications to Existing Files
 
-Follow these steps for each system section:
+> Targeted changes to existing methods. 1-2 hours each.
 
-1. **Read the spec references** listed in the section's "Spec validation" item — understand what the code should look like
-2. **Read the existing source file(s)** mentioned in the section header — understand what's there now
-3. **Implement the code changes** — all non-test, non-validation items in the section
-4. **Write/update tests** — all "Test TS-XXX-NNN" items in the section
-5. **Run tests** — `make test-server` for Go changes, `make test-client` for TS changes
-6. **Verify assertion quality** — check that tests meet the assertion quality requirements listed
-7. **Check coverage** — verify the coverage gate item passes
-8. **Check off all items** in the section with `[x]`
-9. **Log any discoveries** in the Worker Discovery Log section below
-10. **Commit** with descriptive message
+### Task 2.1: Player head-only color distinction
 
-### Rules
+**Spec changes covered:** #1
+**File:** `stick-rumble-client/src/game/entities/ProceduralPlayerGraphics.ts` lines 61-121
+**Action:**
+- Add `headColor: number` and `bodyColor: number` constructor params (replace single `color`)
+- Lines 61, 85, 99: Change `this.color` → `this.bodyColor` (0x000000 for all players)
+- Lines 118-121: Change `this.color` → `this.headColor` (local 0x2A2A2A, enemy 0xFF0000, dead 0x888888)
+**Also:** `PlayerManager.ts` — update caller to pass headColor/bodyColor instead of single color
+**Complexity:** Small-Medium
+**Tests:** Update `ProceduralPlayerGraphics.test.ts`
 
-1. **Read before editing** — always read the target file AND the relevant spec before making changes
-2. **One system section per iteration** — complete all items in a section before moving to the next
-3. **Preserve existing behavior** — don't break unrelated functionality; run full test suite
-4. **Spec is truth** — when plan and spec disagree, spec wins (and log the discrepancy as a discovery)
-5. **Check Validation Errata** — the errata section at the top has known discrepancies; apply those fixes
-6. **Update don't rewrite** — make targeted edits, don't rewrite entire files
-7. **Tests must be meaningful** — follow the assertion quality requirements exactly; no bare `toHaveBeenCalled()` on rendering calls
-8. **Skip HUMAN ONLY items** — Visual Regression and Manual Playtest sections are not for the worker
-9. **Commit every iteration** — even partial progress should be committed
-10. **Log discoveries** — if you find something the plan missed, add it to the Worker Discovery Log
+### Task 2.2: Crosshair shape — white "+" in circle
+
+**Spec changes covered:** #2, #32
+**File:** `stick-rumble-client/src/game/entities/Crosshair.ts` lines 36-57
+**Action in `generateReticleTexture()`:**
+- Remove cardinal tick marks (lines 44-49)
+- Remove red center dot (lines 51-53)
+- Add vertical bar: `moveTo(16, 6); lineTo(16, 26)`
+- Add horizontal bar: `moveTo(6, 16); lineTo(26, 16)`
+**Complexity:** Small
+**Tests:** Update `Crosshair.test.ts`
+
+### Task 2.3: Health bar 2-tier thresholds + percentage format
+
+**Spec changes covered:** #11, #12, #22
+**File 1:** `stick-rumble-client/src/game/ui/HealthBarUI.ts` lines 82-91
+**Action:**
+- Replace 3-tier color logic (green>60%/yellow>30%/red) with 2-tier (green≥20%/red<20%)
+- Change text format from `"${health}/${maxHealth}"` → `"${Math.round(ratio*100)}%"`
+- Add EKG heartbeat icon graphics object to left of bar (new rendering)
+**File 2:** `stick-rumble-client/src/game/entities/HealthBar.ts` line 71
+**Action:** Apply same 2-tier threshold logic (was always green)
+**Complexity:** Medium
+**Tests:** Update `HealthBarUI.test.ts`, `HealthBar.test.ts`
+
+### Task 2.4: Ammo counter rework
+
+**Spec changes covered:** #23
+**File:** Locate ammo display in `GameSceneUI.ts` or related UI file
+**Action:**
+- Add crosshair icon (yellow/orange `COLORS.AMMO_READY` when ready; red spinner when reloading)
+- Change ammo text color to `COLORS.AMMO_READY` (#E0A030) when ready
+- Add "RELOADING..." text in `COLORS.AMMO_RELOADING` (#CC5555) during reload
+- Add "INF" display for fist/infinite-ammo weapons
+- Hide ammo counter for melee weapons
+**Complexity:** Medium
+**Tests:** Update relevant ammo display tests
+
+### Task 2.5: Damage screen flash — replace camera.flash with overlay
+
+**Spec changes covered:** #9, #33, #38
+**File:** `stick-rumble-client/src/game/scenes/GameSceneUI.ts` lines 86-88, 315-317
+**Action:**
+- Fill in `createDamageFlashOverlay()` no-op stub (line 86-88) with actual red rectangle
+- Replace `showDamageFlash()` body: remove `cameras.main.flash(100, 128, 0, 0)`, add full-viewport `Phaser.GameObjects.Rectangle` at depth 999, `COLORS.DAMAGE_FLASH` alpha 0.35, tween alpha→0 over 300ms
+**Note:** `GameScene.ts` already calls `createDamageFlashOverlay()` at line 133 — just needs the no-op filled in.
+**Complexity:** Low
+**Tests:** Update `GameSceneUI.test.ts`
+
+### Task 2.6: Hit direction indicator timing
+
+**Spec changes covered:** #36 (timing)
+**File:** `stick-rumble-client/src/game/scenes/GameSceneUI.ts` lines 436-440
+**Action:** Replace simple fade tween with 3-phase: fade-in 100ms → hold 300ms → fade-out 200ms (total ~600ms)
+**Complexity:** Low
+**Tests:** Update `GameSceneUI.test.ts`
+
+### Task 2.7: Weapon crate visual — yellow circle
+
+**Spec changes covered:** #3
+**File:** `stick-rumble-client/src/game/entities/WeaponCrateManager.ts` lines 1-63
+**Action:**
+- Remove brown rectangle (`sprite`) creation (lines 43-50)
+- Replace with `Phaser.GameObjects.Graphics` drawing yellow circle outline (~40px diameter, `COLORS.WEAPON_CRATE`) with small dark cross icon inside
+- Update `CrateVisual` interface to use Graphics instead of Rectangle
+- Update bobbing tween target from `sprite` → new graphics object
+**Complexity:** Medium
+**Tests:** Update `WeaponCrateManager.test.ts`
+
+### Task 2.8: Minimap rework — size, shape, colors
+
+**Spec changes covered:** #29 (partial)
+**File:** `stick-rumble-client/src/game/scenes/GameSceneUI.ts` lines 459-533
+**Action:**
+- Line 460: `scale = 0.075` → `MINIMAP.SCALE` (0.106)
+- Line 463: `mapSize = 1600 * scale` → `MINIMAP.SIZE` (170)
+- Line 471: `fillStyle(0x000000, 0.7)` → `fillStyle(MINIMAP.BG_COLOR, 0.5)`
+- Line 472: `fillRect(...)` → `fillCircle(...)` (circular shape)
+- Line 475: `lineStyle(2, 0xffffff, 0.5)` → `lineStyle(2, MINIMAP.BORDER_COLOR, 1)` (teal)
+- Line 476: `strokeRect(...)` → `strokeCircle(...)`
+- Lines 491-492: Update scale references
+**Complexity:** Medium
+**Tests:** Update minimap tests in `GameSceneUI.test.ts`
 
 ---
 
-### Worker Discovery Log
+## Phase 3: New UI Component Classes
 
-> **For agent workers.** When you encounter unexpected problems, spec ambiguities, missing dependencies, or new work items during implementation, log them here. Prefix each entry with the date and the system you were working on. Human reviewers will triage these into new tasks or errata.
->
-> Format: `- [YYYY-MM-DD] **System N — Summary**: Details of what was found and any suggested resolution.`
+> Independent of each other, but all depend on Phase 0 constants. Can be done in parallel.
 
-- [2026-02-16] **System 1 — Camera shake deferred to System 5**: The "Add camera shake on melee hit" checklist item overlaps with System 5 (Camera Effects), which normalizes all camera shake to `shake(50, 0.001)`. Implementing it in System 1 would create duplicate work. Deferred to System 5 where it belongs.
-- [2026-02-16] **System 1 — Root-level weapon-configs.json also needs updating**: There are TWO copies of `weapon-configs.json` — one at `stick-rumble-client/public/weapon-configs.json` and one at the project root `weapon-configs.json`. Both needed range/arc updates. The plan only mentions client config.
-- [2026-02-16] **System 1 — MockGraphics needed setAlpha and setVisible as vi.fn()**: The shared Phaser mock in `tests/__mocks__/phaser.ts` lacked `setAlpha` as a `vi.fn()` method, and `setVisible` was a regular method not a `vi.fn()`. Both needed to be mocked properly for tween and visibility testing. The inline mock in `MeleeWeaponManager.test.ts` also needed `setAlpha` and `tweens` added.
-- [2026-02-16] **System 1 — MeleeWeapon.update() backward compatibility**: `MeleeWeaponManager.ts` calls `weapon.update()` on each frame. The rewritten `MeleeWeapon.ts` no longer needs frame-based updates (tweens handle animation), but a no-op `update()` method was added to avoid runtime errors.
-- [2026-02-16] **System 3a — Mock scene needed tweens.add**: The `createMockScene()` factory in `PlayerManager.test.ts` didn't include `tweens: { add: vi.fn() }`. Added it to support corpse fade tween testing. Also updated 3 existing tests that checked for gray color (0x888888) to check for player hidden + corpse created instead.
-- [2026-02-16] **System 3a — Corpse rotation uses aimAngle**: The spec uses `this.rotation` for corpse limb/head angles, but `PlayerManager.ts` doesn't store a rotation for players — it uses `aimAngle`. Used `state.aimAngle ?? 0` as the rotation basis for corpse rendering.
-- [2026-02-16] **System 5 — Per-weapon recoil shake kept separate from hit feedback shake**: `ScreenShake.ts` has per-weapon recoil intensities (Uzi 0.005, AK47 0.007, Shotgun 0.012) triggered on fire/projectile:spawn. The spec's `shake(50, 0.001)` is for hit feedback (hit:confirmed), which is a different trigger. Kept per-weapon recoil as-is and added the normalized `shake(50, 0.001)` only on hit:confirmed via `GameSceneUI.showCameraShake()`.
-- [2026-02-16] **System 5 — createDamageFlashOverlay kept as no-op**: `GameScene.ts` still calls `this.gameSceneUI.createDamageFlashOverlay(width, height)` during scene setup. Rather than modifying GameScene.ts (which would expand the scope), `createDamageFlashOverlay` was converted to a no-op. The actual damage flash now uses `cameras.main.flash()` in `showDamageFlash()`.
-- [2026-02-16] **System 5 — Rectangle count changed in GameScene.connection.test.ts**: Removing the damageFlashOverlay rectangle reduced the total rectangle count from 5 to 4 in scene creation (arena bg, arena border, health bar bg, health bar fill). Updated the assertion in `GameScene.connection.test.ts`.
-- [2026-02-16] **System 5 — 6 test files needed showCameraShake mock**: Adding `showCameraShake()` to `GameSceneUI` required updating the mock in 6 test files: `GameSceneEventHandlers.test.ts`, `GameSceneEventHandlers.audio.test.ts`, `GameSceneEventHandlers.recoil.test.ts`, `GameSceneEventHandlers.reconciliation.test.ts`, `GameSceneUI.test.ts`, and `GameScene.connection.test.ts`.
-- [2026-02-16] **System 2 — Sway implemented via InputManager offset**: Rather than adding sway directly into PlayerManager's update of weapon rotation (which would affect remote players), sway is computed in `PlayerManager.update()` for the local player only, then applied via `InputManager.setAimSwayOffset()`. This ensures sway affects: (a) `getAimAngle()` for visual weapon rotation, (b) `input:state` aimAngle sent to server, (c) `player:shoot` aimAngle for projectile trajectory. All three angles are sway-affected consistently.
-- [2026-02-16] **System 2 — No new files created**: The plan mentioned "Maybe" for new files. No new files were needed — sway state lives in `PlayerManager.ts` (computation), with the offset applied in `InputManager.ts` (integration) and `GameScene.ts` (wiring).
-- [2026-02-16] **System 3b — RenderedPlayer fields not needed**: Errata mentioned `lastDamageTime` and `lastDamageSourceAngle` fields for blood particles. These weren't needed — the `player:damaged` handler gets `attackerId` and `victimId`, and `PlayerManager.getPlayerPosition()` provides both positions to compute the direction on the fly.
-- [2026-02-16] **System 3b — Blood particles use tweens not physics**: Spec shows physics bodies but used tweens (matching HitEffectManager patterns) for testability and consistency. Simulated movement with `effectiveDistance = speed * (duration / 1000) * 0.5`.
-- [2026-02-16] **System 3b — Plan spec line refs wrong**: Plan said "constants.md lines 262-269" for blood particle constants, but those lines are AK47 weapon constants. Actual blood constants at lines ~406. Healing particle constants at lines 421-430 (also mislabeled as lines 277-282 in the plan; those are shotgun constants).
-- [2026-02-16] **System 3c — Placed in PlayerManager.update() not HealthBarUI**: HealthBarUI is a HUD element with scrollFactor=0, unsuitable for spawning world-position particles. Healing particles are spawned in `PlayerManager.update()` which has access to player world positions via renderPosition.
-- [2026-02-16] **System 3c — Particles spawn for all regenerating players**: Implementation creates healing particles for both local and remote players when isRegenerating is true, matching spec's intent of visible feedback for any healing player.
-- [2026-02-16] **System 3c — Test uses absolute y not relative**: Spec shows `y: part.y - 20` (relative) in tween config. Implementation uses `particle.y - 20` as absolute target because Phaser circle objects store their position as plain numbers (not Phaser's `'-=20'` string syntax). Tests assert the computed absolute value.
-- [2026-02-16] **System 6a — Plan spec line refs wrong**: Plan said "constants.md lines 359-361" for gun recoil constants, but those lines are about time limits and kill rewards. Actual gun recoil constants at lines 503-509: GUN_RECOIL_DEFAULT=-6, GUN_RECOIL_SHOTGUN=-10, GUN_RECOIL_DURATION=50.
-- [2026-02-16] **System 6a — Recoil on ProceduralWeaponGraphics not PlayerManager**: The spec shows `this.recoilOffset` on a weapon class. Placed `recoilOffset` property and `triggerRecoil()` method on `ProceduralWeaponGraphics`, which Phaser can tween directly. `PlayerManager.triggerWeaponRecoil(playerId)` delegates to the weapon graphics instance.
-- [2026-02-16] **System 6a — Recoil triggered for all players**: Gun recoil visual is triggered for both local and remote players on `projectile:spawn`, so all firing weapons show the kickback animation.
-- [2026-02-16] **System 4a — Complete Crosshair.ts rewrite**: Replaced per-frame procedural Graphics-based crosshair (white + sign, red spread circle) with pre-generated 32×32 reticle texture (ring, 4 cardinal ticks, red center dot) displayed as a Sprite. Removed all spread-related code (WEAPON_SPREAD constants, spreadRadius, drawSpreadIndicator, SPREAD_LERP_SPEED, PIXELS_PER_DEGREE). `getCurrentSpreadRadius()` now always returns 0. Public interface preserved for backward compatibility.
-- [2026-02-16] **System 4a — Plan spec line refs wrong**: Plan said "constants.md lines 318-325" for reticle constants, but those lines are about hit indicators. Actual reticle constants at lines 462-473: RETICLE_TEXTURE_SIZE=32, RING_RADIUS=10, RING_STROKE=2, etc.
-- [2026-02-16] **System 4a — GameScene.test.setup.ts did NOT need updating**: Despite the new `scene.make.graphics` call in Crosshair's constructor, the shared `createMockScene()` did not need changes because GameScene tests don't directly instantiate Crosshair — they go through GameSceneUI which is mocked at a higher level.
-- [2026-02-16] **System 4b — GameScene.test.setup.ts DID need updating**: Unlike System 4a (Crosshair), System 4b added `scene.make.graphics()` to GameSceneUI's constructor, which IS instantiated in GameScene tests. Added `mockMakeGraphics` object and `make: { graphics: vi.fn() }` to `createMockScene()`.
-- [2026-02-16] **System 4b — Kill variant triggered on player:kill_credit**: The `hit:confirmed` event doesn't include a `kill` boolean. Normal hit markers are shown on `hit:confirmed` (white, 1.2×) and kill hit markers on `player:kill_credit` (red, 2.0×). Added `showHitMarker(true)` call to the kill credit handler.
-- [2026-02-16] **System 4b — Plan spec line refs wrong**: Plan said "constants.md lines 345-350" for hit marker constants, but those lines are about aim sway. Actual hit marker constants at lines 489-499.
-- [2026-02-16] **System 4b — World coordinates via pointer.worldX/worldY**: Spec errata 1.1.7 says hit marker uses world coordinates (no `setScrollFactor(0)`). Implemented using `pointer.worldX`/`pointer.worldY` with fallback to `pointer.x + camera.scrollX` when worldX is undefined.
-- [2026-02-16] **System 4c — Plan spec line refs wrong**: Plan said "constants.md lines 423-431" for damage number constants, but those are healing particle constants. Actual damage number constants at lines 567-579. Also said lines 237-238 for duration/float, actual at lines 385-386.
-- [2026-02-16] **System 4c — isKill derived from newHealth**: The `player:damaged` event includes `newHealth` but no explicit kill boolean. Used `newHealth <= 0` to determine if this damage was a killing blow. `isLocal` is `attackerId === localPlayerId`.
-- [2026-02-16] **System 4c — Backward-compatible signature**: Added `isKill` and `isLocal` as optional params with defaults (`false`, `true`), so existing callers that don't pass them get the normal local variant behavior.
-- [2026-02-16] **System 4d — Plan spec line refs wrong**: Plan said "constants.md lines 333-337" for hit indicator constants, but those are aim sway constants. Actual hit indicator constants at lines 477-485.
-- [2026-02-16] **System 4d — Used Math.atan2 instead of Phaser.Math.Angle.Between**: Spec code uses `Phaser.Math.Angle.Between(player.x, player.y, target.x, target.y)` which is equivalent to `Math.atan2(target.y - player.y, target.x - player.x)`. Used `Math.atan2` directly to avoid needing to mock additional Phaser methods.
-- [2026-02-16] **System 4d — RenderedPlayer fields not needed for hit indicators**: Errata mentioned `lastDamageTime` and `lastDamageSourceAngle` fields for directional hit indicators. These weren't needed — outgoing uses `getLocalPlayerPosition()` + `getPlayerPosition(victimId)`, incoming uses `getLocalPlayerPosition()` + `getPlayerPosition(attackerId)`, computed on the fly from event data.
-- [2026-02-16] **System 4d — GameScene.test.setup.ts needed fillStyle/fillPath/closePath**: The chevron texture uses `fillStyle`, `fillPath`, and `closePath` on `make.graphics()`. Added these methods to `mockMakeGraphics` in both `GameSceneUI.test.ts` and `GameScene.test.setup.ts`.
-- [2026-02-16] **System 4d — Kill credit handler also shows outgoing indicator**: In addition to `hit:confirmed` (normal outgoing), the `player:kill_credit` handler also shows an outgoing indicator with `kill=true` for red chevron on kills.
-- [2026-02-16] **System 4d — getLocalPlayerPosition added to mockPlayerManager**: The base `mockPlayerManager` in `GameSceneEventHandlers.test.ts` was missing `getLocalPlayerPosition`. Added it alongside the existing `getPlayerPosition` mock.
-- [2026-02-16] **System 6b — Plan spec line refs wrong**: Plan said "constants.md lines 385-388" for reload animation constants, but those are healing particle constants. Actual reload animation constants at lines 529-536.
-- [2026-02-16] **System 6b — Placed in ProceduralWeaponGraphics not PlayerManager**: The spec shows `this.weaponContainer` — the actual container lives in `ProceduralWeaponGraphics.container`. Added `triggerReloadPulse()` to ProceduralWeaponGraphics, delegated through `PlayerManager.triggerReloadPulse(playerId)`.
-- [2026-02-16] **System 6b — Reload start detected in weapon:state handler**: The `weapon:state` handler detects reload start transition by comparing `wasReloading` (before `updateWeaponState`) with `messageData.isReloading`. Only triggers pulse for non-melee weapons on the local player.
-- [2026-02-16] **System 6b — Three mockShootingManager objects needed isReloading/isMeleeWeapon**: The weapon:state test blocks create inline `mockShootingManager` objects that were missing `isReloading()` and `isMeleeWeapon()`. Added both to all three instances.
-- [2026-02-16] **System 6c — Wall = arena boundary, not internal geometry**: The spec says "barrel inside wall geometry" but the arena has no internal walls — only the arena boundary (0,0 to 1920×1080). Barrel-in-wall check tests if barrel position is outside arena bounds.
-- [2026-02-16] **System 6c — Barrel offset 30px default**: The spec doesn't specify a barrel offset constant. Used 30px as a reasonable default that covers most weapon barrel tips (Pistol ~25px from container origin, AK47 ~50px). Combined with 10px weapon offset from player, this gives ~30px effective check distance.
-- [2026-02-16] **System 6c — Client-side suppression only**: The server still creates projectiles via `projectile:spawn` — the wall spark only suppresses the client's `player:shoot` request. This is a client-side visual optimization; the server would also reject the shot if implemented server-side.
-- [2026-02-16] **System 6c — Two shoot callsites updated**: Both the pointerdown handler (single shot) and the update loop (automatic fire) needed barrel-in-wall checks. Added `getObstructedBarrelPosition()` helper in GameScene.ts that returns the barrel position if obstructed, null otherwise.
-- [2026-02-16] **System 7a — Plan spec line refs wrong**: Plan said "constants.md lines 396-399" for floor grid constants, but those lines are about melee arc/swing/camera shake. Actual floor grid constants at lines 540-547.
-- [2026-02-16] **System 7a — mockGraphics needed moveTo/lineTo**: The shared `createMockScene()` mockGraphics object was missing `moveTo` and `lineTo` methods. Added both with `.mockReturnThis()` for grid line drawing.
-- [2026-02-16] **System 7a — Vertical line count is 20 not 21**: `for x = 0; x <= 1920; x += 100` iterates x=0,100,...,1900 = 20 values. Initial test counted `moveTo` calls with `y===0` which also matched the first horizontal line's `moveTo(0, 0)`. Fixed to count `lineTo` calls with `y===1080` (definitively vertical lines).
-- [2026-02-16] **System 7b — Plan spec line refs wrong**: Plan said "constants.md lines 407-415" for minimap constants, but those are blood particle constants. Actual minimap constants at lines 551-563.
-- [2026-02-16] **System 7b — No wall rendering in minimap**: The spec shows wall rendering in the static layer, but the arena has no internal walls. The wall loop in the spec (`walls.forEach(...)`) is a no-op for the current arena. Only background and border are drawn in the static layer.
-- [2026-02-16] **System 7b — Distance calculated with Math.sqrt not Phaser**: Used `Math.sqrt(dx*dx + dy*dy)` instead of `Phaser.Math.Distance.Between()` to avoid mocking additional Phaser methods. Same result.
-- [2026-02-16] **System 7b — mockGraphics needed strokeRect/strokeCircle/fillCircle**: The `add.graphics` mock in both `GameSceneUI.test.ts` and `GameScene.test.setup.ts` needed additional methods for minimap rendering.
+### Task 3.1: ScoreDisplayUI (new file)
+
+**Spec changes covered:** #24
+**New file:** `stick-rumble-client/src/game/ui/ScoreDisplayUI.ts`
+**Spec:** 6-digit zero-padded (`String(score).padStart(6, '0')`), monospaced ~28px, white `COLORS.SCORE`, top-right corner, depth 1000.
+**Integration:** Instantiate in `GameScene.ts`. Update on `player:kill_credit` in `GameSceneEventHandlers.ts` lines 472-491 (currently only logs). Score = killerXP.
+**Complexity:** Simple
+**Tests:** Create `ScoreDisplayUI.test.ts`
+
+### Task 3.2: KillCounterUI (new file)
+
+**Spec changes covered:** #25
+**New file:** `stick-rumble-client/src/game/ui/KillCounterUI.ts`
+**Spec:** `"KILLS: N"`, color `COLORS.KILL_COUNTER` (#FF6666), ~16px, right-aligned, below score display.
+**Integration:** Same as ScoreDisplayUI — wire into `player:kill_credit` handler.
+**Complexity:** Simple
+**Tests:** Create `KillCounterUI.test.ts`
+
+### Task 3.3: ChatLogUI (new file)
+
+**Spec changes covered:** #26
+**New file:** `stick-rumble-client/src/game/ui/ChatLogUI.ts`
+**Spec:** 300×120px, bottom-left, `#808080` at 70% opacity background, scroll factor 0. System messages `COLORS.CHAT_SYSTEM` (#BBA840) prefixed `[SYSTEM]`. Player messages: name in red/orange, text in white. Font sans-serif 14px. Max ~6 visible lines. Depth 1000.
+**Methods:** `addSystemMessage(text)`, `addPlayerMessage(name, text)`
+**Complexity:** Medium (similar to KillFeedUI pattern)
+**Tests:** Create `ChatLogUI.test.ts`
+
+### Task 3.4: DebugOverlayUI (new file)
+
+**Spec changes covered:** #28
+**New file:** `stick-rumble-client/src/game/ui/DebugOverlayUI.ts`
+**Spec:** Bright green `COLORS.DEBUG_OVERLAY` (#00FF00), monospaced ~12px. Lines: `FPS: N`, `Update: Nms`, `AI: Nms`, `E: N | B: N`. Below minimap, left side, screen-fixed. Debug flag controlled (not shown in production). Depth 1000.
+**Method:** `update(fps, updateTime, aiTime, entityCount, bulletCount)`
+**Complexity:** Simple
+**Tests:** Create `DebugOverlayUI.test.ts`
+
+### Task 3.5: PickupNotificationUI (new file)
+
+**Spec changes covered:** #31
+**New file:** `stick-rumble-client/src/game/ui/PickupNotificationUI.ts`
+**Spec:** `"Picked up {WEAPON_NAME}"` in gray (#AAAAAA), center screen, fade out after ~2 seconds. Triggered by `weapon:pickup_confirmed`.
+**Integration:** Wire into `weapon:pickup_confirmed` handler in `GameSceneEventHandlers.ts`.
+**Complexity:** Simple
+**Tests:** Create `PickupNotificationUI.test.ts`
+
+### Task 3.6: "YOU" label + enemy name labels
+
+**Spec changes covered:** #5, #6
+**File:** `stick-rumble-client/src/game/entities/ProceduralPlayerGraphics.ts` or `PlayerManager.ts`
+**Action:**
+- For local player: add `Phaser.GameObjects.Text` "YOU", white bold ~14px, dark drop shadow, positioned at `(player.x, player.y - headRadius - 5px)`
+- For enemies: add `Phaser.GameObjects.Text` with player display name, gray/white ~12-14px, same positioning
+- Labels move with player each frame
+**Dependency:** Player names must be available in server state messages (verify)
+**Complexity:** Small
+**Tests:** Update `ProceduralPlayerGraphics.test.ts` or `PlayerManager.test.ts`
+
+### Task 3.7: Spawn invulnerability ring rendering
+
+**Spec changes covered:** #4, #19, #52
+**File:** `stick-rumble-client/src/game/entities/ProceduralPlayerGraphics.ts`
+**Action:** In `draw()` method, add conditional: if `isInvulnerable === true`, draw yellow circle outline (`COLORS.SPAWN_RING`, ~25px radius) around player.
+**Dependency:** Task 0.4 (isInvulnerable in PlayerState)
+**Complexity:** Small
+**Tests:** Update `ProceduralPlayerGraphics.test.ts`
+
+---
+
+## Phase 4: Medium Complexity Features
+
+> Features requiring new rendering logic or significant rework.
+
+### Task 4.1: Crosshair bloom (dynamic size expansion)
+
+**Spec changes covered:** #7, #40
+**File:** `stick-rumble-client/src/game/entities/Crosshair.ts` lines 12, 65-76, 154-156
+**Action:**
+- Remove "No dynamic spread circle" comment (line 12)
+- In `update()`: use `_spreadDegrees` and `_isMoving` to adjust sprite scale (base 40px → expanded 60-80px)
+- Add `triggerBloom()` method: snap to expanded, tween back to base over 200-300ms
+- Update `getCurrentSpreadRadius()` to return actual radius (line 154-156, currently returns 0)
+- Wire: call `triggerBloom()` on `projectile:spawn` for local player
+**Also:** `GameSceneUI.ts` line 221-231 — pass spread/movement state to crosshair update
+**Complexity:** Medium
+**Tests:** Update `Crosshair.test.ts`
+
+### Task 4.2: Aim line visual (new feature)
+
+**Spec changes covered:** #8, #39
+**Current:** No aim line exists anywhere in codebase.
+**Action:** Add `aimLineGraphics: Phaser.GameObjects.Graphics` — thin white line (`COLORS.AIM_LINE` / #FFFFFF) from barrel tip to crosshair/cursor position. Depth 40. Drawn every frame in `preUpdate()` or `update()`, cleared and redrawn. Local player only (enemies may not show).
+**File:** `ProceduralPlayerGraphics.ts` (add to draw method) or standalone in `GameScene.ts`
+**Need:** `getBarrelPosition()` method if not present
+**Complexity:** Medium
+**Tests:** Add aim line tests
+
+### Task 4.3: Projectile chevron shape
+
+**Spec changes covered:** #42
+**File:** `stick-rumble-client/src/game/entities/ProjectileManager.ts` lines 69-74
+**Action:**
+- Currently: `this.scene.add.circle()` — always circle
+- Replace with: when `shape === 'chevron'`, draw directional triangle polygon pointing in velocity direction
+- Use `tracerLength` (~20px) for tracer trail segments
+- Update all weapon entries in `weaponConfig.ts` hardcoded defaults with `shape: 'chevron'`
+**Also:** Add `projectile` sub-object to both `weapon-configs.json` files for all 6 weapons
+**Complexity:** Medium-High (triangle geometry rendering)
+**Tests:** Update `ProjectileManager.test.ts`
+
+### Task 4.4: Muzzle flash starburst shape
+
+**Spec changes covered:** #44 (shape)
+**File:** `stick-rumble-client/src/game/entities/ProjectileManager.ts` lines 228-252 (`createMuzzleFlash()`)
+**Action:** Currently always uses `scene.add.circle()`. When `muzzleFlashShape === 'starburst'`, render small starburst polygon at barrel tip instead.
+**Complexity:** Medium
+**Tests:** Update `ProjectileManager.test.ts`
+
+### Task 4.5: Death screen overlay rewrite
+
+**Spec changes covered:** #27, #55
+**File:** `stick-rumble-client/src/game/scenes/GameSceneSpectator.ts` lines 46-75
+**Current:** Shows "Spectating..." + countdown text. No overlay, no stats, no button.
+**Required:**
+- Dark overlay rectangle (depth 990, 70% alpha black) over full viewport
+- "YOU DIED" text: ~72px bold white, centered
+- Stats row: trophy icon (yellow/gold) + score (red), skull icon (red) + kill count (white)
+- "TRY AGAIN" button: rectangular, thin white border, white text, centered below stats
+- On button click: send `player:respawn_request` message
+- Dismiss on server `player:respawn` event
+**Complexity:** High (substantial rewrite)
+**Tests:** Update `GameSceneSpectator.test.ts`
+
+---
+
+## Phase 5: Server-Side & Cross-Cutting
+
+### Task 5.1: Document invulnerability on Respawn (server)
+
+**Spec changes covered:** #60
+**File:** `stick-rumble-server/internal/game/` — verify `Respawn()` sets `IsInvulnerable = true`
+**Note:** Server code at `player.go` lines 54-55 already has the fields. Verify the broadcast includes them. If not, add to the broadcast payload.
+**Complexity:** Low (likely already working, just verify)
+
+### Task 5.2: Reload progress tracking (client-side)
+
+**Spec changes covered:** #57
+**File:** `stick-rumble-client/src/game/scenes/GameSceneUI.ts` reload progress bar area
+**Action:** Verify client-side timestamp-based progress works: on first `isReloading: true`, record `reloadStartTime`, compute `progress = (now - reloadStartTime) / weapon.reloadDuration` each frame.
+**Also:** Reload progress bar should be world-space (above player, ~60px wide, white fill) per spec change #30 — currently may be screen-fixed at (10, 70).
+**Complexity:** Low-Medium
+
+### Task 5.3: Wire all new UI components into GameScene
+
+**Spec changes covered:** #21 (HUD layout), #50
+**File:** `stick-rumble-client/src/game/scenes/GameScene.ts` (~lines 118-136)
+**Action:** Import and instantiate all new UI classes (ScoreDisplayUI, KillCounterUI, DebugOverlayUI, ChatLogUI, PickupNotificationUI). Wire event handlers in GameSceneEventHandlers.ts.
+**Dependency:** All Phase 3 tasks complete
+**Complexity:** Medium (integration work)
+
+---
+
+## Spec Change Coverage Matrix
+
+| Spec # | Phase.Task | Description |
+|--------|-----------|-------------|
+| #1 | 2.1 | Player head-only color |
+| #2 | 2.2 | Crosshair white "+" shape |
+| #3 | 2.7 | Weapon crate yellow circle |
+| #4 | 3.7 | Spawn invulnerability ring |
+| #5 | 3.6 | "YOU" label |
+| #6 | 3.6 | Enemy name labels |
+| #7 | 4.1 | Crosshair bloom |
+| #8 | 4.2 | Aim line visual |
+| #9 | 2.5 | Damage screen flash |
+| #10 | 1.3 | World-space health bar bg |
+| #11 | 2.3 | HUD health bar text format |
+| #12 | 2.3 | Health bar 2-tier thresholds |
+| #13 | 1.4 | Blood effect color |
+| #14 | 1.5 | Hit indicator color |
+| #15 | 1.6 | Muzzle flash color |
+| #16 | 1.7 | Crate respawn glow |
+| #17 | 1.1 | Background color |
+| #18 | 1.2 | Grid line color |
+| #19 | 3.7 | Spawn ring (player.md) |
+| #20 | 2.5 | Damage flash (player.md) |
+| #21 | 5.3 | HUD layout diagram |
+| #22 | 2.3 | Health bar UI rework |
+| #23 | 2.4 | Ammo counter rework |
+| #24 | 3.1 | Score display |
+| #25 | 3.2 | Kill counter |
+| #26 | 3.3 | Chat log |
+| #27 | 4.5 | Death screen overlay |
+| #28 | 3.4 | Debug overlay |
+| #29 | 2.8 | Minimap rework |
+| #30 | 5.2 | Reload progress bar |
+| #31 | 3.5 | Weapon pickup notification |
+| #32 | 2.2 | Crosshair (ui.md) |
+| #33 | 2.5 | Damage flash mechanism |
+| #34 | 0.2 | HEALTH_BAR_WIDTH naming |
+| #35 | 1.10 | Damage number color/timing |
+| #36 | 1.5 + 2.6 | Hit indicator color + timing |
+| #37 | 1.4 | Blood particles color/count |
+| #38 | 2.5 | Damage flash (hit-detection) |
+| #39 | 4.2 | Aim line (shooting.md) |
+| #40 | 4.1 | Crosshair bloom (shooting) |
+| #41 | — | No code change needed |
+| #42 | 0.5 + 4.3 | Projectile chevron shape |
+| #43 | 1.8 | Pistol tracer color |
+| #44 | 0.5 + 1.9 + 4.4 | Muzzle flash duration/shape |
+| #45 | 0.1 | COLORS constants |
+| #46 | 0.2 | HEALTH_BAR_WIDTH rename |
+| #47 | 0.2 | MINIMAP constants |
+| #48 | 0.3 | GameConfig bg color |
+| #49 | 1.1 | Arena fill (architecture) |
+| #50 | 5.3 | HUD components (architecture) |
+| #51 | 2.1 | Player colors (architecture) |
+| #52 | 3.7 | Spawn ring (architecture) |
+| #53 | 2.8 | renderArena grid (architecture) |
+| #54 | 0.4 | PlayerState invulnerability |
+| #55 | 4.5 | GameSceneSpectator (architecture) |
+| #56 | 0.4 | isInvulnerable in messages |
+| #57 | 5.2 | Reload progress tracking |
+| #58 | 3.1 | Score=XP mapping |
+| #59 | — | Field name mismatch (doc-only, see messages.md) |
+| #60 | 5.1 | Server invulnerability on respawn |
+
+---
+
+## Worker Task Sizing (for loop.sh)
+
+Each task below = one commit. Grouped for a Sonnet worker:
+
+**Commit 1:** Tasks 0.1-0.5 (Foundation — constants, config, interfaces)
+**Commit 2:** Tasks 1.1-1.10 (All trivial one-line color/value fixes)
+**Commit 3:** Task 2.1 (Player head-only color distinction)
+**Commit 4:** Task 2.2 (Crosshair white "+" shape)
+**Commit 5:** Task 2.3 (Health bar 2-tier + percentage format)
+**Commit 6:** Task 2.4 (Ammo counter rework)
+**Commit 7:** Task 2.5 + 2.6 (Damage flash overlay + hit indicator timing)
+**Commit 8:** Task 2.7 (Weapon crate yellow circle)
+**Commit 9:** Task 2.8 (Minimap rework)
+**Commit 10:** Tasks 3.1 + 3.2 (ScoreDisplayUI + KillCounterUI)
+**Commit 11:** Task 3.3 (ChatLogUI)
+**Commit 12:** Tasks 3.4 + 3.5 (DebugOverlayUI + PickupNotificationUI)
+**Commit 13:** Tasks 3.6 + 3.7 ("YOU"/name labels + spawn ring)
+**Commit 14:** Task 4.1 (Crosshair bloom)
+**Commit 15:** Task 4.2 (Aim line visual)
+**Commit 16:** Tasks 4.3 + 4.4 (Projectile chevron + muzzle starburst)
+**Commit 17:** Task 4.5 (Death screen overlay rewrite)
+**Commit 18:** Tasks 5.1-5.3 (Server verify + reload bar + wire all UI)
+
+**Total: ~18 commits**
+
+---
+
+## Risk Areas
+
+1. **weapon-configs.json dual copies** — root `weapon-configs.json` and `stick-rumble-client/public/weapon-configs.json` must stay in sync. Both need `projectile` sub-object added.
+
+2. **ProceduralPlayerGraphics constructor signature change** (Task 2.1) — changing from single `color` to `headColor`/`bodyColor` propagates to `PlayerManager.ts` and all test files that instantiate player graphics.
+
+3. **GameSceneUI.ts is a large file** — multiple tasks touch it (damage flash, hit indicators, minimap, damage numbers). If parallelizing workers, assign all GameSceneUI changes to one worker to avoid merge conflicts.
+
+4. **Crosshair.ts overhaul** — Tasks 2.2 and 4.1 both modify `Crosshair.ts` (shape change + bloom). Do them sequentially (shape first, then bloom).
+
+5. **Death screen rewrite** (Task 4.5) is the highest-risk item — complete rewrite of `GameSceneSpectator.ts` and introduces `player:respawn_request` client-to-server message. Verify server handles this message type.
+
+6. **Missing player names in server messages** — Task 3.6 (enemy labels) requires display names from server state. Verify `player:move` broadcasts include player names, or add them.
+
+---
+
+## Rules for Workers
+
+1. **Read before editing** — always read the target file AND the relevant spec section before making changes
+2. **One commit per task group** — follow the commit sizing above
+3. **Run tests after each commit** — `make test-client` must pass
+4. **Import COLORS** — use `COLORS.*` constants, not inline hex values
+5. **Spec is truth** — when plan and spec disagree, spec wins
+6. **Update existing tests** — don't just add new tests; update existing assertions that check old values (e.g., old colors)
+7. **Two JSON files** — always update BOTH `weapon-configs.json` copies
