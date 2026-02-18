@@ -566,3 +566,65 @@ Each task below = one commit. Grouped for a Sonnet worker:
 5. **Spec is truth** — when plan and spec disagree, spec wins
 6. **Update existing tests** — don't just add new tests; update existing assertions that check old values (e.g., old colors)
 7. **Two JSON files** — always update BOTH `weapon-configs.json` copies
+
+---
+
+## Implementation Results
+
+> Completed: 2026-02-18
+
+### Stats
+
+| Metric | Value |
+|--------|-------|
+| **Files changed** | 50 |
+| **Lines added** | 3,778 |
+| **Lines removed** | 878 |
+| **Feature commits** | 21 (19 task + 1 post-merge fix + 1 wiring) |
+| **Tests passing** | 1,632 |
+| **Lint errors** | 0 |
+| **Typecheck errors** | 0 |
+| **Spec changes covered** | 60/60 |
+
+### Timing
+
+| Phase | Wall clock | Notes |
+|-------|-----------|-------|
+| Planning + team setup | ~10 min | Task breakdown, branch creation, dependency graph |
+| Foundation (Phase 0+1) | ~8 min | 1 worker, sequential |
+| Parallel workers (Phase 2-4) | ~35 min | 3 workers simultaneous |
+| Rate limit downtime | ~2.5 hrs | Workers idled 14:32–17:08 |
+| Worker respawn + finish | ~10 min | 2 workers, 1 task each |
+| Merge + wiring (Phase 5) | ~18 min | 1 Opus worker |
+| Test quality verification | ~3 min | 1 Opus worker |
+| **Total productive time** | **~85 min** | Excludes rate limit downtime |
+
+### Team Composition
+
+| Role | Model | Tasks | Commits | Respawns |
+|------|-------|-------|---------|----------|
+| **Lead** (orchestrator) | Opus 4.6 | Coordination, server verification (5.1/5.2), monitoring | — | — |
+| **foundation** | Sonnet 4.6 | Phase 0 constants + Phase 1 trivial fixes | 2 | 0 |
+| **scene-ui** | Sonnet 4.6 | HealthBarUI, ammo counter, damage flash, hit indicators, minimap, reload bar | 6 | 2 (worktree migration, rate limit) |
+| **entities** | Sonnet 4.6 | Player colors, crosshair, crates, bloom, aim line, projectiles | 6 | 2 (worktree migration, rate limit) |
+| **new-ui** | Sonnet 4.6 | 5 new UI components, death screen, labels, spawn ring | 5 | 0 |
+| **merge-shepherd** | Opus 4.6 | Branch merging, conflict resolution, Task 5.3 UI wiring | 2 | 0 |
+| **test-verifier** | Opus 4.6 | Test quality audit (spawned test-quality-verifier subagent) | 0 (no fixes needed) | 0 |
+| **server-verify** | Sonnet 4.6 | Server code research for Tasks 5.1/5.2 | — | 0 |
+
+**Total agents spawned:** 8 (+ 4 respawns = 12 agent instances)
+**Model mix:** 5 Sonnet workers, 3 Opus workers (lead, merge-shepherd, test-verifier)
+
+### Lessons Learned
+
+1. **Worktrees are essential for multi-agent work.** Workers sharing one working directory caused branch checkout stomping and cross-contamination (commits landing on wrong branches). Switching to `git worktree` per worker eliminated the issue. Future jobs should create worktrees *before* spawning workers.
+
+2. **Rate limits still burn time.** ~2.5 hours of idle time from rate limiting. Workers went into idle-spam loops. Mitigation: detect rate limits earlier and pause instead of retrying.
+
+3. **Worker respawns are cheap.** Because each task = one commit, respawning a worker after rate limits or context exhaustion only risks losing the current in-progress task. Committed work is safe on the branch.
+
+4. **File ownership prevents merge conflicts.** Assigning all GameSceneUI.ts changes to one worker (scene-ui) and all entity files to another (entities) meant the only real merge conflict was the expected ProceduralPlayerGraphics constructor change.
+
+5. **Sonnet handled the "hardest" task fine.** The death screen rewrite (Task 4.5, flagged as highest risk) was completed by Sonnet without needing Opus escalation.
+
+6. **Opus for merging was the right call.** The ProceduralPlayerGraphics conflict required understanding both the headColor/bodyColor refactor and the label/ring additions — Opus resolved it cleanly.
