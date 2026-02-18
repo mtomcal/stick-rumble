@@ -11,6 +11,8 @@ import { COLORS } from '../../shared/constants';
  * - Color customization (separate head and body colors)
  * - Rotation support for direction
  * - Optional aim line from barrel tip to cursor (local player only)
+ * - "YOU" / name label above player head
+ * - Spawn invulnerability ring rendering
  */
 export class ProceduralPlayerGraphics {
   private scene: Phaser.Scene;
@@ -22,6 +24,11 @@ export class ProceduralPlayerGraphics {
   private headColor: number;
   private bodyColor: number;
   private walkCycle: number = 0;
+  private isInvulnerable: boolean = false;
+  private nameLabel: Phaser.GameObjects.Text | null = null;
+
+  // Head radius (used for label positioning)
+  private static readonly HEAD_RADIUS = 13;
 
   // Barrel tip position relative to player center (same as hand position)
   private static readonly BARREL_X = 20;
@@ -45,6 +52,45 @@ export class ProceduralPlayerGraphics {
   }
 
   /**
+   * Set name label displayed above this player's head.
+   * Use 'YOU' for the local player, or player display name for enemies.
+   * Pass null or empty string to hide label.
+   */
+  setNameLabel(label: string | null): void {
+    if (!label) {
+      if (this.nameLabel) {
+        this.nameLabel.destroy();
+        this.nameLabel = null;
+      }
+      return;
+    }
+
+    const isYou = label === 'YOU';
+    if (!this.nameLabel) {
+      this.nameLabel = this.scene.add.text(this.x, this.y - ProceduralPlayerGraphics.HEAD_RADIUS - 5, label, {
+        fontSize: isYou ? '14px' : '12px',
+        fontStyle: isYou ? 'bold' : 'normal',
+        color: isYou ? '#FFFFFF' : '#AAAAAA',
+        shadow: isYou ? { offsetX: 1, offsetY: 1, color: '#000000', blur: 2, fill: true } : undefined,
+      });
+      this.nameLabel.setOrigin(0.5, 1);
+      this.nameLabel.setDepth(60);
+    } else {
+      this.nameLabel.setText(label);
+    }
+    this.updateLabelPosition();
+  }
+
+  /**
+   * Set spawn invulnerability state.
+   * When true, a yellow ring is drawn around the player.
+   */
+  setInvulnerable(invulnerable: boolean): void {
+    this.isInvulnerable = invulnerable;
+    this.draw();
+  }
+
+  /**
    * Draw the stick figure
    * Based on StickFigure.ts lines 297-388
    */
@@ -63,6 +109,12 @@ export class ProceduralPlayerGraphics {
         y: cy + (localX * Math.sin(rot) + localY * Math.cos(rot)),
       };
     };
+
+    // --- SPAWN INVULNERABILITY RING ---
+    if (this.isInvulnerable) {
+      this.graphics.lineStyle(2, COLORS.SPAWN_RING, 1);
+      this.graphics.strokeCircle(cx, cy, 25);
+    }
 
     // --- LEGS ---
     this.graphics.lineStyle(3, this.bodyColor, 1);
@@ -123,9 +175,16 @@ export class ProceduralPlayerGraphics {
 
     // --- HEAD ---
     this.graphics.fillStyle(this.headColor, 1);
-    this.graphics.fillCircle(cx, cy, 13);
+    this.graphics.fillCircle(cx, cy, ProceduralPlayerGraphics.HEAD_RADIUS);
     this.graphics.lineStyle(1, 0x000000, 0.3);
-    this.graphics.strokeCircle(cx, cy, 13);
+    this.graphics.strokeCircle(cx, cy, ProceduralPlayerGraphics.HEAD_RADIUS);
+  }
+
+  private updateLabelPosition(): void {
+    if (this.nameLabel) {
+      this.nameLabel.x = this.x;
+      this.nameLabel.y = this.y - ProceduralPlayerGraphics.HEAD_RADIUS - 5;
+    }
   }
 
   /**
@@ -214,6 +273,7 @@ export class ProceduralPlayerGraphics {
     // Update Graphics transform for camera follow
     this.graphics.x = x;
     this.graphics.y = y;
+    this.updateLabelPosition();
     this.draw();
   }
 
@@ -252,6 +312,9 @@ export class ProceduralPlayerGraphics {
    */
   setVisible(visible: boolean): void {
     this.graphics.setVisible(visible);
+    if (this.nameLabel) {
+      this.nameLabel.setVisible(visible);
+    }
   }
 
   /**
@@ -278,6 +341,10 @@ export class ProceduralPlayerGraphics {
     }
     if (this.graphics) {
       this.graphics.destroy();
+    }
+    if (this.nameLabel) {
+      this.nameLabel.destroy();
+      this.nameLabel = null;
     }
   }
 }
