@@ -5,9 +5,22 @@ import Phaser from 'phaser';
  */
 type WeaponType = 'Uzi' | 'AK47' | 'Shotgun' | 'Bat' | 'Katana' | 'Pistol';
 
+// Crosshair display sizes in pixels (sprite texture is 32x32)
+const BASE_SIZE = 40;       // Base crosshair size (at rest, not moving)
+const EXPANDED_SIZE = 60;   // Expanded when shooting
+const MOVING_EXPANDED_SIZE = 80;  // Expanded when moving
+const TEXTURE_SIZE = 32;
+
+const BASE_SCALE = BASE_SIZE / TEXTURE_SIZE;
+const EXPANDED_SCALE = EXPANDED_SIZE / TEXTURE_SIZE;
+const MOVING_EXPANDED_SCALE = MOVING_EXPANDED_SIZE / TEXTURE_SIZE;
+
+const BLOOM_TWEEN_DURATION = 250; // ms for bloom to decay back to base
+
 /**
  * Crosshair UI class using pre-generated reticle texture.
  * Renders a white '+' shape (crosshair) inside a ring.
+ * Supports dynamic size bloom on shoot.
  */
 export class Crosshair {
   private scene: Phaser.Scene;
@@ -15,6 +28,8 @@ export class Crosshair {
   private weaponType: WeaponType = 'Pistol';
   private visible: boolean = true;
   private isSpectating: boolean = false;
+  private currentScale: number = BASE_SCALE;
+  private bloomTween: Phaser.Tweens.Tween | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -27,10 +42,11 @@ export class Crosshair {
     this.sprite.setScrollFactor(0);
     this.sprite.setDepth(100);
     this.sprite.setAlpha(0.8);
+    this.sprite.setScale(BASE_SCALE);
   }
 
   /**
-   * Generate the reticle texture: ring + 4 cardinal ticks + red center dot
+   * Generate the reticle texture: ring + white '+' cross
    */
   private generateReticleTexture(): void {
     const gfx = this.scene.make.graphics({ x: 0, y: 0 }, false);
@@ -50,12 +66,11 @@ export class Crosshair {
   }
 
   /**
-   * Update crosshair position each frame.
-   * @param _isMoving - Unused (spread removed)
-   * @param _spreadDegrees - Unused (spread removed)
+   * Update crosshair position and size each frame.
+   * @param isMoving - Whether the player is currently moving
+   * @param spreadDegrees - Current weapon spread in degrees
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  update(_isMoving: boolean, _spreadDegrees: number): void {
+  update(isMoving: boolean, spreadDegrees: number): void {
     if (!this.sprite || !this.visible) {
       return;
     }
@@ -66,6 +81,55 @@ export class Crosshair {
     }
 
     this.sprite.setPosition(pointer.x, pointer.y);
+
+    // Adjust scale based on movement and spread (only if not mid-bloom)
+    if (!this.bloomTween || !this.bloomTween.isPlaying()) {
+      let targetScale: number;
+      if (isMoving) {
+        // Expand more when moving
+        const movementFactor = Math.min(1, spreadDegrees / 10);
+        targetScale = BASE_SCALE + (MOVING_EXPANDED_SCALE - BASE_SCALE) * movementFactor;
+      } else {
+        // Expand based on spread
+        const spreadFactor = Math.min(1, spreadDegrees / 10);
+        targetScale = BASE_SCALE + (EXPANDED_SCALE - BASE_SCALE) * spreadFactor;
+      }
+      this.currentScale = targetScale;
+      this.sprite.setScale(this.currentScale);
+    }
+  }
+
+  /**
+   * Trigger bloom animation: snap to expanded size, tween back to base.
+   * Called when a projectile is spawned for the local player.
+   */
+  triggerBloom(): void {
+    if (!this.sprite) {
+      return;
+    }
+
+    // Stop any existing bloom tween
+    if (this.bloomTween) {
+      this.bloomTween.stop();
+      this.bloomTween = null;
+    }
+
+    // Snap to expanded size
+    const expandedScale = this.currentScale > BASE_SCALE ? MOVING_EXPANDED_SCALE : EXPANDED_SCALE;
+    this.sprite.setScale(expandedScale);
+
+    // Tween back to base scale
+    this.bloomTween = this.scene.tweens.add({
+      targets: this.sprite,
+      scaleX: BASE_SCALE,
+      scaleY: BASE_SCALE,
+      duration: BLOOM_TWEEN_DURATION,
+      ease: 'Sine.easeOut',
+      onComplete: () => {
+        this.bloomTween = null;
+        this.currentScale = BASE_SCALE;
+      },
+    });
   }
 
   /**
@@ -142,16 +206,20 @@ export class Crosshair {
   }
 
   /**
-   * Get the current spread radius (always 0, spread removed)
+   * Get the current spread radius in pixels (half of current display size)
    */
   getCurrentSpreadRadius(): number {
-    return 0;
+    return (this.currentScale * TEXTURE_SIZE) / 2;
   }
 
   /**
    * Clean up resources
    */
   destroy(): void {
+    if (this.bloomTween) {
+      this.bloomTween.stop();
+      this.bloomTween = null;
+    }
     if (this.sprite) {
       this.sprite.destroy();
       this.sprite = null;

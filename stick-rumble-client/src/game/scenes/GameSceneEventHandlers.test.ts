@@ -98,6 +98,7 @@ describe('GameSceneEventHandlers', () => {
       updateMinimap: vi.fn(),
       showCameraShake: vi.fn(),
       updateMatchTimer: vi.fn(),
+      triggerCrosshairBloom: vi.fn(),
     } as unknown as GameSceneUI;
 
     mockGameSceneSpectator = {

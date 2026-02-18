@@ -231,6 +231,15 @@ export class GameSceneUI {
   }
 
   /**
+   * Trigger crosshair bloom animation when local player fires
+   */
+  triggerCrosshairBloom(): void {
+    if (this.crosshair) {
+      this.crosshair.triggerBloom();
+    }
+  }
+
+  /**
    * Set crosshair spectating mode
    * Safe to call even if crosshair not created yet
    */

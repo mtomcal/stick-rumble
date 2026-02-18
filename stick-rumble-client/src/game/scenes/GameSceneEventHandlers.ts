@@ -322,6 +322,11 @@ export class GameSceneEventHandlers {
         this.screenShake.shakeOnWeaponFire(this.currentWeaponType);
       }
 
+      // Trigger crosshair bloom when local player fires
+      if (isLocalPlayer) {
+        this.ui.triggerCrosshairBloom();
+      }
+
       // Play weapon firing sound (Story 3.3 Polish: Weapon-Specific Firing Sounds)
       if (this.audioManager) {
         if (isLocalPlayer) {
