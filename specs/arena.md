@@ -1030,6 +1030,7 @@ func TestCalculateDistance(t *testing.T) {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.2.0 | 2026-02-18 | Art style alignment: Updated background color from 0x222222 to 0xC8CCC8 (light gray). Updated floor grid line color from 0xB0BEC5 to 0xD8DCD8. Updated test TS-ARENA-013. |
 | 1.1.0 | 2026-02-16 | Added Floor Grid section with 100px spacing, light blue-gray lines at depth -1. Added TS-ARENA-013 test. Ported from pre-BMM prototype. |
 | 1.0.3 | 2026-02-16 | Removed nonexistent `CheckAABBCollision` standalone Go function — AABB is inlined in `CheckProjectilePlayerCollision`. Removed nonexistent `IsInArena` — boundary checking done inline. Renamed `CanPickupWeapon` → `CheckPlayerCrateProximity` to match source. |
 | 1.0.0 | 2026-02-02 | Initial specification extracted from codebase |

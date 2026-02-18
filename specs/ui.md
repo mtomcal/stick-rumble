@@ -52,8 +52,8 @@ All UI constants are defined here and referenced in [constants.md](constants.md#
 | HUD_HEALTH_BAR_WIDTH | 200 | px | HUD health bar width (distinct from PLAYER_HEALTH_BAR_WIDTH=32 in constants.md for world-space bar) |
 | HUD_HEALTH_BAR_HEIGHT | 30 | px | HUD health bar height |
 | DODGE_ROLL_UI_RADIUS | 20 | px | Cooldown indicator radius |
-| CAMERA_FLASH_DURATION | 100 | ms | Camera flash on damage received |
-| CAMERA_FLASH_COLOR | RGB(128,0,0) | color | Dark red camera flash |
+| DAMAGE_FLASH_ALPHA | 0.35 | ratio | Red overlay alpha on damage received |
+| DAMAGE_FLASH_FADE_DURATION | 300 | ms | Damage flash fade-out duration |
 | HIT_FEEDBACK_SHAKE_DURATION | 50 | ms | Camera shake on server-confirmed hit |
 | HIT_FEEDBACK_SHAKE_INTENSITY | 0.001 | ratio | Hit feedback shake magnitude |
 | RECOIL_SHAKE_DURATION | 100 | ms | Camera shake on firing (client-side) |
@@ -1744,9 +1744,9 @@ it('should sort scoreboard by kills descending, deaths ascending', () => {
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.0.0 | 2026-02-02 | Initial specification |
-| 1.1.0 | 2026-02-15 | Added Debug Network Panel section (DebugNetworkPanel.tsx for testing netcode under degraded conditions). |
-| 1.1.1 | 2026-02-16 | Fixed kill feed ordering — actual uses `push` (add to end) + `shift` (remove oldest from front), not `unshift` + `pop`. Uses KillEntry objects with container, not raw text with setScrollFactor. |
+| 1.4.0 | 2026-02-18 | Art style alignment: Rewrote HUD layout diagram. Health bar updated to 2-tier (green/red at 20%), EKG icon, "N%" format, #333333 depleted bg. Ammo counter updated with icon, #E0A030 color, RELOADING text, INF state. Added Score Display (6-digit zero-padded), Kill Counter (KILLS: N), Chat Log, Death Screen Overlay, Debug Overlay, Weapon Pickup Notification sections. Minimap updated to 170x170px circular with teal border. Reload progress bar moved to world-space 60px white. Crosshair changed to white "+" in circle with bloom. Damage flash changed from camera flash to persistent red overlay at depth 999. Renamed HEALTH_BAR_WIDTH to HUD_HEALTH_BAR_WIDTH. Replaced stale CAMERA_FLASH constants with DAMAGE_FLASH constants. Updated tests TS-UI-001, TS-UI-013, TS-UI-018. |
+| 1.3.0 | 2026-02-17 | Expanded camera shake section to document all three shake systems: hit feedback shake (server-confirmed, 50ms/0.001), per-weapon recoil shake (client-side, 100ms, Uzi=0.005/AK47=0.007/Shotgun=0.012), and bat melee hit shake (150ms/0.008). Renamed constants from generic CAMERA_SHAKE to specific HIT_FEEDBACK_SHAKE. Added tests TS-UI-020 and TS-UI-021. |
+| 1.2.0 | 2026-02-16 | Replaced damage flash overlay with camera flash. Replaced procedural hit marker with texture-based 20×20 X. Updated damage numbers with kill/remote variants. Added camera shake, minimap sections. Added tests TS-UI-013 through TS-UI-019. Ported from pre-BMM prototype. |
 | 1.1.8 | 2026-02-16 | Added dual-source health bar update — `player:damaged` handler also calls `updateHealth()` (not just `player:move`) |
 | 1.1.7 | 2026-02-16 | Fixed hit marker — uses world coordinates (no `setScrollFactor(0)`) per actual `GameSceneUI.ts:305-361` |
 | 1.1.6 | 2026-02-16 | Clarified reload circle alpha — explicitly 1.0 (fully opaque) per `GameSceneUI.ts:168` |
@@ -1754,6 +1754,6 @@ it('should sort scoreboard by kills descending, deaths ascending', () => {
 | 1.1.4 | 2026-02-16 | Added font size (14px) to connection status specification |
 | 1.1.3 | 2026-02-16 | Fixed kill feed player ID method — `slice(0, 8)` → `substring(0, 8)` to match source |
 | 1.1.2 | 2026-02-16 | Fixed match end screen test expected output — winner text is "Winner: Player1", not "Player1 WINS!" |
-| 1.2.0 | 2026-02-16 | Replaced damage flash overlay with camera flash. Replaced procedural hit marker with texture-based 20×20 X. Updated damage numbers with kill/remote variants. Added camera shake, minimap sections. Added tests TS-UI-013 through TS-UI-019. Ported from pre-BMM prototype. |
-| 1.3.0 | 2026-02-17 | Expanded camera shake section to document all three shake systems: hit feedback shake (server-confirmed, 50ms/0.001), per-weapon recoil shake (client-side, 100ms, Uzi=0.005/AK47=0.007/Shotgun=0.012), and bat melee hit shake (150ms/0.008). Renamed constants from generic CAMERA_SHAKE to specific HIT_FEEDBACK_SHAKE. Added tests TS-UI-020 and TS-UI-021. |
-| 1.4.0 | 2026-02-18 | Art style alignment: Rewrote HUD layout diagram. Health bar updated to 2-tier (green/red at 20%), EKG icon, "N%" format, #333333 depleted bg. Ammo counter updated with icon, #E0A030 color, RELOADING text, INF state. Added Score Display (6-digit zero-padded), Kill Counter (KILLS: N), Chat Log, Death Screen Overlay, Debug Overlay, Weapon Pickup Notification sections. Minimap updated to 170x170px circular with teal border. Reload progress bar moved to world-space 60px white. Crosshair changed to white "+" in circle with bloom. Damage flash changed from camera flash to persistent red overlay at depth 999. Renamed HEALTH_BAR_WIDTH to HUD_HEALTH_BAR_WIDTH. Updated tests TS-UI-001, TS-UI-013, TS-UI-018. |
+| 1.1.1 | 2026-02-16 | Fixed kill feed ordering — actual uses `push` (add to end) + `shift` (remove oldest from front), not `unshift` + `pop`. Uses KillEntry objects with container, not raw text with setScrollFactor. |
+| 1.1.0 | 2026-02-15 | Added Debug Network Panel section (DebugNetworkPanel.tsx for testing netcode under degraded conditions). |
+| 1.0.0 | 2026-02-02 | Initial specification |

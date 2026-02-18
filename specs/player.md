@@ -971,4 +971,5 @@ func TestOverkillDamage(t *testing.T) {
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification extracted from codebase |
 | 1.1.0 | 2026-02-15 | Added `inputSequence` field for prediction reconciliation. Added `CorrectionStats` struct for anti-cheat movement validation tracking. |
+| 1.3.0 | 2026-02-18 | Art style alignment: Specified yellow spawn invulnerability ring (#FFFF00, ~50px diameter). Updated damage screen flash to full-viewport overlay with 300ms fade-out, referencing graphics.md as authoritative. |
 | 1.2.0 | 2026-02-16 | Added cross-references to new death corpse rendering, blood particles, camera flash, and directional hit indicators from pre-BMM visual port. |

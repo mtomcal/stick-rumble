@@ -632,7 +632,7 @@ aimSway = (sin(time * swaySpeed) + sin(time * swaySpeed * 0.7)) * swayMagnitude
 | Constant | Value | Unit | Why |
 |----------|-------|------|-----|
 | FLOOR_GRID_SPACING | 100 | px | Grid line every 100px. Helps judge distances. |
-| FLOOR_GRID_COLOR | 0xB0BEC5 | hex | Light blue-gray. Subtle, not distracting. |
+| FLOOR_GRID_COLOR | 0xD8DCD8 | hex | Light gray (`COLORS.GRID_LINE`). Subtle, not distracting. |
 | FLOOR_GRID_ALPHA | 0.5 | ratio | Half-transparent. Background element. |
 | FLOOR_GRID_DEPTH | -1 | z-index | Below all game objects. |
 
@@ -821,9 +821,9 @@ if (distance > maxRange * 0.5):
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.0.0 | 2026-02-02 | Initial specification extracted from codebase |
-| 1.1.0 | 2026-02-15 | Updated DECELERATION from 50 to 1500 px/s² to match source code (changed during Epic 4 client-side prediction work). Updated rationale text and code snippets. |
-| 1.1.1 | 2026-02-16 | Fixed HEALTH_BAR_WIDTH (40→32) and HEALTH_BAR_HEIGHT (6→4) to match HealthBar.ts source code. |
-| 1.2.0 | 2026-02-16 | Added 14 new constant tables for ported pre-BMM visual systems: melee visual, blood particles, healing particles, death corpse, camera effects, crosshair/reticle, hit indicators, hit markers, gun recoil, aim sway, reload animation, floor grid, minimap, damage numbers. Updated Bat range (64→90px), Katana range (80→110px), melee arc (90°→80°). |
-| 1.4.0 | 2026-02-18 | Added COLORS constant group (22 visual color constants). Renamed HEALTH_BAR_WIDTH to PLAYER_HEALTH_BAR_WIDTH, added HUD_HEALTH_BAR_WIDTH=200. Updated MINIMAP_SIZE to 170 and MINIMAP_SCALE to 0.106. Updated BLOOD_COLOR to 0xCC3333. |
+| 1.4.0 | 2026-02-18 | Added COLORS constant group (22 visual color constants). Renamed HEALTH_BAR_WIDTH to PLAYER_HEALTH_BAR_WIDTH, added HUD_HEALTH_BAR_WIDTH=200. Updated MINIMAP_SIZE to 170 and MINIMAP_SCALE to 0.106. Updated BLOOD_COLOR to 0xCC3333. Updated FLOOR_GRID_COLOR to 0xD8DCD8. |
 | 1.3.0 | 2026-02-17 | Expanded Camera Effects Constants into four subsections: Hit Feedback Shake (renamed from generic CAMERA_SHAKE), Per-Weapon Recoil Shake (Uzi=0.005, AK47=0.007, Shotgun=0.012, 100ms duration), Bat Melee Hit Shake (150ms/0.008), Camera Flash. |
+| 1.2.0 | 2026-02-16 | Added 14 new constant tables for ported pre-BMM visual systems: melee visual, blood particles, healing particles, death corpse, camera effects, crosshair/reticle, hit indicators, hit markers, gun recoil, aim sway, reload animation, floor grid, minimap, damage numbers. Updated Bat range (64→90px), Katana range (80→110px), melee arc (90°→80°). |
+| 1.1.1 | 2026-02-16 | Fixed HEALTH_BAR_WIDTH (40→32) and HEALTH_BAR_HEIGHT (6→4) to match HealthBar.ts source code. |
+| 1.1.0 | 2026-02-15 | Updated DECELERATION from 50 to 1500 px/s² to match source code (changed during Epic 4 client-side prediction work). Updated rationale text and code snippets. |
+| 1.0.0 | 2026-02-02 | Initial specification extracted from codebase |

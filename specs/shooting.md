@@ -1218,11 +1218,12 @@ test "aim sway affects projectile trajectory":
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.0.0 | 2026-02-02 | Initial specification with complete shooting mechanics |
-| 1.1.0 | 2026-02-15 | Added `clientTimestamp` parameter to `PlayerShoot()` for lag compensation on hitscan weapons. |
-| 1.1.1 | 2026-02-16 | Fixed `ShootResult.FailReason` → `ShootResult.Reason` to match `gameserver.go:22`. |
-| 1.1.2 | 2026-02-16 | Fixed `PlayerShoot` — only checks `!exists` (no `IsAlive` check), uses `weaponMu.RLock` (not `gs.mu.Lock`), uses `CreateProjectile` (not `NewProjectile+AddProjectile`), added hitscan branch. |
+| 1.3.0 | 2026-02-18 | Art style alignment: Added Aim Line Visual section (white #FFFFFF, barrel to crosshair). Added Crosshair Bloom section (40px base, 60-80px expanded). Added shotgun client-side rendering note (8 chevron+trail entities). |
+| 1.2.0 | 2026-02-16 | Added Aim Sway subsection with composite sine formula, moving/idle magnitudes, and effect on projectile trajectory. Added TS-SHOOT-013. Ported from pre-BMM prototype. |
 | 1.1.5 | 2026-02-16 | Fixed `IsExpired()` operator — uses `>=` not `>` for `ProjectileMaxLifetime` comparison |
 | 1.1.4 | 2026-02-16 | Fixed client `canShoot()` check order — reload → ammo → cooldown (was cooldown → reload → ammo) |
 | 1.1.3 | 2026-02-16 | Fixed `StartReload` — checks `IsReloading` + `CurrentAmmo >= MagazineSize` (not `IsMelee()`). |
-| 1.2.0 | 2026-02-16 | Added Aim Sway subsection with composite sine formula, moving/idle magnitudes, and effect on projectile trajectory. Added TS-SHOOT-013. Ported from pre-BMM prototype. |
+| 1.1.2 | 2026-02-16 | Fixed `PlayerShoot` — only checks `!exists` (no `IsAlive` check), uses `weaponMu.RLock` (not `gs.mu.Lock`), uses `CreateProjectile` (not `NewProjectile+AddProjectile`), added hitscan branch. |
+| 1.1.1 | 2026-02-16 | Fixed `ShootResult.FailReason` → `ShootResult.Reason` to match `gameserver.go:22`. |
+| 1.1.0 | 2026-02-15 | Added `clientTimestamp` parameter to `PlayerShoot()` for lag compensation on hitscan weapons. |
+| 1.0.0 | 2026-02-02 | Initial specification with complete shooting mechanics |

@@ -1823,9 +1823,10 @@ Client                          Server
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.0.0 | 2026-02-02 | Initial specification extracted from codebase |
-| 1.1.0 | 2026-02-15 | Added `sequence` field to `input:state`. Added `clientTimestamp` field to `player:shoot`. Added `lastProcessedSequence` and `correctedPlayers` to `player:move`. Added new `state:snapshot` and `state:delta` message types for delta compression. Updated server→client count from 20 to 22. |
-| 1.1.1 | 2026-02-16 | Fixed `projectile:spawn` Go section — server broadcast omits `weaponType` (only sends id, ownerId, position, velocity) |
-| 1.1.2 | 2026-02-16 | Fixed `weapon:pickup_confirmed` `nextRespawnTime` — is Unix epoch timestamp in seconds (via `respawnTime.Unix()`), not duration in milliseconds |
+| 1.2.0 | 2026-02-18 | Art style alignment: Added isInvulnerable and invulnerabilityEndTime to TypeScript PlayerState. Documented reload progress tracking (client-side timestamp approach). Documented score=XP mapping. Added Go-to-TypeScript field name mapping table for player:move. |
 | 1.1.4 | 2026-02-16 | Clarified `input:state` Go struct — `sequence` is not part of `InputState` struct, extracted separately in `message_processor.go` |
 | 1.1.3 | 2026-02-16 | Fixed `player:damaged` — melee path omits `projectileId` entirely; projectile path includes it. Made `projectileId` optional in TypeScript interface. |
+| 1.1.2 | 2026-02-16 | Fixed `weapon:pickup_confirmed` `nextRespawnTime` — is Unix epoch timestamp in seconds (via `respawnTime.Unix()`), not duration in milliseconds |
+| 1.1.1 | 2026-02-16 | Fixed `projectile:spawn` Go section — server broadcast omits `weaponType` (only sends id, ownerId, position, velocity) |
+| 1.1.0 | 2026-02-15 | Added `sequence` field to `input:state`. Added `clientTimestamp` field to `player:shoot`. Added `lastProcessedSequence` and `correctedPlayers` to `player:move`. Added new `state:snapshot` and `state:delta` message types for delta compression. Updated server→client count from 20 to 22. |
+| 1.0.0 | 2026-02-02 | Initial specification extracted from codebase |

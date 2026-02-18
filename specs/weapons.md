@@ -1073,6 +1073,7 @@ func TestKnockbackBoundaryClamping(t *testing.T) {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.2.0 | 2026-02-18 | Art style alignment: Added shape ("chevron"/"circle") and tracerLength to ProjectileVisuals. Added muzzleFlashShape to WeaponVisuals. Updated Pistol tracerColor to 0xffaa00. Reduced Pistol muzzleFlashDuration to 33ms. |
 | 1.1.0 | 2026-02-16 | Updated Bat range (64→90px) and Katana range (80→110px), melee arc (90°→80°). Added cross-references to gun recoil and aim sway visual systems from pre-BMM port. |
 | 1.0.2 | 2026-02-16 | Added `ProjectileVisuals` and `WeaponVisuals` interfaces to TypeScript section, added `projectile` sub-field to JSON example |
 | 1.0.1 | 2026-02-16 | Fixed Uzi visual config — muzzleFlashSize=8 (not 6), muzzleFlashDuration=50 (not 30) per `weaponConfig.ts:199-200`. |
