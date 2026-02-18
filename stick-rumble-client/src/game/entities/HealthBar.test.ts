@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import Phaser from 'phaser';
 import { HealthBar } from './HealthBar';
+import { COLORS } from '../../shared/constants';
 
 describe('HealthBar', () => {
   let scene: Phaser.Scene;
@@ -193,14 +194,33 @@ describe('HealthBar', () => {
       expect(graphics.fillStyle).toHaveBeenNthCalledWith(1, 0x333333);
     });
 
-    it('should use green color (0x00ff00) for health fill', () => {
+    it('should use COLORS.HEALTH_FULL (green) for health fill at >= 20%', () => {
       const graphics = (scene.add.graphics as any).mock.results[0].value;
       graphics.fillStyle.mockClear();
 
       healthBar.setHealth(50);
 
-      // Second fillStyle call is green fill
-      expect(graphics.fillStyle).toHaveBeenNthCalledWith(2, 0x00ff00);
+      // Second fillStyle call uses COLORS.HEALTH_FULL (green at >= 20%)
+      expect(graphics.fillStyle).toHaveBeenNthCalledWith(2, COLORS.HEALTH_FULL);
+    });
+
+    it('should use COLORS.HEALTH_CRITICAL (red) for health fill at < 20%', () => {
+      const graphics = (scene.add.graphics as any).mock.results[0].value;
+      graphics.fillStyle.mockClear();
+
+      healthBar.setHealth(19);
+
+      // Second fillStyle call uses COLORS.HEALTH_CRITICAL (red at < 20%)
+      expect(graphics.fillStyle).toHaveBeenNthCalledWith(2, COLORS.HEALTH_CRITICAL);
+    });
+
+    it('should use COLORS.HEALTH_FULL at exactly 20% threshold', () => {
+      const graphics = (scene.add.graphics as any).mock.results[0].value;
+      graphics.fillStyle.mockClear();
+
+      healthBar.setHealth(20);
+
+      expect(graphics.fillStyle).toHaveBeenNthCalledWith(2, COLORS.HEALTH_FULL);
     });
   });
 });

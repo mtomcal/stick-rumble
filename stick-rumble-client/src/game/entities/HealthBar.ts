@@ -67,9 +67,11 @@ export class HealthBar {
     this.graphics.fillStyle(COLORS.HEALTH_DEPLETED_BG);
     this.graphics.fillRect(0, 0, this.width, this.height);
 
-    // Draw green health fill (proportional to health)
-    const healthWidth = (this.health / 100) * this.width;
-    this.graphics.fillStyle(0x00ff00);
+    // Draw health fill with 2-tier color logic: green >= 20%, red < 20%
+    const ratio = this.health / 100;
+    const healthWidth = ratio * this.width;
+    const healthColor = ratio >= 0.2 ? COLORS.HEALTH_FULL : COLORS.HEALTH_CRITICAL;
+    this.graphics.fillStyle(healthColor);
     this.graphics.fillRect(0, 0, healthWidth, this.height);
   }
 }
