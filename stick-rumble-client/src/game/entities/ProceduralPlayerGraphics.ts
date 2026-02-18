@@ -7,7 +7,7 @@ import Phaser from 'phaser';
  * Features:
  * - Stick figure with head, arms, legs
  * - Walk cycle animation using sine waves
- * - Color customization
+ * - Color customization (separate head and body colors)
  * - Rotation support for direction
  */
 export class ProceduralPlayerGraphics {
@@ -17,17 +17,19 @@ export class ProceduralPlayerGraphics {
   private x: number;
   private y: number;
   private rotation: number = 0;
-  private color: number;
+  private headColor: number;
+  private bodyColor: number;
   private walkCycle: number = 0;
 
   // Animation constants (from prototype)
   private static readonly WALK_SPEED_FACTOR = 0.02;
 
-  constructor(scene: Phaser.Scene, x: number, y: number, color: number) {
+  constructor(scene: Phaser.Scene, x: number, y: number, headColor: number, bodyColor: number = 0x000000) {
     this.scene = scene;
     this.x = x;
     this.y = y;
-    this.color = color;
+    this.headColor = headColor;
+    this.bodyColor = bodyColor;
 
     // Create graphics object
     this.graphics = scene.add.graphics();
@@ -58,7 +60,7 @@ export class ProceduralPlayerGraphics {
     };
 
     // --- LEGS ---
-    this.graphics.lineStyle(3, this.color, 1);
+    this.graphics.lineStyle(3, this.bodyColor, 1);
 
     const stride = 16;
     const footSideOffset = 8;
@@ -82,7 +84,7 @@ export class ProceduralPlayerGraphics {
     this.graphics.strokePath();
 
     // Draw feet
-    this.graphics.fillStyle(this.color, 1);
+    this.graphics.fillStyle(this.bodyColor, 1);
     this.graphics.fillCircle(leftFootPos.x, leftFootPos.y, 3);
     this.graphics.fillCircle(rightFootPos.x, rightFootPos.y, 3);
 
@@ -96,7 +98,7 @@ export class ProceduralPlayerGraphics {
     const leftHandPos = calcPoint(leftHandX, leftHandY);
     const rightHandPos = calcPoint(rightHandX, rightHandY);
 
-    this.graphics.lineStyle(2, this.color, 1);
+    this.graphics.lineStyle(2, this.bodyColor, 1);
 
     // Draw left arm
     this.graphics.beginPath();
@@ -115,7 +117,7 @@ export class ProceduralPlayerGraphics {
     this.graphics.fillCircle(rightHandPos.x, rightHandPos.y, 3);
 
     // --- HEAD ---
-    this.graphics.fillStyle(this.color, 1);
+    this.graphics.fillStyle(this.headColor, 1);
     this.graphics.fillCircle(cx, cy, 13);
     this.graphics.lineStyle(1, 0x000000, 0.3);
     this.graphics.strokeCircle(cx, cy, 13);
@@ -173,10 +175,10 @@ export class ProceduralPlayerGraphics {
   }
 
   /**
-   * Set color
+   * Set head color (body is always black per art style)
    */
-  setColor(color: number): void {
-    this.color = color;
+  setColor(headColor: number): void {
+    this.headColor = headColor;
     this.draw();
   }
 

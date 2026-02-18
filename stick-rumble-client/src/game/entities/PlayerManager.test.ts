@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PlayerManager, type PlayerState } from './PlayerManager';
+import { COLORS } from '../../shared/constants';
 import { ManualClock } from '../utils/Clock';
 
 // Create mock Phaser scene
@@ -248,7 +249,7 @@ describe('PlayerManager', () => {
       );
     });
 
-    it('should create local player with green color (0x00ff00)', () => {
+    it('should create local player with dark head color (COLORS.PLAYER_HEAD)', () => {
       playerManager.setLocalPlayerId('local-player');
 
       const playerStates: PlayerState[] = [
@@ -258,9 +259,9 @@ describe('PlayerManager', () => {
       playerManager.updatePlayers(playerStates);
 
       expect(mockScene.add.graphics).toHaveBeenCalled();
-      // ProceduralPlayerGraphics uses fillStyle with color 0x00ff00 for local player
+      // ProceduralPlayerGraphics uses fillStyle with COLORS.PLAYER_HEAD for local player
       const graphics = mockScene.graphicsObjects[0];
-      expect(graphics.fillStyle).toHaveBeenCalledWith(0x00ff00, 1);
+      expect(graphics.fillStyle).toHaveBeenCalledWith(COLORS.PLAYER_HEAD, 1);
     });
 
     it('should create remote player with red color (0xff0000)', () => {
@@ -1367,8 +1368,8 @@ describe('PlayerManager', () => {
       playerManager.updatePlayers(rollingState);
 
       const graphics = mockScene.graphicsObjects[0];
-      // Color should be maintained during roll (green for local player)
-      expect(graphics.fillStyle).toHaveBeenCalledWith(0x00ff00, 1);
+      // Head color should be maintained during roll (COLORS.PLAYER_HEAD for local player)
+      expect(graphics.fillStyle).toHaveBeenCalledWith(COLORS.PLAYER_HEAD, 1);
     });
 
     it('should apply death effects even when rolling flag is set', () => {
@@ -2416,9 +2417,9 @@ describe('PlayerManager', () => {
 
       const graphics = mockScene.graphicsObjects[0];
 
-      // Verify green color (local player) was maintained during roll
+      // Verify head color (local player) was maintained during roll
       // Color is applied via fillStyle and strokeStyle calls during draw
-      expect(graphics.fillStyle).toHaveBeenCalledWith(0x00ff00, expect.any(Number));
+      expect(graphics.fillStyle).toHaveBeenCalledWith(COLORS.PLAYER_HEAD, expect.any(Number));
     });
 
     it('should restore original color when not rolling and not dead', () => {
@@ -2449,8 +2450,8 @@ describe('PlayerManager', () => {
       ];
       playerManager.updatePlayers(notRollingStates);
 
-      // Verify original color was restored
-      expect(graphics.fillStyle).toHaveBeenCalledWith(0x00ff00, expect.any(Number));
+      // Verify original head color was restored
+      expect(graphics.fillStyle).toHaveBeenCalledWith(COLORS.PLAYER_HEAD, expect.any(Number));
     });
 
     it('should hide player and create corpse for dead player even if rolling flag is set', () => {
