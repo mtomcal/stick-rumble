@@ -596,8 +596,26 @@ Each task below = one commit. Grouped for a Sonnet worker:
 | Rate limit downtime | ~2.5 hrs | Workers idled 14:32–17:08 |
 | Worker respawn + finish | ~10 min | 2 workers, 1 task each |
 | Merge + wiring (Phase 5) | ~18 min | 1 Opus worker |
-| Test quality verification | ~3 min | 1 Opus worker |
+| Test quality verification | ~3 min | 1 Opus worker + test-quality-verifier subagent |
 | **Total productive time** | **~85 min** | Excludes rate limit downtime |
+
+### Test Quality Verification
+
+The plan called for each worker to spawn a `test-quality-verifier` subagent after every commit batch. In practice, rate limits and worker respawns disrupted this cadence — individual workers did not consistently run the verifier during their implementation phase.
+
+Instead, a comprehensive verification pass was run once at the end on the fully merged `art/main` branch:
+
+| When | Scope | Agent | Result |
+|------|-------|-------|--------|
+| Post-merge (17:30) | All 27 modified/created test files | Opus → `test-quality-verifier` subagent | **PASS — no fixes needed** |
+
+**Findings from the audit:**
+- ~60+ `toBeDefined()` usages — all are guard assertions before more specific checks, not standalone vague assertions
+- `toHaveBeenCalled()` without args — used correctly where sibling tests cover argument specifics
+- Boolean `toBe(true/false)` — all test actual boolean return values, not vague
+- Zero empty test bodies, zero TODO/FIXME, zero `toMatchObject({})` anti-patterns
+
+**Lesson for future jobs:** Run the verifier as a final gate on the merged branch rather than per-commit. It's more efficient and catches everything in one pass. Per-commit verification is ideal but hard to enforce when workers hit rate limits or get respawned.
 
 ### Team Composition
 
@@ -609,7 +627,7 @@ Each task below = one commit. Grouped for a Sonnet worker:
 | **entities** | Sonnet 4.6 | Player colors, crosshair, crates, bloom, aim line, projectiles | 6 | 2 (worktree migration, rate limit) |
 | **new-ui** | Sonnet 4.6 | 5 new UI components, death screen, labels, spawn ring | 5 | 0 |
 | **merge-shepherd** | Opus 4.6 | Branch merging, conflict resolution, Task 5.3 UI wiring | 2 | 0 |
-| **test-verifier** | Opus 4.6 | Test quality audit (spawned test-quality-verifier subagent) | 0 (no fixes needed) | 0 |
+| **test-verifier** | Opus 4.6 | Spawned `test-quality-verifier` subagent on merged branch | 0 (no fixes needed) | 0 |
 | **server-verify** | Sonnet 4.6 | Server code research for Tasks 5.1/5.2 | — | 0 |
 
 **Total agents spawned:** 8 (+ 4 respawns = 12 agent instances)
