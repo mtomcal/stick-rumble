@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import type { ShootingManager } from '../input/ShootingManager';
 import type { PlayerManager } from '../entities/PlayerManager';
 import { Crosshair } from '../entities/Crosshair';
-import { COLORS } from '../../shared/constants';
+import { COLORS, MINIMAP } from '../../shared/constants';
 
 /**
  * GameSceneUI - Manages all UI elements for the game scene
@@ -557,23 +557,22 @@ export class GameSceneUI {
    * Called once during scene creation.
    */
   setupMinimap(): void {
-    const scale = 0.075;
     const mapX = 20;
     const mapY = 20;
-    const mapSize = 1600 * scale; // 120px
+    const mapRadius = MINIMAP.SIZE / 2; // 85px
 
     // Static layer — drawn once
     this.minimapStaticGraphics = this.scene.add.graphics();
     this.minimapStaticGraphics.setScrollFactor(0);
     this.minimapStaticGraphics.setDepth(1999);
 
-    // Background
-    this.minimapStaticGraphics.fillStyle(0x000000, 0.7);
-    this.minimapStaticGraphics.fillRect(mapX, mapY, mapSize, mapSize);
+    // Background — circular
+    this.minimapStaticGraphics.fillStyle(MINIMAP.BG_COLOR, 0.5);
+    this.minimapStaticGraphics.fillCircle(mapX + mapRadius, mapY + mapRadius, mapRadius);
 
-    // Border
-    this.minimapStaticGraphics.lineStyle(2, 0xffffff, 0.5);
-    this.minimapStaticGraphics.strokeRect(mapX, mapY, mapSize, mapSize);
+    // Border — circular, teal
+    this.minimapStaticGraphics.lineStyle(2, MINIMAP.BORDER_COLOR, 1);
+    this.minimapStaticGraphics.strokeCircle(mapX + mapRadius, mapY + mapRadius, mapRadius);
 
     // Dynamic layer — cleared and redrawn each frame
     this.minimapDynamicGraphics = this.scene.add.graphics();
@@ -588,7 +587,7 @@ export class GameSceneUI {
   updateMinimap(playerManager: PlayerManager): void {
     if (!this.minimapDynamicGraphics) return;
 
-    const scale = 0.075;
+    const scale = MINIMAP.SCALE;
     const mapX = 20;
     const mapY = 20;
 

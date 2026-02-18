@@ -1337,20 +1337,22 @@ describe('GameSceneUI', () => {
       expect(staticGraphics.setDepth).toHaveBeenCalledWith(1999);
     });
 
-    it('should draw black background at (20, 20) with 120x120 size', () => {
+    it('should draw circular background with MINIMAP.BG_COLOR at 0.5 alpha', () => {
       ui.setupMinimap();
 
       const staticGraphics = createdGraphics[0];
-      expect(staticGraphics.fillStyle).toHaveBeenCalledWith(0x000000, 0.7);
-      expect(staticGraphics.fillRect).toHaveBeenCalledWith(20, 20, 120, 120);
+      // MINIMAP.BG_COLOR = 0x3A3A3A, MINIMAP.SIZE = 170, radius = 85, center = (20+85, 20+85) = (105, 105)
+      expect(staticGraphics.fillStyle).toHaveBeenCalledWith(0x3A3A3A, 0.5);
+      expect(staticGraphics.fillCircle).toHaveBeenCalledWith(105, 105, 85);
     });
 
-    it('should draw white border with 2px stroke at 0.5 alpha', () => {
+    it('should draw circular teal border with 2px stroke at alpha 1', () => {
       ui.setupMinimap();
 
       const staticGraphics = createdGraphics[0];
-      expect(staticGraphics.lineStyle).toHaveBeenCalledWith(2, 0xffffff, 0.5);
-      expect(staticGraphics.strokeRect).toHaveBeenCalledWith(20, 20, 120, 120);
+      // MINIMAP.BORDER_COLOR = 0x00CCCC
+      expect(staticGraphics.lineStyle).toHaveBeenCalledWith(2, 0x00CCCC, 1);
+      expect(staticGraphics.strokeCircle).toHaveBeenCalledWith(105, 105, 85);
     });
 
     it('should create dynamic graphics at depth 2000 with scrollFactor 0', () => {
@@ -1362,13 +1364,12 @@ describe('GameSceneUI', () => {
       expect(dynamicGraphics.setDepth).toHaveBeenCalledWith(2000);
     });
 
-    it('should position minimap at exactly (20, 20)', () => {
+    it('should not use fillRect or strokeRect (circular minimap)', () => {
       ui.setupMinimap();
 
       const staticGraphics = createdGraphics[0];
-      const fillRectCalls = staticGraphics.fillRect.mock.calls;
-      expect(fillRectCalls[0][0]).toBe(20);
-      expect(fillRectCalls[0][1]).toBe(20);
+      expect(staticGraphics.fillRect).not.toHaveBeenCalled();
+      expect(staticGraphics.strokeRect).not.toHaveBeenCalled();
     });
   });
 
@@ -1395,10 +1396,11 @@ describe('GameSceneUI', () => {
       ui.updateMinimap(mockPlayerManager);
 
       // enemy-near at 200px distance should be shown
+      // MINIMAP.SCALE = 0.106
       expect(dynamicGraphics.fillStyle).toHaveBeenCalledWith(0xff0000, 1);
       expect(dynamicGraphics.fillCircle).toHaveBeenCalledWith(
-        20 + 700 * 0.075,  // mapX + enemy.x * scale
-        20 + 500 * 0.075,  // mapY + enemy.y * scale
+        20 + 700 * 0.106,  // mapX + enemy.x * MINIMAP.SCALE
+        20 + 500 * 0.106,  // mapY + enemy.y * MINIMAP.SCALE
         3
       );
     });
@@ -1411,8 +1413,8 @@ describe('GameSceneUI', () => {
 
       // enemy-far at 700px distance should NOT be shown
       expect(dynamicGraphics.fillCircle).not.toHaveBeenCalledWith(
-        20 + 1200 * 0.075,
-        20 + 500 * 0.075,
+        20 + 1200 * 0.106,
+        20 + 500 * 0.106,
         3
       );
     });
@@ -1425,8 +1427,8 @@ describe('GameSceneUI', () => {
 
       expect(dynamicGraphics.fillStyle).toHaveBeenCalledWith(0x00ff00, 1);
       expect(dynamicGraphics.fillCircle).toHaveBeenCalledWith(
-        20 + 500 * 0.075,
-        20 + 500 * 0.075,
+        20 + 500 * 0.106,
+        20 + 500 * 0.106,
         4
       );
     });
@@ -1439,9 +1441,9 @@ describe('GameSceneUI', () => {
 
       expect(dynamicGraphics.lineStyle).toHaveBeenCalledWith(1, 0x00ff00, 0.15);
       expect(dynamicGraphics.strokeCircle).toHaveBeenCalledWith(
-        20 + 500 * 0.075,
-        20 + 500 * 0.075,
-        600 * 0.075
+        20 + 500 * 0.106,
+        20 + 500 * 0.106,
+        600 * 0.106
       );
     });
 
@@ -1467,8 +1469,8 @@ describe('GameSceneUI', () => {
 
       // Exactly 600px should be included (dist <= 600)
       expect(dynamicGraphics.fillCircle).toHaveBeenCalledWith(
-        20 + 1100 * 0.075,
-        20 + 500 * 0.075,
+        20 + 1100 * 0.106,
+        20 + 500 * 0.106,
         3
       );
     });
@@ -1486,8 +1488,8 @@ describe('GameSceneUI', () => {
 
       // 601px should NOT be included
       expect(dynamicGraphics.fillCircle).not.toHaveBeenCalledWith(
-        20 + 1101 * 0.075,
-        20 + 500 * 0.075,
+        20 + 1101 * 0.106,
+        20 + 500 * 0.106,
         3
       );
     });
