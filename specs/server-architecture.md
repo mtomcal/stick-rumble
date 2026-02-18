@@ -236,6 +236,7 @@ function tickLoop(ctx):
                         onReloadComplete(playerID, weaponState)
 
                 // 5. Check respawns
+                // Respawn() sets IsInvulnerable=true for 2s; cleared by Step 7
                 for player in world.players:
                     if player.ShouldRespawn():
                         player.Respawn()
@@ -310,6 +311,10 @@ case now := <-ticker.C:
     gs.mu.RUnlock()
 
     // Check respawns
+    // NOTE: player.Respawn() sets IsInvulnerable = true with a 2-second duration.
+    // UpdateInvulnerability() in the invulnerability step below clears it when
+    // the timer expires. This ensures subsequent broadcasts include the
+    // invulnerability state for client-side spawn protection ring rendering.
     gs.world.ForEachPlayer(func(p *PlayerState) {
         if p.ShouldRespawn() {
             p.Respawn()
