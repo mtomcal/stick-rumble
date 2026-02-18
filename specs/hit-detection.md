@@ -700,7 +700,70 @@ handleHitConfirmed(data: HitConfirmedData) {
   // Show visual hitmarker for local player (no audio yet — TODO for audio story)
   this.ui.showHitMarker();
 }
+```
 
+### Damage Numbers (Client)
+
+On `player:damaged`, display a floating damage number at the victim's world position. This applies to ALL players' damage events (not just local player).
+
+**Visual Specification:**
+- Font: Bold, ~24px, color `#FF4444` (`COLORS.DAMAGE_NUMBER`)
+- Animation: Float upward ~40px over 600ms while fading from alpha 1.0 to 0
+- Trigger: Every `player:damaged` event for any player
+- Implementation: Object pool via `DamageNumberManager` (pre-allocate ~10 text objects, recycle on animation complete)
+
+**Pseudocode:**
+```typescript
+// In GameSceneEventHandlers.ts
+handlePlayerDamaged(data: PlayerDamagedData) {
+  const player = this.playerManager.getPlayer(data.victimId);
+  if (player) {
+    player.setHealth(data.newHealth);
+    this.hitEffectManager.playHitEffect(player.x, player.y);
+    this.damageNumberManager.show(data.damage, player.x, player.y);
+    this.bloodEffectManager.showBloodEffect(player.x, player.y);
+
+    if (data.victimId === this.playerManager.getLocalPlayerId()) {
+      this.damageFlashOverlay.flash();
+      this.hitIndicatorManager.showIndicator(data.attackerId);
+    }
+  }
+}
+```
+
+### Hit Direction Indicators (Client)
+
+On `player:damaged` where `victimId === localPlayerId`, show directional chevrons pointing toward the attacker's position.
+
+**Visual Specification:**
+- Shape: 1-3 red triangular chevrons, color `#CC3333` (`COLORS.HIT_CHEVRON`)
+- Position: Near the local player sprite
+- Direction: Calculate angle from local player to `attackerId`'s last known position from `PlayerManager.playerStates`
+- Animation: Fade in 100ms, hold 300ms, fade out 200ms (total ~600ms)
+- Multiple incoming attacks stack indicators (each attacker gets its own set of chevrons)
+
+### Blood Particle Effects (Client)
+
+On `player:damaged` for any player, spawn blood particles at the victim's world position.
+
+**Visual Specification:**
+- Particle count: 6-10 small circular particles
+- Color: `#CC3333` (`COLORS.BLOOD`), particle size 3-5px
+- Animation: Splatter outward ~30-50px over 300ms, then fade to alpha 0
+- Trigger: Every `player:damaged` event for any player
+- Implementation: `BloodEffectManager` with `showBloodEffect(x, y)` method
+
+### Damage Screen Flash (Client)
+
+On `player:damaged` where `victimId === localPlayerId` only, flash the viewport red.
+
+**Visual Specification:**
+- Full-viewport red overlay rectangle, color `#FF0000` (`COLORS.DAMAGE_FLASH`) at 0.3-0.4 alpha
+- Flash in immediately (alpha snap to 0.3-0.4), fade out over 300ms (tween alpha to 0)
+- Depth: 999 (below fixed HUD at 1000)
+- Implementation: `DamageFlashOverlay` — semi-transparent Phaser graphics object. See also [graphics.md § Damage Screen Flash](graphics.md#damage-screen-flash)
+
+```typescript
 // player:death handler
 const playerDeathHandler = (data: unknown) => {
   const messageData = data as PlayerDeathData;
@@ -1193,8 +1256,9 @@ func TestProjectileOutOfBounds(t *testing.T) {
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.0.0 | 2026-02-02 | Initial specification |
-| 1.1.0 | 2026-02-15 | Added Hitscan Hit Detection section (Pistol ray-circle collision). Added Lag Compensation via Position History section (RTT-based rewind, 150ms cap, linear interpolation). Updated overview to distinguish projectile vs hitscan collision modes. |
+| 1.2.0 | 2026-02-18 | Art style alignment: Added client-side sections for Damage Numbers (#FF4444, float-and-fade), Hit Direction Indicators (#CC3333 chevrons), Blood Particle Effects (#CC3333), and Damage Screen Flash (#FF0000 overlay). |
+| 1.1.3 | 2026-02-16 | Fixed hitscan pseudocode — hitscan does NOT check `IsInvulnerable` or `IsInvincibleFromRoll()` (unlike projectile collision). Invulnerable/rolling players can be hit by hitscan. |
+| 1.1.2 | 2026-02-16 | Fixed client `handleHitConfirmed` — only calls `this.ui.showHitMarker()`, no `audioManager.playHitmarker()` (audio is TODO) |
 | 1.1.1 | 2026-02-16 | Fixed `checkHitDetection` code block — `onHit(hit)` takes HitEvent struct (not individual params), weapon damage via `gs.weaponStates` map (not `gs.world.GetPlayerWeapon`), projectiles via `gs.projectileManager` (not `gs.world.Projectiles`), players accessed directly under RLock. |
-| 1.1.3 | 2026-02-16 | Fixed client `handleHitConfirmed` — only calls `this.ui.showHitMarker()`, no `audioManager.playHitmarker()` (audio is TODO) |
-| 1.1.2 | 2026-02-16 | Fixed hitscan pseudocode — hitscan does NOT check `IsInvulnerable` or `IsInvincibleFromRoll()` (unlike projectile collision). Invulnerable/rolling players can be hit by hitscan. |
+| 1.1.0 | 2026-02-15 | Added Hitscan Hit Detection section (Pistol ray-circle collision). Added Lag Compensation via Position History section (RTT-based rewind, 150ms cap, linear interpolation). Updated overview to distinguish projectile vs hitscan collision modes. |
+| 1.0.0 | 2026-02-02 | Initial specification |

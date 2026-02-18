@@ -633,6 +633,43 @@ let angle = shooter.rotation + (shooter.aimSway || 0);  // sway affects bullet a
 - Visual weapon rotation: [graphics.md § Aim Sway](graphics.md#aim-sway)
 - Constants: [constants.md § Aim Sway Constants](constants.md#aim-sway-constants)
 
+### Aim Line Visual
+
+A thin white line from the player's barrel tip toward the crosshair, visible whenever the player is aiming.
+
+**Visual Specification:**
+- Color: White `#FFFFFF`, constant `aimLineColor: 0xffffff` (add to `WeaponVisuals` or as a shared constant)
+- Extends from barrel position to crosshair/cursor position with no explicit length cap
+- Visible continuously while aiming (not just on fire)
+- Drawn each frame in `preUpdate()` or `update()`, cleared and redrawn from current `aimAngle` and crosshair position
+- Depth: 40 (below players at 50)
+
+**Implementation:**
+```typescript
+// In StickFigure.preUpdate() or a dedicated AimLineRenderer
+this.aimLineGraphics.clear();
+this.aimLineGraphics.lineStyle(1, 0xffffff, 0.8);
+const barrel = this.getBarrelPosition();
+const crosshair = this.scene.input.activePointer;
+this.aimLineGraphics.lineBetween(barrel.x, barrel.y, crosshair.worldX, crosshair.worldY);
+```
+
+**Note:** Enemies may not display aim lines (prototype shows line primarily for local player).
+
+### Crosshair Bloom
+
+Crosshair expands dynamically during firing (recoil bloom) and movement.
+
+**Visual Specification:**
+- Base diameter: ~40px
+- Expanded diameter: ~60-80px
+- On shot: Snap to expanded size immediately
+- Recovery: Ease back to base diameter over 200-300ms
+- Movement: Also expands proportionally during movement based on aim sway magnitude
+- Implementation: `Crosshair.ts` adjusts circle radius based on firing state and player velocity
+
+**Note:** This contradicts the previous spec statement "There is NO dynamic spread circle" — that statement should be removed from graphics.md.
+
 ### Shotgun Pellet Spread
 
 Creating multiple pellets with spread distribution.
@@ -687,6 +724,8 @@ func CalculateShotgunPelletAngles(aimAngle, spreadDegrees float64) []float64 {
 - **8 pellets**: Balances visual density vs performance
 - **Even distribution + jitter**: Consistent spread pattern with natural variance
 - **15-degree arc**: Wide enough for close-range, narrow enough to require aiming
+
+**Client-Side Rendering Note:** Each of the 8 pellets spawns a separate `projectile:spawn` event, resulting in 8 individual chevron+trail entities visible as a fan-spread pattern within the 15° cone. No special shotgun blast visual is needed — each pellet uses standard projectile rendering (chevron shape with tracer trail per `weapons.md § ProjectileVisuals`).
 
 ---
 
@@ -1179,11 +1218,12 @@ test "aim sway affects projectile trajectory":
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.0.0 | 2026-02-02 | Initial specification with complete shooting mechanics |
-| 1.1.0 | 2026-02-15 | Added `clientTimestamp` parameter to `PlayerShoot()` for lag compensation on hitscan weapons. |
-| 1.1.1 | 2026-02-16 | Fixed `ShootResult.FailReason` → `ShootResult.Reason` to match `gameserver.go:22`. |
-| 1.1.2 | 2026-02-16 | Fixed `PlayerShoot` — only checks `!exists` (no `IsAlive` check), uses `weaponMu.RLock` (not `gs.mu.Lock`), uses `CreateProjectile` (not `NewProjectile+AddProjectile`), added hitscan branch. |
+| 1.3.0 | 2026-02-18 | Art style alignment: Added Aim Line Visual section (white #FFFFFF, barrel to crosshair). Added Crosshair Bloom section (40px base, 60-80px expanded). Added shotgun client-side rendering note (8 chevron+trail entities). |
+| 1.2.0 | 2026-02-16 | Added Aim Sway subsection with composite sine formula, moving/idle magnitudes, and effect on projectile trajectory. Added TS-SHOOT-013. Ported from pre-BMM prototype. |
 | 1.1.5 | 2026-02-16 | Fixed `IsExpired()` operator — uses `>=` not `>` for `ProjectileMaxLifetime` comparison |
 | 1.1.4 | 2026-02-16 | Fixed client `canShoot()` check order — reload → ammo → cooldown (was cooldown → reload → ammo) |
 | 1.1.3 | 2026-02-16 | Fixed `StartReload` — checks `IsReloading` + `CurrentAmmo >= MagazineSize` (not `IsMelee()`). |
-| 1.2.0 | 2026-02-16 | Added Aim Sway subsection with composite sine formula, moving/idle magnitudes, and effect on projectile trajectory. Added TS-SHOOT-013. Ported from pre-BMM prototype. |
+| 1.1.2 | 2026-02-16 | Fixed `PlayerShoot` — only checks `!exists` (no `IsAlive` check), uses `weaponMu.RLock` (not `gs.mu.Lock`), uses `CreateProjectile` (not `NewProjectile+AddProjectile`), added hitscan branch. |
+| 1.1.1 | 2026-02-16 | Fixed `ShootResult.FailReason` → `ShootResult.Reason` to match `gameserver.go:22`. |
+| 1.1.0 | 2026-02-15 | Added `clientTimestamp` parameter to `PlayerShoot()` for lag compensation on hitscan weapons. |
+| 1.0.0 | 2026-02-02 | Initial specification with complete shooting mechanics |

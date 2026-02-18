@@ -1,6 +1,6 @@
 # UI System
 
-> **Spec Version**: 1.3.0
+> **Spec Version**: 1.4.0
 > **Last Updated**: 2026-02-17
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [match.md](match.md), [client-architecture.md](client-architecture.md), [graphics.md](graphics.md)
 > **Depended By**: [test-index.md](test-index.md)
@@ -49,11 +49,11 @@ All UI constants are defined here and referenced in [constants.md](constants.md#
 | KILL_FEED_FADE_DELAY | 5000 | ms | Time before kill entry fades |
 | KILL_FEED_FADE_DURATION | 1000 | ms | Duration of fade animation |
 | KILL_FEED_SPACING | 25 | px | Vertical spacing between entries |
-| HEALTH_BAR_WIDTH | 200 | px | HUD health bar width |
-| HEALTH_BAR_HEIGHT | 30 | px | HUD health bar height |
+| HUD_HEALTH_BAR_WIDTH | 200 | px | HUD health bar width (distinct from PLAYER_HEALTH_BAR_WIDTH=32 in constants.md for world-space bar) |
+| HUD_HEALTH_BAR_HEIGHT | 30 | px | HUD health bar height |
 | DODGE_ROLL_UI_RADIUS | 20 | px | Cooldown indicator radius |
-| CAMERA_FLASH_DURATION | 100 | ms | Camera flash on damage received |
-| CAMERA_FLASH_COLOR | RGB(128,0,0) | color | Dark red camera flash |
+| DAMAGE_FLASH_ALPHA | 0.35 | ratio | Red overlay alpha on damage received |
+| DAMAGE_FLASH_FADE_DURATION | 300 | ms | Damage flash fade-out duration |
 | HIT_FEEDBACK_SHAKE_DURATION | 50 | ms | Camera shake on server-confirmed hit |
 | HIT_FEEDBACK_SHAKE_INTENSITY | 0.001 | ratio | Hit feedback shake magnitude |
 | RECOIL_SHAKE_DURATION | 100 | ms | Camera shake on firing (client-side) |
@@ -116,23 +116,22 @@ interface UIElementPosition {
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ [Title]                                                      │
-│ [Status]                                       [Kill Feed]   │
-│ [Ammo]                                            Entry 1    │
-│ [Health Bar + Regen Pulse]                        Entry 2    │
-│ [Reload Progress]                                 Entry 3    │
-│                                                   Entry 4    │
-│                          [Timer]                  Entry 5    │
-│                         MM:SS                                │
-│                                                              │
-│                                                              │
-│                      [Crosshair]                             │
-│                         + spread                             │
+│ [Minimap]  [EKG] [====Health Bar====] 100%      [000000]    │
+│ FPS: N     [Ammo Icon] 20/20                     KILLS: 0   │
+│ Update: Nms                                                  │
+│ AI: Nms                            [Timer]      [Kill Feed]  │
+│ E: N | B: N                        MM:SS           Entry 1   │
+│                                                    Entry 2   │
+│                                                    Entry 3   │
+│                      [Crosshair]                   Entry 4   │
+│                         + bloom                    Entry 5   │
 │                      [Reload Circle]                         │
 │                      [RELOAD! text]                          │
 │                                                              │
 │                  [Pickup Prompt]              [Dodge Roll]   │
 │              Press E to pick up {WEAPON}          ○          │
+│                                                              │
+│ [Chat Log Panel (bottom-left)]                               │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -148,17 +147,17 @@ interface UIElementPosition {
 
 **Visual Specification:**
 - Dimensions: 200×30 px
-- Background: Black (#000000), 0.7 alpha
+- Icon: Heartbeat/EKG icon to the left of the bar (COLORS.HEALTH_FULL)
+- Background (depleted portion): Dark gray (#333333 / COLORS.HEALTH_DEPLETED_BG), 0.7 alpha
 - Foreground: Dynamic color based on health percentage
-- Text: "HP: {current}/{max}" centered, white (#ffffff), 18px bold
+- Text: "N%" format to the right of the bar, white (#ffffff), 18px bold (e.g., "100%", "76%")
 - Depth: 1000
 
-**Color Thresholds:**
+**Color Thresholds (2-tier):**
 | Health % | Color | Hex | Why |
 |----------|-------|-----|-----|
-| > 60% | Green | #00ff00 | Safe, no urgency |
-| 30-60% | Yellow | #ffff00 | Caution, find cover |
-| < 30% | Red | #ff0000 | Critical, immediate danger |
+| >= 20% | Green | #00CC00 (COLORS.HEALTH_FULL) | Safe / normal |
+| < 20% | Red | #FF0000 (COLORS.HEALTH_CRITICAL) | Critical, immediate danger |
 
 **Regeneration Indicator:**
 When `isRegenerating` is true:
@@ -172,15 +171,15 @@ function updateHealth(current, max, isRegenerating):
     ratio = current / max
     width = ratio * 200px
 
-    if ratio > 0.6:
-        color = GREEN
-    else if ratio > 0.3:
-        color = YELLOW
+    if ratio >= 0.2:
+        color = COLORS.HEALTH_FULL    // Green
     else:
-        color = RED
+        color = COLORS.HEALTH_CRITICAL // Red
 
+    drawDepletedBackground(COLORS.HEALTH_DEPLETED_BG)
     drawBar(width, color)
-    setText("HP: {current}/{max}")
+    drawEKGIcon(left of bar)
+    setText("{round(ratio * 100)}%")   // e.g., "76%"
 
     if isRegenerating AND NOT pulsingActive:
         startPulseAnimation()
@@ -193,19 +192,22 @@ function updateHealth(current, max, isRegenerating):
 export class HealthBarUI {
   private bar: Phaser.GameObjects.Graphics;
   private text: Phaser.GameObjects.Text;
+  private ekgIcon: Phaser.GameObjects.Graphics;
   private pulseTween?: Phaser.Tweens.Tween;
 
   updateHealth(current: number, max: number, isRegenerating: boolean): void {
     const ratio = current / max;
-    const color = ratio > 0.6 ? 0x00ff00 : ratio > 0.3 ? 0xffff00 : 0xff0000;
+    const color = ratio >= 0.2 ? 0x00CC00 : 0xFF0000; // COLORS.HEALTH_FULL / COLORS.HEALTH_CRITICAL
 
     this.bar.clear();
-    this.bar.fillStyle(0x000000, 0.7);
+    // Depleted background
+    this.bar.fillStyle(0x333333, 0.7); // COLORS.HEALTH_DEPLETED_BG
     this.bar.fillRect(0, 0, 200, 30);
+    // Filled portion
     this.bar.fillStyle(color);
     this.bar.fillRect(2, 2, (ratio * 196), 26);
 
-    this.text.setText(`HP: ${current}/${max}`);
+    this.text.setText(`${Math.round(ratio * 100)}%`);
 
     if (isRegenerating && !this.pulseTween) {
       this.pulseTween = this.scene.tweens.add({
@@ -304,6 +306,63 @@ export class KillFeedUI {
 
 ---
 
+### Score Display (Top Right)
+
+**Position**: Top-right corner, right-aligned
+
+**Why this location?** Score is a persistent stat visible at a glance. Top-right groups it with the kill counter below.
+
+**Visual Specification:**
+- Format: 6-digit zero-padded (e.g., `String(score).padStart(6, '0')` → "000000", "001250")
+- Font: Monospaced, ~28px, white (#FFFFFF / COLORS.SCORE)
+- Position: Top-right corner, right-aligned
+- Updated by: `player:kill_credit` event (when local player is killer). Score = killerXP from the event data
+- Depth: 1000
+
+**TypeScript:**
+```typescript
+export class ScoreDisplayUI {
+  private scoreText: Phaser.GameObjects.Text;
+  private score = 0;
+
+  updateScore(killerXP: number): void {
+    this.score = killerXP;
+    this.scoreText.setText(String(this.score).padStart(6, '0'));
+  }
+}
+```
+
+---
+
+### Kill Counter (Top Right, Below Score)
+
+**Position**: Below score display, top-right, right-aligned
+
+**Why this location?** Groups with score for quick combat stats at a glance.
+
+**Visual Specification:**
+- Format: "KILLS: N" (e.g., "KILLS: 0", "KILLS: 5")
+- Color: #FF6666 (COLORS.KILL_COUNTER)
+- Font: ~16px, right-aligned
+- Position: Below score display, top-right
+- Incremented on `player:kill_credit` for local player
+- Depth: 1000
+
+**TypeScript:**
+```typescript
+export class KillCounterUI {
+  private killText: Phaser.GameObjects.Text;
+  private kills = 0;
+
+  incrementKills(): void {
+    this.kills++;
+    this.killText.setText(`KILLS: ${this.kills}`);
+  }
+}
+```
+
+---
+
 ### Ammo Display (Top Left)
 
 **Position**: (10, 50)
@@ -311,27 +370,50 @@ export class KillFeedUI {
 **Why this location?** Below title, above health bar. Groups weapon info together.
 
 **Visual Specification:**
+- Icon (left of text): Yellow/orange target/crosshair icon (#E0A030 / COLORS.AMMO_READY) when ready; red rotating spinner icon when reloading
 - Text format: "{current}/{max}" (e.g., "15/15")
-- Font: 16px, white (#ffffff)
+- Text color: Yellow/orange (#E0A030 / COLORS.AMMO_READY) when ready
+- Font: 16px
+- Reloading state: "RELOADING..." text in red/coral (#CC5555 / COLORS.AMMO_RELOADING) appears to the right of the counter
+- Fist/infinite-ammo weapons: Display "INF" instead of ammo count (no max shown)
 - Visibility: Hidden for melee weapons (Bat, Katana)
 - Depth: 1000
 
 **Why hide for melee?** Melee weapons have unlimited attacks (magazineSize = 0). Showing "0/0" is confusing.
-
-> **Note:** There is no low-ammo color change logic. The ammo text stays white (#ffffff) regardless of ammo count.
 
 **TypeScript:**
 ```typescript
 updateAmmoDisplay(shootingManager: ShootingManager): void {
   if (this.ammoText && shootingManager) {
     const isMelee = shootingManager.isMeleeWeapon();
+    const isReloading = shootingManager.isReloading();
 
     if (isMelee) {
       this.ammoText.setVisible(false);
+      this.ammoIcon.setVisible(false);
+      this.reloadingText.setVisible(false);
     } else {
       this.ammoText.setVisible(true);
+      this.ammoIcon.setVisible(true);
       const [current, max] = shootingManager.getAmmoInfo();
-      this.ammoText.setText(`${current}/${max}`);
+
+      if (max === Infinity || max === 0) {
+        this.ammoText.setText('INF');
+      } else {
+        this.ammoText.setText(`${current}/${max}`);
+      }
+      this.ammoText.setColor('#E0A030'); // COLORS.AMMO_READY
+
+      // Icon state: ready vs reloading
+      if (isReloading) {
+        this.ammoIcon.setTint(0xFF0000); // Red spinner when reloading
+        this.reloadingText.setVisible(true);
+        this.reloadingText.setText('RELOADING...');
+        this.reloadingText.setColor('#CC5555'); // COLORS.AMMO_RELOADING
+      } else {
+        this.ammoIcon.setTint(0xE0A030); // COLORS.AMMO_READY
+        this.reloadingText.setVisible(false);
+      }
     }
   }
 }
@@ -343,18 +425,18 @@ updateAmmoDisplay(shootingManager: ShootingManager): void {
 
 Three complementary indicators for reload state:
 
-#### Reload Progress Bar (Top Left)
+#### Reload Progress Bar (World-Space, Above Player)
 
-**Position**: (10, 70), overlays health bar area
+**Position**: World-space above the player character, same pattern as health bars rendered above entities (not screen-fixed)
 
 **Visual Specification:**
-- Dimensions: 200×10 px
+- Dimensions: ~60×6 px
 - Background: Dark gray (#333333), 0.8 alpha
-- Progress fill: Green (#00ff00)
+- Progress fill: White (#FFFFFF)
 - Visibility: Only during reload, hidden for melee
-- Depth: 1001 (above health bar)
+- Depth: World-space (rendered with player entities)
 
-**Why overlay health bar?** Reload is temporary state; dedicated real estate wastes space.
+**Why world-space?** Keeps reload feedback attached to the player character, consistent with world-space health bars. Easier to track during movement.
 
 #### Reload Circle (Screen Center)
 
@@ -562,16 +644,51 @@ function update():
 
 ---
 
+### Weapon Pickup Notification (Center Screen)
+
+**Trigger**: `weapon:pickup_confirmed` event
+
+**Why this location?** Center screen ensures the player sees the confirmation. Distinct from the proximity-based [Weapon Pickup Prompt](#weapon-pickup-prompt-bottom-center) which asks the player to press E.
+
+**Visual Specification:**
+- Text: "Picked up {WEAPON_NAME}" (e.g., "Picked up AK47")
+- Color: Gray (#AAAAAA)
+- Font: 18px, centered
+- Position: Center screen
+- Animation: Fade out after ~2 seconds (alpha 1.0 → 0.0 over 500ms starting at 1500ms)
+- Depth: 1000
+
+**TypeScript:**
+```typescript
+export class PickupNotificationUI {
+  show(weaponName: string): void {
+    this.text.setText(`Picked up ${weaponName}`);
+    this.text.setAlpha(1).setVisible(true);
+    this.scene.time.delayedCall(1500, () => {
+      this.scene.tweens.add({
+        targets: this.text,
+        alpha: 0,
+        duration: 500,
+        onComplete: () => this.text.setVisible(false),
+      });
+    });
+  }
+}
+```
+
+---
+
 ### Crosshair (Mouse Cursor)
 
 **Position**: Follows mouse pointer
 
 **Visual Specification:**
-- Static crosshair: 4 white lines (2px), 10px long, 5px gap from center
-- Spread indicator: Red circle (#ff0000), 2px line, 0.6 alpha
-- Spread radius: `spreadDegrees * 2` pixels
+- Crosshair shape: White "+" (cross) inside an outer circle outline. All elements white (#FFFFFF)
+- Outer circle: Base diameter ~40px. Expands to ~60-80px during firing (recoil bloom). Snap to expanded on shot, ease back over 200-300ms. Also expands during movement proportional to aim sway
 - Visibility: Hidden for melee weapons, hidden when spectating
 - Depth: 1000
+
+> **Note:** The previous red spread circle (#ff0000) has been removed. The outer circle bloom replaces it as the dynamic accuracy indicator.
 
 **Spread Values by Weapon:**
 | Weapon | Base Spread (degrees) |
@@ -593,30 +710,33 @@ function update():
 **TypeScript:**
 ```typescript
 export class Crosshair {
-  private currentSpread = 0;
+  private currentRadius = 20; // Base radius ~20px (40px diameter)
+  private readonly BASE_RADIUS = 20;
+  private readonly EXPANDED_RADIUS = 35; // ~60-70px diameter
   private readonly LERP_SPEED = 0.2;
 
-  update(isMoving: boolean, spreadDegrees: number, weaponType: string): void {
-    const targetSpread = isMoving ? spreadDegrees * 2 : 0;
-    this.currentSpread = Phaser.Math.Linear(this.currentSpread, targetSpread, this.LERP_SPEED);
+  update(isMoving: boolean, spreadDegrees: number, weaponType: string, isFiring: boolean): void {
+    // Bloom: expand on firing, also expand during movement
+    const targetRadius = isFiring
+      ? this.EXPANDED_RADIUS
+      : isMoving
+        ? this.BASE_RADIUS + spreadDegrees
+        : this.BASE_RADIUS;
+    this.currentRadius = Phaser.Math.Linear(this.currentRadius, targetRadius, this.LERP_SPEED);
 
     this.graphics.clear();
     const pointer = this.scene.input.activePointer;
     const x = pointer.x;
     const y = pointer.y;
 
-    // Static crosshair lines
+    // White "+" cross
     this.graphics.lineStyle(2, 0xffffff);
-    this.graphics.lineBetween(x - 15, y, x - 5, y);
-    this.graphics.lineBetween(x + 5, y, x + 15, y);
-    this.graphics.lineBetween(x, y - 15, x, y - 5);
-    this.graphics.lineBetween(x, y + 5, x, y + 15);
+    this.graphics.lineBetween(x - 8, y, x + 8, y);
+    this.graphics.lineBetween(x, y - 8, x, y + 8);
 
-    // Spread circle (only when moving)
-    if (this.currentSpread > 0.1) {
-      this.graphics.lineStyle(2, 0xff0000, 0.6);
-      this.graphics.strokeCircle(x, y, this.currentSpread);
-    }
+    // Outer circle outline (bloom expands during firing)
+    this.graphics.lineStyle(2, 0xffffff, 0.8);
+    this.graphics.strokeCircle(x, y, this.currentRadius);
   }
 }
 ```
@@ -625,19 +745,34 @@ export class Crosshair {
 
 ### Damage Flash
 
-When the player takes damage, the camera flashes red. This replaces any screen-overlay approach with the native Phaser camera flash.
+When the local player takes damage (`player:damaged` where `victimId === localPlayerId`), a persistent red overlay tints the screen.
 
-**Implementation**:
+**Implementation**: A full-viewport red overlay rectangle (not `cameras.main.flash()`, which produces a bright-to-transparent flash). The prototype shows a persistent red tint, not a bright flash.
+
 ```typescript
-this.cameras.main.flash(100, 128, 0, 0);  // 100ms, RGB(128, 0, 0)
+// Overlay rectangle, created once, hidden by default
+this.damageOverlay = this.add.rectangle(
+  camera.width / 2, camera.height / 2,
+  camera.width, camera.height,
+  0xFF0000 // COLORS.DAMAGE_FLASH
+).setAlpha(0).setScrollFactor(0).setDepth(999);
+
+// On damage:
+this.damageOverlay.setAlpha(0.35); // 0.3-0.4 alpha
+this.tweens.add({
+  targets: this.damageOverlay,
+  alpha: 0,
+  duration: 300,
+  ease: 'Power2'
+});
 ```
 
 | Property | Value | Source |
 |----------|-------|--------|
-| Duration | 100ms | `constants.md § Camera Effects Constants` |
-| Red | 128 | Half-intensity, not blinding |
-| Green | 0 | — |
-| Blue | 0 | — |
+| Color | #FF0000 (COLORS.DAMAGE_FLASH) | Full red |
+| Alpha | 0.3-0.4 | Persistent tint, not blinding |
+| Fade duration | ~300ms | Fade out to 0 |
+| Depth | 999 | Below fixed HUD (1000+), above game entities |
 
 **Constants**: See [constants.md § Camera Effects Constants](constants.md#camera-effects-constants).
 
@@ -782,21 +917,23 @@ this.cameras.main.shake(150, 0.008);
 
 A minimap in the top-left corner shows the arena layout, player position, and nearby enemies within radar range.
 
-**Architecture**: Two graphics layers, both with `setScrollFactor(0)` (screen-fixed):
-1. **Static layer** (depth 1999): Arena boundary, walls — drawn once
+**Architecture**: Two graphics layers, both with `setScrollFactor(0)` (screen-fixed). Circular shape with teal/green outline border:
+1. **Static layer** (depth 1999): Circular background, teal border, walls — drawn once
 2. **Dynamic layer** (depth 2000): Player dot, enemy dots, radar ring — updated every frame
 
 **Static Layer** (drawn once in `setupMinimap()`):
 ```typescript
-const scale = 0.075;
+const scale = 0.106;  // MINIMAP_SCALE = 170 / 1600
 const mapX = 20, mapY = 20;
-const mapSize = 1600 * scale;  // 120px
+const mapSize = 170;  // MINIMAP_SIZE
 
 // Background
-minimapStaticGraphics.fillStyle(0x000000, 0.7);
-minimapStaticGraphics.fillRect(mapX, mapY, mapSize, mapSize);
-minimapStaticGraphics.lineStyle(2, 0xffffff, 0.5);
-minimapStaticGraphics.strokeRect(mapX, mapY, mapSize, mapSize);
+minimapStaticGraphics.fillStyle(0x3A3A3A, 0.5); // Dark gray at 50% alpha
+minimapStaticGraphics.fillCircle(mapX + mapSize / 2, mapY + mapSize / 2, mapSize / 2);
+
+// Circular/radar ring border — teal/green outline
+minimapStaticGraphics.lineStyle(2, 0x00CCCC, 0.8);
+minimapStaticGraphics.strokeCircle(mapX + mapSize / 2, mapY + mapSize / 2, mapSize / 2);
 
 // Walls
 minimapStaticGraphics.fillStyle(0x555555, 1);
@@ -842,12 +979,13 @@ minimapGraphics.strokePath();
 | Property | Value | Source |
 |----------|-------|--------|
 | Position | (20, 20) top-left | `constants.md § Minimap Constants` |
-| Scale | 0.075 | 1600px → 120px |
-| Size | 120 × 120 px | Derived |
+| Scale | 0.106 (MINIMAP_SCALE) | 1600px → 170px |
+| Size | 170 × 170 px (MINIMAP_SIZE) | `constants.md § Minimap Constants` |
+| Shape | Circular with teal/green outline border | — |
 | Radar Range | 600px | Enemies beyond this hidden |
 | Player Dot | 4px radius, green | — |
 | Enemy Dot | 3px radius, red | — |
-| Background | Black, alpha 0.7 | — |
+| Background | #3A3A3A, alpha 0.5 | — |
 | Static Depth | 1999 | — |
 | Dynamic Depth | 2000 | — |
 
@@ -858,6 +996,8 @@ minimapGraphics.strokePath();
 ### Match End Screen (React Modal)
 
 **Trigger**: `match:ended` event
+
+> **Note:** This is distinct from the [Death Screen Overlay](#death-screen-overlay-per-death), which is a Phaser-rendered overlay shown on each individual death during the match. The Match End Screen is a React modal that appears once when the entire match concludes.
 
 **Why React?** Complex layout (tables, buttons, forms) is easier in React. Accessibility features (keyboard nav, screen readers) come free.
 
@@ -988,6 +1128,128 @@ export function MatchEndScreen({ matchData, localPlayerId, onClose, onPlayAgain 
   - No visible on-screen UI for reconnecting state
 
 **Why detailed connected message?** First-time players need control hints. Experienced players ignore it.
+
+---
+
+### Chat Log (Bottom Left)
+
+**Position**: Bottom-left of viewport, screen-fixed (scroll factor 0)
+
+**Why this location?** Bottom-left is underutilized and doesn't conflict with combat HUD elements. Chat is secondary info players glance at between fights.
+
+**Visual Specification:**
+- Dimensions: ~300x120px
+- Background: #808080 at 70% opacity
+- System messages: Yellow (#BBA840 / COLORS.CHAT_SYSTEM), prefixed `[SYSTEM]` (e.g., "Welcome to Stick Rumble. Survive.")
+- Player messages: Name in red/orange, message text in white (e.g., "Reaper: Bruh")
+- Font: Sans-serif, 14px
+- Max visible lines: ~6 (overflow scrolls oldest off top)
+- Scroll behavior: Auto-scrolls to newest message; manual scroll pauses auto-scroll
+- Depth: 1000
+
+**TypeScript:**
+```typescript
+export class ChatLogUI {
+  private container: Phaser.GameObjects.Container;
+  private background: Phaser.GameObjects.Graphics;
+  private messages: Phaser.GameObjects.Text[] = [];
+  private readonly MAX_VISIBLE = 6;
+
+  addSystemMessage(text: string): void {
+    this.addMessage(`[SYSTEM] ${text}`, '#BBA840'); // COLORS.CHAT_SYSTEM
+  }
+
+  addPlayerMessage(playerName: string, text: string): void {
+    const nameColor = '#E07040'; // Red/orange for player name
+    // Render: "{playerName}: {text}" with name colored, message white
+    this.addMessage(`${playerName}: ${text}`, '#FFFFFF');
+  }
+}
+```
+
+---
+
+### Death Screen Overlay (Per-Death)
+
+**Trigger**: `player:death` event for local player
+
+> **Note:** This is distinct from the [Match End Screen](#match-end-screen-react-modal), which is a React modal triggered by `match:ended`. The Death Screen Overlay is a Phaser-rendered overlay shown on each individual death during the match.
+
+**Why separate from Match End?** Players die multiple times per match. Each death needs immediate feedback without blocking the game permanently. The match end screen only appears once when the entire match concludes.
+
+**Visual Specification:**
+- Dark overlay: Full viewport, 70% opacity black (#000000)
+- "YOU DIED" text: ~72px bold, white (#FFFFFF), centered horizontally and vertically
+- Stats row (below "YOU DIED"):
+  - Trophy icon (yellow/gold) + score value (red)
+  - Skull icon (red) + kill count (white)
+- "TRY AGAIN" button: Rectangular, thin white border, white text, centered below stats. On click: sends `player:respawn_request` to server (server auto-respawns the player via `player:respawn`)
+- Depth: Above game world (depth ~990), below React modals (z-index 1000)
+
+**Respawn Flow:**
+1. `player:death` received for local player → show Death Screen Overlay
+2. Player clicks "TRY AGAIN" → client sends `player:respawn_request`
+3. Server processes respawn → sends `player:respawn` → client hides overlay
+
+**TypeScript:**
+```typescript
+export class DeathScreenOverlay {
+  private overlay: Phaser.GameObjects.Rectangle;
+  private diedText: Phaser.GameObjects.Text;
+  private tryAgainButton: Phaser.GameObjects.Container;
+
+  show(score: number, kills: number): void {
+    this.overlay.setAlpha(0.7).setVisible(true);
+    this.diedText.setVisible(true);
+    this.scoreText.setText(String(score).padStart(6, '0'));
+    this.killsText.setText(String(kills));
+    this.tryAgainButton.setVisible(true);
+  }
+
+  hide(): void {
+    this.overlay.setVisible(false);
+    this.diedText.setVisible(false);
+    this.tryAgainButton.setVisible(false);
+  }
+}
+```
+
+---
+
+### Debug Overlay (Top Left, Below Minimap)
+
+**Position**: Below minimap, left side, screen-fixed
+
+**Why this location?** Groups diagnostic info near the minimap without overlapping combat HUD. Only visible during development.
+
+**Visual Specification:**
+- Color: Bright green (#00FF00 / COLORS.DEBUG_OVERLAY)
+- Font: Monospaced, ~12px
+- Lines:
+  - `FPS: N`
+  - `Update: Nms`
+  - `AI: Nms`
+  - `E: N | B: N` (entity count | bullet count)
+- Controlled by a debug flag (not shown in production)
+- Depth: 1000
+
+> **Note:** This is distinct from the [Debug Network Panel](#debug-network-panel-epic-4), which is a React component for simulating network conditions. The Debug Overlay is a Phaser-rendered performance readout.
+
+**TypeScript:**
+```typescript
+export class DebugOverlayUI {
+  private lines: Phaser.GameObjects.Text[];
+  private enabled = false;
+
+  update(fps: number, updateMs: number, aiMs: number, entities: number, bullets: number): void {
+    if (!this.enabled) return;
+    this.lines[0].setText(`FPS: ${fps}`);
+    this.lines[1].setText(`Update: ${updateMs}ms`);
+    this.lines[2].setText(`AI: ${aiMs}ms`);
+    this.lines[3].setText(`E: ${entities} | B: ${bullets}`);
+  }
+}
+```
 
 ---
 
@@ -1137,8 +1399,8 @@ this.wsClient.on('match:ended', (data) => {
 
 **Expected Output:**
 - Bar width = 75% of 200px = 150px
-- Bar color = Yellow (#ffff00)
-- Text = "HP: 75/100"
+- Bar color = Green (#00CC00 / COLORS.HEALTH_FULL) — 75% is >= 20% threshold
+- Text = "75%"
 
 **TypeScript (Vitest):**
 ```typescript
@@ -1146,8 +1408,8 @@ it('should display correct health bar width and color', () => {
   healthBarUI.updateHealth(75, 100, false);
 
   expect(healthBarUI.getBarWidth()).toBe(150);
-  expect(healthBarUI.getBarColor()).toBe(0xffff00);
-  expect(healthBarUI.getText()).toBe('HP: 75/100');
+  expect(healthBarUI.getBarColor()).toBe(0x00CC00); // COLORS.HEALTH_FULL
+  expect(healthBarUI.getText()).toBe('75%');
 });
 ```
 
@@ -1362,7 +1624,7 @@ it('should sort scoreboard by kills descending, deaths ascending', () => {
 
 ---
 
-### TS-UI-013: Camera flash on damage received
+### TS-UI-013: Damage flash overlay on damage received
 
 **Category**: Visual
 **Priority**: High
@@ -1371,8 +1633,10 @@ it('should sort scoreboard by kills descending, deaths ascending', () => {
 - Player takes damage
 
 **Expected Output:**
-- Camera flashes with RGB(128, 0, 0) for 100ms
-- No screen overlay rectangle (uses cameras.main.flash)
+- Full-viewport red overlay rectangle (#FF0000 / COLORS.DAMAGE_FLASH) at 0.3-0.4 alpha
+- Fades out over ~300ms
+- Depth 999 (below fixed HUD)
+- Does NOT use cameras.main.flash (uses persistent overlay rectangle)
 
 ### TS-UI-014: Hit marker normal variant
 
@@ -1455,9 +1719,9 @@ it('should sort scoreboard by kills descending, deaths ascending', () => {
 - Game scene loaded
 
 **Expected Output:**
-- Minimap at (20, 20), 120×120px
-- Black background with white border
-- Wall positions rendered at 0.075 scale
+- Minimap at (20, 20), 170×170px (MINIMAP_SIZE=170)
+- Dark gray (#3A3A3A) background at 50% alpha with teal/green circular border
+- Wall positions rendered at 0.106 scale (MINIMAP_SCALE)
 - Static layer at depth 1999
 
 ### TS-UI-019: Minimap radar range filters enemies
@@ -1472,7 +1736,7 @@ it('should sort scoreboard by kills descending, deaths ascending', () => {
 - Enemies within 600px shown as red dots (radius 3)
 - Enemies beyond 600px NOT shown
 - Player shown as green dot (radius 4)
-- Radar range ring visible at 0.15 alpha
+- Radar range ring visible at 0.15 alpha (scaled at MINIMAP_SCALE=0.106)
 
 ---
 
@@ -1480,9 +1744,9 @@ it('should sort scoreboard by kills descending, deaths ascending', () => {
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.0.0 | 2026-02-02 | Initial specification |
-| 1.1.0 | 2026-02-15 | Added Debug Network Panel section (DebugNetworkPanel.tsx for testing netcode under degraded conditions). |
-| 1.1.1 | 2026-02-16 | Fixed kill feed ordering — actual uses `push` (add to end) + `shift` (remove oldest from front), not `unshift` + `pop`. Uses KillEntry objects with container, not raw text with setScrollFactor. |
+| 1.4.0 | 2026-02-18 | Art style alignment: Rewrote HUD layout diagram. Health bar updated to 2-tier (green/red at 20%), EKG icon, "N%" format, #333333 depleted bg. Ammo counter updated with icon, #E0A030 color, RELOADING text, INF state. Added Score Display (6-digit zero-padded), Kill Counter (KILLS: N), Chat Log, Death Screen Overlay, Debug Overlay, Weapon Pickup Notification sections. Minimap updated to 170x170px circular with teal border. Reload progress bar moved to world-space 60px white. Crosshair changed to white "+" in circle with bloom. Damage flash changed from camera flash to persistent red overlay at depth 999. Renamed HEALTH_BAR_WIDTH to HUD_HEALTH_BAR_WIDTH. Replaced stale CAMERA_FLASH constants with DAMAGE_FLASH constants. Updated tests TS-UI-001, TS-UI-013, TS-UI-018. |
+| 1.3.0 | 2026-02-17 | Expanded camera shake section to document all three shake systems: hit feedback shake (server-confirmed, 50ms/0.001), per-weapon recoil shake (client-side, 100ms, Uzi=0.005/AK47=0.007/Shotgun=0.012), and bat melee hit shake (150ms/0.008). Renamed constants from generic CAMERA_SHAKE to specific HIT_FEEDBACK_SHAKE. Added tests TS-UI-020 and TS-UI-021. |
+| 1.2.0 | 2026-02-16 | Replaced damage flash overlay with camera flash. Replaced procedural hit marker with texture-based 20×20 X. Updated damage numbers with kill/remote variants. Added camera shake, minimap sections. Added tests TS-UI-013 through TS-UI-019. Ported from pre-BMM prototype. |
 | 1.1.8 | 2026-02-16 | Added dual-source health bar update — `player:damaged` handler also calls `updateHealth()` (not just `player:move`) |
 | 1.1.7 | 2026-02-16 | Fixed hit marker — uses world coordinates (no `setScrollFactor(0)`) per actual `GameSceneUI.ts:305-361` |
 | 1.1.6 | 2026-02-16 | Clarified reload circle alpha — explicitly 1.0 (fully opaque) per `GameSceneUI.ts:168` |
@@ -1490,5 +1754,6 @@ it('should sort scoreboard by kills descending, deaths ascending', () => {
 | 1.1.4 | 2026-02-16 | Added font size (14px) to connection status specification |
 | 1.1.3 | 2026-02-16 | Fixed kill feed player ID method — `slice(0, 8)` → `substring(0, 8)` to match source |
 | 1.1.2 | 2026-02-16 | Fixed match end screen test expected output — winner text is "Winner: Player1", not "Player1 WINS!" |
-| 1.2.0 | 2026-02-16 | Replaced damage flash overlay with camera flash. Replaced procedural hit marker with texture-based 20×20 X. Updated damage numbers with kill/remote variants. Added camera shake, minimap sections. Added tests TS-UI-013 through TS-UI-019. Ported from pre-BMM prototype. |
-| 1.3.0 | 2026-02-17 | Expanded camera shake section to document all three shake systems: hit feedback shake (server-confirmed, 50ms/0.001), per-weapon recoil shake (client-side, 100ms, Uzi=0.005/AK47=0.007/Shotgun=0.012), and bat melee hit shake (150ms/0.008). Renamed constants from generic CAMERA_SHAKE to specific HIT_FEEDBACK_SHAKE. Added tests TS-UI-020 and TS-UI-021. |
+| 1.1.1 | 2026-02-16 | Fixed kill feed ordering — actual uses `push` (add to end) + `shift` (remove oldest from front), not `unshift` + `pop`. Uses KillEntry objects with container, not raw text with setScrollFactor. |
+| 1.1.0 | 2026-02-15 | Added Debug Network Panel section (DebugNetworkPanel.tsx for testing netcode under degraded conditions). |
+| 1.0.0 | 2026-02-02 | Initial specification |

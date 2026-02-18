@@ -82,7 +82,7 @@ const GameConfig: Phaser.Types.Core.GameConfig = {
   width: 1280,                 // Window width
   height: 720,                 // Window height
   parent: 'game-container',    // HTML div ID
-  backgroundColor: '#282c34',  // Dark gray background
+  backgroundColor: '#C8CCC8',  // Light gray background (matches arena)
 
   physics: {
     default: 'arcade',
@@ -105,7 +105,7 @@ const GameConfig: Phaser.Types.Core.GameConfig = {
 - `Phaser.AUTO` uses WebGL if available, Canvas fallback for compatibility
 - `physics.arcade` with zero gravity enables top-down 2D gameplay
 - `scale.FIT` maintains aspect ratio while filling browser window
-- Dark background (#282c34) matches modern dark UI aesthetic
+- Light gray background (#C8CCC8) matches the arena floor color
 
 ### InputState
 
@@ -270,9 +270,19 @@ stick-rumble-client/
 │       │   ├── HealthBarUI.ts            # Top-left health
 │       │   ├── KillFeedUI.ts             # Top-right kills
 │       │   ├── PickupPromptUI.ts         # "Press E" prompt
-│       │   └── DodgeRollCooldownUI.ts    # Cooldown indicator
+│       │   ├── PickupNotificationUI.ts   # "Picked up [WEAPON]" confirmation
+│       │   ├── DodgeRollCooldownUI.ts    # Cooldown indicator
+│       │   ├── MinimapUI.ts              # 170x170 circular minimap
+│       │   ├── ScoreDisplayUI.ts         # Top-right 6-digit score
+│       │   ├── KillCounterUI.ts          # Top-right kill count
+│       │   ├── DebugOverlayUI.ts         # FPS/Update/AI debug stats
+│       │   └── ChatLogUI.ts              # Bottom-left chat panel
 │       ├── effects/
-│       │   └── ScreenShake.ts            # Camera shake
+│       │   ├── ScreenShake.ts            # Camera shake
+│       │   ├── DamageNumberManager.ts    # Floating damage numbers
+│       │   ├── HitIndicatorManager.ts    # Directional hit chevrons
+│       │   ├── BloodEffectManager.ts     # Blood particle effects
+│       │   └── DamageFlashOverlay.ts     # Full-viewport damage flash
 │       ├── audio/
 │       │   └── AudioManager.ts           # Positional audio
 │       └── utils/
@@ -639,6 +649,24 @@ updatePlayers(states: PlayerState[]): void {
 
 ---
 
+#### ProceduralPlayerGraphics (`game/entities/ProceduralPlayerGraphics.ts`)
+
+**Purpose:** Render a stick figure player using procedural Phaser graphics primitives.
+
+**Rendering Composition:**
+- **Head circle**: Color depends on player type — local player `COLORS.PLAYER_HEAD` / `#2A2A2A` (dark), enemy `COLORS.ENEMY_HEAD` / `#FF0000` (red), dead `COLORS.DEAD_HEAD` / `#888888` (gray)
+- **Body/limbs** (torso, arms, legs): All drawn in black (`0x000000`) for all player types
+- **"YOU" label**: White bold text ~14px with dark drop shadow, floats above local player head at `(player.x, player.y - headRadius - 5px)`, centered on X
+- **Name labels**: Player display name in gray/white text ~12-14px above enemy heads at same offset, centered on X
+
+**Why:**
+- Head-only color distinction provides clear friend/foe identification at a glance
+- Black body/limbs create consistent silhouette regardless of team
+- "YOU" label eliminates confusion in crowded combat
+- Name labels identify enemies without requiring additional UI
+
+---
+
 #### ProjectileManager
 
 **Purpose:** Render and update projectiles in flight. Create muzzle flash effects.
@@ -833,6 +861,127 @@ showBulletImpact(x: number, y: number): void {
 - Pre-creation eliminates allocation during gameplay
 - Reuse oldest prevents memory growth even under heavy load
 - Simple procedural graphics (no particle system complexity)
+
+---
+
+#### DamageNumberManager (`game/effects/DamageNumberManager.ts`)
+
+**Purpose:** Object pool for floating damage numbers displayed at victim world positions.
+
+- Pool size: ~10 reusable text objects
+- On `player:damaged`: display damage value as bold red text (`COLORS.DAMAGE_NUMBER` / `#FF4444`), ~24px
+- Animation: tween float upward ~30px over ~1000ms while fading alpha 1.0 to 0
+- Triggered for ALL players' damage events (not just local player)
+- Depth: 60 (hit effects layer)
+
+---
+
+#### HitIndicatorManager (`game/effects/HitIndicatorManager.ts`)
+
+**Purpose:** Render directional hit indicators pointing toward the damage source for the local player.
+
+- On `player:damaged` where `victimId === localPlayerId`: show 2-4 red triangular chevrons (`COLORS.HIT_CHEVRON` / `#CC3333`)
+- Chevrons point toward the attacker's last known position (from `PlayerManager.playerStates`)
+- Animation: fade in 100ms, hold 300ms, fade out 200ms (~500ms total)
+- Multiple incoming attacks stack indicators
+- Position: near the local player sprite
+
+---
+
+#### BloodEffectManager (`game/effects/BloodEffectManager.ts`)
+
+**Purpose:** Render blood particle effects at victim positions on damage.
+
+- On `player:damaged` for any player: spawn ~5-8 small circular particles
+- Color: `COLORS.BLOOD` / `#CC3333` (pink-red), particle size 3-5px
+- Animation: splatter outward ~30-50px over 300ms, then fade
+- Method: `showBloodEffect(x: number, y: number): void`
+
+---
+
+#### DamageFlashOverlay (`game/effects/DamageFlashOverlay.ts`)
+
+**Purpose:** Full-viewport red flash overlay on taking damage (local player only).
+
+- On `player:damaged` where `victimId === localPlayerId`
+- Renders a full-viewport rectangle, color `COLORS.DAMAGE_FLASH` / `#FF0000`, alpha 0.3-0.4
+- Animation: flash in immediately, tween alpha to 0 over ~300ms
+- Depth: 999 (below fixed HUD at 1000+, above all gameplay)
+
+---
+
+#### PickupNotificationUI (`game/ui/PickupNotificationUI.ts`)
+
+**Purpose:** Display confirmation text after picking up a weapon.
+
+- On `weapon:pickup_confirmed`: show `"Picked up {WEAPON_NAME}"` in gray text
+- Position: center screen, scroll-factor 0 (fixed to camera)
+- Animation: fade out after ~2000ms
+- Depth: 1000 (fixed UI layer)
+
+---
+
+#### MinimapUI (`game/ui/MinimapUI.ts`)
+
+**Purpose:** Render a circular minimap showing player positions on the arena.
+
+- Size: 170x170px with circular mask and teal/green outline border
+- Background: `#3A3A3A` at 50% alpha
+- Green dot = local player, red dots = enemies
+- Position: top-left of viewport, screen-fixed (scroll factor 0)
+- Depth: 1000 (fixed UI layer)
+
+---
+
+#### ScoreDisplayUI (`game/ui/ScoreDisplayUI.ts`)
+
+**Purpose:** Display the player's score (XP) as a 6-digit zero-padded number.
+
+- Format: `String(score).padStart(6, '0')` (e.g., `"000100"`)
+- Font: monospaced, ~28px, white `COLORS.SCORE` / `#FFFFFF`
+- Position: top-right corner, right-aligned, screen-fixed
+- Updated on `player:kill_credit` (score = killerXP)
+- Depth: 1000 (fixed UI layer)
+
+---
+
+#### KillCounterUI (`game/ui/KillCounterUI.ts`)
+
+**Purpose:** Display persistent kill count below the score display.
+
+- Format: `"KILLS: N"`
+- Color: `COLORS.KILL_COUNTER` / `#FF6666` (red/pink)
+- Font: ~16px, right-aligned
+- Position: below ScoreDisplayUI, top-right, screen-fixed
+- Incremented on `player:kill_credit` for local player
+- Depth: 1000 (fixed UI layer)
+
+---
+
+#### DebugOverlayUI (`game/ui/DebugOverlayUI.ts`)
+
+**Purpose:** Display performance metrics for development/debugging.
+
+- Color: `COLORS.DEBUG_OVERLAY` / `#00FF00` (bright green), monospaced font, ~12px
+- Lines: `FPS: N`, `Update: Nms`, `AI: Nms`, `E: N | B: N`
+- Position: below minimap, left side, screen-fixed
+- Controlled by a debug flag (not shown in production)
+- Depth: 1000 (fixed UI layer)
+
+---
+
+#### ChatLogUI (`game/ui/ChatLogUI.ts`)
+
+**Purpose:** Render a chat log panel for system and player messages.
+
+- Dimensions: ~300x120px
+- Position: bottom-left of viewport, screen-fixed (scroll factor 0)
+- Background: `#808080` at 70% opacity
+- System messages: `COLORS.CHAT_SYSTEM` / `#BBA840` (yellow), prefixed `[SYSTEM]`
+- Player messages: name in red/orange, message text in white
+- Font: sans-serif, 14px
+- Max visible lines with scroll behavior
+- Depth: 1000 (fixed UI layer)
 
 ---
 
@@ -1335,6 +1484,32 @@ const PhaserGame: React.FC<{ onMatchEnd: (data: MatchEndData, playerId: string) 
 
 ---
 
+### GameSceneSpectator (`game/scenes/GameSceneSpectator.ts`)
+
+**Purpose:** Render the per-death overlay when the local player dies. Distinct from `MatchEndScreen` (React modal for `match:ended`).
+
+**Trigger:** `player:death` where `victimId === localPlayerId`
+
+**Layout:**
+- Full-screen semi-transparent black rectangle (depth 990, 70% alpha)
+- **"YOU DIED"** text: ~72px bold white, centered horizontally
+- **Stats row** (centered below "YOU DIED"):
+  - Trophy icon (yellow/gold) + score value (red) — score = killerXP, formatted as 6-digit zero-padded
+  - Skull icon (red) + kill count (white)
+- **"TRY AGAIN" button**: rectangular, thin white border, white text, centered below stats row
+
+**Respawn Flow:**
+- The server auto-respawns the player after `RESPAWN_DELAY` (3s) via `player:respawn`
+- The "TRY AGAIN" button sends `player:respawn_request` to the server as user intent
+- On receiving `player:respawn`, the overlay is dismissed and normal gameplay resumes
+
+**Why:**
+- Per-death overlay provides immediate feedback and brief pause after death
+- Separate from `MatchEndScreen` which only appears on `match:ended`
+- Depth 990 ensures visibility above game world but below fixed HUD elements
+
+---
+
 ### Rendering Pipeline
 
 **Frame Order (60 FPS, ~16ms per frame):**
@@ -1406,14 +1581,44 @@ Async WebSocket Messages (any time):
 
 ---
 
+### renderArena()
+
+Called once in `create()`. Fills the arena background and draws the floor grid.
+
+- Background: fill full arena (1920x1080) with `COLORS.BACKGROUND` / `#C8CCC8` (light gray)
+- Grid lines: draw using `scene.add.grid()` or manual `Graphics.lineTo()` with `COLORS.GRID_LINE` / `#D8DCD8` at cell size 100x100px
+- Grid covers full arena dimensions
+- Depth: 0 (background layer)
+
+---
+
+### Spawn Ring and Death Ragdoll Rendering
+
+#### Spawn Invulnerability Ring
+
+When `PlayerStateSnapshot.isInvulnerable === true`, draw a yellow ring (`COLORS.SPAWN_RING` / `#FFFF00`, ~50px diameter circle outline) around the player sprite. Remove the ring when invulnerability expires (i.e., `isInvulnerable` becomes `false`). Applied to both local and remote players.
+
+#### Death Ragdoll
+
+On `player:death`:
+1. Transition stick figure to ragdoll X-pose (limbs spread at ~45 degrees)
+2. Change head color to `COLORS.DEAD_HEAD` / `#888888` (gray)
+3. Add yellow circle outline (`COLORS.SPAWN_RING` / `#FFFF00`, ~50px diameter) around the corpse
+4. Corpse persists for 5 seconds
+5. After 5 seconds, tween alpha from 1 to 0 over 1 second, then destroy the graphics object
+
+---
+
 ### Depth Layering
 
 ```
-Depth 1000+: Fixed UI (reload bar, match timer, health display)
+Depth 1000+: Fixed UI (reload bar, match timer, health display, minimap, score, kills, debug, chat)
+Depth 999:   Damage flash overlay (below fixed HUD, above all gameplay)
 Depth 100:   HUD elements (kill feed, pickup prompt)
-Depth 60:    Hit effects (particles, impact markers)
+Depth 60:    Hit effects (particles, impact markers, damage numbers)
 Depth 50:    Players, weapons, projectiles
-Depth 0:     Background, arena floor
+Depth 40:    Aim line (below players)
+Depth 0:     Background, arena floor, grid
 ```
 
 **Why:**
@@ -1777,10 +1982,11 @@ it('should follow local player with camera', () => {
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.0.0 | 2026-02-02 | Initial specification |
-| 1.1.0 | 2026-02-15 | Added new directories: physics/, simulation/, ui/debug/. Added subsystem descriptions: PredictionEngine, InterpolationEngine, GameSimulation, NetworkSimulator, DebugNetworkPanel. Updated directory tree with new files (RangedWeapon.ts, MeleeWeapon.ts, GameSceneSpectator.ts, urlParams.ts). Updated rendering pipeline with prediction/interpolation steps. Updated async message flow for state:snapshot/state:delta. |
-| 1.1.1 | 2026-02-16 | Fixed dodge roll visual — uses `setRotation` (360deg spin) + `setVisible` flicker (not `setAlpha(0.5)`) per `PlayerManager.ts:264-278`. |
+| 1.2.0 | 2026-02-18 | Art style alignment: Updated GameConfig background to #C8CCC8. Added 5 visual effect managers (DamageNumberManager, HitIndicatorManager, BloodEffectManager, DamageFlashOverlay, PickupNotificationUI). Added 5 HUD components (MinimapUI, ScoreDisplayUI, KillCounterUI, DebugOverlayUI, ChatLogUI). Documented ProceduralPlayerGraphics class. Added spawn ring and death ragdoll rendering specs. Documented renderArena() with grid spec. Added depth layers 40 (aim line) and 999 (damage flash). Documented GameSceneSpectator.ts. |
 | 1.1.5 | 2026-02-16 | Fixed update() pseudocode — `dodgeRollManager.update()` and `meleeWeaponManager.update()` take no params |
 | 1.1.4 | 2026-02-16 | Fixed camera follow — uses `startFollow()` set once (not per-frame lerp in update). Removed `followLocalPlayer()` from update loop. |
 | 1.1.3 | 2026-02-16 | Fixed directory tree — removed nonexistent MatchTimer.ts, added xpCalculator.ts to utils/ |
 | 1.1.2 | 2026-02-16 | Fixed ShootingManager — separate `shoot()` and `meleeAttack()` methods (not single `shoot()` checking `isMelee`). Added `clientTimestamp` to shoot data. |
+| 1.1.1 | 2026-02-16 | Fixed dodge roll visual — uses `setRotation` (360deg spin) + `setVisible` flicker (not `setAlpha(0.5)`) per `PlayerManager.ts:264-278`. |
+| 1.1.0 | 2026-02-15 | Added new directories: physics/, simulation/, ui/debug/. Added subsystem descriptions: PredictionEngine, InterpolationEngine, GameSimulation, NetworkSimulator, DebugNetworkPanel. Updated directory tree with new files (RangedWeapon.ts, MeleeWeapon.ts, GameSceneSpectator.ts, urlParams.ts). Updated rendering pipeline with prediction/interpolation steps. Updated async message flow for state:snapshot/state:delta. |
+| 1.0.0 | 2026-02-02 | Initial specification |

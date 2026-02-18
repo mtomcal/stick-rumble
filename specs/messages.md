@@ -542,10 +542,12 @@ interface PlayerState {
   velocity: Velocity;
   health: number;
   maxHealth: number;
-  rotation: number;     // Aim angle in radians
+  rotation: number;              // Aim angle in radians
   isDead: boolean;
   isSprinting: boolean;
   isRolling: boolean;
+  isInvulnerable: boolean;       // Spawn protection active
+  invulnerabilityEndTime: number; // Timestamp (ms) when invulnerability expires
 }
 
 interface PlayerMoveData {
@@ -575,7 +577,19 @@ type PlayerStateSnapshot struct {
 }
 ```
 
-> **Note:** The Go `PlayerStateSnapshot` struct serializes different JSON field names than the TypeBox `PlayerStateSchema` expects. For example, Go sends `aimAngle` while the TypeBox schema defines `rotation`; Go sends `deathTime` instead of `isDead`; Go omits `maxHealth` and `isSprinting`. This mismatch exists in the codebase and may be reconciled by the client-side handler.
+> **Field Name Mapping (Go → TypeScript):**
+> The Go `PlayerStateSnapshot` struct serializes different JSON field names than the TypeBox `PlayerStateSchema` expects. The client-side handler maps between them:
+>
+> | Go JSON field | TypeScript field | Notes |
+> |---------------|-----------------|-------|
+> | `aimAngle` | `rotation` | Client reads `aimAngle` from payload, maps to `rotation` |
+> | `deathTime` | `isDead` | Client considers player dead when `deathTime !== null`. `deathTime` is a nullable ISO timestamp; `isDead` is derived as `deathTime != null` |
+> | (omitted) | `maxHealth` | Always 100; client uses hardcoded default |
+> | (omitted) | `isSprinting` | Not broadcast; client uses local input state |
+> | `isInvulnerable` | `isInvulnerable` | Direct mapping (added for spawn ring rendering) |
+> | `invulnerabilityEnd` | `invulnerabilityEndTime` | Timestamp when invulnerability expires |
+>
+> **Canonical rule:** The Go server field names are authoritative for the wire format. The TypeScript `PlayerState` interface represents the client-side model after mapping.
 
 **Example:**
 ```json
@@ -773,6 +787,8 @@ type WeaponStateData struct {
 1. Update ammo display UI
 2. Update shooting manager state
 3. Show reload indicator if reloading
+
+**Reload Progress Tracking:** The `weapon:state` message sends `isReloading: boolean` but no `reloadProgress` (0.0-1.0) or `reloadStartTime`. The client tracks reload progress locally: on the first `isReloading: true` message, the client records the local timestamp as `reloadStartTime`. On each frame, progress is computed as `(now - reloadStartTime) / weapon.reloadDuration`. When `isReloading` transitions to `false`, the reload bar is hidden. This avoids adding a `reloadStartTime` field to the server broadcast payload.
 
 ---
 
@@ -996,6 +1012,10 @@ interface PlayerKillCreditData {
 1. Update scoreboard
 2. Check win condition (kill target reached)
 3. Show "+100 XP" feedback to killer
+4. Update score display: score = `killerXP`, formatted as 6-digit zero-padded (`String(killerXP).padStart(6, '0')`)
+5. Update kill counter: `"KILLS: " + killerKills`
+
+> **Score = XP:** The 6-digit score display in the top-right HUD maps directly to `killerXP`. There is no separate `killerScore` field. The client formats XP as zero-padded 6 digits (e.g., XP of 450 displays as `"000450"`).
 
 ---
 
@@ -1803,9 +1823,10 @@ Client                          Server
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.0.0 | 2026-02-02 | Initial specification extracted from codebase |
-| 1.1.0 | 2026-02-15 | Added `sequence` field to `input:state`. Added `clientTimestamp` field to `player:shoot`. Added `lastProcessedSequence` and `correctedPlayers` to `player:move`. Added new `state:snapshot` and `state:delta` message types for delta compression. Updated server→client count from 20 to 22. |
-| 1.1.1 | 2026-02-16 | Fixed `projectile:spawn` Go section — server broadcast omits `weaponType` (only sends id, ownerId, position, velocity) |
-| 1.1.2 | 2026-02-16 | Fixed `weapon:pickup_confirmed` `nextRespawnTime` — is Unix epoch timestamp in seconds (via `respawnTime.Unix()`), not duration in milliseconds |
+| 1.2.0 | 2026-02-18 | Art style alignment: Added isInvulnerable and invulnerabilityEndTime to TypeScript PlayerState. Documented reload progress tracking (client-side timestamp approach). Documented score=XP mapping. Added Go-to-TypeScript field name mapping table for player:move. |
 | 1.1.4 | 2026-02-16 | Clarified `input:state` Go struct — `sequence` is not part of `InputState` struct, extracted separately in `message_processor.go` |
 | 1.1.3 | 2026-02-16 | Fixed `player:damaged` — melee path omits `projectileId` entirely; projectile path includes it. Made `projectileId` optional in TypeScript interface. |
+| 1.1.2 | 2026-02-16 | Fixed `weapon:pickup_confirmed` `nextRespawnTime` — is Unix epoch timestamp in seconds (via `respawnTime.Unix()`), not duration in milliseconds |
+| 1.1.1 | 2026-02-16 | Fixed `projectile:spawn` Go section — server broadcast omits `weaponType` (only sends id, ownerId, position, velocity) |
+| 1.1.0 | 2026-02-15 | Added `sequence` field to `input:state`. Added `clientTimestamp` field to `player:shoot`. Added `lastProcessedSequence` and `correctedPlayers` to `player:move`. Added new `state:snapshot` and `state:delta` message types for delta compression. Updated server→client count from 20 to 22. |
+| 1.0.0 | 2026-02-02 | Initial specification extracted from codebase |

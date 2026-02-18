@@ -555,7 +555,7 @@ The arena floor displays a subtle grid overlay to help players judge distances a
 | Property | Value | Source |
 |----------|-------|--------|
 | Grid Spacing | 100 px | `constants.md § Floor Grid Constants` |
-| Line Color | 0xB0BEC5 (light blue-gray) | `constants.md § Floor Grid Constants` |
+| Line Color | 0xD8DCD8 (light gray) | `constants.md § Floor Grid Constants` |
 | Line Alpha | 0.5 | `constants.md § Floor Grid Constants` |
 | Depth | -1 | Below all game objects |
 
@@ -566,7 +566,7 @@ The floor grid is drawn once during scene creation using a `Phaser.GameObjects.G
 ```typescript
 // Floor grid rendering (LevelGenerator.drawFloorGrid)
 const graphics = scene.add.graphics();
-graphics.lineStyle(1, 0xb0bec5, 0.5);
+graphics.lineStyle(1, 0xd8dcd8, 0.5);
 for (let x = 0; x <= ARENA_WIDTH; x += 100) {
   graphics.moveTo(x, 0);
   graphics.lineTo(x, ARENA_HEIGHT);
@@ -582,7 +582,7 @@ graphics.setDepth(-1);
 ### Design Rationale
 
 - **100px spacing**: At 200 px/s movement speed, each grid cell takes 0.5 seconds to cross — intuitive distance reference
-- **Light blue-gray color**: Matches the `#cfd8dc` arena background without high contrast
+- **Light gray color**: Subtly lighter than the `#C8CCC8` arena background for low contrast
 - **Alpha 0.5**: Visible enough to aid spatial awareness, transparent enough to not distract from gameplay
 - **Depth -1**: Renders below all game objects, walls, and entities
 
@@ -723,7 +723,7 @@ func (p *Physics) CheckPlayerCrateProximity(player *PlayerState, crate *WeaponCr
 
 2. **Background**: Draw arena as a solid rectangle
    ```typescript
-   this.add.rectangle(0, 0, ARENA.WIDTH, ARENA.HEIGHT, 0x222222).setOrigin(0, 0);
+   this.add.rectangle(0, 0, ARENA.WIDTH, ARENA.HEIGHT, 0xC8CCC8).setOrigin(0, 0);
    ```
 
 3. **Local Prediction**: Client mirrors server's `clampToArena()` for responsive movement
@@ -1022,7 +1022,7 @@ func TestCalculateDistance(t *testing.T) {
 **Expected Output:**
 - Grid lines visible at 100px intervals
 - Grid renders below all game objects (depth -1)
-- Grid color is 0xB0BEC5 at alpha 0.5
+- Grid color is 0xD8DCD8 at alpha 0.5
 
 ---
 
@@ -1030,6 +1030,7 @@ func TestCalculateDistance(t *testing.T) {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.2.0 | 2026-02-18 | Art style alignment: Updated background color from 0x222222 to 0xC8CCC8 (light gray). Updated floor grid line color from 0xB0BEC5 to 0xD8DCD8. Updated test TS-ARENA-013. |
 | 1.1.0 | 2026-02-16 | Added Floor Grid section with 100px spacing, light blue-gray lines at depth -1. Added TS-ARENA-013 test. Ported from pre-BMM prototype. |
 | 1.0.3 | 2026-02-16 | Removed nonexistent `CheckAABBCollision` standalone Go function — AABB is inlined in `CheckProjectilePlayerCollision`. Removed nonexistent `IsInArena` — boundary checking done inline. Renamed `CanPickupWeapon` → `CheckPlayerCrateProximity` to match source. |
 | 1.0.0 | 2026-02-02 | Initial specification extracted from codebase |
