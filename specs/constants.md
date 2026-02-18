@@ -373,6 +373,65 @@ Fixed positions for weapon crates. Coordinates based on arena percentages.
 
 ---
 
+## Visual Color Constants
+
+All visual colors are centralized in a `COLORS` constant group. Spec files should reference `COLORS.X` rather than bare hex values.
+
+**TypeScript:**
+```typescript
+export const COLORS = {
+  BACKGROUND: 0xC8CCC8,
+  GRID_LINE: 0xD8DCD8,
+  PLAYER_HEAD: 0x2A2A2A,
+  ENEMY_HEAD: 0xFF0000,
+  DEAD_HEAD: 0x888888,
+  HEALTH_FULL: 0x00CC00,
+  HEALTH_CRITICAL: 0xFF0000,
+  HEALTH_DEPLETED_BG: 0x333333,
+  AMMO_READY: 0xE0A030,
+  AMMO_RELOADING: 0xCC5555,
+  SCORE: 0xFFFFFF,
+  KILL_COUNTER: 0xFF6666,
+  DEBUG_OVERLAY: 0x00FF00,
+  CHAT_SYSTEM: 0xBBA840,
+  MUZZLE_FLASH: 0xFFD700,
+  BULLET_TRAIL: 0xFFA500,
+  DAMAGE_NUMBER: 0xFF4444,
+  BLOOD: 0xCC3333,
+  SPAWN_RING: 0xFFFF00,
+  DAMAGE_FLASH: 0xFF0000,
+  HIT_CHEVRON: 0xCC3333,
+  WEAPON_CRATE: 0xCCCC00,
+} as const;
+```
+
+| Constant | Value | Description |
+|----------|-------|-------------|
+| COLORS.BACKGROUND | 0xC8CCC8 | Arena background fill |
+| COLORS.GRID_LINE | 0xD8DCD8 | Floor grid line color |
+| COLORS.PLAYER_HEAD | 0x2A2A2A | Local player head |
+| COLORS.ENEMY_HEAD | 0xFF0000 | Enemy player head |
+| COLORS.DEAD_HEAD | 0x888888 | Dead player head |
+| COLORS.HEALTH_FULL | 0x00CC00 | Health bar ≥20% |
+| COLORS.HEALTH_CRITICAL | 0xFF0000 | Health bar <20% |
+| COLORS.HEALTH_DEPLETED_BG | 0x333333 | Health bar depleted background |
+| COLORS.AMMO_READY | 0xE0A030 | Ammo counter ready state |
+| COLORS.AMMO_RELOADING | 0xCC5555 | Ammo counter reloading state |
+| COLORS.SCORE | 0xFFFFFF | Score display text |
+| COLORS.KILL_COUNTER | 0xFF6666 | Kill counter text |
+| COLORS.DEBUG_OVERLAY | 0x00FF00 | Debug overlay text |
+| COLORS.CHAT_SYSTEM | 0xBBA840 | Chat system messages |
+| COLORS.MUZZLE_FLASH | 0xFFD700 | Generic muzzle flash |
+| COLORS.BULLET_TRAIL | 0xFFA500 | Bullet tracer trail |
+| COLORS.DAMAGE_NUMBER | 0xFF4444 | Floating damage numbers |
+| COLORS.BLOOD | 0xCC3333 | Blood particle effects |
+| COLORS.SPAWN_RING | 0xFFFF00 | Spawn invulnerability ring |
+| COLORS.DAMAGE_FLASH | 0xFF0000 | Damage screen flash overlay |
+| COLORS.HIT_CHEVRON | 0xCC3333 | Hit direction indicator |
+| COLORS.WEAPON_CRATE | 0xCCCC00 | Weapon crate circle |
+
+---
+
 ## Visual Effects Constants
 
 | Constant | Value | Unit | Why |
@@ -408,7 +467,7 @@ Fixed positions for weapon crates. Coordinates based on arena percentages.
 | Constant | Value | Unit | Why |
 |----------|-------|------|-----|
 | BLOOD_PARTICLE_COUNT | 5 | count | Per-hit burst. Enough for impact feel without clutter. |
-| BLOOD_COLOR | 0xCC0000 | hex | Dark red. Distinct from UI elements. |
+| BLOOD_COLOR | 0xCC3333 | hex | Pink-red (`COLORS.BLOOD`). Matches prototype. |
 | BLOOD_RADIUS_MIN | 2 | px | Smallest particle size. |
 | BLOOD_RADIUS_MAX | 5 | px | Largest particle size. Variety in burst. |
 | BLOOD_SPEED_MIN | 50 | px/s | Slow particles linger near impact. |
@@ -585,8 +644,8 @@ aimSway = (sin(time * swaySpeed) + sin(time * swaySpeed * 0.7)) * swayMagnitude
 |----------|-------|------|-----|
 | MINIMAP_X | 20 | px | Top-left corner X offset. |
 | MINIMAP_Y | 20 | px | Top-left corner Y offset. |
-| MINIMAP_SCALE | 0.075 | ratio | World-to-minimap scale factor. 1600px world → 120px minimap. |
-| MINIMAP_SIZE | 120 | px | Derived: 1600 × 0.075 = 120. Compact but readable. |
+| MINIMAP_SCALE | 0.106 | ratio | World-to-minimap scale factor. 1600px world → 170px minimap. |
+| MINIMAP_SIZE | 170 | px | Derived: 1600 × 0.106 ≈ 170. Larger for better readability. |
 | MINIMAP_RADAR_RANGE | 600 | px | Enemies beyond 600px not shown. Encourages map awareness. |
 | MINIMAP_BG_DEPTH | 1999 | z-index | Static layer (walls, background). |
 | MINIMAP_DYNAMIC_DEPTH | 2000 | z-index | Dynamic layer (players, enemies). |
@@ -617,8 +676,9 @@ aimSway = (sin(time * swaySpeed) + sin(time * swaySpeed * 0.7)) * swayMagnitude
 |----------|-------|------|-----|
 | KILL_FEED_MAX_ENTRIES | 5 | entries | Fits in corner without scrolling. |
 | KILL_FEED_FADE_TIME | 5000 | ms | 5 seconds visible. Long enough to process, short enough to clear. |
-| HEALTH_BAR_WIDTH | 32 | px | Matches player width (32px). Fits above player head without overlap. |
+| PLAYER_HEALTH_BAR_WIDTH | 32 | px | World-space bar above player head. Matches player width (32px). |
 | HEALTH_BAR_HEIGHT | 4 | px | Thin bar. Readable without obstructing player. |
+| HUD_HEALTH_BAR_WIDTH | 200 | px | HUD health bar width (top of screen). |
 | DODGE_ROLL_UI_RADIUS | 20 | px | Circular cooldown indicator size. |
 
 ---
@@ -765,4 +825,5 @@ if (distance > maxRange * 0.5):
 | 1.1.0 | 2026-02-15 | Updated DECELERATION from 50 to 1500 px/s² to match source code (changed during Epic 4 client-side prediction work). Updated rationale text and code snippets. |
 | 1.1.1 | 2026-02-16 | Fixed HEALTH_BAR_WIDTH (40→32) and HEALTH_BAR_HEIGHT (6→4) to match HealthBar.ts source code. |
 | 1.2.0 | 2026-02-16 | Added 14 new constant tables for ported pre-BMM visual systems: melee visual, blood particles, healing particles, death corpse, camera effects, crosshair/reticle, hit indicators, hit markers, gun recoil, aim sway, reload animation, floor grid, minimap, damage numbers. Updated Bat range (64→90px), Katana range (80→110px), melee arc (90°→80°). |
+| 1.4.0 | 2026-02-18 | Added COLORS constant group (22 visual color constants). Renamed HEALTH_BAR_WIDTH to PLAYER_HEALTH_BAR_WIDTH, added HUD_HEALTH_BAR_WIDTH=200. Updated MINIMAP_SIZE to 170 and MINIMAP_SCALE to 0.106. Updated BLOOD_COLOR to 0xCC3333. |
 | 1.3.0 | 2026-02-17 | Expanded Camera Effects Constants into four subsections: Hit Feedback Shake (renamed from generic CAMERA_SHAKE), Per-Weapon Recoil Shake (Uzi=0.005, AK47=0.007, Shotgun=0.012, 100ms duration), Bat Melee Hit Shake (150ms/0.008), Camera Flash. |
