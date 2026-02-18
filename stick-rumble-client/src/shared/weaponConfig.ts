@@ -8,12 +8,15 @@ export interface ProjectileVisuals {
   diameter: number;
   tracerColor: string;
   tracerWidth: number;
+  shape: 'chevron' | 'circle';
+  tracerLength: number;
 }
 
 export interface WeaponVisuals {
   muzzleFlashColor: string;
   muzzleFlashSize: number;
   muzzleFlashDuration: number;
+  muzzleFlashShape: 'starburst' | 'circle';
   projectile: ProjectileVisuals;
 }
 
@@ -121,11 +124,14 @@ function getHardcodedWeaponConfigs(): Record<string, WeaponConfig> {
         muzzleFlashColor: '0xffdd00',
         muzzleFlashSize: 8,
         muzzleFlashDuration: 50,
+        muzzleFlashShape: 'starburst',
         projectile: {
           color: '0xffff00', // Yellow
           diameter: 4,
           tracerColor: '0xffff00',
           tracerWidth: 2,
+          shape: 'chevron',
+          tracerLength: 20,
         },
       },
     },
@@ -145,11 +151,14 @@ function getHardcodedWeaponConfigs(): Record<string, WeaponConfig> {
         muzzleFlashColor: '0x000000',
         muzzleFlashSize: 0,
         muzzleFlashDuration: 0,
+        muzzleFlashShape: 'circle',
         projectile: {
           color: '0x000000', // Not used for melee
           diameter: 0,
           tracerColor: '0x000000',
           tracerWidth: 0,
+          shape: 'circle',
+          tracerLength: 0,
         },
       },
     },
@@ -169,11 +178,14 @@ function getHardcodedWeaponConfigs(): Record<string, WeaponConfig> {
         muzzleFlashColor: '0x000000',
         muzzleFlashSize: 0,
         muzzleFlashDuration: 0,
+        muzzleFlashShape: 'circle',
         projectile: {
           color: '0x000000', // Not used for melee
           diameter: 0,
           tracerColor: '0x000000',
           tracerWidth: 0,
+          shape: 'circle',
+          tracerLength: 0,
         },
       },
     },
@@ -198,11 +210,14 @@ function getHardcodedWeaponConfigs(): Record<string, WeaponConfig> {
         muzzleFlashColor: '0xffaa00',
         muzzleFlashSize: 8, // Matches weapon-configs.json
         muzzleFlashDuration: 50, // Matches weapon-configs.json
+        muzzleFlashShape: 'starburst',
         projectile: {
           color: '0xffaa00', // Orange
           diameter: 3,
           tracerColor: '0xffaa00',
           tracerWidth: 1.5,
+          shape: 'chevron',
+          tracerLength: 20,
         },
       },
     },
@@ -227,11 +242,14 @@ function getHardcodedWeaponConfigs(): Record<string, WeaponConfig> {
         muzzleFlashColor: '0xffcc00',
         muzzleFlashSize: 12,
         muzzleFlashDuration: 80,
+        muzzleFlashShape: 'starburst',
         projectile: {
           color: '0xffcc00', // Gold
           diameter: 5,
           tracerColor: '0xffcc00',
           tracerWidth: 2.5,
+          shape: 'chevron',
+          tracerLength: 20,
         },
       },
     },
@@ -251,11 +269,14 @@ function getHardcodedWeaponConfigs(): Record<string, WeaponConfig> {
         muzzleFlashColor: '0xff8800',
         muzzleFlashSize: 16,
         muzzleFlashDuration: 100,
+        muzzleFlashShape: 'starburst',
         projectile: {
           color: '0xff8800', // Orange-red
           diameter: 6,
           tracerColor: '0xff8800',
           tracerWidth: 3,
+          shape: 'chevron',
+          tracerLength: 20,
         },
       },
     },

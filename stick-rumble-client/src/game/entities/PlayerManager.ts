@@ -25,6 +25,8 @@ export interface PlayerState {
   health?: number; // Current health (0-100)
   isRegenerating?: boolean; // Whether health is currently regenerating
   isRolling?: boolean; // Whether player is currently dodge rolling
+  isInvulnerable?: boolean; // Whether player is in spawn invulnerability state
+  invulnerabilityEndTime?: number; // Timestamp when invulnerability expires (ms since epoch)
 }
 
 // Length of the aim indicator line in pixels

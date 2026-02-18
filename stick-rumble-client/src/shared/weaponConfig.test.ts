@@ -24,6 +24,21 @@ describe('weaponConfig', () => {
   });
 
   describe('validateWeaponConfig', () => {
+    const baseVisuals = {
+      muzzleFlashColor: '0xffdd00',
+      muzzleFlashSize: 8,
+      muzzleFlashDuration: 50,
+      muzzleFlashShape: 'starburst' as const,
+      projectile: {
+        color: '0xffff00',
+        diameter: 4,
+        tracerColor: '0xffff00',
+        tracerWidth: 2,
+        shape: 'chevron' as const,
+        tracerLength: 20,
+      },
+    };
+
     it('should validate a valid weapon config', () => {
       const config: WeaponConfig = {
         name: 'Pistol',
@@ -37,17 +52,7 @@ describe('weaponConfig', () => {
         knockbackDistance: 0,
         recoil: null,
         spreadDegrees: 0,
-        visuals: {
-          muzzleFlashColor: '0xffdd00',
-          muzzleFlashSize: 8,
-          muzzleFlashDuration: 50,
-          projectile: {
-            color: '0xffff00',
-            diameter: 4,
-            tracerColor: '0xffff00',
-            tracerWidth: 2,
-          },
-        },
+        visuals: baseVisuals,
       };
 
       const errors = validateWeaponConfig(config);
@@ -67,17 +72,7 @@ describe('weaponConfig', () => {
         knockbackDistance: 0,
         recoil: null,
         spreadDegrees: 0,
-        visuals: {
-          muzzleFlashColor: '0xffdd00',
-          muzzleFlashSize: 8,
-          muzzleFlashDuration: 50,
-          projectile: {
-            color: '0xffff00',
-            diameter: 4,
-            tracerColor: '0xffff00',
-            tracerWidth: 2,
-          },
-        },
+        visuals: baseVisuals,
       };
 
       const errors = validateWeaponConfig(config);
@@ -97,17 +92,7 @@ describe('weaponConfig', () => {
         knockbackDistance: 0,
         recoil: null,
         spreadDegrees: 0,
-        visuals: {
-          muzzleFlashColor: '0xffdd00',
-          muzzleFlashSize: 8,
-          muzzleFlashDuration: 50,
-          projectile: {
-            color: '0xffff00',
-            diameter: 4,
-            tracerColor: '0xffff00',
-            tracerWidth: 2,
-          },
-        },
+        visuals: baseVisuals,
       };
 
       const errors = validateWeaponConfig(config);
@@ -127,17 +112,7 @@ describe('weaponConfig', () => {
         knockbackDistance: 0,
         recoil: null,
         spreadDegrees: 0,
-        visuals: {
-          muzzleFlashColor: '0xffdd00',
-          muzzleFlashSize: 8,
-          muzzleFlashDuration: 50,
-          projectile: {
-            color: '0xffff00',
-            diameter: 4,
-            tracerColor: '0xffff00',
-            tracerWidth: 2,
-          },
-        },
+        visuals: baseVisuals,
       };
 
       const errors = validateWeaponConfig(config);
@@ -157,17 +132,7 @@ describe('weaponConfig', () => {
         knockbackDistance: 0,
         recoil: null,
         spreadDegrees: 0,
-        visuals: {
-          muzzleFlashColor: '0xffdd00',
-          muzzleFlashSize: 8,
-          muzzleFlashDuration: 50,
-          projectile: {
-            color: '0xffff00',
-            diameter: 4,
-            tracerColor: '0xffff00',
-            tracerWidth: 2,
-          },
-        },
+        visuals: baseVisuals,
       };
 
       const errors = validateWeaponConfig(config);
@@ -187,17 +152,7 @@ describe('weaponConfig', () => {
         knockbackDistance: 0,
         recoil: null,
         spreadDegrees: 0,
-        visuals: {
-          muzzleFlashColor: '0xffdd00',
-          muzzleFlashSize: 8,
-          muzzleFlashDuration: 50,
-          projectile: {
-            color: '0xffff00',
-            diameter: 4,
-            tracerColor: '0xffff00',
-            tracerWidth: 2,
-          },
-        },
+        visuals: baseVisuals,
       };
 
       const errors = validateWeaponConfig(config);
@@ -222,17 +177,7 @@ describe('weaponConfig', () => {
           maxAccumulation: -5, // Invalid
         },
         spreadDegrees: 0,
-        visuals: {
-          muzzleFlashColor: '0xffdd00',
-          muzzleFlashSize: 8,
-          muzzleFlashDuration: 50,
-          projectile: {
-            color: '0xffff00',
-            diameter: 4,
-            tracerColor: '0xffff00',
-            tracerWidth: 2,
-          },
-        },
+        visuals: baseVisuals,
       };
 
       const errors = validateWeaponConfig(config);
@@ -402,6 +347,22 @@ describe('weaponConfig', () => {
       expect(pistol?.magazineSize).toBe(15);
       expect(pistol?.reloadTimeMs).toBe(1500);
       expect(pistol?.range).toBe(800);
+    });
+
+    it('should have projectile shape and tracerLength fields on all ranged weapons', () => {
+      for (const name of ['Pistol', 'Uzi', 'AK47', 'Shotgun']) {
+        const config = getWeaponConfigSync(name);
+        expect(config?.visuals.projectile.shape).toBeDefined();
+        expect(config?.visuals.projectile.tracerLength).toBeDefined();
+        expect(config?.visuals.muzzleFlashShape).toBeDefined();
+      }
+    });
+
+    it('should have muzzleFlashShape on all weapons', () => {
+      for (const name of ['Pistol', 'Bat', 'Katana', 'Uzi', 'AK47', 'Shotgun']) {
+        const config = getWeaponConfigSync(name);
+        expect(['starburst', 'circle']).toContain(config?.visuals.muzzleFlashShape);
+      }
     });
 
     it('should have valid Bat config', () => {
