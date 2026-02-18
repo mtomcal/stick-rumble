@@ -1071,30 +1071,40 @@ describe('GameSceneUI', () => {
 
   describe('reload UI elements', () => {
     describe('createReloadProgressBar', () => {
-      it('should create reload progress bar graphics elements', () => {
-        ui.createReloadProgressBar(10, 70, 200, 10);
+      it('should create reload progress bar graphics elements (world-space, no scroll factor)', () => {
+        ui.createReloadProgressBar(0, 0, 60, 4);
 
         expect(mockScene.add.graphics).toHaveBeenCalledTimes(2); // Background + foreground
+        // World-space: NOT setting scroll factor to 0
+        expect(createdGraphics[0].setScrollFactor).not.toHaveBeenCalled();
+        expect(createdGraphics[1].setScrollFactor).not.toHaveBeenCalled();
       });
     });
 
     describe('updateReloadProgress', () => {
-      it('should update reload progress bar fill amount', () => {
-        ui.createReloadProgressBar(10, 70, 200, 10);
+      it('should render world-space bar centered above player with white fill', () => {
+        ui.createReloadProgressBar(0, 0, 60, 4);
         // createReloadProgressBar creates 2 graphics: background (index 0), foreground (index 1)
+        const bgGraphics = createdGraphics[0];
         const progressBarGraphics = createdGraphics[1];
 
-        ui.updateReloadProgress(0.5, 10, 70, 200, 10);
+        // Player at world position (500, 300), barWidth=60, barHeight=4
+        ui.updateReloadProgress(0.5, 500, 300, 60, 4);
 
-        // Graphics mock should be called to clear and fill
+        // Background: centered above player: barX = 500 - 30 = 470, barY = 300 - 30 = 270
+        expect(bgGraphics.clear).toHaveBeenCalled();
+        expect(bgGraphics.fillStyle).toHaveBeenCalledWith(0x333333, 0.8);
+        expect(bgGraphics.fillRect).toHaveBeenCalledWith(470, 270, 60, 4);
+
+        // Foreground: white fill, 50% of width = 30px
         expect(progressBarGraphics.clear).toHaveBeenCalled();
-        expect(progressBarGraphics.fillStyle).toHaveBeenCalledWith(0x00ff00, 1.0);
-        expect(progressBarGraphics.fillRect).toHaveBeenCalledWith(10, 70, 100, 10); // 50% of 200 width
+        expect(progressBarGraphics.fillStyle).toHaveBeenCalledWith(0xffffff, 1.0);
+        expect(progressBarGraphics.fillRect).toHaveBeenCalledWith(470, 270, 30, 4);
       });
 
       it('should handle updateReloadProgress when progress bar not created', () => {
         expect(() => {
-          ui.updateReloadProgress(0.5, 10, 70, 200, 10);
+          ui.updateReloadProgress(0.5, 500, 300, 60, 4);
         }).not.toThrow();
       });
     });

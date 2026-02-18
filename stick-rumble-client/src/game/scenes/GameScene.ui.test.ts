@@ -657,8 +657,14 @@ describe('GameScene - UI', () => {
       // Call update to trigger reload UI updates
       scene.update(0, 16);
 
-      // Verify reload UI was updated
-      expect(updateReloadProgressSpy).toHaveBeenCalledWith(0.5, 10, 70, 200, 10);
+      // Verify reload UI was updated (world-space: player pos + 60px wide, 4px tall)
+      expect(updateReloadProgressSpy).toHaveBeenCalledWith(
+        0.5,
+        expect.any(Number), // playerX (world-space)
+        expect.any(Number), // playerY (world-space)
+        60,
+        4
+      );
       expect(updateReloadCircleSpy).toHaveBeenCalledWith(0.5);
     });
 

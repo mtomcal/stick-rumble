@@ -194,34 +194,43 @@ export class GameSceneUI {
   }
 
   /**
-   * Create reload progress bar HUD element
+   * Create world-space reload progress bar graphics objects.
+   * Positioned above the local player in world coordinates.
    */
-  createReloadProgressBar(x: number, y: number, width: number, height: number): void {
-    // Background bar
+  createReloadProgressBar(_x: number, _y: number, _width: number, _height: number): void {
+    // Background bar (world-space — no scroll factor)
     this.reloadProgressBarBg = this.scene.add.graphics();
-    this.reloadProgressBarBg.fillStyle(0x333333, 0.8);
-    this.reloadProgressBarBg.fillRect(x, y, width, height);
-    this.reloadProgressBarBg.setScrollFactor(0);
     this.reloadProgressBarBg.setDepth(1000);
     this.reloadProgressBarBg.setVisible(false);
 
-    // Foreground progress bar
+    // Foreground progress bar (world-space — no scroll factor)
     this.reloadProgressBar = this.scene.add.graphics();
-    this.reloadProgressBar.setScrollFactor(0);
     this.reloadProgressBar.setDepth(1001);
     this.reloadProgressBar.setVisible(false);
   }
 
   /**
-   * Update reload progress bar fill amount (0 to 1)
+   * Update world-space reload progress bar above local player.
+   * playerX/playerY are the player's world coordinates.
+   * barWidth ~60px, white fill per spec.
    */
-  updateReloadProgress(progress: number, barX: number, barY: number, barWidth: number, barHeight: number): void {
-    if (!this.reloadProgressBar) {
+  updateReloadProgress(progress: number, playerX: number, playerY: number, barWidth: number, barHeight: number): void {
+    if (!this.reloadProgressBar || !this.reloadProgressBarBg) {
       return;
     }
 
+    // Position bar centered above player
+    const barX = playerX - barWidth / 2;
+    const barY = playerY - 30;
+
+    // Redraw background
+    this.reloadProgressBarBg.clear();
+    this.reloadProgressBarBg.fillStyle(0x333333, 0.8);
+    this.reloadProgressBarBg.fillRect(barX, barY, barWidth, barHeight);
+
+    // Redraw foreground progress (white fill per spec)
     this.reloadProgressBar.clear();
-    this.reloadProgressBar.fillStyle(0x00ff00, 1.0);
+    this.reloadProgressBar.fillStyle(0xffffff, 1.0);
     this.reloadProgressBar.fillRect(barX, barY, barWidth * progress, barHeight);
   }
 
