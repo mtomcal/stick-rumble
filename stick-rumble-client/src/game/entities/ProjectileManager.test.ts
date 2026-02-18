@@ -5,12 +5,49 @@ import { ManualClock } from '../utils/Clock';
 
 // Mock Phaser scene
 const createMockScene = () => {
-  const mockCircles: Map<string, { x: number; y: number; destroy: ReturnType<typeof vi.fn> }> = new Map();
-  const mockLines: Map<string, { destroy: ReturnType<typeof vi.fn>; alpha: number; active: boolean }> = new Map();
+  const mockGraphics: Map<
+    string,
+    {
+      x: number;
+      y: number;
+      destroy: ReturnType<typeof vi.fn>;
+      setPosition: ReturnType<typeof vi.fn>;
+      setDepth: ReturnType<typeof vi.fn>;
+      clear: ReturnType<typeof vi.fn>;
+      fillStyle: ReturnType<typeof vi.fn>;
+      fillTriangle: ReturnType<typeof vi.fn>;
+      fillPoints: ReturnType<typeof vi.fn>;
+    }
+  > = new Map();
+  const mockCircles: Map<string, { x: number; y: number; destroy: ReturnType<typeof vi.fn> }> =
+    new Map();
+  const mockLines: Map<
+    string,
+    { destroy: ReturnType<typeof vi.fn>; alpha: number; active: boolean }
+  > = new Map();
   const mockTweens: object[] = [];
 
   return {
     add: {
+      graphics: vi.fn(() => {
+        const id = `gfx-${mockGraphics.size}`;
+        const gfx = {
+          x: 0,
+          y: 0,
+          setPosition: vi.fn((newX: number, newY: number) => {
+            gfx.x = newX;
+            gfx.y = newY;
+          }),
+          setDepth: vi.fn().mockReturnThis(),
+          clear: vi.fn().mockReturnThis(),
+          fillStyle: vi.fn().mockReturnThis(),
+          fillTriangle: vi.fn().mockReturnThis(),
+          fillPoints: vi.fn().mockReturnThis(),
+          destroy: vi.fn(),
+        };
+        mockGraphics.set(id, gfx);
+        return gfx;
+      }),
       circle: vi.fn((x: number, y: number, radius: number) => {
         const id = `circle-${mockCircles.size}`;
         const circle = {
@@ -61,10 +98,12 @@ const createMockScene = () => {
     time: {
       now: 0,
     },
+    mockGraphics,
     mockCircles,
     mockLines,
     mockTweens,
   } as unknown as Phaser.Scene & {
+    mockGraphics: typeof mockGraphics;
     mockCircles: Map<string, { x: number; y: number; destroy: ReturnType<typeof vi.fn> }>;
     mockLines: Map<string, { destroy: ReturnType<typeof vi.fn>; alpha: number; active: boolean }>;
     mockTweens: object[];
@@ -121,7 +160,7 @@ describe('ProjectileManager', () => {
   });
 
   describe('spawnProjectile', () => {
-    it('should create a projectile sprite', () => {
+    it('should create a chevron projectile sprite using graphics for Pistol', () => {
       const projectileData: ProjectileData = {
         id: 'proj-1',
         ownerId: 'player-1',
@@ -132,27 +171,9 @@ describe('ProjectileManager', () => {
 
       projectileManager.spawnProjectile(projectileData);
 
-      expect(scene.add.circle).toHaveBeenCalled();
+      // Pistol uses chevron shape, so graphics is used
+      expect(scene.add.graphics).toHaveBeenCalled();
       expect(projectileManager.getProjectileCount()).toBe(1);
-    });
-
-    it('should create projectile with correct size', () => {
-      const projectileData: ProjectileData = {
-        id: 'proj-1',
-        ownerId: 'player-1',
-        weaponType: 'Pistol',
-        position: { x: 100, y: 200 },
-        velocity: { x: 800, y: 0 },
-      };
-
-      projectileManager.spawnProjectile(projectileData);
-
-      expect(scene.add.circle).toHaveBeenCalledWith(
-        100,
-        200,
-        EFFECTS.PROJECTILE_DIAMETER / 2,
-        expect.any(Number)
-      );
     });
 
     it('should not create duplicate projectiles with same ID', () => {
@@ -182,6 +203,23 @@ describe('ProjectileManager', () => {
       projectileManager.spawnProjectile(projectileData);
 
       expect(scene.add.line).toHaveBeenCalled();
+    });
+
+    it('should draw fillTriangle for chevron shape', () => {
+      const projectileData: ProjectileData = {
+        id: 'proj-1',
+        ownerId: 'player-1',
+        weaponType: 'Pistol',
+        position: { x: 100, y: 200 },
+        velocity: { x: 800, y: 0 },
+      };
+
+      projectileManager.spawnProjectile(projectileData);
+
+      // At least one graphics should have fillTriangle called
+      const graphics = Array.from(scene.mockGraphics.values());
+      const hasTriangle = graphics.some((g) => g.fillTriangle.mock.calls.length > 0);
+      expect(hasTriangle).toBe(true);
     });
   });
 
@@ -217,9 +255,10 @@ describe('ProjectileManager', () => {
       projectileManager.spawnProjectile(projectileData);
       projectileManager.update(0.5);
 
-      // The sprite's setPosition should have been called
-      const circles = Array.from(scene.mockCircles.values());
-      expect(circles[0].x).toBe(300); // 100 + 400 * 0.5
+      // The sprite's setPosition should have been called (chevron graphics)
+      const graphics = Array.from(scene.mockGraphics.values());
+      const projectileGfx = graphics[0];
+      expect(projectileGfx.x).toBe(300); // 100 + 400 * 0.5
     });
 
     it('should remove projectiles that are out of bounds', () => {
@@ -288,8 +327,8 @@ describe('ProjectileManager', () => {
       projectileManager.spawnProjectile(projectileData);
       projectileManager.removeProjectile('proj-1');
 
-      const circles = Array.from(scene.mockCircles.values());
-      expect(circles[0].destroy).toHaveBeenCalled();
+      const graphics = Array.from(scene.mockGraphics.values());
+      expect(graphics[0].destroy).toHaveBeenCalled();
     });
 
     it('should handle removing non-existent projectile gracefully', () => {
@@ -389,13 +428,21 @@ describe('ProjectileManager', () => {
   });
 
   describe('createMuzzleFlash', () => {
-    it('should create a muzzle flash effect', () => {
-      projectileManager.createMuzzleFlash(100, 200);
+    it('should create a starburst muzzle flash effect using graphics', () => {
+      projectileManager.createMuzzleFlash(100, 200, 'Pistol');
+
+      // Pistol uses starburst, which uses graphics
+      expect(scene.add.graphics).toHaveBeenCalled();
+    });
+
+    it('should create circle muzzle flash for non-starburst weapons', () => {
+      // Override to test circle path
+      projectileManager.createMuzzleFlash(100, 200); // No weapon type = fallback circle
 
       expect(scene.add.circle).toHaveBeenCalled();
     });
 
-    it('should create muzzle flash at correct position', () => {
+    it('should create muzzle flash at correct position for circle fallback', () => {
       projectileManager.createMuzzleFlash(150, 250);
 
       expect(scene.add.circle).toHaveBeenCalledWith(
@@ -407,26 +454,33 @@ describe('ProjectileManager', () => {
     });
 
     it('should setup tween animation for muzzle flash fade out', () => {
-      projectileManager.createMuzzleFlash(100, 200);
+      projectileManager.createMuzzleFlash(100, 200, 'Pistol');
 
       // Verify tween was created with correct config
       expect(scene.tweens.add).toHaveBeenCalledWith(
         expect.objectContaining({
           alpha: 0,
           scale: 1.5,
-          duration: EFFECTS.MUZZLE_FLASH_DURATION,
+          duration: 33, // Pistol muzzle flash duration
           onComplete: expect.any(Function),
         })
       );
     });
 
     it('should destroy muzzle flash when tween completes', async () => {
-      // Create mock circle with destroy spy
+      // Create mock graphics with destroy spy
       const mockFlash = {
+        x: 0,
+        y: 0,
+        setPosition: vi.fn(),
+        setDepth: vi.fn().mockReturnThis(),
+        clear: vi.fn().mockReturnThis(),
+        fillStyle: vi.fn().mockReturnThis(),
+        fillPoints: vi.fn().mockReturnThis(),
+        fillTriangle: vi.fn().mockReturnThis(),
         destroy: vi.fn(),
-        setFillStyle: vi.fn().mockReturnThis(),
       };
-      scene.add.circle = vi.fn().mockReturnValue(mockFlash);
+      scene.add.graphics = vi.fn().mockReturnValue(mockFlash);
 
       // Track the onComplete callback
       let capturedOnComplete: (() => void) | null = null;
@@ -437,7 +491,7 @@ describe('ProjectileManager', () => {
         return { remove: vi.fn() };
       });
 
-      projectileManager.createMuzzleFlash(100, 200);
+      projectileManager.createMuzzleFlash(100, 200, 'Pistol');
 
       // Verify tween was created
       expect(scene.tweens.add).toHaveBeenCalled();
@@ -449,10 +503,20 @@ describe('ProjectileManager', () => {
       // Verify flash was destroyed
       expect(mockFlash.destroy).toHaveBeenCalled();
     });
+
+    it('should draw fillPoints for starburst shape', () => {
+      projectileManager.createMuzzleFlash(100, 200, 'Pistol');
+
+      const graphics = Array.from(scene.mockGraphics.values());
+      const hasStarburst = graphics.some(
+        (g) => (g.fillPoints as ReturnType<typeof vi.fn>).mock.calls.length > 0
+      );
+      expect(hasStarburst).toBe(true);
+    });
   });
 
-  describe('weapon-specific projectile visuals', () => {
-    it('should create Pistol projectile with correct visuals (yellow, 4px diameter, 2px tracer)', () => {
+  describe('weapon-specific projectile visuals (chevron)', () => {
+    it('should create Pistol projectile as chevron using graphics', () => {
       const projectileData: ProjectileData = {
         id: 'proj-pistol',
         ownerId: 'player-1',
@@ -463,23 +527,20 @@ describe('ProjectileManager', () => {
 
       projectileManager.spawnProjectile(projectileData);
 
-      // Verify projectile circle created with Pistol specs: diameter 4, yellow color (0xffff00)
-      expect(scene.add.circle).toHaveBeenCalledWith(100, 100, 2, 0xffff00);
+      // Chevron shape uses graphics not circle
+      expect(scene.add.graphics).toHaveBeenCalled();
+      expect(scene.add.circle).not.toHaveBeenCalled();
 
       // Verify tracer line created
       expect(scene.add.line).toHaveBeenCalled();
 
-      // Get the created line and verify it has Pistol tracer properties
-      const lines = Array.from(scene.mockLines.values());
-      const tracerLine = lines[0];
-      expect(tracerLine).toBeDefined();
-
       // Verify tracer styling (width 2, orange-amber tracer color 0xffaa00)
-      const lineObject = tracerLine as unknown as { setStrokeStyle: ReturnType<typeof vi.fn> };
+      const lines = Array.from(scene.mockLines.values());
+      const lineObject = lines[0] as unknown as { setStrokeStyle: ReturnType<typeof vi.fn> };
       expect(lineObject.setStrokeStyle).toHaveBeenCalledWith(2, 0xffaa00);
     });
 
-    it('should create Uzi projectile with correct visuals (orange, 3px diameter, 1.5px tracer)', () => {
+    it('should create Uzi projectile as chevron using graphics', () => {
       const projectileData: ProjectileData = {
         id: 'proj-uzi',
         ownerId: 'player-1',
@@ -490,23 +551,15 @@ describe('ProjectileManager', () => {
 
       projectileManager.spawnProjectile(projectileData);
 
-      // Verify projectile circle created with Uzi specs: diameter 3, orange color (0xffaa00)
-      expect(scene.add.circle).toHaveBeenCalledWith(200, 150, 1.5, 0xffaa00);
-
-      // Verify tracer line created
-      expect(scene.add.line).toHaveBeenCalled();
-
-      // Get the created line and verify it has Uzi tracer properties
-      const lines = Array.from(scene.mockLines.values());
-      const tracerLine = lines[0];
-      expect(tracerLine).toBeDefined();
+      expect(scene.add.graphics).toHaveBeenCalled();
 
       // Verify tracer styling (width 1.5, orange color)
-      const lineObject = tracerLine as unknown as { setStrokeStyle: ReturnType<typeof vi.fn> };
+      const lines = Array.from(scene.mockLines.values());
+      const lineObject = lines[0] as unknown as { setStrokeStyle: ReturnType<typeof vi.fn> };
       expect(lineObject.setStrokeStyle).toHaveBeenCalledWith(1.5, 0xffaa00);
     });
 
-    it('should create AK47 projectile with correct visuals (gold, 5px diameter, 2.5px tracer)', () => {
+    it('should create AK47 projectile as chevron using graphics', () => {
       const projectileData: ProjectileData = {
         id: 'proj-ak47',
         ownerId: 'player-1',
@@ -517,23 +570,15 @@ describe('ProjectileManager', () => {
 
       projectileManager.spawnProjectile(projectileData);
 
-      // Verify projectile circle created with AK47 specs: diameter 5, gold color (0xffcc00)
-      expect(scene.add.circle).toHaveBeenCalledWith(300, 200, 2.5, 0xffcc00);
-
-      // Verify tracer line created
-      expect(scene.add.line).toHaveBeenCalled();
-
-      // Get the created line and verify it has AK47 tracer properties
-      const lines = Array.from(scene.mockLines.values());
-      const tracerLine = lines[0];
-      expect(tracerLine).toBeDefined();
+      expect(scene.add.graphics).toHaveBeenCalled();
 
       // Verify tracer styling (width 2.5, gold color)
-      const lineObject = tracerLine as unknown as { setStrokeStyle: ReturnType<typeof vi.fn> };
+      const lines = Array.from(scene.mockLines.values());
+      const lineObject = lines[0] as unknown as { setStrokeStyle: ReturnType<typeof vi.fn> };
       expect(lineObject.setStrokeStyle).toHaveBeenCalledWith(2.5, 0xffcc00);
     });
 
-    it('should create Shotgun projectile with correct visuals (orange-red, 6px diameter, 3px tracer)', () => {
+    it('should create Shotgun projectile as chevron using graphics', () => {
       const projectileData: ProjectileData = {
         id: 'proj-shotgun',
         ownerId: 'player-1',
@@ -544,23 +589,15 @@ describe('ProjectileManager', () => {
 
       projectileManager.spawnProjectile(projectileData);
 
-      // Verify projectile circle created with Shotgun specs: diameter 6, orange-red color (0xff8800)
-      expect(scene.add.circle).toHaveBeenCalledWith(400, 250, 3, 0xff8800);
-
-      // Verify tracer line created
-      expect(scene.add.line).toHaveBeenCalled();
-
-      // Get the created line and verify it has Shotgun tracer properties
-      const lines = Array.from(scene.mockLines.values());
-      const tracerLine = lines[0];
-      expect(tracerLine).toBeDefined();
+      expect(scene.add.graphics).toHaveBeenCalled();
 
       // Verify tracer styling (width 3, orange-red color)
-      const lineObject = tracerLine as unknown as { setStrokeStyle: ReturnType<typeof vi.fn> };
+      const lines = Array.from(scene.mockLines.values());
+      const lineObject = lines[0] as unknown as { setStrokeStyle: ReturnType<typeof vi.fn> };
       expect(lineObject.setStrokeStyle).toHaveBeenCalledWith(3, 0xff8800);
     });
 
-    it('should create multiple projectiles with different weapon types and correct visuals', () => {
+    it('should create multiple projectiles with different weapon types', () => {
       const pistolData: ProjectileData = {
         id: 'proj-pistol',
         ownerId: 'player-1',
@@ -581,10 +618,8 @@ describe('ProjectileManager', () => {
       projectileManager.spawnProjectile(shotgunData);
 
       expect(projectileManager.getProjectileCount()).toBe(2);
-
-      // Verify both projectiles created with correct specs
-      expect(scene.add.circle).toHaveBeenCalledWith(100, 100, 2, 0xffff00); // Pistol
-      expect(scene.add.circle).toHaveBeenCalledWith(500, 500, 3, 0xff8800); // Shotgun
+      // Both are chevrons — 2 graphics created for projectiles
+      expect(scene.add.graphics).toHaveBeenCalledTimes(2);
     });
   });
 });

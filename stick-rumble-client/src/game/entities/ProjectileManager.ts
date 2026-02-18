@@ -24,9 +24,12 @@ interface Projectile {
   weaponType: string;
   position: { x: number; y: number };
   velocity: { x: number; y: number };
-  sprite: Phaser.GameObjects.Arc;
+  sprite: Phaser.GameObjects.Arc | Phaser.GameObjects.Graphics;
   tracer?: Phaser.GameObjects.Line;
   createdAt: number;
+  shape: 'chevron' | 'circle';
+  projectileColor: number;
+  tracerLength: number;
 }
 
 /**
@@ -64,14 +67,29 @@ export class ProjectileManager {
       ? parseHexColor(projectileVisuals.tracerColor)
       : 0xffff00;
     const tracerWidth = projectileVisuals?.tracerWidth ?? EFFECTS.TRACER_WIDTH;
+    const shape = projectileVisuals?.shape ?? 'circle';
+    const tracerLength = projectileVisuals?.tracerLength ?? 20;
 
-    // Create projectile sprite with weapon-specific color and size
-    const sprite = this.scene.add.circle(
-      data.position.x,
-      data.position.y,
-      projectileDiameter / 2,
-      projectileColor
-    );
+    let sprite: Phaser.GameObjects.Arc | Phaser.GameObjects.Graphics;
+
+    if (shape === 'chevron') {
+      // Draw directional triangle polygon pointing in velocity direction
+      sprite = this.createChevronSprite(
+        data.position.x,
+        data.position.y,
+        data.velocity,
+        projectileColor,
+        tracerLength
+      );
+    } else {
+      // Default circle sprite
+      sprite = this.scene.add.circle(
+        data.position.x,
+        data.position.y,
+        projectileDiameter / 2,
+        projectileColor
+      );
+    }
 
     // Create bullet tracer with weapon-specific color and width
     const tracer = this.createTracer(
@@ -92,9 +110,63 @@ export class ProjectileManager {
       sprite,
       tracer,
       createdAt: this.clock.now(),
+      shape,
+      projectileColor,
+      tracerLength,
     };
 
     this.projectiles.set(data.id, projectile);
+  }
+
+  /**
+   * Create a chevron (directional triangle) Graphics sprite for projectiles.
+   * The triangle points in the velocity direction using tracerLength for scale.
+   */
+  private createChevronSprite(
+    x: number,
+    y: number,
+    velocity: { x: number; y: number },
+    color: number,
+    tracerLength: number
+  ): Phaser.GameObjects.Graphics {
+    const gfx = this.scene.add.graphics();
+    gfx.setPosition(x, y);
+    gfx.setDepth(50);
+
+    const speed = Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
+    const angle = speed > 0 ? Math.atan2(velocity.y, velocity.x) : 0;
+
+    this.drawChevron(gfx, angle, color, tracerLength);
+
+    return gfx;
+  }
+
+  /**
+   * Draw a chevron (triangle) on a Graphics object at the given angle.
+   * The tip points forward in the aim direction.
+   */
+  private drawChevron(
+    gfx: Phaser.GameObjects.Graphics,
+    angle: number,
+    color: number,
+    size: number
+  ): void {
+    gfx.clear();
+    gfx.fillStyle(color, 1);
+
+    // Triangle tip is `size` px forward, base is `size/2` px behind, `size/3` wide
+    const tipX = Math.cos(angle) * size;
+    const tipY = Math.sin(angle) * size;
+    const baseX = -Math.cos(angle) * (size / 2);
+    const baseY = -Math.sin(angle) * (size / 2);
+    const perpX = -Math.sin(angle) * (size / 3);
+    const perpY = Math.cos(angle) * (size / 3);
+
+    gfx.fillTriangle(
+      tipX, tipY,
+      baseX + perpX, baseY + perpY,
+      baseX - perpX, baseY - perpY
+    );
   }
 
   /**
@@ -236,8 +308,15 @@ export class ProjectileManager {
       : 0xffffff;
     const flashSize = muzzleFlashVisuals?.muzzleFlashSize ?? EFFECTS.MUZZLE_FLASH_RADIUS;
     const flashDuration = muzzleFlashVisuals?.muzzleFlashDuration ?? EFFECTS.MUZZLE_FLASH_DURATION;
+    const flashShape = muzzleFlashVisuals?.muzzleFlashShape ?? 'circle';
 
-    const flash = this.scene.add.circle(x, y, flashSize, flashColor);
+    let flash: Phaser.GameObjects.Arc | Phaser.GameObjects.Graphics;
+
+    if (flashShape === 'starburst') {
+      flash = this.createStarburstFlash(x, y, flashColor, flashSize);
+    } else {
+      flash = this.scene.add.circle(x, y, flashSize, flashColor);
+    }
 
     // Fade and remove the flash
     this.scene.tweens.add({
@@ -249,6 +328,41 @@ export class ProjectileManager {
         flash.destroy();
       },
     });
+  }
+
+  /**
+   * Create a starburst polygon muzzle flash effect.
+   * Alternating long/short spikes radiating from center.
+   */
+  private createStarburstFlash(
+    x: number,
+    y: number,
+    color: number,
+    size: number
+  ): Phaser.GameObjects.Graphics {
+    const gfx = this.scene.add.graphics();
+    gfx.setPosition(x, y);
+    gfx.setDepth(60);
+
+    gfx.fillStyle(color, 1);
+
+    const numSpikes = 8;
+    const outerRadius = size;
+    const innerRadius = size * 0.4;
+
+    const points: { x: number; y: number }[] = [];
+    for (let i = 0; i < numSpikes * 2; i++) {
+      const angle = (i * Math.PI) / numSpikes - Math.PI / 2;
+      const radius = i % 2 === 0 ? outerRadius : innerRadius;
+      points.push({
+        x: Math.cos(angle) * radius,
+        y: Math.sin(angle) * radius,
+      });
+    }
+
+    gfx.fillPoints(points, true);
+
+    return gfx;
   }
 
   /**

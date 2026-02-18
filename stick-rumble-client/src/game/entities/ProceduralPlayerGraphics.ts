@@ -13,7 +13,6 @@ import { COLORS } from '../../shared/constants';
  * - Optional aim line from barrel tip to cursor (local player only)
  */
 export class ProceduralPlayerGraphics {
-  // @ts-expect-error - Scene kept for future weapon attachment support
   private scene: Phaser.Scene;
   private graphics: Phaser.GameObjects.Graphics;
   private aimLineGraphics: Phaser.GameObjects.Graphics | null = null;
