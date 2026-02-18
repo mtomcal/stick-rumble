@@ -20,6 +20,7 @@ import { GameSceneSpectator } from './GameSceneSpectator';
 import { GameSceneEventHandlers } from './GameSceneEventHandlers';
 import { ScreenShake } from '../effects/ScreenShake';
 import { AudioManager } from '../audio/AudioManager';
+import { AimLine } from '../entities/AimLine';
 import { ARENA, COLORS } from '../../shared/constants';
 
 export class GameScene extends Phaser.Scene {
@@ -48,6 +49,7 @@ export class GameScene extends Phaser.Scene {
   private cameraFollowTarget: Phaser.GameObjects.Graphics | null = null;
   private nearbyWeaponCrate: { id: string; weaponType: string } | null = null;
   private isPointerHeld: boolean = false;
+  private aimLine!: AimLine;
 
   constructor() {
     super({ key: 'GameScene' });
@@ -98,6 +100,9 @@ export class GameScene extends Phaser.Scene {
       color: '#ffffff'
     });
     titleText.setScrollFactor(0);
+
+    // Initialize aim line (local player only, depth 40)
+    this.aimLine = new AimLine(this);
 
     // Initialize player manager (using procedural graphics)
     this.playerManager = new PlayerManager(this);
@@ -392,6 +397,18 @@ export class GameScene extends Phaser.Scene {
       const currentAimAngle = this.inputManager.getAimAngle();
       this.playerManager.updateLocalPlayerAim(currentAimAngle);
 
+      // Update aim line (local player only)
+      if (this.aimLine) {
+        const localPos = this.playerManager.getLocalPlayerPosition();
+        const isMelee = this.shootingManager && this.shootingManager.isMeleeWeapon();
+        if (localPos && !isMelee) {
+          this.aimLine.setEnabled(true);
+          this.aimLine.update(localPos.x, localPos.y, currentAimAngle);
+        } else {
+          this.aimLine.setEnabled(false);
+        }
+      }
+
       // Handle automatic fire for automatic weapons when pointer held
       if (this.isPointerHeld && this.shootingManager && !this.shootingManager.isMeleeWeapon() && this.shootingManager.isAutomatic()) {
         this.shootingManager.setAimAngle(currentAimAngle);
@@ -565,6 +582,11 @@ export class GameScene extends Phaser.Scene {
     // Cleanup event handlers first to prevent handler accumulation
     if (this.eventHandlers) {
       this.eventHandlers.destroy();
+    }
+
+    // Destroy aim line
+    if (this.aimLine) {
+      this.aimLine.destroy();
     }
 
     // Destroy all managers

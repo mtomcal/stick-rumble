@@ -103,6 +103,7 @@ describe('GameSceneEventHandlers - Recoil Visual Feedback', () => {
       showHitMarker: vi.fn(),
       showCameraShake: vi.fn(),
       updateMatchTimer: vi.fn(),
+      triggerCrosshairBloom: vi.fn(),
     } as unknown as GameSceneUI;
 
     mockGameSceneSpectator = {

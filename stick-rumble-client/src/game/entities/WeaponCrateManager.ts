@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { COLORS } from '../../shared/constants';
 
 export interface WeaponCrateData {
   id: string;
@@ -8,7 +9,7 @@ export interface WeaponCrateData {
 }
 
 interface CrateVisual {
-  sprite: Phaser.GameObjects.Rectangle;
+  sprite: Phaser.GameObjects.Graphics;
   glow: Phaser.GameObjects.Arc;
   tween: Phaser.Tweens.Tween;
   isAvailable: boolean;
@@ -16,8 +17,7 @@ interface CrateVisual {
   weaponType: string;
 }
 
-const CRATE_SIZE = 48;
-const CRATE_COLOR = 0x996633;
+const CRATE_RADIUS = 20;
 const GLOW_RADIUS = 32;
 const GLOW_COLOR = 0xffff00;
 const GLOW_ALPHA = 0;
@@ -39,15 +39,22 @@ export class WeaponCrateManager {
   }
 
   spawnCrate(data: WeaponCrateData): void {
-    // Create weapon crate sprite (box)
-    const sprite = this.scene.add.rectangle(
-      data.position.x,
-      data.position.y,
-      CRATE_SIZE,
-      CRATE_SIZE,
-      CRATE_COLOR
-    );
-    sprite.setOrigin(0.5, 0.5);
+    // Create weapon crate graphics: yellow circle outline with dark cross icon
+    const sprite = this.scene.add.graphics();
+    sprite.setPosition(data.position.x, data.position.y);
+
+    // Draw yellow circle outline (~40px diameter)
+    sprite.lineStyle(3, COLORS.WEAPON_CRATE, 1);
+    sprite.strokeCircle(0, 0, CRATE_RADIUS);
+
+    // Draw small dark cross icon inside
+    sprite.lineStyle(2, 0x000000, 0.8);
+    sprite.beginPath();
+    sprite.moveTo(0, -8);
+    sprite.lineTo(0, 8);
+    sprite.moveTo(-8, 0);
+    sprite.lineTo(8, 0);
+    sprite.strokePath();
 
     // Add glow effect for visibility
     const glow = this.scene.add.arc(
@@ -62,7 +69,7 @@ export class WeaponCrateManager {
     );
     glow.setStrokeStyle(GLOW_STROKE_WIDTH, GLOW_COLOR, GLOW_STROKE_ALPHA);
 
-    // Add bobbing animation
+    // Add bobbing animation to graphics object
     const tween = this.scene.tweens.add({
       targets: sprite,
       y: data.position.y - BOB_DISTANCE,
