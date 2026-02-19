@@ -17,7 +17,7 @@ describe('GameConfig', () => {
   });
 
   it('should have correct background color', () => {
-    expect(GameConfig.backgroundColor).toBe('#282c34');
+    expect(GameConfig.backgroundColor).toBe('#C8CCC8');
   });
 
   it('should configure arcade physics', () => {

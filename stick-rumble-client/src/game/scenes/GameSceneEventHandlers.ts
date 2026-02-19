@@ -15,6 +15,10 @@ import type { GameSceneSpectator } from './GameSceneSpectator';
 import type { ScreenShake } from '../effects/ScreenShake';
 import type { AudioManager } from '../audio/AudioManager';
 import type { PredictionEngine } from '../physics/PredictionEngine';
+import type { ScoreDisplayUI } from '../ui/ScoreDisplayUI';
+import type { KillCounterUI } from '../ui/KillCounterUI';
+import type { ChatLogUI } from '../ui/ChatLogUI';
+import type { PickupNotificationUI } from '../ui/PickupNotificationUI';
 // Import generated schema types for server→client messages (replaces manual type assertions)
 import type {
   RoomJoinedData,
@@ -67,6 +71,10 @@ export class GameSceneEventHandlers {
   private matchEnded: boolean = false; // Flag to stop processing player:move after match ends
   private pendingPlayerMoves: unknown[] = []; // Queue for player:move messages before room:joined
   private pendingWeaponSpawns: unknown[] = []; // Queue for weapon:spawned messages before room:joined
+  private scoreDisplayUI: ScoreDisplayUI | null = null;
+  private killCounterUI: KillCounterUI | null = null;
+  private chatLogUI: ChatLogUI | null = null;
+  private pickupNotificationUI: PickupNotificationUI | null = null;
 
   constructor(
     wsClient: WebSocketClient,
@@ -136,6 +144,34 @@ export class GameSceneEventHandlers {
    */
   setPredictionEngine(predictionEngine: PredictionEngine): void {
     this.predictionEngine = predictionEngine;
+  }
+
+  /**
+   * Set score display UI for kill credit wiring
+   */
+  setScoreDisplayUI(scoreDisplayUI: ScoreDisplayUI): void {
+    this.scoreDisplayUI = scoreDisplayUI;
+  }
+
+  /**
+   * Set kill counter UI for kill credit wiring
+   */
+  setKillCounterUI(killCounterUI: KillCounterUI): void {
+    this.killCounterUI = killCounterUI;
+  }
+
+  /**
+   * Set chat log UI for system message wiring
+   */
+  setChatLogUI(chatLogUI: ChatLogUI): void {
+    this.chatLogUI = chatLogUI;
+  }
+
+  /**
+   * Set pickup notification UI for weapon pickup wiring
+   */
+  setPickupNotificationUI(pickupNotificationUI: PickupNotificationUI): void {
+    this.pickupNotificationUI = pickupNotificationUI;
   }
 
   /**
@@ -277,6 +313,11 @@ export class GameSceneEventHandlers {
         // The next player:move from the server will have the correct player list
         this.pendingPlayerMoves = [];
 
+        // Log join to chat
+        if (this.chatLogUI) {
+          this.chatLogUI.addSystemMessage('You joined the match');
+        }
+
         // Process any queued weapon:spawned messages
         for (const pendingData of this.pendingWeaponSpawns) {
           const weaponData = pendingData as WeaponSpawnedData;
@@ -320,6 +361,11 @@ export class GameSceneEventHandlers {
       // Trigger screen shake for local player's weapon fire (Story 3.3 Polish)
       if (this.screenShake && isLocalPlayer) {
         this.screenShake.shakeOnWeaponFire(this.currentWeaponType);
+      }
+
+      // Trigger crosshair bloom when local player fires
+      if (isLocalPlayer) {
+        this.ui.triggerCrosshairBloom();
       }
 
       // Play weapon firing sound (Story 3.3 Polish: Weapon-Specific Firing Sounds)
@@ -486,6 +532,16 @@ export class GameSceneEventHandlers {
 
       // Add kill to feed (using player IDs for now - will be replaced with names later)
       this.killFeedUI.addKill(messageData.killerId.substring(0, 8), messageData.victimId.substring(0, 8));
+
+      // Update score display with XP from kill credit
+      if (this.scoreDisplayUI) {
+        this.scoreDisplayUI.updateScore(messageData.killerXP);
+      }
+
+      // Increment kill counter
+      if (this.killCounterUI) {
+        this.killCounterUI.incrementKills();
+      }
     };
     this.handlerRefs.set('player:kill_credit', playerKillCreditHandler);
     this.wsClient.on('player:kill_credit', playerKillCreditHandler);
@@ -591,6 +647,11 @@ export class GameSceneEventHandlers {
 
       // Update weapon sprite for the player (Story 3.7A - weapon sprites)
       this.playerManager.updatePlayerWeapon(messageData.playerId, messageData.weaponType);
+
+      // Show pickup notification for local player
+      if (messageData.playerId === this.playerManager.getLocalPlayerId() && this.pickupNotificationUI) {
+        this.pickupNotificationUI.show(messageData.weaponType);
+      }
 
       // Create melee weapon visual if picking up Bat or Katana
       const playerPos = this.playerManager.getPlayerPosition(messageData.playerId);

@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { PLAYER } from '../../shared/constants';
+import { PLAYER, COLORS } from '../../shared/constants';
 import type { Clock } from '../utils/Clock';
 import { RealClock } from '../utils/Clock';
 import { ProceduralPlayerGraphics } from './ProceduralPlayerGraphics';
@@ -25,6 +25,8 @@ export interface PlayerState {
   health?: number; // Current health (0-100)
   isRegenerating?: boolean; // Whether health is currently regenerating
   isRolling?: boolean; // Whether player is currently dodge rolling
+  isInvulnerable?: boolean; // Whether player is in spawn invulnerability state
+  invulnerabilityEndTime?: number; // Timestamp when invulnerability expires (ms since epoch)
 }
 
 // Length of the aim indicator line in pixels
@@ -208,13 +210,14 @@ export class PlayerManager {
 
         // Create new player graphics (procedural stick figure)
         const isLocal = state.id === this.localPlayerId;
-        const color = isLocal ? 0x00ff00 : 0xff0000; // Green for local, red for others
+        const headColor = isLocal ? COLORS.PLAYER_HEAD : COLORS.ENEMY_HEAD;
 
         playerGraphics = new ProceduralPlayerGraphics(
           this.scene,
           state.position.x,
           state.position.y,
-          color
+          headColor,
+          COLORS.BODY
         );
 
         this.players.set(state.id, playerGraphics);
@@ -304,18 +307,18 @@ export class PlayerManager {
           this.createDeathCorpse(state);
         }
       } else if (!state.isRolling) {
-        // Alive player (not rolling): restore original color and visibility
+        // Alive player (not rolling): restore original head color and visibility
         const isLocal = state.id === this.localPlayerId;
-        const color = isLocal ? 0x00ff00 : 0xff0000;
-        playerGraphics.setColor(color);
+        const headColor = isLocal ? COLORS.PLAYER_HEAD : COLORS.ENEMY_HEAD;
+        playerGraphics.setColor(headColor);
 
         // Clean up corpse if player respawned
         this.destroyCorpse(state.id);
       } else {
-        // Alive player (rolling): keep original color
+        // Alive player (rolling): keep original head color
         const isLocal = state.id === this.localPlayerId;
-        const color = isLocal ? 0x00ff00 : 0xff0000;
-        playerGraphics.setColor(color);
+        const headColor = isLocal ? COLORS.PLAYER_HEAD : COLORS.ENEMY_HEAD;
+        playerGraphics.setColor(headColor);
 
         // Clean up corpse if player respawned
         this.destroyCorpse(state.id);

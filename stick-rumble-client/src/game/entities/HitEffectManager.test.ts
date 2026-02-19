@@ -261,14 +261,14 @@ describe('HitEffectManager', () => {
       expect(graphicsMock.fillCircle).toHaveBeenCalledWith(0, 0, 2);
     });
 
-    it('should create orange muzzle flash', () => {
+    it('should create gold muzzle flash (COLORS.MUZZLE_FLASH)', () => {
       const addGraphics = scene.add.graphics as unknown as ReturnType<typeof vi.fn>;
       const graphicsMock = addGraphics.mock.results[0]?.value;
 
       manager.showMuzzleFlash(100, 200, 0);
 
-      // Should have filled with orange color (0xFFA500)
-      expect(graphicsMock.fillStyle).toHaveBeenCalledWith(0xFFA500, 1);
+      // Should have filled with gold color (COLORS.MUZZLE_FLASH = 0xFFD700)
+      expect(graphicsMock.fillStyle).toHaveBeenCalledWith(0xFFD700, 1);
     });
   });
 
@@ -349,19 +349,19 @@ describe('HitEffectManager', () => {
   });
 
   describe('showBloodParticles (TS-GFX-015)', () => {
-    it('should create exactly 5 blood particles', () => {
+    it('should create exactly 8 blood particles', () => {
       manager.showBloodParticles(200, 200, 100, 200);
 
       const addCircle = scene.add.circle as unknown as ReturnType<typeof vi.fn>;
-      expect(addCircle).toHaveBeenCalledTimes(5);
+      expect(addCircle).toHaveBeenCalledTimes(8);
     });
 
-    it('should create circles with color 0xCC0000 (dark red)', () => {
+    it('should create circles with color 0xCC3333 (COLORS.BLOOD)', () => {
       manager.showBloodParticles(200, 200, 100, 200);
 
       const addCircle = scene.add.circle as unknown as ReturnType<typeof vi.fn>;
       for (const call of addCircle.mock.calls) {
-        expect(call[3]).toBe(0xCC0000);
+        expect(call[3]).toBe(0xCC3333);
       }
     });
 
@@ -440,8 +440,8 @@ describe('HitEffectManager', () => {
 
       inspectManager.showBloodParticles(200, 200, 100, 200);
 
-      // 5 particles = 5 tweens
-      expect(tweenConfigs.length).toBe(5);
+      // 8 particles = 8 tweens
+      expect(tweenConfigs.length).toBe(8);
       for (const config of tweenConfigs) {
         const c = config as { alpha: number; scale: number; duration: number; onComplete: () => void };
         expect(c.alpha).toBe(0);

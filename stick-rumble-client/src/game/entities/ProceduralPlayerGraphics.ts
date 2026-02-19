@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { COLORS } from '../../shared/constants';
 
 /**
  * ProceduralPlayerGraphics renders stick figure characters using procedural graphics
@@ -7,33 +8,85 @@ import Phaser from 'phaser';
  * Features:
  * - Stick figure with head, arms, legs
  * - Walk cycle animation using sine waves
- * - Color customization
+ * - Color customization (separate head and body colors)
  * - Rotation support for direction
+ * - Optional aim line from barrel tip to cursor (local player only)
+ * - "YOU" / name label above player head
+ * - Spawn invulnerability ring rendering
  */
 export class ProceduralPlayerGraphics {
-  // @ts-expect-error - Scene kept for future weapon attachment support
   private scene: Phaser.Scene;
   private graphics: Phaser.GameObjects.Graphics;
+  private aimLineGraphics: Phaser.GameObjects.Graphics | null = null;
   private x: number;
   private y: number;
   private rotation: number = 0;
-  private color: number;
+  private headColor: number;
+  private bodyColor: number;
   private walkCycle: number = 0;
+  private isInvulnerable: boolean = false;
+  private nameLabel: Phaser.GameObjects.Text | null = null;
+
+  // Head radius (used for label positioning)
+  private static readonly HEAD_RADIUS = 13;
+
+  // Barrel tip position relative to player center (same as hand position)
+  private static readonly BARREL_X = 20;
 
   // Animation constants (from prototype)
   private static readonly WALK_SPEED_FACTOR = 0.02;
 
-  constructor(scene: Phaser.Scene, x: number, y: number, color: number) {
+  constructor(scene: Phaser.Scene, x: number, y: number, headColor: number, bodyColor: number = 0x000000) {
     this.scene = scene;
     this.x = x;
     this.y = y;
-    this.color = color;
+    this.headColor = headColor;
+    this.bodyColor = bodyColor;
 
     // Create graphics object
     this.graphics = scene.add.graphics();
     this.graphics.setDepth(50); // Render below UI but above background
 
     // Initial draw
+    this.draw();
+  }
+
+  /**
+   * Set name label displayed above this player's head.
+   * Use 'YOU' for the local player, or player display name for enemies.
+   * Pass null or empty string to hide label.
+   */
+  setNameLabel(label: string | null): void {
+    if (!label) {
+      if (this.nameLabel) {
+        this.nameLabel.destroy();
+        this.nameLabel = null;
+      }
+      return;
+    }
+
+    const isYou = label === 'YOU';
+    if (!this.nameLabel) {
+      this.nameLabel = this.scene.add.text(this.x, this.y - ProceduralPlayerGraphics.HEAD_RADIUS - 5, label, {
+        fontSize: isYou ? '14px' : '12px',
+        fontStyle: isYou ? 'bold' : 'normal',
+        color: isYou ? '#FFFFFF' : '#AAAAAA',
+        shadow: isYou ? { offsetX: 1, offsetY: 1, color: '#000000', blur: 2, fill: true } : undefined,
+      });
+      this.nameLabel.setOrigin(0.5, 1);
+      this.nameLabel.setDepth(60);
+    } else {
+      this.nameLabel.setText(label);
+    }
+    this.updateLabelPosition();
+  }
+
+  /**
+   * Set spawn invulnerability state.
+   * When true, a yellow ring is drawn around the player.
+   */
+  setInvulnerable(invulnerable: boolean): void {
+    this.isInvulnerable = invulnerable;
     this.draw();
   }
 
@@ -57,8 +110,14 @@ export class ProceduralPlayerGraphics {
       };
     };
 
+    // --- SPAWN INVULNERABILITY RING ---
+    if (this.isInvulnerable) {
+      this.graphics.lineStyle(2, COLORS.SPAWN_RING, 1);
+      this.graphics.strokeCircle(cx, cy, 25);
+    }
+
     // --- LEGS ---
-    this.graphics.lineStyle(3, this.color, 1);
+    this.graphics.lineStyle(3, this.bodyColor, 1);
 
     const stride = 16;
     const footSideOffset = 8;
@@ -82,7 +141,7 @@ export class ProceduralPlayerGraphics {
     this.graphics.strokePath();
 
     // Draw feet
-    this.graphics.fillStyle(this.color, 1);
+    this.graphics.fillStyle(this.bodyColor, 1);
     this.graphics.fillCircle(leftFootPos.x, leftFootPos.y, 3);
     this.graphics.fillCircle(rightFootPos.x, rightFootPos.y, 3);
 
@@ -96,7 +155,7 @@ export class ProceduralPlayerGraphics {
     const leftHandPos = calcPoint(leftHandX, leftHandY);
     const rightHandPos = calcPoint(rightHandX, rightHandY);
 
-    this.graphics.lineStyle(2, this.color, 1);
+    this.graphics.lineStyle(2, this.bodyColor, 1);
 
     // Draw left arm
     this.graphics.beginPath();
@@ -115,10 +174,77 @@ export class ProceduralPlayerGraphics {
     this.graphics.fillCircle(rightHandPos.x, rightHandPos.y, 3);
 
     // --- HEAD ---
-    this.graphics.fillStyle(this.color, 1);
-    this.graphics.fillCircle(cx, cy, 13);
+    this.graphics.fillStyle(this.headColor, 1);
+    this.graphics.fillCircle(cx, cy, ProceduralPlayerGraphics.HEAD_RADIUS);
     this.graphics.lineStyle(1, 0x000000, 0.3);
-    this.graphics.strokeCircle(cx, cy, 13);
+    this.graphics.strokeCircle(cx, cy, ProceduralPlayerGraphics.HEAD_RADIUS);
+  }
+
+  private updateLabelPosition(): void {
+    if (this.nameLabel) {
+      this.nameLabel.x = this.x;
+      this.nameLabel.y = this.y - ProceduralPlayerGraphics.HEAD_RADIUS - 5;
+    }
+  }
+
+  /**
+   * Get the world-space barrel tip position (where shots come from)
+   */
+  getBarrelPosition(): { x: number; y: number } {
+    return {
+      x: this.x + ProceduralPlayerGraphics.BARREL_X * Math.cos(this.rotation),
+      y: this.y + ProceduralPlayerGraphics.BARREL_X * Math.sin(this.rotation),
+    };
+  }
+
+  /**
+   * Create and show the aim line graphic (local player only)
+   */
+  createAimLine(): void {
+    if (this.aimLineGraphics) {
+      return;
+    }
+    this.aimLineGraphics = this.scene.add.graphics();
+    this.aimLineGraphics.setDepth(40);
+  }
+
+  /**
+   * Update the aim line from barrel tip toward target position
+   * @param targetX - World-space X of cursor/crosshair target
+   * @param targetY - World-space Y of cursor/crosshair target
+   */
+  updateAimLine(targetX: number, targetY: number): void {
+    if (!this.aimLineGraphics) {
+      return;
+    }
+
+    this.aimLineGraphics.clear();
+
+    const barrel = this.getBarrelPosition();
+    this.aimLineGraphics.lineStyle(1, COLORS.AIM_LINE, 0.6);
+    this.aimLineGraphics.beginPath();
+    this.aimLineGraphics.moveTo(barrel.x, barrel.y);
+    this.aimLineGraphics.lineTo(targetX, targetY);
+    this.aimLineGraphics.strokePath();
+  }
+
+  /**
+   * Hide aim line (e.g. when switching to melee or spectating)
+   */
+  hideAimLine(): void {
+    if (this.aimLineGraphics) {
+      this.aimLineGraphics.clear();
+      this.aimLineGraphics.setVisible(false);
+    }
+  }
+
+  /**
+   * Show aim line
+   */
+  showAimLine(): void {
+    if (this.aimLineGraphics) {
+      this.aimLineGraphics.setVisible(true);
+    }
   }
 
   /**
@@ -147,6 +273,7 @@ export class ProceduralPlayerGraphics {
     // Update Graphics transform for camera follow
     this.graphics.x = x;
     this.graphics.y = y;
+    this.updateLabelPosition();
     this.draw();
   }
 
@@ -173,10 +300,10 @@ export class ProceduralPlayerGraphics {
   }
 
   /**
-   * Set color
+   * Set head color (body is always black per art style)
    */
-  setColor(color: number): void {
-    this.color = color;
+  setColor(headColor: number): void {
+    this.headColor = headColor;
     this.draw();
   }
 
@@ -185,6 +312,9 @@ export class ProceduralPlayerGraphics {
    */
   setVisible(visible: boolean): void {
     this.graphics.setVisible(visible);
+    if (this.nameLabel) {
+      this.nameLabel.setVisible(visible);
+    }
   }
 
   /**
@@ -205,8 +335,16 @@ export class ProceduralPlayerGraphics {
    * Cleanup
    */
   destroy(): void {
+    if (this.aimLineGraphics) {
+      this.aimLineGraphics.destroy();
+      this.aimLineGraphics = null;
+    }
     if (this.graphics) {
       this.graphics.destroy();
+    }
+    if (this.nameLabel) {
+      this.nameLabel.destroy();
+      this.nameLabel = null;
     }
   }
 }

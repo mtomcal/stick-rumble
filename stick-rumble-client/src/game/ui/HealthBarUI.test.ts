@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { HealthBarUI } from './HealthBarUI';
+import { COLORS } from '../../shared/constants';
 import type Phaser from 'phaser';
 
 describe('HealthBarUI', () => {
@@ -8,6 +9,7 @@ describe('HealthBarUI', () => {
   let mockBackground: Phaser.GameObjects.Rectangle;
   let mockHealthBar: Phaser.GameObjects.Rectangle;
   let mockHealthText: Phaser.GameObjects.Text;
+  let mockEkgIcon: Phaser.GameObjects.Graphics;
   let mockTween: Phaser.Tweens.Tween;
 
   beforeEach(() => {
@@ -32,6 +34,15 @@ describe('HealthBarUI', () => {
       setOrigin: vi.fn().mockReturnThis(),
     } as unknown as Phaser.GameObjects.Rectangle;
 
+    mockEkgIcon = {
+      clear: vi.fn().mockReturnThis(),
+      lineStyle: vi.fn().mockReturnThis(),
+      beginPath: vi.fn().mockReturnThis(),
+      moveTo: vi.fn().mockReturnThis(),
+      lineTo: vi.fn().mockReturnThis(),
+      strokePath: vi.fn().mockReturnThis(),
+    } as unknown as Phaser.GameObjects.Graphics;
+
     mockContainer = {
       add: vi.fn().mockReturnThis(),
       setScrollFactor: vi.fn().mockReturnThis(),
@@ -44,6 +55,7 @@ describe('HealthBarUI', () => {
         rectangle: vi.fn()
           .mockReturnValueOnce(mockBackground) // First call: background
           .mockReturnValueOnce(mockHealthBar), // Second call: health bar
+        graphics: vi.fn().mockReturnValue(mockEkgIcon),
         text: vi.fn().mockReturnValue(mockHealthText),
       },
       tweens: {
@@ -57,7 +69,8 @@ describe('HealthBarUI', () => {
 
     expect(mockScene.add.container).toHaveBeenCalledWith(10, 70);
     expect(mockScene.add.rectangle).toHaveBeenCalledTimes(2);
-    expect(mockScene.add.text).toHaveBeenCalledWith(5, 5, '100/100', expect.any(Object));
+    expect(mockScene.add.graphics).toHaveBeenCalled();
+    expect(mockScene.add.text).toHaveBeenCalledWith(5, 5, '100%', expect.any(Object));
     expect(mockContainer.setScrollFactor).toHaveBeenCalledWith(0);
     expect(mockContainer.setDepth).toHaveBeenCalledWith(1000);
   });
@@ -78,19 +91,28 @@ describe('HealthBarUI', () => {
     expect(mockBackground.setOrigin).toHaveBeenCalledWith(0, 0);
   });
 
-  it('should create health bar rectangle with correct initial dimensions', () => {
+  it('should create health bar rectangle with COLORS.HEALTH_FULL initial color', () => {
     new HealthBarUI(mockScene, 10, 70);
 
-    // Health bar: 200x30 (full health)
+    // Health bar: 200x30 (full health), using COLORS.HEALTH_FULL
     expect(mockScene.add.rectangle).toHaveBeenNthCalledWith(
       2,
       2,
       2,
       200,
       30,
-      0x00ff00
+      COLORS.HEALTH_FULL
     );
     expect(mockHealthBar.setOrigin).toHaveBeenCalledWith(0, 0);
+  });
+
+  it('should draw EKG heartbeat icon', () => {
+    new HealthBarUI(mockScene, 10, 70);
+
+    expect(mockScene.add.graphics).toHaveBeenCalled();
+    expect(mockEkgIcon.lineStyle).toHaveBeenCalledWith(2, COLORS.HEALTH_FULL, 1);
+    expect(mockEkgIcon.beginPath).toHaveBeenCalled();
+    expect(mockEkgIcon.strokePath).toHaveBeenCalled();
   });
 
   it('should update health bar width when health changes', () => {
@@ -102,30 +124,28 @@ describe('HealthBarUI', () => {
     expect(mockHealthBar.setDisplaySize).toHaveBeenCalledWith(100, 30);
   });
 
-  it('should update health text when health changes', () => {
+  it('should update health text in percentage format when health changes', () => {
     const healthBar = new HealthBarUI(mockScene, 10, 70);
 
     healthBar.updateHealth(75, 100);
 
-    expect(mockHealthText.setText).toHaveBeenCalledWith('75/100');
+    expect(mockHealthText.setText).toHaveBeenCalledWith('75%');
   });
 
-  it('should change health bar color to yellow when health is between 30-60%', () => {
-    const healthBar = new HealthBarUI(mockScene, 10, 70);
-
-    healthBar.updateHealth(50, 100);
-
-    expect(mockHealthBar.setDisplaySize).toHaveBeenCalledWith(100, 30);
-    expect(mockHealthBar.fillColor).toBe(0xffff00); // Yellow color
-  });
-
-  it('should change health bar color to red when health is below 30%', () => {
+  it('should use green color (COLORS.HEALTH_FULL) when health >= 20%', () => {
     const healthBar = new HealthBarUI(mockScene, 10, 70);
 
     healthBar.updateHealth(20, 100);
 
-    expect(mockHealthBar.setDisplaySize).toHaveBeenCalledWith(40, 30);
-    expect(mockHealthBar.fillColor).toBe(0xff0000); // Red color
+    expect(mockHealthBar.fillColor).toBe(COLORS.HEALTH_FULL);
+  });
+
+  it('should use red color (COLORS.HEALTH_CRITICAL) when health < 20%', () => {
+    const healthBar = new HealthBarUI(mockScene, 10, 70);
+
+    healthBar.updateHealth(19, 100);
+
+    expect(mockHealthBar.fillColor).toBe(COLORS.HEALTH_CRITICAL);
   });
 
   it('should handle zero health', () => {
@@ -134,7 +154,8 @@ describe('HealthBarUI', () => {
     healthBar.updateHealth(0, 100);
 
     expect(mockHealthBar.setDisplaySize).toHaveBeenCalledWith(0, 30);
-    expect(mockHealthText.setText).toHaveBeenCalledWith('0/100');
+    expect(mockHealthText.setText).toHaveBeenCalledWith('0%');
+    expect(mockHealthBar.fillColor).toBe(COLORS.HEALTH_CRITICAL);
   });
 
   it('should handle full health', () => {
@@ -143,58 +164,37 @@ describe('HealthBarUI', () => {
     healthBar.updateHealth(100, 100);
 
     expect(mockHealthBar.setDisplaySize).toHaveBeenCalledWith(200, 30);
-    expect(mockHealthText.setText).toHaveBeenCalledWith('100/100');
+    expect(mockHealthText.setText).toHaveBeenCalledWith('100%');
+    expect(mockHealthBar.fillColor).toBe(COLORS.HEALTH_FULL);
   });
 
-  it('should handle edge case at 30% health threshold', () => {
+  it('should round percentage correctly in text', () => {
     const healthBar = new HealthBarUI(mockScene, 10, 70);
 
-    healthBar.updateHealth(30, 100);
+    healthBar.updateHealth(33, 100);
 
-    expect(mockHealthBar.setDisplaySize).toHaveBeenCalledWith(60, 30);
-    expect(mockHealthText.setText).toHaveBeenCalledWith('30/100');
+    expect(mockHealthText.setText).toHaveBeenCalledWith('33%');
   });
 
-  it('should handle edge case at 60% health threshold', () => {
+  it('should handle edge case at exactly 20% health threshold (green)', () => {
     const healthBar = new HealthBarUI(mockScene, 10, 70);
 
-    healthBar.updateHealth(60, 100);
+    healthBar.updateHealth(20, 100);
 
-    expect(mockHealthBar.setDisplaySize).toHaveBeenCalledWith(120, 30);
-    expect(mockHealthText.setText).toHaveBeenCalledWith('60/100');
+    expect(mockHealthBar.setDisplaySize).toHaveBeenCalledWith(40, 30);
+    expect(mockHealthBar.fillColor).toBe(COLORS.HEALTH_FULL);
   });
 
-  it('should keep health bar green when health is above 60%', () => {
+  it('should transition from green to red just below 20% threshold', () => {
     const healthBar = new HealthBarUI(mockScene, 10, 70);
 
-    healthBar.updateHealth(80, 100);
+    // Just above 20% (green)
+    healthBar.updateHealth(21, 100);
+    expect(mockHealthBar.fillColor).toBe(COLORS.HEALTH_FULL);
 
-    expect(mockHealthBar.setDisplaySize).toHaveBeenCalledWith(160, 30);
-    expect(mockHealthBar.fillColor).toBe(0x00ff00); // Green color
-  });
-
-  it('should transition from green to yellow at 60% threshold', () => {
-    const healthBar = new HealthBarUI(mockScene, 10, 70);
-
-    // Start with >60% (green)
-    healthBar.updateHealth(61, 100);
-    expect(mockHealthBar.fillColor).toBe(0x00ff00);
-
-    // Drop to exactly 60% (still yellow since >0.6 is false)
-    healthBar.updateHealth(60, 100);
-    expect(mockHealthBar.fillColor).toBe(0xffff00);
-  });
-
-  it('should transition from yellow to red at 30% threshold', () => {
-    const healthBar = new HealthBarUI(mockScene, 10, 70);
-
-    // Start with >30% (yellow)
-    healthBar.updateHealth(31, 100);
-    expect(mockHealthBar.fillColor).toBe(0xffff00);
-
-    // Drop to exactly 30% (still red since >0.3 is false)
-    healthBar.updateHealth(30, 100);
-    expect(mockHealthBar.fillColor).toBe(0xff0000);
+    // Just below 20% (red)
+    healthBar.updateHealth(19, 100);
+    expect(mockHealthBar.fillColor).toBe(COLORS.HEALTH_CRITICAL);
   });
 
   it('should clamp negative health to zero', () => {
@@ -203,7 +203,7 @@ describe('HealthBarUI', () => {
     healthBar.updateHealth(-10, 100);
 
     expect(mockHealthBar.setDisplaySize).toHaveBeenCalledWith(0, 30);
-    expect(mockHealthText.setText).toHaveBeenCalledWith('0/100');
+    expect(mockHealthText.setText).toHaveBeenCalledWith('0%');
   });
 
   it('should clamp health above max to max', () => {
@@ -212,7 +212,7 @@ describe('HealthBarUI', () => {
     healthBar.updateHealth(150, 100);
 
     expect(mockHealthBar.setDisplaySize).toHaveBeenCalledWith(200, 30);
-    expect(mockHealthText.setText).toHaveBeenCalledWith('100/100');
+    expect(mockHealthText.setText).toHaveBeenCalledWith('100%');
   });
 
   describe('Health Regeneration Animation', () => {
@@ -311,20 +311,20 @@ describe('HealthBarUI', () => {
       expect(mockHealthBar.setDisplaySize).toHaveBeenCalledWith(200, 30);
     });
 
-    it('should update health text while regenerating', () => {
+    it('should update health text in percentage format while regenerating', () => {
       const healthBar = new HealthBarUI(mockScene, 10, 70);
 
       // Start regenerating at 50 HP
       healthBar.updateHealth(50, 100, true);
-      expect(mockHealthText.setText).toHaveBeenCalledWith('50/100');
+      expect(mockHealthText.setText).toHaveBeenCalledWith('50%');
 
       // Regenerate to 75 HP
       healthBar.updateHealth(75, 100, true);
-      expect(mockHealthText.setText).toHaveBeenCalledWith('75/100');
+      expect(mockHealthText.setText).toHaveBeenCalledWith('75%');
 
       // Regenerate to 100 HP
       healthBar.updateHealth(100, 100, true);
-      expect(mockHealthText.setText).toHaveBeenCalledWith('100/100');
+      expect(mockHealthText.setText).toHaveBeenCalledWith('100%');
     });
 
     it('should not restart animation when already regenerating (idempotency test)', () => {
@@ -365,7 +365,7 @@ describe('HealthBarUI', () => {
 
       // Should set bar width to 0 and not crash
       expect(mockHealthBar.setDisplaySize).toHaveBeenCalledWith(0, 30);
-      expect(mockHealthText.setText).toHaveBeenCalledWith('0/0');
+      expect(mockHealthText.setText).toHaveBeenCalledWith('0%');
     });
   });
 

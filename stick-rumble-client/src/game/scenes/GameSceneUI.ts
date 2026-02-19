@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import type { ShootingManager } from '../input/ShootingManager';
 import type { PlayerManager } from '../entities/PlayerManager';
 import { Crosshair } from '../entities/Crosshair';
+import { COLORS, MINIMAP } from '../../shared/constants';
 
 /**
  * GameSceneUI - Manages all UI elements for the game scene
@@ -10,6 +11,8 @@ import { Crosshair } from '../entities/Crosshair';
 export class GameSceneUI {
   private scene: Phaser.Scene;
   private ammoText!: Phaser.GameObjects.Text;
+  private ammoIcon: Phaser.GameObjects.Graphics | null = null;
+  private reloadingText: Phaser.GameObjects.Text | null = null;
   private matchTimerText: Phaser.GameObjects.Text | null = null;
 
   /**
@@ -78,24 +81,55 @@ export class GameSceneUI {
     this.matchTimerText.setScrollFactor(0);
   }
 
+  private damageFlashOverlay: Phaser.GameObjects.Rectangle | null = null;
+
   /**
-   * Create damage flash overlay — no-op, kept for backward compatibility.
-   * Damage flash now uses cameras.main.flash() directly.
+   * Create damage flash overlay — full-viewport red rectangle, tweened to transparent.
+   * Called once during scene creation.
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  createDamageFlashOverlay(_width: number, _height: number): void {
-    // No overlay needed — showDamageFlash() uses cameras.main.flash()
+  createDamageFlashOverlay(width: number, height: number): void {
+    this.damageFlashOverlay = this.scene.add.rectangle(width / 2, height / 2, width, height, COLORS.DAMAGE_FLASH);
+    this.damageFlashOverlay.setScrollFactor(0);
+    this.damageFlashOverlay.setDepth(999);
+    this.damageFlashOverlay.setAlpha(0);
   }
 
   /**
-   * Create ammo text display
+   * Create ammo text display with icon and reloading text
    */
   createAmmoDisplay(x: number, y: number): void {
+    // Ammo icon (small bullet/crosshair graphic)
+    this.ammoIcon = this.scene.add.graphics();
+    this.ammoIcon.setScrollFactor(0);
+    this.ammoIcon.setDepth(1000);
+    this.drawAmmoIcon(COLORS.AMMO_READY);
+
+    // Ammo count text
     this.ammoText = this.scene.add.text(x, y, '15/15', {
       fontSize: '16px',
-      color: '#ffffff'
+      color: `#${COLORS.AMMO_READY.toString(16).padStart(6, '0')}`
     });
     this.ammoText.setScrollFactor(0);
+    this.ammoText.setDepth(1000);
+
+    // "RELOADING..." text shown during reload
+    this.reloadingText = this.scene.add.text(x + 60, y, 'RELOADING...', {
+      fontSize: '16px',
+      color: `#${COLORS.AMMO_RELOADING.toString(16).padStart(6, '0')}`
+    });
+    this.reloadingText.setScrollFactor(0);
+    this.reloadingText.setDepth(1000);
+    this.reloadingText.setVisible(false);
+  }
+
+  /**
+   * Draw ammo icon using given color
+   */
+  private drawAmmoIcon(color: number): void {
+    if (!this.ammoIcon) return;
+    this.ammoIcon.clear();
+    this.ammoIcon.fillStyle(color);
+    this.ammoIcon.fillRect(0, 0, 8, 8);
   }
 
   /**
@@ -108,10 +142,31 @@ export class GameSceneUI {
       // Hide ammo display for melee weapons, show for ranged
       if (isMelee) {
         this.ammoText.setVisible(false);
+        if (this.ammoIcon) this.ammoIcon.setVisible(false);
+        if (this.reloadingText) this.reloadingText.setVisible(false);
       } else {
         this.ammoText.setVisible(true);
+        if (this.ammoIcon) this.ammoIcon.setVisible(true);
         const [current, max] = shootingManager.getAmmoInfo();
-        this.ammoText.setText(`${current}/${max}`);
+
+        // Show "INF" for fist/infinite-ammo weapons (max === 0 or Infinity)
+        if (max === 0 || max === Infinity) {
+          this.ammoText.setText('INF');
+        } else {
+          this.ammoText.setText(`${current}/${max}`);
+        }
+
+        // Color ammo text based on reload state
+        const isReloading = shootingManager.isReloading();
+        if (isReloading) {
+          this.ammoText.setColor(`#${COLORS.AMMO_RELOADING.toString(16).padStart(6, '0')}`);
+          this.drawAmmoIcon(COLORS.AMMO_RELOADING);
+          if (this.reloadingText) this.reloadingText.setVisible(true);
+        } else {
+          this.ammoText.setColor(`#${COLORS.AMMO_READY.toString(16).padStart(6, '0')}`);
+          this.drawAmmoIcon(COLORS.AMMO_READY);
+          if (this.reloadingText) this.reloadingText.setVisible(false);
+        }
       }
 
       // Show/hide reload UI elements based on state
@@ -139,34 +194,44 @@ export class GameSceneUI {
   }
 
   /**
-   * Create reload progress bar HUD element
+   * Create world-space reload progress bar graphics objects.
+   * Positioned above the local player in world coordinates.
    */
-  createReloadProgressBar(x: number, y: number, width: number, height: number): void {
-    // Background bar
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  createReloadProgressBar(_x: number, _y: number, _width: number, _height: number): void {
+    // Background bar (world-space — no scroll factor)
     this.reloadProgressBarBg = this.scene.add.graphics();
-    this.reloadProgressBarBg.fillStyle(0x333333, 0.8);
-    this.reloadProgressBarBg.fillRect(x, y, width, height);
-    this.reloadProgressBarBg.setScrollFactor(0);
     this.reloadProgressBarBg.setDepth(1000);
     this.reloadProgressBarBg.setVisible(false);
 
-    // Foreground progress bar
+    // Foreground progress bar (world-space — no scroll factor)
     this.reloadProgressBar = this.scene.add.graphics();
-    this.reloadProgressBar.setScrollFactor(0);
     this.reloadProgressBar.setDepth(1001);
     this.reloadProgressBar.setVisible(false);
   }
 
   /**
-   * Update reload progress bar fill amount (0 to 1)
+   * Update world-space reload progress bar above local player.
+   * playerX/playerY are the player's world coordinates.
+   * barWidth ~60px, white fill per spec.
    */
-  updateReloadProgress(progress: number, barX: number, barY: number, barWidth: number, barHeight: number): void {
-    if (!this.reloadProgressBar) {
+  updateReloadProgress(progress: number, playerX: number, playerY: number, barWidth: number, barHeight: number): void {
+    if (!this.reloadProgressBar || !this.reloadProgressBarBg) {
       return;
     }
 
+    // Position bar centered above player
+    const barX = playerX - barWidth / 2;
+    const barY = playerY - 30;
+
+    // Redraw background
+    this.reloadProgressBarBg.clear();
+    this.reloadProgressBarBg.fillStyle(0x333333, 0.8);
+    this.reloadProgressBarBg.fillRect(barX, barY, barWidth, barHeight);
+
+    // Redraw foreground progress (white fill per spec)
     this.reloadProgressBar.clear();
-    this.reloadProgressBar.fillStyle(0x00ff00, 1.0);
+    this.reloadProgressBar.fillStyle(0xffffff, 1.0);
     this.reloadProgressBar.fillRect(barX, barY, barWidth * progress, barHeight);
   }
 
@@ -228,6 +293,15 @@ export class GameSceneUI {
     }
 
     this.crosshair.update(isMoving, spreadDegrees);
+  }
+
+  /**
+   * Trigger crosshair bloom animation when local player fires
+   */
+  triggerCrosshairBloom(): void {
+    if (this.crosshair) {
+      this.crosshair.triggerBloom();
+    }
   }
 
   /**
@@ -309,11 +383,17 @@ export class GameSceneUI {
   }
 
   /**
-   * Show camera flash when local player takes damage.
-   * Uses native Phaser camera flash — 100ms, RGB(128, 0, 0).
+   * Show damage flash overlay when local player takes damage.
+   * Red rectangle, alpha 0.35, tweens to 0 over 300ms.
    */
   showDamageFlash(): void {
-    this.scene.cameras.main.flash(100, 128, 0, 0);
+    if (!this.damageFlashOverlay) return;
+    this.damageFlashOverlay.setAlpha(0.35);
+    this.scene.tweens.add({
+      targets: this.damageFlashOverlay,
+      alpha: 0,
+      duration: 300,
+    });
   }
 
   /**
@@ -374,9 +454,9 @@ export class GameSceneUI {
       return; // Player not found or already removed
     }
 
-    // Determine variant: kill uses red 24px, normal/remote uses white 16px
+    // Determine variant: kill uses red 24px, normal/remote uses COLORS.DAMAGE_NUMBER 16px
     const fontSize = isKill ? '24px' : '16px';
-    const color = isKill ? '#ff0000' : '#ffffff';
+    const color = isKill ? '#ff0000' : '#FF4444';
 
     // Create damage number text
     const damageText = this.scene.add.text(
@@ -400,12 +480,12 @@ export class GameSceneUI {
       damageText.setAlpha(0.8);
     }
 
-    // Animate: float up 50px and fade out over 800ms
+    // Animate: float up 40px and fade out over 600ms
     this.scene.tweens.add({
       targets: damageText,
-      y: position.y - 80, // Move up 50 pixels (from y-30 to y-80)
+      y: position.y - 70, // Move up 40 pixels (from y-30 to y-70)
       alpha: 0,
-      duration: 800,
+      duration: 600,
       ease: 'Cubic.easeOut',
       onComplete: () => {
         damageText.destroy();
@@ -432,22 +512,52 @@ export class GameSceneUI {
     indicator.setRotation(angle);
 
     if (type === 'incoming') {
-      indicator.setTint(0xff0000);
+      indicator.setTint(COLORS.HIT_CHEVRON);
+      indicator.setAlpha(0);
       this.scene.tweens.add({
         targets: indicator,
-        alpha: 0,
-        scale: 1.5,
-        duration: 400,
-        onComplete: () => indicator.destroy(),
+        alpha: 1,
+        duration: 100,
+        onComplete: () => {
+          this.scene.tweens.add({
+            targets: indicator,
+            alpha: 1,
+            duration: 300,
+            onComplete: () => {
+              this.scene.tweens.add({
+                targets: indicator,
+                alpha: 0,
+                scale: 1.5,
+                duration: 200,
+                onComplete: () => indicator.destroy(),
+              });
+            },
+          });
+        },
       });
     } else {
       indicator.setTint(kill ? 0xff0000 : 0xffffff);
+      indicator.setAlpha(0);
       this.scene.tweens.add({
         targets: indicator,
-        alpha: 0,
-        scale: 1.5,
-        duration: 200,
-        onComplete: () => indicator.destroy(),
+        alpha: 1,
+        duration: 100,
+        onComplete: () => {
+          this.scene.tweens.add({
+            targets: indicator,
+            alpha: 1,
+            duration: 300,
+            onComplete: () => {
+              this.scene.tweens.add({
+                targets: indicator,
+                alpha: 0,
+                scale: 1.5,
+                duration: 200,
+                onComplete: () => indicator.destroy(),
+              });
+            },
+          });
+        },
       });
     }
   }
@@ -457,23 +567,22 @@ export class GameSceneUI {
    * Called once during scene creation.
    */
   setupMinimap(): void {
-    const scale = 0.075;
     const mapX = 20;
     const mapY = 20;
-    const mapSize = 1600 * scale; // 120px
+    const mapRadius = MINIMAP.SIZE / 2; // 85px
 
     // Static layer — drawn once
     this.minimapStaticGraphics = this.scene.add.graphics();
     this.minimapStaticGraphics.setScrollFactor(0);
     this.minimapStaticGraphics.setDepth(1999);
 
-    // Background
-    this.minimapStaticGraphics.fillStyle(0x000000, 0.7);
-    this.minimapStaticGraphics.fillRect(mapX, mapY, mapSize, mapSize);
+    // Background — circular
+    this.minimapStaticGraphics.fillStyle(MINIMAP.BG_COLOR, 0.5);
+    this.minimapStaticGraphics.fillCircle(mapX + mapRadius, mapY + mapRadius, mapRadius);
 
-    // Border
-    this.minimapStaticGraphics.lineStyle(2, 0xffffff, 0.5);
-    this.minimapStaticGraphics.strokeRect(mapX, mapY, mapSize, mapSize);
+    // Border — circular, teal
+    this.minimapStaticGraphics.lineStyle(2, MINIMAP.BORDER_COLOR, 1);
+    this.minimapStaticGraphics.strokeCircle(mapX + mapRadius, mapY + mapRadius, mapRadius);
 
     // Dynamic layer — cleared and redrawn each frame
     this.minimapDynamicGraphics = this.scene.add.graphics();
@@ -488,7 +597,7 @@ export class GameSceneUI {
   updateMinimap(playerManager: PlayerManager): void {
     if (!this.minimapDynamicGraphics) return;
 
-    const scale = 0.075;
+    const scale = MINIMAP.SCALE;
     const mapX = 20;
     const mapY = 20;
 
@@ -572,10 +681,18 @@ export class GameSceneUI {
     if (this.ammoText) {
       this.ammoText.destroy();
     }
+    if (this.ammoIcon) {
+      this.ammoIcon.destroy();
+    }
+    if (this.reloadingText) {
+      this.reloadingText.destroy();
+    }
     if (this.matchTimerText) {
       this.matchTimerText.destroy();
     }
-    // damageFlashOverlay removed — flash is now a camera effect (no game object to destroy)
+    if (this.damageFlashOverlay) {
+      this.damageFlashOverlay.destroy();
+    }
     if (this.reloadProgressBar) {
       this.reloadProgressBar.destroy();
     }

@@ -20,7 +20,13 @@ import { GameSceneSpectator } from './GameSceneSpectator';
 import { GameSceneEventHandlers } from './GameSceneEventHandlers';
 import { ScreenShake } from '../effects/ScreenShake';
 import { AudioManager } from '../audio/AudioManager';
-import { ARENA } from '../../shared/constants';
+import { AimLine } from '../entities/AimLine';
+import { ScoreDisplayUI } from '../ui/ScoreDisplayUI';
+import { KillCounterUI } from '../ui/KillCounterUI';
+import { DebugOverlayUI } from '../ui/DebugOverlayUI';
+import { ChatLogUI } from '../ui/ChatLogUI';
+import { PickupNotificationUI } from '../ui/PickupNotificationUI';
+import { ARENA, COLORS } from '../../shared/constants';
 
 export class GameScene extends Phaser.Scene {
   private wsClient!: WebSocketClient;
@@ -48,6 +54,12 @@ export class GameScene extends Phaser.Scene {
   private cameraFollowTarget: Phaser.GameObjects.Graphics | null = null;
   private nearbyWeaponCrate: { id: string; weaponType: string } | null = null;
   private isPointerHeld: boolean = false;
+  private aimLine!: AimLine;
+  private scoreDisplayUI!: ScoreDisplayUI;
+  private killCounterUI!: KillCounterUI;
+  private debugOverlayUI!: DebugOverlayUI;
+  private chatLogUI!: ChatLogUI;
+  private pickupNotificationUI!: PickupNotificationUI;
 
   constructor() {
     super({ key: 'GameScene' });
@@ -71,7 +83,7 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.setBounds(0, 0, ARENA.WIDTH, ARENA.HEIGHT);
 
     // Add arena background
-    this.add.rectangle(0, 0, ARENA.WIDTH, ARENA.HEIGHT, 0x222222).setOrigin(0, 0);
+    this.add.rectangle(0, 0, ARENA.WIDTH, ARENA.HEIGHT, COLORS.BACKGROUND).setOrigin(0, 0);
 
     // Add arena border
     this.add.rectangle(0, 0, ARENA.WIDTH, ARENA.HEIGHT, 0xffffff, 0)
@@ -80,7 +92,7 @@ export class GameScene extends Phaser.Scene {
 
     // Draw floor grid
     const gridGraphics = this.add.graphics();
-    gridGraphics.lineStyle(1, 0xb0bec5, 0.5);
+    gridGraphics.lineStyle(1, COLORS.GRID_LINE, 0.5);
     for (let x = 0; x <= ARENA.WIDTH; x += 100) {
       gridGraphics.moveTo(x, 0);
       gridGraphics.lineTo(x, ARENA.HEIGHT);
@@ -98,6 +110,9 @@ export class GameScene extends Phaser.Scene {
       color: '#ffffff'
     });
     titleText.setScrollFactor(0);
+
+    // Initialize aim line (local player only, depth 40)
+    this.aimLine = new AimLine(this);
 
     // Initialize player manager (using procedural graphics)
     this.playerManager = new PlayerManager(this);
@@ -131,6 +146,13 @@ export class GameScene extends Phaser.Scene {
     // Initialize dodge roll cooldown UI (bottom-right corner, fixed to screen)
     this.dodgeRollCooldownUI = new DodgeRollCooldownUI(this, camera.width - 50, camera.height - 50);
     this.ui.createDamageFlashOverlay(ARENA.WIDTH, ARENA.HEIGHT);
+
+    // Initialize new UI components
+    this.scoreDisplayUI = new ScoreDisplayUI(this, camera.width - 10, 10);
+    this.killCounterUI = new KillCounterUI(this, camera.width - 10, 42);
+    this.debugOverlayUI = new DebugOverlayUI(this, 10, camera.height - 80);
+    this.chatLogUI = new ChatLogUI(this, 10, camera.height - 140);
+    this.pickupNotificationUI = new PickupNotificationUI(this, camera.width / 2, camera.height / 2);
 
     // Initialize spectator module
     this.spectator = new GameSceneSpectator(this, this.playerManager, () => this.stopCameraFollow());
@@ -173,6 +195,12 @@ export class GameScene extends Phaser.Scene {
       this.meleeWeaponManager,
       this.hitEffectManager
     );
+
+    // Inject new UI components into event handlers
+    this.eventHandlers.setScoreDisplayUI(this.scoreDisplayUI);
+    this.eventHandlers.setKillCounterUI(this.killCounterUI);
+    this.eventHandlers.setChatLogUI(this.chatLogUI);
+    this.eventHandlers.setPickupNotificationUI(this.pickupNotificationUI);
 
     // Inject screen shake into event handlers for recoil feedback (Story 3.3 Polish)
     this.eventHandlers.setScreenShake(this.screenShake);
@@ -392,6 +420,18 @@ export class GameScene extends Phaser.Scene {
       const currentAimAngle = this.inputManager.getAimAngle();
       this.playerManager.updateLocalPlayerAim(currentAimAngle);
 
+      // Update aim line (local player only)
+      if (this.aimLine) {
+        const localPos = this.playerManager.getLocalPlayerPosition();
+        const isMelee = this.shootingManager && this.shootingManager.isMeleeWeapon();
+        if (localPos && !isMelee) {
+          this.aimLine.setEnabled(true);
+          this.aimLine.update(localPos.x, localPos.y, currentAimAngle);
+        } else {
+          this.aimLine.setEnabled(false);
+        }
+      }
+
       // Handle automatic fire for automatic weapons when pointer held
       if (this.isPointerHeld && this.shootingManager && !this.shootingManager.isMeleeWeapon() && this.shootingManager.isAutomatic()) {
         this.shootingManager.setAimAngle(currentAimAngle);
@@ -428,10 +468,13 @@ export class GameScene extends Phaser.Scene {
       this.meleeWeaponManager.update();
     }
 
-    // Update reload UI progress
+    // Update reload UI progress (world-space bar above local player)
     if (this.shootingManager && this.shootingManager.isReloading()) {
       const progress = this.shootingManager.getReloadProgress();
-      this.ui.updateReloadProgress(progress, 10, 70, 200, 10);
+      const localPos = this.playerManager?.getLocalPlayerPosition();
+      const playerX = localPos?.x ?? 0;
+      const playerY = localPos?.y ?? 0;
+      this.ui.updateReloadProgress(progress, playerX, playerY, 60, 4);
       this.ui.updateReloadCircle(progress);
     }
 
@@ -457,6 +500,12 @@ export class GameScene extends Phaser.Scene {
     // Update minimap
     if (this.ui && this.playerManager) {
       this.ui.updateMinimap(this.playerManager);
+    }
+
+    // Update debug overlay (if enabled)
+    if (this.debugOverlayUI && this.game?.loop) {
+      const fps = Math.round(this.game.loop.actualFps);
+      this.debugOverlayUI.update(fps, Math.round(this.lastDeltaTime * 1000), 0, 0, 0);
     }
 
     // Update spectator mode
@@ -564,6 +613,11 @@ export class GameScene extends Phaser.Scene {
       this.eventHandlers.destroy();
     }
 
+    // Destroy aim line
+    if (this.aimLine) {
+      this.aimLine.destroy();
+    }
+
     // Destroy all managers
     if (this.playerManager) {
       this.playerManager.destroy();
@@ -597,6 +651,21 @@ export class GameScene extends Phaser.Scene {
     }
     if (this.audioManager) {
       this.audioManager.destroy();
+    }
+    if (this.scoreDisplayUI) {
+      this.scoreDisplayUI.destroy();
+    }
+    if (this.killCounterUI) {
+      this.killCounterUI.destroy();
+    }
+    if (this.debugOverlayUI) {
+      this.debugOverlayUI.destroy();
+    }
+    if (this.chatLogUI) {
+      this.chatLogUI.destroy();
+    }
+    if (this.pickupNotificationUI) {
+      this.pickupNotificationUI.destroy();
     }
     if (this.inputManager) {
       this.inputManager.destroy();

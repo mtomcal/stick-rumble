@@ -7,13 +7,20 @@ describe('Crosshair', () => {
   let crosshair: Crosshair;
   let mockSprite: Phaser.GameObjects.Sprite;
   let mockMakeGraphics: any;
+  let mockTween: any;
 
   beforeEach(() => {
+    mockTween = {
+      stop: vi.fn(),
+      isPlaying: vi.fn().mockReturnValue(false),
+    };
+
     // Create mock sprite
     mockSprite = {
       setScrollFactor: vi.fn().mockReturnThis(),
       setDepth: vi.fn().mockReturnThis(),
       setAlpha: vi.fn().mockReturnThis(),
+      setScale: vi.fn().mockReturnThis(),
       setPosition: vi.fn().mockReturnThis(),
       setVisible: vi.fn().mockReturnThis(),
       destroy: vi.fn(),
@@ -47,6 +54,9 @@ describe('Crosshair', () => {
           y: 300,
         },
       },
+      tweens: {
+        add: vi.fn().mockReturnValue(mockTween),
+      },
     } as unknown as Phaser.Scene;
 
     crosshair = new Crosshair(scene);
@@ -65,24 +75,25 @@ describe('Crosshair', () => {
       expect(mockMakeGraphics.lineStyle).toHaveBeenCalledWith(2, 0xffffff, 1);
     });
 
-    it('should draw red center dot with fillCircle(16, 16, 2) and color 0xFF0000', () => {
-      expect(mockMakeGraphics.fillStyle).toHaveBeenCalledWith(0xff0000, 1);
-      expect(mockMakeGraphics.fillCircle).toHaveBeenCalledWith(16, 16, 2);
+    it('should NOT draw red center dot', () => {
+      expect(mockMakeGraphics.fillStyle).not.toHaveBeenCalledWith(0xff0000, 1);
+      expect(mockMakeGraphics.fillCircle).not.toHaveBeenCalled();
     });
 
-    it('should draw 4 cardinal tick marks (6px each)', () => {
-      // Top tick: (16, 2) to (16, 8) — 6px
-      expect(mockMakeGraphics.moveTo).toHaveBeenCalledWith(16, 2);
-      expect(mockMakeGraphics.lineTo).toHaveBeenCalledWith(16, 8);
-      // Bottom tick: (16, 24) to (16, 30)
-      expect(mockMakeGraphics.moveTo).toHaveBeenCalledWith(16, 24);
-      expect(mockMakeGraphics.lineTo).toHaveBeenCalledWith(16, 30);
-      // Left tick: (2, 16) to (8, 16)
-      expect(mockMakeGraphics.moveTo).toHaveBeenCalledWith(2, 16);
-      expect(mockMakeGraphics.lineTo).toHaveBeenCalledWith(8, 16);
-      // Right tick: (24, 16) to (30, 16)
-      expect(mockMakeGraphics.moveTo).toHaveBeenCalledWith(24, 16);
-      expect(mockMakeGraphics.lineTo).toHaveBeenCalledWith(30, 16);
+    it('should NOT draw old cardinal tick marks', () => {
+      // Old ticks went to coords 2, 8, 24, 30 — these should not appear
+      expect(mockMakeGraphics.moveTo).not.toHaveBeenCalledWith(16, 2);
+      expect(mockMakeGraphics.moveTo).not.toHaveBeenCalledWith(2, 16);
+    });
+
+    it('should draw vertical bar from (16,6) to (16,26)', () => {
+      expect(mockMakeGraphics.moveTo).toHaveBeenCalledWith(16, 6);
+      expect(mockMakeGraphics.lineTo).toHaveBeenCalledWith(16, 26);
+    });
+
+    it('should draw horizontal bar from (6,16) to (26,16)', () => {
+      expect(mockMakeGraphics.moveTo).toHaveBeenCalledWith(6, 16);
+      expect(mockMakeGraphics.lineTo).toHaveBeenCalledWith(26, 16);
     });
 
     it('should create sprite with "reticle" texture', () => {
@@ -110,6 +121,10 @@ describe('Crosshair', () => {
     it('should initialize as visible by default', () => {
       expect(crosshair.isVisible()).toBe(true);
     });
+
+    it('should set initial scale to BASE_SCALE (40/32)', () => {
+      expect(mockSprite.setScale).toHaveBeenCalledWith(40 / 32);
+    });
   });
 
   describe('update', () => {
@@ -136,6 +151,7 @@ describe('Crosshair', () => {
         add: { sprite: vi.fn(() => mockSprite) },
         make: { graphics: vi.fn(() => mockMakeGraphics) },
         input: { activePointer: null },
+        tweens: { add: vi.fn().mockReturnValue(mockTween) },
       } as unknown as Phaser.Scene;
 
       const crosshairNoPointer = new Crosshair(sceneNoPointer);
@@ -149,6 +165,88 @@ describe('Crosshair', () => {
     it('should not throw when sprite is null (after destroy)', () => {
       crosshair.destroy();
       expect(() => crosshair.update(true, 5)).not.toThrow();
+    });
+
+    it('should adjust scale when moving with spread', () => {
+      (mockSprite.setScale as ReturnType<typeof vi.fn>).mockClear();
+      crosshair.update(true, 10);
+      // When isMoving=true and spread=10 (full factor), scale = MOVING_EXPANDED_SCALE = 80/32 = 2.5
+      expect(mockSprite.setScale).toHaveBeenCalledWith(80 / 32);
+    });
+
+    it('should adjust scale when stationary with spread', () => {
+      (mockSprite.setScale as ReturnType<typeof vi.fn>).mockClear();
+      crosshair.update(false, 10);
+      // When isMoving=false and spread=10 (full factor), scale = EXPANDED_SCALE = 60/32 = 1.875
+      expect(mockSprite.setScale).toHaveBeenCalledWith(60 / 32);
+    });
+
+    it('should use BASE_SCALE when stationary with zero spread', () => {
+      (mockSprite.setScale as ReturnType<typeof vi.fn>).mockClear();
+      crosshair.update(false, 0);
+      expect(mockSprite.setScale).toHaveBeenCalledWith(40 / 32);
+    });
+
+    it('should not adjust scale while bloom tween is playing', () => {
+      mockTween.isPlaying.mockReturnValue(true);
+      crosshair.triggerBloom();
+      (mockSprite.setScale as ReturnType<typeof vi.fn>).mockClear();
+
+      crosshair.update(false, 10);
+
+      expect(mockSprite.setScale).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('triggerBloom', () => {
+    it('should snap to EXPANDED_SCALE (60/32) from base', () => {
+      (mockSprite.setScale as ReturnType<typeof vi.fn>).mockClear();
+      crosshair.triggerBloom();
+      expect(mockSprite.setScale).toHaveBeenCalledWith(60 / 32);
+    });
+
+    it('should snap to MOVING_EXPANDED_SCALE (80/32) when already expanded', () => {
+      // First expand the crosshair via update with movement
+      crosshair.update(true, 10);
+      (mockSprite.setScale as ReturnType<typeof vi.fn>).mockClear();
+
+      crosshair.triggerBloom();
+      expect(mockSprite.setScale).toHaveBeenCalledWith(80 / 32);
+    });
+
+    it('should start a tween back to BASE_SCALE', () => {
+      crosshair.triggerBloom();
+      expect(scene.tweens.add).toHaveBeenCalledWith(
+        expect.objectContaining({
+          scaleX: 40 / 32,
+          scaleY: 40 / 32,
+          duration: 250,
+        })
+      );
+    });
+
+    it('should stop existing bloom tween before starting new one', () => {
+      crosshair.triggerBloom();
+      crosshair.triggerBloom();
+      expect(mockTween.stop).toHaveBeenCalled();
+    });
+
+    it('should not throw when sprite is null (after destroy)', () => {
+      crosshair.destroy();
+      expect(() => crosshair.triggerBloom()).not.toThrow();
+    });
+  });
+
+  describe('getCurrentSpreadRadius', () => {
+    it('should return BASE_SIZE / 2 (20) at rest', () => {
+      // BASE_SCALE = 40/32, TEXTURE_SIZE = 32, so radius = (40/32 * 32) / 2 = 20
+      expect(crosshair.getCurrentSpreadRadius()).toBe(20);
+    });
+
+    it('should return larger radius when expanded by movement', () => {
+      crosshair.update(true, 10);
+      // MOVING_EXPANDED_SCALE = 80/32, TEXTURE_SIZE = 32, so radius = 80/2 = 40
+      expect(crosshair.getCurrentSpreadRadius()).toBe(40);
     });
   });
 
@@ -207,13 +305,6 @@ describe('Crosshair', () => {
     });
   });
 
-  describe('spread removed', () => {
-    it('should always return 0 for getCurrentSpreadRadius', () => {
-      crosshair.update(true, 10);
-      expect(crosshair.getCurrentSpreadRadius()).toBe(0);
-    });
-  });
-
   describe('destroy', () => {
     it('should destroy sprite', () => {
       crosshair.destroy();
@@ -223,6 +314,12 @@ describe('Crosshair', () => {
     it('should handle multiple destroy calls safely', () => {
       crosshair.destroy();
       expect(() => crosshair.destroy()).not.toThrow();
+    });
+
+    it('should stop bloom tween on destroy', () => {
+      crosshair.triggerBloom();
+      crosshair.destroy();
+      expect(mockTween.stop).toHaveBeenCalled();
     });
   });
 

@@ -104,6 +104,7 @@ describe('GameSceneEventHandlers - Audio Integration', () => {
       showHitMarker: vi.fn(),
       showCameraShake: vi.fn(),
       updateMatchTimer: vi.fn(),
+      triggerCrosshairBloom: vi.fn(),
     } as unknown as GameSceneUI;
 
     mockGameSceneSpectator = {

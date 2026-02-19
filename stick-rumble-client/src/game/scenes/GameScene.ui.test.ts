@@ -92,21 +92,11 @@ describe('GameScene - UI', () => {
 
     it('should update ammo display when weapon:state received', async () => {
       const mockSceneContext = createMockScene();
-      const mockAmmoText = {
-        setText: vi.fn(),
-        setOrigin: vi.fn().mockReturnThis(),
-        setScrollFactor: vi.fn().mockReturnThis(),
-        setVisible: vi.fn().mockReturnThis(),
-        visible: false,
-      };
-      let textCallCount = 0;
+      const ammoTexts: any[] = [];
       mockSceneContext.add.text = vi.fn().mockImplementation(() => {
-        textCallCount++;
-        // Sixth text call is the ammo display (after title, pickup prompt, health bar text, match timer, connection status)
-        if (textCallCount === 6) {
-          return mockAmmoText;
-        }
-        return { setOrigin: vi.fn().mockReturnThis(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), setVisible: vi.fn().mockReturnThis(), destroy: vi.fn() };
+        const t = { setOrigin: vi.fn().mockReturnThis(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), setVisible: vi.fn().mockReturnThis(), setAlpha: vi.fn().mockReturnThis(), visible: false, destroy: vi.fn() };
+        ammoTexts.push(t);
+        return t;
       });
       mockSceneContext.input = {
         ...mockSceneContext.input,
@@ -151,27 +141,18 @@ describe('GameScene - UI', () => {
         mockWebSocketInstance.onmessage(weaponStateMessage as MessageEvent);
       }
 
-      // Verify ammo text was updated
-      expect(mockAmmoText.setText).toHaveBeenCalledWith('10/15');
+      // Verify ammo text was updated (check any text object had setText called with ammo format)
+      const hasAmmoUpdate = ammoTexts.some(t => t.setText.mock.calls.some((c: any[]) => c[0] === '10/15'));
+      expect(hasAmmoUpdate).toBe(true);
     });
 
     it('should display RELOADING indicator when reloading', async () => {
       const mockSceneContext = createMockScene();
-      const mockAmmoText = {
-        setText: vi.fn(),
-        setOrigin: vi.fn().mockReturnThis(),
-        setScrollFactor: vi.fn().mockReturnThis(),
-        setVisible: vi.fn().mockReturnThis(),
-        visible: false,
-      };
-      let textCallCount = 0;
+      const reloadTexts: any[] = [];
       mockSceneContext.add.text = vi.fn().mockImplementation(() => {
-        textCallCount++;
-        // Sixth text call is the ammo display (after title, pickup prompt, health bar text, match timer, connection status)
-        if (textCallCount === 6) {
-          return mockAmmoText;
-        }
-        return { setOrigin: vi.fn().mockReturnThis(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), setVisible: vi.fn().mockReturnThis(), destroy: vi.fn() };
+        const t = { setOrigin: vi.fn().mockReturnThis(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), setVisible: vi.fn().mockReturnThis(), setAlpha: vi.fn().mockReturnThis(), visible: false, destroy: vi.fn() };
+        reloadTexts.push(t);
+        return t;
       });
       mockSceneContext.input = {
         ...mockSceneContext.input,
@@ -217,7 +198,8 @@ describe('GameScene - UI', () => {
       }
 
       // Verify ammo text no longer shows [RELOADING] text (uses progress bars instead)
-      expect(mockAmmoText.setText).toHaveBeenCalledWith('5/15');
+      const hasAmmoUpdate = reloadTexts.some(t => t.setText.mock.calls.some((c: any[]) => c[0] === '5/15'));
+      expect(hasAmmoUpdate).toBe(true);
     });
   });
 
@@ -657,8 +639,14 @@ describe('GameScene - UI', () => {
       // Call update to trigger reload UI updates
       scene.update(0, 16);
 
-      // Verify reload UI was updated
-      expect(updateReloadProgressSpy).toHaveBeenCalledWith(0.5, 10, 70, 200, 10);
+      // Verify reload UI was updated (world-space: player pos + 60px wide, 4px tall)
+      expect(updateReloadProgressSpy).toHaveBeenCalledWith(
+        0.5,
+        expect.any(Number), // playerX (world-space)
+        expect.any(Number), // playerY (world-space)
+        60,
+        4
+      );
       expect(updateReloadCircleSpy).toHaveBeenCalledWith(0.5);
     });
 

@@ -1,11 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { WeaponCrateManager, type WeaponCrateData } from './WeaponCrateManager';
 import Phaser from 'phaser';
+import { COLORS } from '../../shared/constants';
 
 describe('WeaponCrateManager', () => {
   let manager: WeaponCrateManager;
   let mockScene: Phaser.Scene;
-  let mockSprite: Phaser.GameObjects.Rectangle;
+  let mockSprite: Phaser.GameObjects.Graphics;
   let mockGlow: Phaser.GameObjects.Arc;
   let mockTween: Phaser.Tweens.Tween;
 
@@ -17,26 +18,33 @@ describe('WeaponCrateManager', () => {
       remove: vi.fn(),
     } as unknown as Phaser.Tweens.Tween;
 
-    // Create mock sprite
+    // Create mock graphics (replaces old Rectangle sprite)
     mockSprite = {
       setAlpha: vi.fn().mockReturnThis(),
-      setOrigin: vi.fn().mockReturnThis(),
+      setPosition: vi.fn().mockReturnThis(),
+      lineStyle: vi.fn().mockReturnThis(),
+      strokeCircle: vi.fn().mockReturnThis(),
+      beginPath: vi.fn().mockReturnThis(),
+      moveTo: vi.fn().mockReturnThis(),
+      lineTo: vi.fn().mockReturnThis(),
+      strokePath: vi.fn().mockReturnThis(),
       destroy: vi.fn(),
       x: 0,
       y: 0,
-    } as unknown as Phaser.GameObjects.Rectangle;
+    } as unknown as Phaser.GameObjects.Graphics;
 
     // Create mock glow
     mockGlow = {
       setStrokeStyle: vi.fn().mockReturnThis(),
       setVisible: vi.fn().mockReturnThis(),
+      setAlpha: vi.fn().mockReturnThis(),
       destroy: vi.fn(),
     } as unknown as Phaser.GameObjects.Arc;
 
     // Create mock scene
     mockScene = {
       add: {
-        rectangle: vi.fn().mockReturnValue(mockSprite),
+        graphics: vi.fn().mockReturnValue(mockSprite),
         arc: vi.fn().mockReturnValue(mockGlow),
       },
       tweens: {
@@ -48,7 +56,7 @@ describe('WeaponCrateManager', () => {
   });
 
   describe('spawnCrate', () => {
-    it('should create sprite and glow for weapon crate', () => {
+    it('should create graphics and glow for weapon crate', () => {
       const crateData: WeaponCrateData = {
         id: 'crate_uzi_1',
         position: { x: 500, y: 600 },
@@ -58,18 +66,59 @@ describe('WeaponCrateManager', () => {
 
       manager.spawnCrate(crateData);
 
-      expect(mockScene.add.rectangle).toHaveBeenCalledWith(
-        500,
-        600,
-        48,
-        48,
-        0x996633
-      );
+      expect(mockScene.add.graphics).toHaveBeenCalled();
+      expect(mockSprite.setPosition).toHaveBeenCalledWith(500, 600);
       expect(mockScene.add.arc).toHaveBeenCalledWith(500, 600, 32, 0, 360, false, 0xffff00, 0);
       expect(mockGlow.setStrokeStyle).toHaveBeenCalledWith(2, 0xffff00, 0.5);
     });
 
-    it('should add bobbing animation to sprite', () => {
+    it('should draw yellow circle outline with COLORS.WEAPON_CRATE', () => {
+      const crateData: WeaponCrateData = {
+        id: 'crate_uzi_1',
+        position: { x: 500, y: 600 },
+        weaponType: 'uzi',
+        isAvailable: true,
+      };
+
+      manager.spawnCrate(crateData);
+
+      // Should use COLORS.WEAPON_CRATE for circle stroke
+      expect(mockSprite.lineStyle).toHaveBeenCalledWith(3, COLORS.WEAPON_CRATE, 1);
+      expect(mockSprite.strokeCircle).toHaveBeenCalledWith(0, 0, 20);
+    });
+
+    it('should draw dark cross icon inside circle', () => {
+      const crateData: WeaponCrateData = {
+        id: 'crate_uzi_1',
+        position: { x: 500, y: 600 },
+        weaponType: 'uzi',
+        isAvailable: true,
+      };
+
+      manager.spawnCrate(crateData);
+
+      // Cross icon: vertical and horizontal lines
+      expect(mockSprite.moveTo).toHaveBeenCalledWith(0, -8);
+      expect(mockSprite.lineTo).toHaveBeenCalledWith(0, 8);
+      expect(mockSprite.moveTo).toHaveBeenCalledWith(-8, 0);
+      expect(mockSprite.lineTo).toHaveBeenCalledWith(8, 0);
+    });
+
+    it('should NOT use old brown rectangle for crate', () => {
+      const crateData: WeaponCrateData = {
+        id: 'crate_uzi_1',
+        position: { x: 500, y: 600 },
+        weaponType: 'uzi',
+        isAvailable: true,
+      };
+
+      manager.spawnCrate(crateData);
+
+      // Old API not used
+      expect((mockScene.add as any).rectangle).toBeUndefined();
+    });
+
+    it('should add bobbing animation to graphics object', () => {
       const crateData: WeaponCrateData = {
         id: 'crate_ak47_1',
         position: { x: 400, y: 540 },
@@ -87,19 +136,6 @@ describe('WeaponCrateManager', () => {
         repeat: -1,
         ease: 'Sine.easeInOut',
       });
-    });
-
-    it('should set sprite origin to center', () => {
-      const crateData: WeaponCrateData = {
-        id: 'crate_shotgun_1',
-        position: { x: 1520, y: 540 },
-        weaponType: 'shotgun',
-        isAvailable: true,
-      };
-
-      manager.spawnCrate(crateData);
-
-      expect(mockSprite.setOrigin).toHaveBeenCalledWith(0.5, 0.5);
     });
 
     it('should store crate data in internal map', () => {
@@ -135,10 +171,10 @@ describe('WeaponCrateManager', () => {
       expect(mockSprite.setAlpha).toHaveBeenCalledWith(0.3);
     });
 
-    it('should hide glow effect', () => {
+    it('should fade glow to UNAVAILABLE_ALPHA (0.3)', () => {
       manager.markUnavailable('crate_test_1');
 
-      expect(mockGlow.setVisible).toHaveBeenCalledWith(false);
+      expect(mockGlow.setAlpha).toHaveBeenCalledWith(0.3);
     });
 
     it('should update isAvailable flag to false', () => {

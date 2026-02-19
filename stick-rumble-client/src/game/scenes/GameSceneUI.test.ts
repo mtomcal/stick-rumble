@@ -80,6 +80,7 @@ describe('GameSceneUI', () => {
       setTint: vi.fn().mockReturnThis(),
       setScale: vi.fn().mockImplementation(function(this: any, s: number) { this.scale = s; return this; }),
       setRotation: vi.fn().mockReturnThis(),
+      setAlpha: vi.fn().mockReturnThis(),
       scale: 1,
       destroy: vi.fn(),
     };
@@ -181,11 +182,28 @@ describe('GameSceneUI', () => {
   });
 
   describe('createDamageFlashOverlay', () => {
-    it('should be a no-op (flash now uses cameras.main.flash)', () => {
+    it('should create a full-viewport rectangle with COLORS.DAMAGE_FLASH (0xFF0000)', () => {
       ui.createDamageFlashOverlay(1920, 1080);
 
-      // No rectangle should be created — damage flash uses cameras.main.flash()
-      expect(mockScene.add.rectangle).not.toHaveBeenCalled();
+      expect(mockScene.add.rectangle).toHaveBeenCalledWith(960, 540, 1920, 1080, 0xFF0000);
+    });
+
+    it('should set scroll factor to 0 (screen-fixed)', () => {
+      ui.createDamageFlashOverlay(1920, 1080);
+
+      expect(mockDamageFlashOverlay.setScrollFactor).toHaveBeenCalledWith(0);
+    });
+
+    it('should set depth to 999', () => {
+      ui.createDamageFlashOverlay(1920, 1080);
+
+      expect(mockDamageFlashOverlay.setDepth).toHaveBeenCalledWith(999);
+    });
+
+    it('should start fully transparent (alpha 0)', () => {
+      ui.createDamageFlashOverlay(1920, 1080);
+
+      expect(mockDamageFlashOverlay.setAlpha).toHaveBeenCalledWith(0);
     });
   });
 
@@ -195,6 +213,22 @@ describe('GameSceneUI', () => {
 
       expect(mockScene.add.text).toHaveBeenCalledWith(10, 50, '15/15', expect.any(Object));
       expect(createdTexts[0].setScrollFactor).toHaveBeenCalledWith(0);
+    });
+
+    it('should create ammo icon graphics', () => {
+      ui.createAmmoDisplay(10, 50);
+
+      // ammoIcon is the first graphics object created
+      expect(createdGraphics[0].setScrollFactor).toHaveBeenCalledWith(0);
+      expect(createdGraphics[0].setDepth).toHaveBeenCalledWith(1000);
+    });
+
+    it('should create RELOADING text initially hidden', () => {
+      ui.createAmmoDisplay(10, 50);
+
+      // reloadingText is createdTexts[1]
+      expect(createdTexts[1]).toBeDefined();
+      expect(createdTexts[1].setVisible).toHaveBeenCalledWith(false);
     });
   });
 
@@ -215,7 +249,7 @@ describe('GameSceneUI', () => {
       expect(createdTexts[0].setVisible).toHaveBeenCalledWith(true);
     });
 
-    it('should update ammo text when reloading (no longer shows [RELOADING] text)', () => {
+    it('should show RELOADING... text when reloading', () => {
       ui.createAmmoDisplay(10, 50);
 
       const mockShootingManager = {
@@ -227,8 +261,70 @@ describe('GameSceneUI', () => {
 
       ui.updateAmmoDisplay(mockShootingManager);
 
-      // No longer appends [RELOADING] text - reload UI uses progress bars instead
       expect(createdTexts[0].setText).toHaveBeenCalledWith('5/15');
+      // reloadingText (createdTexts[1]) should be visible during reload
+      expect(createdTexts[1].setVisible).toHaveBeenCalledWith(true);
+    });
+
+    it('should hide RELOADING... text when not reloading', () => {
+      ui.createAmmoDisplay(10, 50);
+
+      const mockShootingManager = {
+        getAmmoInfo: vi.fn().mockReturnValue([10, 15]),
+        isReloading: vi.fn().mockReturnValue(false),
+        isEmpty: vi.fn().mockReturnValue(false),
+        isMeleeWeapon: vi.fn().mockReturnValue(false),
+      } as unknown as ShootingManager;
+
+      ui.updateAmmoDisplay(mockShootingManager);
+
+      // reloadingText (createdTexts[1]) should be hidden when not reloading
+      expect(createdTexts[1].setVisible).toHaveBeenCalledWith(false);
+    });
+
+    it('should set ammo text color to COLORS.AMMO_READY when not reloading', () => {
+      ui.createAmmoDisplay(10, 50);
+
+      const mockShootingManager = {
+        getAmmoInfo: vi.fn().mockReturnValue([10, 15]),
+        isReloading: vi.fn().mockReturnValue(false),
+        isEmpty: vi.fn().mockReturnValue(false),
+        isMeleeWeapon: vi.fn().mockReturnValue(false),
+      } as unknown as ShootingManager;
+
+      ui.updateAmmoDisplay(mockShootingManager);
+
+      expect(createdTexts[0].setColor).toHaveBeenCalledWith('#e0a030');
+    });
+
+    it('should display INF for fist weapons (max === 0)', () => {
+      ui.createAmmoDisplay(10, 50);
+
+      const mockFistManager = {
+        getAmmoInfo: vi.fn().mockReturnValue([0, 0]),
+        isReloading: vi.fn().mockReturnValue(false),
+        isEmpty: vi.fn().mockReturnValue(false),
+        isMeleeWeapon: vi.fn().mockReturnValue(false),
+      } as unknown as ShootingManager;
+
+      ui.updateAmmoDisplay(mockFistManager);
+
+      expect(createdTexts[0].setText).toHaveBeenCalledWith('INF');
+    });
+
+    it('should display INF for infinite ammo weapons (max === Infinity)', () => {
+      ui.createAmmoDisplay(10, 50);
+
+      const mockInfiniteManager = {
+        getAmmoInfo: vi.fn().mockReturnValue([Infinity, Infinity]),
+        isReloading: vi.fn().mockReturnValue(false),
+        isEmpty: vi.fn().mockReturnValue(false),
+        isMeleeWeapon: vi.fn().mockReturnValue(false),
+      } as unknown as ShootingManager;
+
+      ui.updateAmmoDisplay(mockInfiniteManager);
+
+      expect(createdTexts[0].setText).toHaveBeenCalledWith('INF');
     });
 
     it('should not update if ammo text not created', () => {
@@ -312,6 +408,9 @@ describe('GameSceneUI', () => {
 
     it('should not show reload progress bar for melee weapons', () => {
       ui.createAmmoDisplay(10, 50);
+      // createAmmoDisplay creates ammoIcon at createdGraphics[0]
+      // createReloadProgressBar creates bg at [1], fg at [2]
+      // createReloadCircleIndicator creates circle at [3]
       ui.createReloadProgressBar(10, 70, 100, 10);
       ui.createReloadCircleIndicator();
 
@@ -324,10 +423,10 @@ describe('GameSceneUI', () => {
 
       ui.updateAmmoDisplay(mockMeleeManager);
 
-      // Reload UI should be hidden for melee weapons
-      expect(createdGraphics[0].setVisible).toHaveBeenCalledWith(false);
+      // Reload UI should be hidden for melee weapons (indices shifted by ammoIcon at [0])
       expect(createdGraphics[1].setVisible).toHaveBeenCalledWith(false);
       expect(createdGraphics[2].setVisible).toHaveBeenCalledWith(false);
+      expect(createdGraphics[3].setVisible).toHaveBeenCalledWith(false);
     });
 
     it('should show ammo display again when switching from melee to ranged weapon', () => {
@@ -449,34 +548,41 @@ describe('GameSceneUI', () => {
   });
 
   describe('showDamageFlash (TS-UI-013)', () => {
-    it('should call cameras.main.flash with exact args (100, 128, 0, 0)', () => {
+    it('should set overlay alpha to 0.35 when flash is triggered', () => {
+      ui.createDamageFlashOverlay(1920, 1080);
+      mockDamageFlashOverlay.setAlpha.mockClear();
+
       ui.showDamageFlash();
 
-      expect(mockCamera.flash).toHaveBeenCalledWith(100, 128, 0, 0);
+      expect(mockDamageFlashOverlay.setAlpha).toHaveBeenCalledWith(0.35);
     });
 
-    it('should flash with duration 100ms', () => {
+    it('should tween overlay alpha to 0 over 300ms', () => {
+      ui.createDamageFlashOverlay(1920, 1080);
+
       ui.showDamageFlash();
 
-      const args = mockCamera.flash.mock.calls[0];
-      expect(args[0]).toBe(100);
+      expect(mockScene.tweens.add).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targets: mockDamageFlashOverlay,
+          alpha: 0,
+          duration: 300,
+        })
+      );
     });
 
-    it('should flash with RGB(128, 0, 0) — dark red, not blinding', () => {
+    it('should not call cameras.main.flash (uses overlay instead)', () => {
+      ui.createDamageFlashOverlay(1920, 1080);
+
       ui.showDamageFlash();
 
-      const args = mockCamera.flash.mock.calls[0];
-      expect(args[1]).toBe(128); // R
-      expect(args[2]).toBe(0);   // G
-      expect(args[3]).toBe(0);   // B
+      expect(mockCamera.flash).not.toHaveBeenCalled();
     });
 
-    it('should not use screen overlay rectangle (uses cameras.main.flash)', () => {
-      ui.showDamageFlash();
-
-      // No rectangle or tween should be created
-      expect(mockScene.add.rectangle).not.toHaveBeenCalled();
-      expect(mockScene.tweens.add).not.toHaveBeenCalled();
+    it('should do nothing if overlay not created', () => {
+      // No createDamageFlashOverlay call — should not throw
+      expect(() => ui.showDamageFlash()).not.toThrow();
+      expect(mockCamera.flash).not.toHaveBeenCalled();
     });
   });
 
@@ -639,14 +745,14 @@ describe('GameSceneUI', () => {
     }) as unknown as PlayerManager;
 
     describe('Normal hit variant (default)', () => {
-      it('should use white color (#ffffff) and 16px font', () => {
+      it('should use COLORS.DAMAGE_NUMBER (#FF4444) and 16px font', () => {
         ui.showDamageNumber(mockPlayerManager(), 'victim-1', 25);
 
         expect(mockScene.add.text).toHaveBeenCalledWith(
           500, 270, '-25',
           expect.objectContaining({
             fontSize: '16px',
-            color: '#ffffff',
+            color: '#FF4444',
           })
         );
       });
@@ -722,28 +828,28 @@ describe('GameSceneUI', () => {
         expect(createdTexts[0].setAlpha).toHaveBeenCalledWith(0.8);
       });
 
-      it('should use white 16px for remote damage', () => {
+      it('should use COLORS.DAMAGE_NUMBER (#FF4444) 16px for remote damage', () => {
         ui.showDamageNumber(mockPlayerManager(), 'victim-1', 25, false, false);
 
         expect(mockScene.add.text).toHaveBeenCalledWith(
           500, 270, '-25',
           expect.objectContaining({
             fontSize: '16px',
-            color: '#ffffff',
+            color: '#FF4444',
           })
         );
       });
     });
 
     describe('Tween animation', () => {
-      it('should float up 50px and fade over 800ms (not 1000ms)', () => {
+      it('should float up 40px and fade over 600ms', () => {
         ui.showDamageNumber(mockPlayerManager(), 'victim-1', 25);
 
         expect(mockScene.tweens.add).toHaveBeenCalledWith(
           expect.objectContaining({
-            y: 220, // position.y(300) - 80 = 220
+            y: 230, // position.y(300) - 70 = 230
             alpha: 0,
-            duration: 800,
+            duration: 600,
             ease: 'Cubic.easeOut',
           })
         );
@@ -780,7 +886,7 @@ describe('GameSceneUI', () => {
           500, 270, '-25',
           expect.objectContaining({
             fontSize: '16px',
-            color: '#ffffff',
+            color: '#FF4444',
           })
         );
       });
@@ -846,15 +952,20 @@ describe('GameSceneUI', () => {
       expect(mockSprite.setTint).toHaveBeenCalledWith(0xff0000);
     });
 
-    it('should create tween with alpha 0, scale 1.5, duration exactly 200ms', () => {
+    it('should start invisible (alpha 0) for 3-phase animation', () => {
+      ui.showHitIndicator(100, 100, 200, 100, 'outgoing');
+
+      expect(mockSprite.setAlpha).toHaveBeenCalledWith(0);
+    });
+
+    it('should create fade-in tween with alpha 1 over 100ms as first phase', () => {
       ui.showHitIndicator(100, 100, 200, 100, 'outgoing');
 
       expect(mockScene.tweens.add).toHaveBeenCalledWith(
         expect.objectContaining({
           targets: mockSprite,
-          alpha: 0,
-          scale: 1.5,
-          duration: 200,
+          alpha: 1,
+          duration: 100,
         })
       );
     });
@@ -902,27 +1013,33 @@ describe('GameSceneUI', () => {
       expect(mockSprite.setDepth).toHaveBeenCalledWith(1001);
     });
 
-    it('should always set red tint (0xFF0000) for incoming hit', () => {
+    it('should always set COLORS.HIT_CHEVRON tint (0xCC3333) for incoming hit', () => {
       ui.showHitIndicator(200, 200, 100, 200, 'incoming', false);
 
-      expect(mockSprite.setTint).toHaveBeenCalledWith(0xff0000);
+      expect(mockSprite.setTint).toHaveBeenCalledWith(0xCC3333);
     });
 
-    it('should always set red tint for incoming even when kill is true', () => {
+    it('should always set COLORS.HIT_CHEVRON tint for incoming even when kill is true', () => {
       ui.showHitIndicator(200, 200, 100, 200, 'incoming', true);
 
-      expect(mockSprite.setTint).toHaveBeenCalledWith(0xff0000);
+      expect(mockSprite.setTint).toHaveBeenCalledWith(0xCC3333);
     });
 
-    it('should create tween with alpha 0, scale 1.5, duration exactly 400ms', () => {
+    it('should start invisible (alpha 0) for 3-phase animation', () => {
+      ui.showHitIndicator(200, 200, 100, 200, 'incoming');
+
+      // setAlpha(0) called to start invisible before fade-in
+      expect(mockSprite.setAlpha).toHaveBeenCalledWith(0);
+    });
+
+    it('should create fade-in tween with alpha 1 over 100ms as first phase', () => {
       ui.showHitIndicator(200, 200, 100, 200, 'incoming');
 
       expect(mockScene.tweens.add).toHaveBeenCalledWith(
         expect.objectContaining({
           targets: mockSprite,
-          alpha: 0,
-          scale: 1.5,
-          duration: 400,
+          alpha: 1,
+          duration: 100,
         })
       );
     });
@@ -954,30 +1071,40 @@ describe('GameSceneUI', () => {
 
   describe('reload UI elements', () => {
     describe('createReloadProgressBar', () => {
-      it('should create reload progress bar graphics elements', () => {
-        ui.createReloadProgressBar(10, 70, 200, 10);
+      it('should create reload progress bar graphics elements (world-space, no scroll factor)', () => {
+        ui.createReloadProgressBar(0, 0, 60, 4);
 
         expect(mockScene.add.graphics).toHaveBeenCalledTimes(2); // Background + foreground
+        // World-space: NOT setting scroll factor to 0
+        expect(createdGraphics[0].setScrollFactor).not.toHaveBeenCalled();
+        expect(createdGraphics[1].setScrollFactor).not.toHaveBeenCalled();
       });
     });
 
     describe('updateReloadProgress', () => {
-      it('should update reload progress bar fill amount', () => {
-        ui.createReloadProgressBar(10, 70, 200, 10);
+      it('should render world-space bar centered above player with white fill', () => {
+        ui.createReloadProgressBar(0, 0, 60, 4);
         // createReloadProgressBar creates 2 graphics: background (index 0), foreground (index 1)
+        const bgGraphics = createdGraphics[0];
         const progressBarGraphics = createdGraphics[1];
 
-        ui.updateReloadProgress(0.5, 10, 70, 200, 10);
+        // Player at world position (500, 300), barWidth=60, barHeight=4
+        ui.updateReloadProgress(0.5, 500, 300, 60, 4);
 
-        // Graphics mock should be called to clear and fill
+        // Background: centered above player: barX = 500 - 30 = 470, barY = 300 - 30 = 270
+        expect(bgGraphics.clear).toHaveBeenCalled();
+        expect(bgGraphics.fillStyle).toHaveBeenCalledWith(0x333333, 0.8);
+        expect(bgGraphics.fillRect).toHaveBeenCalledWith(470, 270, 60, 4);
+
+        // Foreground: white fill, 50% of width = 30px
         expect(progressBarGraphics.clear).toHaveBeenCalled();
-        expect(progressBarGraphics.fillStyle).toHaveBeenCalledWith(0x00ff00, 1.0);
-        expect(progressBarGraphics.fillRect).toHaveBeenCalledWith(10, 70, 100, 10); // 50% of 200 width
+        expect(progressBarGraphics.fillStyle).toHaveBeenCalledWith(0xffffff, 1.0);
+        expect(progressBarGraphics.fillRect).toHaveBeenCalledWith(470, 270, 30, 4);
       });
 
       it('should handle updateReloadProgress when progress bar not created', () => {
         expect(() => {
-          ui.updateReloadProgress(0.5, 10, 70, 200, 10);
+          ui.updateReloadProgress(0.5, 500, 300, 60, 4);
         }).not.toThrow();
       });
     });
@@ -1076,6 +1203,24 @@ describe('GameSceneUI', () => {
       expect(ammoText.destroy).toHaveBeenCalled();
     });
 
+    it('should destroy ammo icon when destroyed', () => {
+      ui.createAmmoDisplay(10, 50);
+      const ammoIcon = createdGraphics[0];
+
+      ui.destroy();
+
+      expect(ammoIcon.destroy).toHaveBeenCalled();
+    });
+
+    it('should destroy reloading text when destroyed', () => {
+      ui.createAmmoDisplay(10, 50);
+      const reloadingText = createdTexts[1];
+
+      ui.destroy();
+
+      expect(reloadingText.destroy).toHaveBeenCalled();
+    });
+
     it('should destroy match timer when destroyed', () => {
       ui.createMatchTimer(960, 10);
       const timerText = createdTexts[0];
@@ -1085,10 +1230,16 @@ describe('GameSceneUI', () => {
       expect(timerText.destroy).toHaveBeenCalled();
     });
 
-    it('should not crash on destroy even without damage flash overlay (no-op)', () => {
+    it('should destroy damage flash overlay when destroyed', () => {
       ui.createDamageFlashOverlay(1920, 1080);
 
-      // No game object to destroy — flash is a camera effect
+      ui.destroy();
+
+      expect(mockDamageFlashOverlay.destroy).toHaveBeenCalled();
+    });
+
+    it('should not crash on destroy when damage flash overlay not created', () => {
+      // Don't call createDamageFlashOverlay
       expect(() => ui.destroy()).not.toThrow();
     });
 
@@ -1196,20 +1347,22 @@ describe('GameSceneUI', () => {
       expect(staticGraphics.setDepth).toHaveBeenCalledWith(1999);
     });
 
-    it('should draw black background at (20, 20) with 120x120 size', () => {
+    it('should draw circular background with MINIMAP.BG_COLOR at 0.5 alpha', () => {
       ui.setupMinimap();
 
       const staticGraphics = createdGraphics[0];
-      expect(staticGraphics.fillStyle).toHaveBeenCalledWith(0x000000, 0.7);
-      expect(staticGraphics.fillRect).toHaveBeenCalledWith(20, 20, 120, 120);
+      // MINIMAP.BG_COLOR = 0x3A3A3A, MINIMAP.SIZE = 170, radius = 85, center = (20+85, 20+85) = (105, 105)
+      expect(staticGraphics.fillStyle).toHaveBeenCalledWith(0x3A3A3A, 0.5);
+      expect(staticGraphics.fillCircle).toHaveBeenCalledWith(105, 105, 85);
     });
 
-    it('should draw white border with 2px stroke at 0.5 alpha', () => {
+    it('should draw circular teal border with 2px stroke at alpha 1', () => {
       ui.setupMinimap();
 
       const staticGraphics = createdGraphics[0];
-      expect(staticGraphics.lineStyle).toHaveBeenCalledWith(2, 0xffffff, 0.5);
-      expect(staticGraphics.strokeRect).toHaveBeenCalledWith(20, 20, 120, 120);
+      // MINIMAP.BORDER_COLOR = 0x00CCCC
+      expect(staticGraphics.lineStyle).toHaveBeenCalledWith(2, 0x00CCCC, 1);
+      expect(staticGraphics.strokeCircle).toHaveBeenCalledWith(105, 105, 85);
     });
 
     it('should create dynamic graphics at depth 2000 with scrollFactor 0', () => {
@@ -1221,13 +1374,12 @@ describe('GameSceneUI', () => {
       expect(dynamicGraphics.setDepth).toHaveBeenCalledWith(2000);
     });
 
-    it('should position minimap at exactly (20, 20)', () => {
+    it('should not use fillRect or strokeRect (circular minimap)', () => {
       ui.setupMinimap();
 
       const staticGraphics = createdGraphics[0];
-      const fillRectCalls = staticGraphics.fillRect.mock.calls;
-      expect(fillRectCalls[0][0]).toBe(20);
-      expect(fillRectCalls[0][1]).toBe(20);
+      expect(staticGraphics.fillRect).not.toHaveBeenCalled();
+      expect(staticGraphics.strokeRect).not.toHaveBeenCalled();
     });
   });
 
@@ -1254,10 +1406,11 @@ describe('GameSceneUI', () => {
       ui.updateMinimap(mockPlayerManager);
 
       // enemy-near at 200px distance should be shown
+      // MINIMAP.SCALE = 0.106
       expect(dynamicGraphics.fillStyle).toHaveBeenCalledWith(0xff0000, 1);
       expect(dynamicGraphics.fillCircle).toHaveBeenCalledWith(
-        20 + 700 * 0.075,  // mapX + enemy.x * scale
-        20 + 500 * 0.075,  // mapY + enemy.y * scale
+        20 + 700 * 0.106,  // mapX + enemy.x * MINIMAP.SCALE
+        20 + 500 * 0.106,  // mapY + enemy.y * MINIMAP.SCALE
         3
       );
     });
@@ -1270,8 +1423,8 @@ describe('GameSceneUI', () => {
 
       // enemy-far at 700px distance should NOT be shown
       expect(dynamicGraphics.fillCircle).not.toHaveBeenCalledWith(
-        20 + 1200 * 0.075,
-        20 + 500 * 0.075,
+        20 + 1200 * 0.106,
+        20 + 500 * 0.106,
         3
       );
     });
@@ -1284,8 +1437,8 @@ describe('GameSceneUI', () => {
 
       expect(dynamicGraphics.fillStyle).toHaveBeenCalledWith(0x00ff00, 1);
       expect(dynamicGraphics.fillCircle).toHaveBeenCalledWith(
-        20 + 500 * 0.075,
-        20 + 500 * 0.075,
+        20 + 500 * 0.106,
+        20 + 500 * 0.106,
         4
       );
     });
@@ -1298,9 +1451,9 @@ describe('GameSceneUI', () => {
 
       expect(dynamicGraphics.lineStyle).toHaveBeenCalledWith(1, 0x00ff00, 0.15);
       expect(dynamicGraphics.strokeCircle).toHaveBeenCalledWith(
-        20 + 500 * 0.075,
-        20 + 500 * 0.075,
-        600 * 0.075
+        20 + 500 * 0.106,
+        20 + 500 * 0.106,
+        600 * 0.106
       );
     });
 
@@ -1326,8 +1479,8 @@ describe('GameSceneUI', () => {
 
       // Exactly 600px should be included (dist <= 600)
       expect(dynamicGraphics.fillCircle).toHaveBeenCalledWith(
-        20 + 1100 * 0.075,
-        20 + 500 * 0.075,
+        20 + 1100 * 0.106,
+        20 + 500 * 0.106,
         3
       );
     });
@@ -1345,8 +1498,8 @@ describe('GameSceneUI', () => {
 
       // 601px should NOT be included
       expect(dynamicGraphics.fillCircle).not.toHaveBeenCalledWith(
-        20 + 1101 * 0.075,
-        20 + 500 * 0.075,
+        20 + 1101 * 0.106,
+        20 + 500 * 0.106,
         3
       );
     });

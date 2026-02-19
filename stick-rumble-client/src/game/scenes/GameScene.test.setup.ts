@@ -14,6 +14,8 @@ export const createMockScene = () => {
     clearTint: vi.fn().mockReturnThis(),
     setFillStyle: vi.fn().mockReturnThis(),
     setDisplaySize: vi.fn().mockReturnThis(),
+    setInteractive: vi.fn().mockReturnThis(),
+    on: vi.fn().mockReturnThis(),
     fillColor: 0x00ff00,
     destroy: vi.fn(),
   };
@@ -59,8 +61,11 @@ export const createMockScene = () => {
 
   const mockContainer = {
     add: vi.fn().mockReturnThis(),
+    remove: vi.fn().mockReturnThis(),
     setScrollFactor: vi.fn().mockReturnThis(),
     setDepth: vi.fn().mockReturnThis(),
+    setVisible: vi.fn().mockReturnThis(),
+    destroy: vi.fn(),
   };
 
   const mockMakeGraphics = {

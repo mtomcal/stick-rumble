@@ -91,18 +91,11 @@ describe('GameScene - Spectator Mode', () => {
         mockWebSocketInstance.onmessage(deathMessage as MessageEvent);
       }
 
-      // Verify spectator UI was created
+      // Verify spectator UI was created — rewritten death screen shows "YOU DIED"
       expect(mockSceneContext.add.text).toHaveBeenCalledWith(
         expect.any(Number),
         expect.any(Number),
-        'Spectating...',
-        expect.any(Object)
-      );
-
-      expect(mockSceneContext.add.text).toHaveBeenCalledWith(
-        expect.any(Number),
-        expect.any(Number),
-        'Respawning in 3...',
+        'YOU DIED',
         expect.any(Object)
       );
     });
