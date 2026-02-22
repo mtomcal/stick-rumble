@@ -77,7 +77,10 @@
 - Green dot = local player
 - Red dots = enemies
 - Shows simplified map layout with dark rectangles for walls/platforms *(from prototype -- minimap wall rendering is currently a no-op since no internal wall geometry exists)*
-- **Ref frames**: `02-gameplay-respawn-full-hud.jpg`
+- **Bug (to fix)**: Player and enemy dots are NOT clipped to the radar circle boundary — they visibly travel outside the circle as the player moves. Dots should be clamped to stay within the radar circumference.
+- **Bug (to fix)**: The minimap circle overlaps and obscures the HUD elements directly beneath it (health bar, ammo, debug text). The minimap needs to be positioned or sized so it does not overlap critical HUD info.
+- **Bug (to fix)**: Minimap border is rendering as gray instead of the specified teal/green outline color.
+- **Ref frames**: `02-gameplay-respawn-full-hud.jpg`, `53-corrections-aim-line-overshoots-cursor.jpg` through `71-corrections-cursor-directly-above-player-short-line.jpg`
 
 ### Health Bar (top-center-left)
 - Green heartbeat/EKG icon on the left
@@ -96,10 +99,11 @@
 - **Ref frames**: `08-reloading-progress-bar.jpg`, `46-infinite-ammo-weapon-switch.jpg`
 
 ### Score (top-right)
-- 6-digit zero-padded monospaced font
+- 6-digit zero-padded monospaced font (e.g., `000000`, `000100`, `000500`)
 - White color, ~28px
 - Right-aligned
-- **Ref frames**: `02-gameplay-respawn-full-hud.jpg`
+- **Bug (to fix)**: Score is currently rendering as 7 digits (e.g., `0000100`) instead of 6. Must be zero-padded to exactly 6 digits.
+- **Ref frames**: `02-gameplay-respawn-full-hud.jpg`, `57-corrections-aim-line-cursor-reticle-first-kill.jpg`
 
 ### Kill Counter (below score)
 - Format: "KILLS: N"
@@ -111,7 +115,9 @@
 - Green monospaced text, ~12px
 - Lines: FPS, Update time, AI time, Entity/Bullet counts
 - Format: `E: N | B: N`
-- **Ref frames**: `02-gameplay-respawn-full-hud.jpg`
+- Must be positioned **below** the minimap, not overlapping it
+- **Bug (to fix)**: Debug/ammo text currently overlaps the top-left corner of the minimap circle instead of sitting below it. Reposition so it renders beneath the minimap.
+- **Ref frames**: `02-gameplay-respawn-full-hud.jpg`, `58-corrections-reloading-arc-progress-dead-enemy.jpg`
 
 ---
 
@@ -122,9 +128,12 @@
 - **Label**: "YOU" in white bold text with dark shadow, ~14px, floats above head
 - **Weapon**: Dark stick extending from body in aim direction
 - **Aim direction**: Character arm/gun rotates to follow crosshair/mouse position
-- **Crosshair cursor**: White "+" inside a circle outline, ~40-60px diameter, follows mouse
-  - Size appears to expand during firing (recoil bloom)
-- **Ref frames**: `02-gameplay-respawn-full-hud.jpg`, `03-gameplay-player-moving-right.jpg`
+- **Bug (to fix)**: A short green horizontal bar/line renders near the player's head in the current build. This does NOT appear in the original prototype. It should be removed — it is not part of the intended visual design. Likely an erroneous health bar or debug indicator rendered on the player sprite itself rather than in the HUD.
+  - **Ref frames**: `53-corrections-aim-line-overshoots-cursor.jpg`, `56-corrections-shooting-damage-number-on-enemy.jpg`, `63-corrections-ak47-equipped-aim-line-cursor.jpg`, `65-corrections-aiming-at-red-enemy-two-players.jpg`
+- **Crosshair cursor**: Small crosshair reticle (`⊕`) — a circle with a `+` inside, ~20-25px diameter, follows mouse position
+  - **Correction**: NOT a large 40-60px circle. The reticle is compact and sits at the exact mouse cursor location.
+  - No evidence of size expansion during firing in corrected footage
+- **Ref frames**: `02-gameplay-respawn-full-hud.jpg`, `03-gameplay-player-moving-right.jpg`, `54-corrections-aim-line-terminates-at-cursor.jpg`, `59-corrections-aim-line-short-reticle-near-player.jpg`, `64-corrections-ak47-aiming-small-crosshair-reticle.jpg`, `69-corrections-small-crosshair-reticle-at-cursor.jpg`
 
 ---
 
@@ -140,7 +149,9 @@
   - Highlighted/targeted state
   - Active enemy indicator
 - **Special case**: "Guest123" rendered with WHITE body (not black), possibly indicating a different team or newly connected player
-- **Ref frames**: `04-combat-shooting-muzzle-flash-bullet.jpg`, `39-guest123-white-player-corridors.jpg`
+- **Bug (to fix)**: Enemy weapon is nearly invisible in the current build — only a tiny dark nub/stub renders on the enemy body. In the original prototype, enemy weapons are clearly visible, full-sized, and proportional to the player's weapon. Enemy weapons should match the scale and visibility of the player's weapon.
+  - **Ref frames (prototype — correct)**: `04-combat-shooting-muzzle-flash-bullet.jpg`, `07-multi-enemy-combat-low-ammo.jpg`, `22-three-enemies-camper-appears.jpg`
+  - **Ref frames (current build — bug)**: `65-corrections-aiming-at-red-enemy-two-players.jpg`, `66-corrections-cursor-on-enemy-about-to-shoot.jpg`
 
 ---
 
@@ -158,10 +169,10 @@
 - **Ref frames**: `04-combat-shooting-muzzle-flash-bullet.jpg`, `21-heavy-fire-multiple-projectiles.jpg`
 
 ### Aim/Trajectory Line
-- Thin white line extending from player through crosshair toward target
-- Visible during active aiming
-- Pink/white diagonal line for upward aiming
-- **Ref frames**: `11-shooting-downward-trajectory-line.jpg`, `48-firing-upward-aim-line.jpg`
+- Thin white line connecting the player's gun barrel **to the crosshair cursor position** — it terminates exactly at the cursor, it does NOT extend beyond it
+- **Correction**: This is NOT a bullet trail. It is a live aim line that updates every frame as the mouse moves.
+- Always present while aiming; disappears when cursor is very close to player
+- **Ref frames**: `11-shooting-downward-trajectory-line.jpg`, `48-firing-upward-aim-line.jpg`, `53-corrections-aim-line-overshoots-cursor.jpg`, `54-corrections-aim-line-terminates-at-cursor.jpg`, `55-corrections-aim-line-far-overshoot-bottom.jpg`, `70-corrections-aim-line-long-diagonal-to-cursor.jpg`
 
 ### Damage Numbers (Floating)
 - Red bold text ("20", "12") floating near hit location
@@ -212,8 +223,9 @@
 - Visual indicators:
   - Ammo icon changes to red rotating arrows (spinner)
   - "RELOADING..." text in red/coral to the right of ammo counter
-  - White progress bar (~60px wide) appears above player character, fills left-to-right
-- **Ref frames**: `08-reloading-progress-bar.jpg`, `14-post-respawn-reloading-enemy-above.jpg`
+  - Green arc sweeps around the player character (progress indicator), centered on the player body
+- **Bug (to fix)**: Reload arc is misaligned — it sweeps only on the right side of the player rather than centering around the player body. The arc origin point must be centered on the player.
+- **Ref frames**: `08-reloading-progress-bar.jpg`, `14-post-respawn-reloading-enemy-above.jpg`, `58-corrections-reloading-arc-progress-dead-enemy.jpg`
 
 ---
 
@@ -268,8 +280,10 @@
 
 ### Background
 - Light gray (`#C8CCC8`) with subtle grid pattern
-- Grid lines form large squares (lighter gray)
+- Grid lines form large squares (lighter gray `#D8DCD8`)
 - Provides spatial reference for movement
+- **Bug (to fix)**: Grid pattern is not rendering — background appears as flat solid gray with no grid lines visible in the current build.
+- **Ref frames**: `53-corrections-aim-line-overshoots-cursor.jpg` (no grid visible vs intended spec)
 
 ### Platforms (Brown Blocks) -- *From Prototype -- Not Yet Implemented*
 
@@ -306,11 +320,15 @@ The level has two distinct zone types:
 
 ## Weapon Crates
 
-- **Appearance**: Yellow circle outline (~40px diameter) containing a small dark rectangular/cross icon
+- **Appearance**: Yellow circle outline (~40px diameter) with a `+` (crosshair/plus) icon inside — **Correction**: not a "dark rectangular" icon, it is the same crosshair `⊕` symbol used for the player cursor
+- **Color**: Clean yellow (`#CCCC00`) — consistent across all crates
 - **Respawning**: Faded/ghostly yellow circle indicates a crate that has been collected and is respawning
-- **Pickup notification**: Center-screen fading gray text: "Picked up [WEAPON NAME]"
-- **Scattered placement**: Multiple crates visible across the map at any time
-- **Ref frames**: `17-weapon-crate-pickup-visible.jpg`, `20-new-enemy-lag-weapon-crate.jpg`, `40-picked-up-shotgun-notification.jpg`
+- **Pickup notification**: Center-screen fading gray text: "Picked up [WEAPON NAME]" — weapon name must be uppercase (e.g., "Picked up AK47", not "Picked up ak47")
+- **Proximity prompt**: When the player is near a crate, a dark rectangular tooltip appears at bottom-center of screen: **"Press E to pick up [WEAPON NAME]"** (dark background, white text, ~14px)
+- **Scattered placement**: Multiple crates visible across the map at any time; all crates should be the same size
+- **Bug (to fix)**: Crate ring color has a yellow-green tint instead of clean yellow, and crate ring sizes are inconsistent across instances.
+- **Bug (to fix)**: Pickup confirmation text uses lowercase weapon name (e.g., "ak47") — must match the uppercase format used in the proximity prompt.
+- **Ref frames**: `17-weapon-crate-pickup-visible.jpg`, `20-new-enemy-lag-weapon-crate.jpg`, `40-picked-up-shotgun-notification.jpg`, `61-corrections-press-e-pickup-ak47-tooltip.jpg`, `62-corrections-picked-up-ak47-confirmation.jpg`
 
 ---
 
@@ -318,7 +336,7 @@ The level has two distinct zone types:
 
 - **Position**: Bottom-left corner
 - **Size**: ~300x120px
-- **Background**: Dark semi-transparent panel (`#808080` @ ~70% opacity)
+- **Background**: Dark semi-transparent panel (`#808080` @ ~70% opacity) — the game world must be partially visible through the panel
 - **System messages**: Yellow text (`#BBA840`), prefixed with "[SYSTEM]"
   - "Welcome to Stick Rumble. Survive."
   - "GAME OVER! Score: N"
@@ -326,7 +344,8 @@ The level has two distinct zone types:
 - **Player messages**: Player name in red/orange, message in white
   - e.g., "Reaper: Bruh"
 - **Font**: Sans-serif, ~14px
-- **Ref frames**: `02-gameplay-respawn-full-hud.jpg`, `28-idle-chat-message-reaper-bruh.jpg`
+- **Bug (to fix)**: Chat panel is rendering as a flat opaque gray rectangle with no transparency — the game background is not visible through it. Must be semi-transparent.
+- **Ref frames**: `02-gameplay-respawn-full-hud.jpg`, `28-idle-chat-message-reaper-bruh.jpg`, `53-corrections-aim-line-overshoots-cursor.jpg`
 
 ---
 
@@ -396,6 +415,30 @@ The level has two distinct zone types:
 | `50-tracking-camper-on-platform.jpg` | 49s | Tracking enemy on upper platform level |
 | `51-camper-moving-right-tracking.jpg` | 50s | "Camper" moving right, player tracking |
 | `52-final-frame-aiming-upward.jpg` | 51s | Final frame, aiming upward at distant "Camper" |
+
+### Corrections Video Frames (Corrections.mov)
+
+| Frame | Key Content |
+|-------|-------------|
+| `53-corrections-aim-line-overshoots-cursor.jpg` | Aim line extends well past the cursor to the far right — bug demonstration of overshoot |
+| `54-corrections-aim-line-terminates-at-cursor.jpg` | Aim line correctly terminates at the small crosshair reticle at cursor — corrected behavior |
+| `55-corrections-aim-line-far-overshoot-bottom.jpg` | Aim line shoots far past cursor to the bottom-right corner — severe overshoot bug |
+| `56-corrections-shooting-damage-number-on-enemy.jpg` | Player shooting at red enemy, "-35" floating damage number, bullet trail visible |
+| `57-corrections-aim-line-cursor-reticle-first-kill.jpg` | Aim line to cursor with small reticle; score 000100, KILLS:1 visible top-right |
+| `58-corrections-reloading-arc-progress-dead-enemy.jpg` | Reload state: green arc progress indicator around player, "RELOADING..." in HUD, dead enemy on screen |
+| `59-corrections-aim-line-short-reticle-near-player.jpg` | Very short aim line with small crosshair reticle positioned close to the player |
+| `60-corrections-aim-line-to-cursor-reticle-left.jpg` | Aim line extending lower-left to cursor, small reticle correctly at cursor position |
+| `61-corrections-press-e-pickup-ak47-tooltip.jpg` | "Press E to pick up AK47" dark tooltip at bottom-center when near weapon crate |
+| `62-corrections-picked-up-ak47-confirmation.jpg` | "Picked up ak47" confirmation text floating next to player after collecting weapon |
+| `63-corrections-ak47-equipped-aim-line-cursor.jpg` | AK47 rifle visible on player sprite, aim line to cursor, small reticle at cursor |
+| `64-corrections-ak47-aiming-small-crosshair-reticle.jpg` | AK47-equipped player aiming lower-right, small (~20px) crosshair reticle at cursor |
+| `65-corrections-aiming-at-red-enemy-two-players.jpg` | Two players — local AK47 player aiming toward red enemy player on the right |
+| `66-corrections-cursor-on-enemy-about-to-shoot.jpg` | Cursor positioned on top of red enemy, aim line reaching them |
+| `67-corrections-shoot-hit-enemy-score-kills-2.jpg` | Hit on enemy, score 000200, KILLS:2 in top-right |
+| `68-corrections-minimap-dot-faded-after-second-kill.jpg` | Minimap dot appears gray/faded indicating dead enemy; dot visible outside radar boundary |
+| `69-corrections-small-crosshair-reticle-at-cursor.jpg` | Demonstration of correctly sized small crosshair reticle (~20px) at cursor position |
+| `70-corrections-aim-line-long-diagonal-to-cursor.jpg` | Long diagonal aim line from player upper-right down to cursor in lower-center |
+| `71-corrections-cursor-directly-above-player-short-line.jpg` | Cursor directly above player head, short upward aim line with reticle at cursor |
 
 ---
 
