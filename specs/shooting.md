@@ -633,42 +633,54 @@ let angle = shooter.rotation + (shooter.aimSway || 0);  // sway affects bullet a
 - Visual weapon rotation: [graphics.md § Aim Sway](graphics.md#aim-sway)
 - Constants: [constants.md § Aim Sway Constants](constants.md#aim-sway-constants)
 
-### Aim Line Visual
+### Hit Confirmation Trail
 
-A thin white line from the player's barrel tip toward the crosshair, visible whenever the player is aiming.
+A thin white line from the player's barrel tip to the hit target position, triggered by the `hit:confirmed` event (server-authoritative). This is NOT continuously visible — it only appears when a shot lands.
 
 **Visual Specification:**
-- Color: White `#FFFFFF`, constant `aimLineColor: 0xffffff` (add to `WeaponVisuals` or as a shared constant)
-- Extends from barrel position to crosshair/cursor position with no explicit length cap
-- Visible continuously while aiming (not just on fire)
-- Drawn each frame in `preUpdate()` or `update()`, cleared and redrawn from current `aimAngle` and crosshair position
-- Depth: 40 (below players at 50)
+- Color: White (`HIT_TRAIL_COLOR` = 0xFFFFFF)
+- Stroke: `HIT_TRAIL_STROKE` = 1px
+- Alpha: `HIT_TRAIL_ALPHA` = 0.8
+- Extends from barrel position to the hit target's position (not to the cursor)
+- Lingers for `HIT_TRAIL_LINGER_DURATION` = 300ms, then fades out over `HIT_TRAIL_FADE_DURATION` = 200ms
+- Works for all hits: on-screen and off-screen targets
+- Depth: `HIT_TRAIL_DEPTH` = 40 (below players at 50)
 
 **Implementation:**
 ```typescript
-// In StickFigure.preUpdate() or a dedicated AimLineRenderer
-this.aimLineGraphics.clear();
-this.aimLineGraphics.lineStyle(1, 0xffffff, 0.8);
-const barrel = this.getBarrelPosition();
-const crosshair = this.scene.input.activePointer;
-this.aimLineGraphics.lineBetween(barrel.x, barrel.y, crosshair.worldX, crosshair.worldY);
+// Triggered by hit:confirmed event, NOT drawn every frame
+onHitConfirmed(hitData: { targetPosition: { x: number, y: number } }) {
+    const barrel = this.getBarrelPosition();
+    const trail = this.scene.add.graphics();
+    trail.lineStyle(HIT_TRAIL_STROKE, HIT_TRAIL_COLOR, HIT_TRAIL_ALPHA);
+    trail.lineBetween(barrel.x, barrel.y, hitData.targetPosition.x, hitData.targetPosition.y);
+    trail.setDepth(HIT_TRAIL_DEPTH);
+
+    // Linger then fade
+    this.scene.time.delayedCall(HIT_TRAIL_LINGER_DURATION, () => {
+        this.scene.tweens.add({
+            targets: trail,
+            alpha: 0,
+            duration: HIT_TRAIL_FADE_DURATION,
+            onComplete: () => trail.destroy(),
+        });
+    });
+}
 ```
 
-**Note:** Enemies may not display aim lines (prototype shows line primarily for local player).
+**Note:** The trail renders for all confirmed hits regardless of whether the target is visible on screen. For off-screen targets, the line extends beyond the viewport toward the target's world position.
 
-### Crosshair Bloom
+### Crosshair / Reticle
 
-Crosshair expands dynamically during firing (recoil bloom) and movement.
+The crosshair is a fixed-size `⊕` reticle with no dynamic expansion or bloom.
 
 **Visual Specification:**
-- Base diameter: ~40px
-- Expanded diameter: ~60-80px
-- On shot: Snap to expanded size immediately
-- Recovery: Ease back to base diameter over 200-300ms
-- Movement: Also expands proportionally during movement based on aim sway magnitude
-- Implementation: `Crosshair.ts` adjusts circle radius based on firing state and player velocity
-
-**Note:** This contradicts the previous spec statement "There is NO dynamic spread circle" — that statement should be removed from graphics.md.
+- Fixed ~20-25px diameter reticle
+- Shape: `⊕` (circle with crosshair lines)
+- No dynamic expansion on fire
+- No bloom effect
+- No movement-based scaling
+- See [constants.md § Crosshair / Reticle Constants](constants.md#crosshair--reticle-constants) for values
 
 ### Shotgun Pellet Spread
 
@@ -1218,6 +1230,7 @@ test "aim sway affects projectile trajectory":
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.1.0 | 2026-02-23 | Renamed "Aim Line Visual" → "Hit Confirmation Trail" (triggered by hit:confirmed, not continuously visible). Renamed "Crosshair Bloom" → "Crosshair / Reticle" (fixed ~20-25px, no bloom). |
 | 1.3.0 | 2026-02-18 | Art style alignment: Added Aim Line Visual section (white #FFFFFF, barrel to crosshair). Added Crosshair Bloom section (40px base, 60-80px expanded). Added shotgun client-side rendering note (8 chevron+trail entities). |
 | 1.2.0 | 2026-02-16 | Added Aim Sway subsection with composite sine formula, moving/idle magnitudes, and effect on projectile trajectory. Added TS-SHOOT-013. Ported from pre-BMM prototype. |
 | 1.1.5 | 2026-02-16 | Fixed `IsExpired()` operator — uses `>=` not `>` for `ProjectileMaxLifetime` comparison |

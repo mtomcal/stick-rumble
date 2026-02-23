@@ -519,29 +519,45 @@ The world-space bar is too small for precise health reading. The HUD bar provide
 - Duration: 500ms per cycle
 - Ease: Sine.easeInOut
 
-### Aim Indicator
+### Hit Confirmation Trail
 
-**Why Aim Lines?**
-Shows where the local player is aiming, essential for tracking aim direction.
+**Why Hit Trails?**
+Provides visual confirmation when a shot connects, especially useful for confirming hits on off-screen enemies.
+
+**Trigger:** `hit:confirmed` event (appears for ALL hits — on-screen and off-screen targets)
 
 **Visual:**
-- Shape: Line from player center through crosshair cursor position
-- Color: White (`#FFFFFF`) for local player
-- Length: No cap — extends from player position to crosshair/cursor position
-- Visible during active aiming (local player only; enemies may not display aim lines)
+- Shape: Line from gun barrel position to the hit target's position
+- Color: `HIT_TRAIL_COLOR` / `0xFFFFFF` (white)
+- Stroke: `HIT_TRAIL_STROKE` / 1px
+- Alpha: `HIT_TRAIL_ALPHA` / 0.8
+- Depth: `HIT_TRAIL_DEPTH` / 40
+- Lingers for `HIT_TRAIL_LINGER_DURATION` / 300ms, then fades over `HIT_TRAIL_FADE_DURATION` / 200ms
 
-**Formula:**
+**Pseudocode:**
 ```
-// Line from player to crosshair — no fixed length cap
-startX = playerX
-startY = playerY
-endX = crosshairX
-endY = crosshairY
+// On hit:confirmed event
+function showHitTrail(barrelX, barrelY, targetX, targetY):
+    trail = scene.add.line(0, 0, barrelX, barrelY, targetX, targetY, 0xFFFFFF)
+    trail.setAlpha(0.8)
+    trail.setDepth(40)
+    trail.setLineWidth(1)
+
+    // Linger 300ms, then fade over 200ms
+    scene.tweens.add({
+        targets: trail,
+        alpha: 0,
+        duration: 200,   // HIT_TRAIL_FADE_DURATION
+        delay: 300,       // HIT_TRAIL_LINGER_DURATION
+        onComplete: () => trail.destroy()
+    })
 ```
+
+**Constants**: See [constants.md § Hit Trail Constants](constants.md#hit-trail-constants).
 
 ### Crosshair / Reticle
 
-The crosshair is a **pre-generated texture** (not procedural per-frame). It consists of a white outer circle with a white "+" (cross) shape inside. All elements are white (`#FFFFFF`). There is no red center dot.
+The crosshair is a **fixed-size `⊕` reticle** (~20-25px) rendered as a pre-generated texture. It consists of a white outer circle with a white "+" (cross) shape inside. All elements are white (`#FFFFFF`). There is no red center dot. There is **no dynamic expansion or bloom** — the reticle remains at a fixed compact size at all times.
 
 **Texture Generation** (32×32, generated once in `preload()`):
 
@@ -560,9 +576,7 @@ gfx.strokePath();
 gfx.generateTexture('reticle', 32, 32);
 ```
 
-**Placement**: Sprite at cursor/aim position, depth 100, alpha 0.8.
-
-**Crosshair Bloom**: Crosshair diameter expands dynamically during firing. Base size: ~40px diameter. Expanded: ~60-80px. Snaps to expanded on shot, eases back over 200-300ms. Also expands proportionally during movement based on aim sway magnitude.
+**Placement**: Sprite at exact mouse cursor position, depth 100, alpha 0.8. The compact `⊕` reticle sits directly at the cursor location.
 
 **Constants**: See [constants.md § Crosshair / Reticle Constants](constants.md#crosshair--reticle-constants).
 
@@ -576,7 +590,7 @@ Draws attention to pickups, makes them feel valuable and interactive.
 - Color: `COLORS.WEAPON_CRATE` / `0xCCCC00` (yellow)
 - Stroke: 2px
 - Origin: Center
-- A small dark cross/icon is drawn inside the circle to indicate it is a pickup
+- A visible `⊕` crosshair/plus symbol in yellow (`#CCCC00`) is drawn inside the circle to indicate it is a pickup
 
 **Bobbing Animation:**
 - Distance: 5px up/down
@@ -786,8 +800,22 @@ scene.tweens.add({
 | Visible Duration | 5000ms | — |
 | Fade Duration | 2000ms | After visible period |
 | Depth | 5 | Below live players |
+| Yellow Outline | ~50px circle, `COLORS.SPAWN_RING` / 0xFFFF00 | Visual spec line 265 |
+
+**Yellow Circle Outline**: Dead enemies have a yellow circle outline (~50px diameter) surrounding the corpse body. This is drawn as a stroke-only circle at the corpse position using `COLORS.SPAWN_RING` / `0xFFFF00`.
 
 **Constants**: See [constants.md § Death Corpse Constants](constants.md#death-corpse-constants).
+
+### Enemy Weapon Visibility
+
+Enemy weapons must render at the **same scale** as local player weapons. They must be full-sized and visually identifiable — not tiny nubs or stubs.
+
+**Requirements:**
+- Enemy weapon containers use the same `ProceduralWeaponGraphics` rendering as the local player
+- Weapon scale must be 1:1 with local player weapon scale
+- All weapon types (pistol, uzi, ak47, shotgun, bat, katana) must be clearly recognizable on enemies
+
+> **Bug (to fix)**: Current build renders enemy weapons as nearly invisible tiny nub/stub shapes. Enemy weapons must match the scale and visibility of the player's own weapon. See visual spec lines 152-154.
 
 ### Blood Particles
 
@@ -1227,18 +1255,19 @@ test "player renders all body parts":
 
 ---
 
-### TS-GFX-005: Aim Indicator Points at Mouse
+### TS-GFX-005: Hit Confirmation Trail Renders on Hit
 
 **Category**: Visual
 **Priority**: Medium
 
 **Input:**
-- Player at (100, 100)
-- aimAngle = PI/4 (45 degrees)
+- `hit:confirmed` event with barrel position (100, 100) and target position (300, 200)
 
 **Expected Output:**
-- Line ends at (100 + cos(PI/4) * 50, 100 + sin(PI/4) * 50)
-- Approximately (135, 135)
+- Line rendered from barrel (100, 100) to hit target position (300, 200)
+- Trail color: white (0xFFFFFF), stroke 1px, alpha 0.8
+- Trail lingers for 300ms, then fades over 200ms
+- Trail depth: 40
 
 ---
 
@@ -1290,7 +1319,7 @@ test "player renders all body parts":
 - Crate at position (500, 500)
 
 **Expected Output:**
-- Yellow circle outline (~40px diameter, `COLORS.WEAPON_CRATE` / 0xCCCC00) with dark cross inside
+- Yellow circle outline (~40px diameter, `COLORS.WEAPON_CRATE` / 0xCCCC00) with yellow `⊕` symbol inside
 - Bobbing animation active
 
 ---
@@ -1515,10 +1544,10 @@ test "player renders all body parts":
 - Game scene loaded
 
 **Expected Output:**
-- Reticle sprite at cursor position, depth 100, alpha 0.8
+- Fixed ~20-25px `⊕` reticle sprite at cursor position, depth 100, alpha 0.8
 - Contains white outer circle (radius 10) with white "+" cross shape inside
 - No red center dot
-- Crosshair bloom: expands from ~40px to ~60-80px on firing, eases back over 200-300ms
+- No dynamic expansion or bloom — reticle stays at fixed compact size
 
 ---
 
@@ -1541,6 +1570,7 @@ test "player renders all body parts":
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.2.0 | 2026-02-23 | Renamed "Aim Indicator" → "Hit Confirmation Trail" (triggered by hit:confirmed, not continuously visible). Rewrote crosshair section: fixed ~20-25px reticle, no bloom. Updated weapon crate icon to yellow `⊕` symbol. Added yellow circle outline to death corpse rendering. Added "Enemy Weapon Visibility" section with bug note. Updated tests TS-GFX-005, TS-GFX-023, TS-GFX-008. |
 | 2.1.0 | 2026-02-18 | Art style alignment: Head-only player color distinction (body/limbs always black). Crosshair changed to white "+" in circle with bloom on firing. Weapon crate changed to yellow circle outline. Added spawn invulnerability ring, "YOU" label, enemy name labels, damage screen flash sections. Aim line changed to white, extends to crosshair. Health bar updated to 2-tier thresholds (green ≥20%, red <20%), "N%" text format, EKG icon, dark depleted background. Blood/hit indicator colors updated to 0xCC3333. Muzzle flash color updated to 0xFFD700. Unavailable weapon crate glow remains visible. Updated tests TS-GFX-003, TS-GFX-004, TS-GFX-008, TS-GFX-009, TS-GFX-015, TS-GFX-022, TS-GFX-023. |
 | 2.0.0 | 2026-02-16 | Major overhaul: Ported all pre-BMM visual systems. Replaced crosshair with pre-generated reticle texture. Replaced melee arc with white stroke-only + container tween. Replaced dead player with splayed corpse. Added blood particles, healing particles, wall spark, gun recoil, aim sway, reload animation, directional hit indicators. Updated depth table. Added tests TS-GFX-015 through TS-GFX-024. |
 | 1.0.0 | 2026-02-02 | Initial specification |

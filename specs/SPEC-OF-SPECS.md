@@ -1659,14 +1659,15 @@ Organized by category with tables:
        - Width: 1px
    ```
 
-6. **Aim Indicator**
+6. **Hit Confirmation Trail**
    ```
-   Line from player center toward aim direction:
-       - Start: Player center
-       - End: center + (cos(aimAngle), sin(aimAngle)) * 50px
+   Line from gun barrel to hit target position (triggered by hit:confirmed event):
+       - Start: Gun barrel position
+       - End: Hit target position
        - Color: #FFFFFF (white)
        - Width: 1px
-       - Alpha: 0.5
+       - Alpha: 0.8
+       - Lingers 300ms, fades over 200ms
    ```
 
 7. **Projectile Rendering**
@@ -1741,7 +1742,7 @@ Organized by category with tables:
 - TS-GFX-002: Walk animation oscillates legs
 - TS-GFX-003: Player color matches assigned index
 - TS-GFX-004: Health bar width reflects health percentage
-- TS-GFX-005: Aim indicator points at mouse
+- TS-GFX-005: Hit confirmation trail renders on hit
 - TS-GFX-006: Projectile has tracer trail
 - TS-GFX-007: Muzzle flash appears on shoot
 - TS-GFX-008: Weapon crate renders with icon

@@ -272,7 +272,7 @@ stick-rumble-client/
 │       │   ├── PickupPromptUI.ts         # "Press E" prompt
 │       │   ├── PickupNotificationUI.ts   # "Picked up [WEAPON]" confirmation
 │       │   ├── DodgeRollCooldownUI.ts    # Cooldown indicator
-│       │   ├── MinimapUI.ts              # 170x170 circular minimap
+│       │   ├── MinimapUI.ts              # 170x170 square minimap
 │       │   ├── ScoreDisplayUI.ts         # Top-right 6-digit score
 │       │   ├── KillCounterUI.ts          # Top-right kill count
 │       │   ├── DebugOverlayUI.ts         # FPS/Update/AI debug stats
@@ -923,9 +923,9 @@ showBulletImpact(x: number, y: number): void {
 
 #### MinimapUI (`game/ui/MinimapUI.ts`)
 
-**Purpose:** Render a circular minimap showing player positions on the arena.
+**Purpose:** Render a square minimap showing player positions on the arena.
 
-- Size: 170x170px with circular mask and teal/green outline border
+- Size: 170x170px with square bounds and teal/green outline border
 - Background: `#3A3A3A` at 50% alpha
 - Green dot = local player, red dots = enemies
 - Position: top-left of viewport, screen-fixed (scroll factor 0)
@@ -1617,7 +1617,7 @@ Depth 999:   Damage flash overlay (below fixed HUD, above all gameplay)
 Depth 100:   HUD elements (kill feed, pickup prompt)
 Depth 60:    Hit effects (particles, impact markers, damage numbers)
 Depth 50:    Players, weapons, projectiles
-Depth 40:    Aim line (below players)
+Depth 40:    Hit confirmation trail (below players)
 Depth 0:     Background, arena floor, grid
 ```
 
@@ -1982,6 +1982,7 @@ it('should follow local player with camera', () => {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.3.0 | 2026-02-23 | Updated MinimapUI: circular → square minimap shape. |
 | 1.2.0 | 2026-02-18 | Art style alignment: Updated GameConfig background to #C8CCC8. Added 5 visual effect managers (DamageNumberManager, HitIndicatorManager, BloodEffectManager, DamageFlashOverlay, PickupNotificationUI). Added 5 HUD components (MinimapUI, ScoreDisplayUI, KillCounterUI, DebugOverlayUI, ChatLogUI). Documented ProceduralPlayerGraphics class. Added spawn ring and death ragdoll rendering specs. Documented renderArena() with grid spec. Added depth layers 40 (aim line) and 999 (damage flash). Documented GameSceneSpectator.ts. |
 | 1.1.5 | 2026-02-16 | Fixed update() pseudocode — `dodgeRollManager.update()` and `meleeWeaponManager.update()` take no params |
 | 1.1.4 | 2026-02-16 | Fixed camera follow — uses `startFollow()` set once (not per-frame lerp in update). Removed `followLocalPlayer()` from update loop. |

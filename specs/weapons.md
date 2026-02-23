@@ -606,6 +606,33 @@ bat.position     = (ArenaWidth * 0.15, ArenaHeight * 0.15)   = (288, 162)
    - Broadcast weapon:respawned
 ```
 
+### Weapon Crate Visual Appearance
+
+Weapon crates are visually represented as outlined circles with a weapon icon inside.
+
+**Visual Specification:**
+- **Shape**: Circle outline, 40px diameter
+- **Color**: `0xCCCC00` (yellow, `COLORS.WEAPON_CRATE`)
+- **Icon**: `⊕` symbol inside (crosshair/plus symbol, same as player cursor reticle)
+- **Animation**: Gentle bobbing up/down animation (floating effect)
+- **Alpha states**:
+  - `1.0` when available for pickup
+  - `0.3` when respawning (on cooldown)
+
+**Proximity Prompt:**
+- Text: `"Press E to pick up [WEAPON NAME]"` — weapon name displayed in uppercase
+- Style: Dark tooltip background, bottom-center of screen, ~14px font size
+- Appears when player is within pickup radius (32px)
+
+**Pickup Confirmation:**
+- Text: `"Picked up [WEAPON NAME]"` — weapon name displayed in uppercase
+- Style: Fading text near player position, floats upward and fades out
+- Displayed briefly after successful pickup
+
+**Known Bugs:**
+- Current build uses lowercase weapon name in pickup confirmation text (should be uppercase)
+- Crate ring color has a yellow-green tint and sizes are inconsistent across different weapon crates
+
 ### Weapon Replacement
 
 When picking up a weapon, the player's current weapon is replaced entirely.
@@ -1073,6 +1100,7 @@ func TestKnockbackBoundaryClamping(t *testing.T) {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.1.0 | 2026-02-23 | Added "Weapon Crate Visual Appearance" section with visual details, proximity prompt, and pickup confirmation specs. |
 | 1.2.0 | 2026-02-18 | Art style alignment: Added shape ("chevron"/"circle") and tracerLength to ProjectileVisuals. Added muzzleFlashShape to WeaponVisuals. Updated Pistol tracerColor to 0xffaa00. Reduced Pistol muzzleFlashDuration to 33ms. |
 | 1.1.0 | 2026-02-16 | Updated Bat range (64→90px) and Katana range (80→110px), melee arc (90°→80°). Added cross-references to gun recoil and aim sway visual systems from pre-BMM port. |
 | 1.0.2 | 2026-02-16 | Added `ProjectileVisuals` and `WeaponVisuals` interfaces to TypeScript section, added `projectile` sub-field to JSON example |

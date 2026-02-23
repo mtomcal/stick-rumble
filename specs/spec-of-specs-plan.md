@@ -630,7 +630,7 @@
 - Projectile rendering with tracer lines and weapon-specific colors
 - Muzzle flash effects with per-weapon size/duration/color
 - Health bar rendering (world-space above player + HUD with dynamic colors)
-- Aim indicator lines and dynamic crosshair with spread visualization
+- Hit confirmation trail and fixed-size crosshair reticle (~20-25px)
 - Weapon crate rendering with bobbing animation and glow effect
 - Melee swing arc visualization (pie-slice for Bat/Katana)
 - Hit effect object pooling system (20 effects: bullet, melee, muzzle)

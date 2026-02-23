@@ -1,7 +1,7 @@
 # UI System
 
-> **Spec Version**: 1.4.0
-> **Last Updated**: 2026-02-17
+> **Spec Version**: 2.1.0
+> **Last Updated**: 2026-02-23
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [match.md](match.md), [client-architecture.md](client-architecture.md), [graphics.md](graphics.md)
 > **Depended By**: [test-index.md](test-index.md)
 
@@ -124,8 +124,8 @@ interface UIElementPosition {
 │                                                    Entry 2   │
 │                                                    Entry 3   │
 │                      [Crosshair]                   Entry 4   │
-│                         + bloom                    Entry 5   │
-│                      [Reload Circle]                         │
+│                       (fixed ⊕)                    Entry 5   │
+│                      [Reload Arc]                            │
 │                      [RELOAD! text]                          │
 │                                                              │
 │                  [Pickup Prompt]              [Dodge Roll]   │
@@ -332,6 +332,8 @@ export class ScoreDisplayUI {
 }
 ```
 
+> **Bug (to fix)**: Current build renders 7 digits (e.g., `0000100`). Must be exactly 6 digits zero-padded.
+
 ---
 
 ### Kill Counter (Top Right, Below Score)
@@ -438,17 +440,29 @@ Three complementary indicators for reload state:
 
 **Why world-space?** Keeps reload feedback attached to the player character, consistent with world-space health bars. Easier to track during movement.
 
-#### Reload Circle (Screen Center)
+#### Reload Arc (Player-Centered)
 
-**Position**: Camera center (width/2, height/2)
+**Position**: World-space, centered on the player character body (NOT screen center)
 
 **Visual Specification:**
-- Radius: 20px
-- Line style: 3px, green (#00ff00), 1.0 alpha (fully opaque)
-- Arc: Starts at 270° (top), sweeps clockwise
-- Depth: 1002
+- Radius: 25px
+- Line style: 3px stroke, green (#00FF00 / `0x00FF00`), 1.0 alpha (fully opaque)
+- Arc: Starts at top (270° / -90°), sweeps clockwise proportional to reload progress
+- Depth: World-space (rendered with player entities)
 
-**Why centered?** Player focuses on crosshair during combat. Circle around crosshair is immediately visible.
+**Why player-centered?** Keeps reload feedback attached to the player character, consistent with the world-space reload progress bar above the player. Easier to track during movement than a screen-center indicator.
+
+**TypeScript:**
+```typescript
+// World-space arc centered on player body
+const startAngle = Phaser.Math.DegToRad(-90); // Top
+const endAngle = startAngle + (reloadProgress * Math.PI * 2); // Clockwise sweep
+this.reloadArcGraphics.clear();
+this.reloadArcGraphics.lineStyle(3, 0x00FF00, 1.0);
+this.reloadArcGraphics.beginPath();
+this.reloadArcGraphics.arc(player.x, player.y, 25, startAngle, endAngle);
+this.reloadArcGraphics.strokePath();
+```
 
 #### "RELOAD!" Flashing Text
 
@@ -473,11 +487,11 @@ function updateReloadUI(isReloading, isEmpty, reloadProgress, isMelee):
 
     if isReloading:
         showProgressBar(reloadProgress)
-        showCircle(reloadProgress)
+        showReloadArc(reloadProgress)
         hideReloadText()
     else if isEmpty:
         hideProgressBar()
-        hideCircle()
+        hideReloadArc()
         showFlashingReloadText()
     else:
         hideAll()
@@ -683,60 +697,36 @@ export class PickupNotificationUI {
 **Position**: Follows mouse pointer
 
 **Visual Specification:**
-- Crosshair shape: White "+" (cross) inside an outer circle outline. All elements white (#FFFFFF)
-- Outer circle: Base diameter ~40px. Expands to ~60-80px during firing (recoil bloom). Snap to expanded on shot, ease back over 200-300ms. Also expands during movement proportional to aim sway
-- Visibility: Hidden for melee weapons, hidden when spectating
+- Crosshair shape: Fixed-size `⊕` reticle — a circle with a `+` (cross) inside. All elements white (#FFFFFF)
+- Size: ~20-25px diameter (fixed, no expansion or bloom)
+- Visibility: Hidden for melee weapons (Bat, Katana), hidden when spectating
 - Depth: 1000
 
-> **Note:** The previous red spread circle (#ff0000) has been removed. The outer circle bloom replaces it as the dynamic accuracy indicator.
-
-**Spread Values by Weapon:**
-| Weapon | Base Spread (degrees) |
-|--------|----------------------|
-| Pistol | 2.0 |
-| Uzi | 5.0 |
-| AK47 | 3.0 |
-| Shotgun | 15.0 |
-| Bat | 0 (hidden) |
-| Katana | 0 (hidden) |
-
-**Behavior:**
-- Spread circle only visible when player is moving
-- Smooth lerp transition (0.2 speed) between spread states
-- Sprint multiplies spread by 1.5x
-
-**Why lerp?** Instant spread changes are jarring. Smooth transition feels responsive but controlled.
+> **Correction**: The crosshair is a compact, fixed-size reticle. There is no bloom, no expansion during firing, and no spread visualization. The corrected video footage confirms a small ~20px `⊕` at the cursor position with no size changes.
 
 **TypeScript:**
 ```typescript
 export class Crosshair {
-  private currentRadius = 20; // Base radius ~20px (40px diameter)
-  private readonly BASE_RADIUS = 20;
-  private readonly EXPANDED_RADIUS = 35; // ~60-70px diameter
-  private readonly LERP_SPEED = 0.2;
+  private readonly RETICLE_RADIUS = 10; // ~20px diameter
 
-  update(isMoving: boolean, spreadDegrees: number, weaponType: string, isFiring: boolean): void {
-    // Bloom: expand on firing, also expand during movement
-    const targetRadius = isFiring
-      ? this.EXPANDED_RADIUS
-      : isMoving
-        ? this.BASE_RADIUS + spreadDegrees
-        : this.BASE_RADIUS;
-    this.currentRadius = Phaser.Math.Linear(this.currentRadius, targetRadius, this.LERP_SPEED);
-
+  update(weaponType: string): void {
     this.graphics.clear();
+
+    // Hidden for melee weapons
+    if (weaponType === 'bat' || weaponType === 'katana') return;
+
     const pointer = this.scene.input.activePointer;
     const x = pointer.x;
     const y = pointer.y;
 
     // White "+" cross
     this.graphics.lineStyle(2, 0xffffff);
-    this.graphics.lineBetween(x - 8, y, x + 8, y);
-    this.graphics.lineBetween(x, y - 8, x, y + 8);
+    this.graphics.lineBetween(x - 6, y, x + 6, y);
+    this.graphics.lineBetween(x, y - 6, x, y + 6);
 
-    // Outer circle outline (bloom expands during firing)
-    this.graphics.lineStyle(2, 0xffffff, 0.8);
-    this.graphics.strokeCircle(x, y, this.currentRadius);
+    // Outer circle outline (fixed size)
+    this.graphics.lineStyle(1.5, 0xffffff, 0.8);
+    this.graphics.strokeCircle(x, y, this.RETICLE_RADIUS);
   }
 }
 ```
@@ -917,9 +907,13 @@ this.cameras.main.shake(150, 0.008);
 
 A minimap in the top-left corner shows the arena layout, player position, and nearby enemies within radar range.
 
-**Architecture**: Two graphics layers, both with `setScrollFactor(0)` (screen-fixed). Circular shape with teal/green outline border:
-1. **Static layer** (depth 1999): Circular background, teal border, walls — drawn once
+**Architecture**: Two graphics layers, both with `setScrollFactor(0)` (screen-fixed). Square shape with teal/green outline border:
+1. **Static layer** (depth 1999): Square background, teal border, walls — drawn once
 2. **Dynamic layer** (depth 2000): Player dot, enemy dots, radar ring — updated every frame
+
+**Dot Clamping**: All dots (player and enemy) must be clamped to stay within the minimap bounds using `Math.min`/`Math.max`. This prevents dots from rendering outside the minimap when the player or enemies are near arena edges.
+
+> **Positioning Note**: The minimap must be positioned so it does not overlap HUD elements below it (health bar, ammo display, debug overlay). Ensure sufficient vertical clearance.
 
 **Static Layer** (drawn once in `setupMinimap()`):
 ```typescript
@@ -929,11 +923,11 @@ const mapSize = 170;  // MINIMAP_SIZE
 
 // Background
 minimapStaticGraphics.fillStyle(0x3A3A3A, 0.5); // Dark gray at 50% alpha
-minimapStaticGraphics.fillCircle(mapX + mapSize / 2, mapY + mapSize / 2, mapSize / 2);
+minimapStaticGraphics.fillRect(mapX, mapY, mapSize, mapSize);
 
-// Circular/radar ring border — teal/green outline
+// Square border — teal/green outline
 minimapStaticGraphics.lineStyle(2, 0x00CCCC, 0.8);
-minimapStaticGraphics.strokeCircle(mapX + mapSize / 2, mapY + mapSize / 2, mapSize / 2);
+minimapStaticGraphics.strokeRect(mapX, mapY, mapSize, mapSize);
 
 // Walls
 minimapStaticGraphics.fillStyle(0x555555, 1);
@@ -948,30 +942,39 @@ walls.forEach(wall => {
 
 **Dynamic Layer** (updated every frame in `updateMinimap()`):
 ```typescript
+// Clamp helper — keeps dots within minimap bounds
+function clampToMinimap(worldX: number, worldY: number): { x: number; y: number } {
+    const dotX = Math.min(Math.max(mapX + worldX * scale, mapX), mapX + mapSize);
+    const dotY = Math.min(Math.max(mapY + worldY * scale, mapY), mapY + mapSize);
+    return { x: dotX, y: dotY };
+}
+
 // Enemy dots (within radar range only)
 enemies.forEach(enemy => {
     const dist = Phaser.Math.Distance.Between(player.x, player.y, enemy.x, enemy.y);
     if (dist <= 600) {  // MINIMAP_RADAR_RANGE
+        const pos = clampToMinimap(enemy.x, enemy.y);
         minimapGraphics.fillStyle(0xff0000, 1);
-        minimapGraphics.fillCircle(mapX + enemy.x * scale, mapY + enemy.y * scale, 3);
+        minimapGraphics.fillCircle(pos.x, pos.y, 3);
     }
 });
 
-// Player dot
+// Player dot (clamped)
+const playerPos = clampToMinimap(player.x, player.y);
 minimapGraphics.fillStyle(0x00ff00, 1);
-minimapGraphics.fillCircle(mapX + player.x * scale, mapY + player.y * scale, 4);
+minimapGraphics.fillCircle(playerPos.x, playerPos.y, 4);
 
 // Radar range ring
 minimapGraphics.lineStyle(1, 0x00ff00, 0.15);
-minimapGraphics.strokeCircle(mapX + player.x * scale, mapY + player.y * scale, 600 * scale);
+minimapGraphics.strokeCircle(playerPos.x, playerPos.y, 600 * scale);
 
 // Aim direction line
 minimapGraphics.lineStyle(1, 0x00ff00, 0.8);
 minimapGraphics.beginPath();
-minimapGraphics.moveTo(mapX + player.x * scale, mapY + player.y * scale);
+minimapGraphics.moveTo(playerPos.x, playerPos.y);
 minimapGraphics.lineTo(
-    mapX + player.x * scale + Math.cos(player.rotation) * 10,
-    mapY + player.y * scale + Math.sin(player.rotation) * 10
+    playerPos.x + Math.cos(player.rotation) * 10,
+    playerPos.y + Math.sin(player.rotation) * 10
 );
 minimapGraphics.strokePath();
 ```
@@ -981,10 +984,11 @@ minimapGraphics.strokePath();
 | Position | (20, 20) top-left | `constants.md § Minimap Constants` |
 | Scale | 0.106 (MINIMAP_SCALE) | 1600px → 170px |
 | Size | 170 × 170 px (MINIMAP_SIZE) | `constants.md § Minimap Constants` |
-| Shape | Circular with teal/green outline border | — |
+| Shape | Square with teal/green outline border | — |
+| Border Color | Teal/green `0x00CCCC` | — |
 | Radar Range | 600px | Enemies beyond this hidden |
-| Player Dot | 4px radius, green | — |
-| Enemy Dot | 3px radius, red | — |
+| Player Dot | 4px radius, green (clamped to bounds) | — |
+| Enemy Dot | 3px radius, red (clamped to bounds) | — |
 | Background | #3A3A3A, alpha 0.5 | — |
 | Static Depth | 1999 | — |
 | Dynamic Depth | 2000 | — |
@@ -1167,6 +1171,8 @@ export class ChatLogUI {
 }
 ```
 
+> **Bug (to fix)**: Current build renders chat panel as flat opaque gray. Background must be semi-transparent (`#808080` at 70% opacity) so game world is partially visible through it.
+
 ---
 
 ### Death Screen Overlay (Per-Death)
@@ -1181,10 +1187,13 @@ export class ChatLogUI {
 - Dark overlay: Full viewport, 70% opacity black (#000000)
 - "YOU DIED" text: ~72px bold, white (#FFFFFF), centered horizontally and vertically
 - Stats row (below "YOU DIED"):
-  - Trophy icon (yellow/gold) + score value (red)
-  - Skull icon (red) + kill count (white)
+  - Trophy icon (yellow/gold), center-left of stats row
+  - Score: Red number displayed below the trophy icon (e.g., "0")
+  - Skull icon (red), center-right of stats row
+  - Kill count: White text next to skull (e.g., "0 Kills")
 - "TRY AGAIN" button: Rectangular, thin white border, white text, centered below stats. On click: sends `player:respawn_request` to server (server auto-respawns the player via `player:respawn`)
 - Depth: Above game world (depth ~990), below React modals (z-index 1000)
+- **Ref**: Visual spec § Death & Respawn, frame `01-death-screen-you-died-overlay.jpg`
 
 **Respawn Flow:**
 1. `player:death` received for local player → show Death Screen Overlay
@@ -1221,6 +1230,10 @@ export class DeathScreenOverlay {
 **Position**: Below minimap, left side, screen-fixed
 
 **Why this location?** Groups diagnostic info near the minimap without overlapping combat HUD. Only visible during development.
+
+> Must be positioned below the minimap. Debug text must NOT overlap the minimap.
+
+> **Bug (to fix)**: Debug/ammo text currently overlaps the top-left corner of the minimap instead of sitting below it. Reposition so it renders beneath the minimap. (Ref: visual spec line 119)
 
 **Visual Specification:**
 - Color: Bright green (#00FF00 / COLORS.DEBUG_OVERLAY)
@@ -1336,7 +1349,7 @@ All UI is created and updated through `GameSceneUI` in `GameScene.create()` and 
 | 999 | Damage flash overlay |
 | 1000 | Base UI (health, timer, kill feed) |
 | 1001 | Hit marker, reload progress |
-| 1002 | Reload circle |
+| 1002 | Reload arc (now world-space, but depth retained for reference) |
 | 1003 | RELOAD! flashing text |
 
 **Screen-Fixed Elements:**
@@ -1494,7 +1507,7 @@ it('should show kills in reverse chronological order', () => {
 
 **Expected Output:**
 - Progress bar at 50%
-- Reload circle at 180°
+- Reload arc at 180° (player-centered)
 - RELOAD! text hidden
 
 ---
@@ -1720,7 +1733,7 @@ it('should sort scoreboard by kills descending, deaths ascending', () => {
 
 **Expected Output:**
 - Minimap at (20, 20), 170×170px (MINIMAP_SIZE=170)
-- Dark gray (#3A3A3A) background at 50% alpha with teal/green circular border
+- Dark gray (#3A3A3A) background at 50% alpha with teal/green square border
 - Wall positions rendered at 0.106 scale (MINIMAP_SCALE)
 - Static layer at depth 1999
 
@@ -1744,6 +1757,7 @@ it('should sort scoreboard by kills descending, deaths ascending', () => {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.1.0 | 2026-02-23 | Rewrote minimap: circular → square shape, added dot clamping, teal border. Renamed "Reload Circle" → "Reload Arc (Player-Centered)", world-space green arc. Rewrote crosshair: fixed ~20-25px reticle, removed bloom. Added score bug note (7 digits → must be 6). Added chat log bug note (opaque → semi-transparent). Added debug overlay positioning rule and overlap bug note. Verified death screen overlay against visual spec. |
 | 1.4.0 | 2026-02-18 | Art style alignment: Rewrote HUD layout diagram. Health bar updated to 2-tier (green/red at 20%), EKG icon, "N%" format, #333333 depleted bg. Ammo counter updated with icon, #E0A030 color, RELOADING text, INF state. Added Score Display (6-digit zero-padded), Kill Counter (KILLS: N), Chat Log, Death Screen Overlay, Debug Overlay, Weapon Pickup Notification sections. Minimap updated to 170x170px circular with teal border. Reload progress bar moved to world-space 60px white. Crosshair changed to white "+" in circle with bloom. Damage flash changed from camera flash to persistent red overlay at depth 999. Renamed HEALTH_BAR_WIDTH to HUD_HEALTH_BAR_WIDTH. Replaced stale CAMERA_FLASH constants with DAMAGE_FLASH constants. Updated tests TS-UI-001, TS-UI-013, TS-UI-018. |
 | 1.3.0 | 2026-02-17 | Expanded camera shake section to document all three shake systems: hit feedback shake (server-confirmed, 50ms/0.001), per-weapon recoil shake (client-side, 100ms, Uzi=0.005/AK47=0.007/Shotgun=0.012), and bat melee hit shake (150ms/0.008). Renamed constants from generic CAMERA_SHAKE to specific HIT_FEEDBACK_SHAKE. Added tests TS-UI-020 and TS-UI-021. |
 | 1.2.0 | 2026-02-16 | Replaced damage flash overlay with camera flash. Replaced procedural hit marker with texture-based 20×20 X. Updated damage numbers with kill/remote variants. Added camera shake, minimap sections. Added tests TS-UI-013 through TS-UI-019. Ported from pre-BMM prototype. |

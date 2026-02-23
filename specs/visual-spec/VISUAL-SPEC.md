@@ -73,12 +73,12 @@
 ### Minimap (top-left)
 - Size: ~170x170px
 - Dark semi-transparent background (`#3A3A3A` @ ~50% opacity)
-- Circular radar ring border (teal/green outline)
+- Square border (teal/green outline)
 - Green dot = local player
 - Red dots = enemies
 - Shows simplified map layout with dark rectangles for walls/platforms *(from prototype -- minimap wall rendering is currently a no-op since no internal wall geometry exists)*
-- **Bug (to fix)**: Player and enemy dots are NOT clipped to the radar circle boundary — they visibly travel outside the circle as the player moves. Dots should be clamped to stay within the radar circumference.
-- **Bug (to fix)**: The minimap circle overlaps and obscures the HUD elements directly beneath it (health bar, ammo, debug text). The minimap needs to be positioned or sized so it does not overlap critical HUD info.
+- **Bug (to fix)**: Player and enemy dots are NOT clipped to the minimap bounds — they visibly travel outside the minimap as the player moves. Dots should be clamped to stay within the minimap bounds.
+- **Bug (to fix)**: The minimap overlaps and obscures the HUD elements directly beneath it (health bar, ammo, debug text). The minimap needs to be positioned or sized so it does not overlap critical HUD info.
 - **Bug (to fix)**: Minimap border is rendering as gray instead of the specified teal/green outline color.
 - **Ref frames**: `02-gameplay-respawn-full-hud.jpg`, `53-corrections-aim-line-overshoots-cursor.jpg` through `71-corrections-cursor-directly-above-player-short-line.jpg`
 
@@ -168,11 +168,12 @@
 - Small yellow dots (~4px) as shell casings or impact particles
 - **Ref frames**: `04-combat-shooting-muzzle-flash-bullet.jpg`, `21-heavy-fire-multiple-projectiles.jpg`
 
-### Aim/Trajectory Line
-- Thin white line connecting the player's gun barrel **to the crosshair cursor position** — it terminates exactly at the cursor, it does NOT extend beyond it
-- **Correction**: This is NOT a bullet trail. It is a live aim line that updates every frame as the mouse moves.
-- Always present while aiming; disappears when cursor is very close to player
-- **Ref frames**: `11-shooting-downward-trajectory-line.jpg`, `48-firing-upward-aim-line.jpg`, `53-corrections-aim-line-overshoots-cursor.jpg`, `54-corrections-aim-line-terminates-at-cursor.jpg`, `55-corrections-aim-line-far-overshoot-bottom.jpg`, `70-corrections-aim-line-long-diagonal-to-cursor.jpg`
+### Hit Trail Line
+- Thin white line from the player's gun barrel to the hit target — appears **after firing** when a bullet hits another player
+- This is a **hit confirmation trail**, NOT a live aim line. It shows the path of a successful hit.
+- Useful for confirming hits on off-screen enemies (blind fire confirmation), but appears for all hits regardless of whether the target is on-screen
+- Lingers for a short duration after the hit, then fades
+- **Ref frames**: `11-shooting-downward-trajectory-line.jpg`, `48-firing-upward-aim-line.jpg`, `53-corrections-aim-line-overshoots-cursor.jpg`, `55-corrections-aim-line-far-overshoot-bottom.jpg`, `56-corrections-shooting-damage-number-on-enemy.jpg`, `70-corrections-aim-line-long-diagonal-to-cursor.jpg`
 
 ### Damage Numbers (Floating)
 - Red bold text ("20", "12") floating near hit location
@@ -420,25 +421,25 @@ The level has two distinct zone types:
 
 | Frame | Key Content |
 |-------|-------------|
-| `53-corrections-aim-line-overshoots-cursor.jpg` | Aim line extends well past the cursor to the far right — bug demonstration of overshoot |
-| `54-corrections-aim-line-terminates-at-cursor.jpg` | Aim line correctly terminates at the small crosshair reticle at cursor — corrected behavior |
-| `55-corrections-aim-line-far-overshoot-bottom.jpg` | Aim line shoots far past cursor to the bottom-right corner — severe overshoot bug |
-| `56-corrections-shooting-damage-number-on-enemy.jpg` | Player shooting at red enemy, "-35" floating damage number, bullet trail visible |
-| `57-corrections-aim-line-cursor-reticle-first-kill.jpg` | Aim line to cursor with small reticle; score 000100, KILLS:1 visible top-right |
+| `53-corrections-aim-line-overshoots-cursor.jpg` | Hit trail extending to the far right toward off-screen enemy hit |
+| `54-corrections-aim-line-terminates-at-cursor.jpg` | Hit trail to a nearby target; small crosshair reticle visible at cursor position |
+| `55-corrections-aim-line-far-overshoot-bottom.jpg` | Hit trail extending to the bottom-right toward distant off-screen enemy hit |
+| `56-corrections-shooting-damage-number-on-enemy.jpg` | Player shooting at red enemy, "-35" floating damage number, hit trail visible |
+| `57-corrections-aim-line-cursor-reticle-first-kill.jpg` | Hit trail visible with small reticle at cursor; score 000100, KILLS:1 visible top-right |
 | `58-corrections-reloading-arc-progress-dead-enemy.jpg` | Reload state: green arc progress indicator around player, "RELOADING..." in HUD, dead enemy on screen |
-| `59-corrections-aim-line-short-reticle-near-player.jpg` | Very short aim line with small crosshair reticle positioned close to the player |
-| `60-corrections-aim-line-to-cursor-reticle-left.jpg` | Aim line extending lower-left to cursor, small reticle correctly at cursor position |
+| `59-corrections-aim-line-short-reticle-near-player.jpg` | Short hit trail to nearby enemy; small crosshair reticle positioned close to the player |
+| `60-corrections-aim-line-to-cursor-reticle-left.jpg` | Hit trail extending lower-left toward target; small reticle at cursor position |
 | `61-corrections-press-e-pickup-ak47-tooltip.jpg` | "Press E to pick up AK47" dark tooltip at bottom-center when near weapon crate |
 | `62-corrections-picked-up-ak47-confirmation.jpg` | "Picked up ak47" confirmation text floating next to player after collecting weapon |
-| `63-corrections-ak47-equipped-aim-line-cursor.jpg` | AK47 rifle visible on player sprite, aim line to cursor, small reticle at cursor |
+| `63-corrections-ak47-equipped-aim-line-cursor.jpg` | AK47 rifle visible on player sprite, hit trail visible, small reticle at cursor |
 | `64-corrections-ak47-aiming-small-crosshair-reticle.jpg` | AK47-equipped player aiming lower-right, small (~20px) crosshair reticle at cursor |
 | `65-corrections-aiming-at-red-enemy-two-players.jpg` | Two players — local AK47 player aiming toward red enemy player on the right |
-| `66-corrections-cursor-on-enemy-about-to-shoot.jpg` | Cursor positioned on top of red enemy, aim line reaching them |
+| `66-corrections-cursor-on-enemy-about-to-shoot.jpg` | Cursor positioned on top of red enemy, about to shoot |
 | `67-corrections-shoot-hit-enemy-score-kills-2.jpg` | Hit on enemy, score 000200, KILLS:2 in top-right |
 | `68-corrections-minimap-dot-faded-after-second-kill.jpg` | Minimap dot appears gray/faded indicating dead enemy; dot visible outside radar boundary |
 | `69-corrections-small-crosshair-reticle-at-cursor.jpg` | Demonstration of correctly sized small crosshair reticle (~20px) at cursor position |
-| `70-corrections-aim-line-long-diagonal-to-cursor.jpg` | Long diagonal aim line from player upper-right down to cursor in lower-center |
-| `71-corrections-cursor-directly-above-player-short-line.jpg` | Cursor directly above player head, short upward aim line with reticle at cursor |
+| `70-corrections-aim-line-long-diagonal-to-cursor.jpg` | Long diagonal hit trail from player toward distant target in lower-center |
+| `71-corrections-cursor-directly-above-player-short-line.jpg` | Cursor directly above player head, short upward hit trail with reticle at cursor |
 
 ---
 

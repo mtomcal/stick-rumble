@@ -402,6 +402,9 @@ export const COLORS = {
   DAMAGE_FLASH: 0xFF0000,
   HIT_CHEVRON: 0xCC3333,
   WEAPON_CRATE: 0xCCCC00,
+  HIT_TRAIL: 0xFFFFFF,
+  MINIMAP_BORDER: 0x00CCCC,
+  RELOAD_ARC: 0x00FF00,
 } as const;
 ```
 
@@ -429,6 +432,9 @@ export const COLORS = {
 | COLORS.DAMAGE_FLASH | 0xFF0000 | Damage screen flash overlay |
 | COLORS.HIT_CHEVRON | 0xCC3333 | Hit direction indicator |
 | COLORS.WEAPON_CRATE | 0xCCCC00 | Weapon crate circle |
+| COLORS.HIT_TRAIL | 0xFFFFFF | Hit confirmation trail |
+| COLORS.MINIMAP_BORDER | 0x00CCCC | Minimap border |
+| COLORS.RELOAD_ARC | 0x00FF00 | Reload arc indicator |
 
 ---
 
@@ -551,14 +557,13 @@ Triggered on melee hit with the Bat weapon. Heavier than the standard hit feedba
 
 ## Crosshair / Reticle Constants
 
+Reticle is fixed ~20px diameter. No dynamic bloom.
+
 | Constant | Value | Unit | Why |
 |----------|-------|------|-----|
 | RETICLE_TEXTURE_SIZE | 32 | px | 32x32 pre-generated texture. |
 | RETICLE_RING_RADIUS | 10 | px | Outer aiming ring. |
 | RETICLE_RING_STROKE | 2 | px | White stroke width. |
-| RETICLE_CENTER_DOT_COLOR | 0xFF0000 | hex | Red center dot for precision aiming. |
-| RETICLE_CENTER_DOT_RADIUS | 2 | px | Small precise dot. |
-| RETICLE_TICK_LENGTH | 6 | px | Cardinal direction tick marks (top/bottom/left/right). |
 | RETICLE_ALPHA | 0.8 | ratio | Slightly transparent to not obscure targets. |
 | RETICLE_DEPTH | 100 | z-index | Above all game objects. |
 
@@ -616,6 +621,19 @@ aimSway = (sin(time * swaySpeed) + sin(time * swaySpeed * 0.7)) * swayMagnitude
 
 ---
 
+## Hit Confirmation Trail Constants
+
+| Constant | Value | Unit | Why |
+|----------|-------|------|-----|
+| HIT_TRAIL_COLOR | 0xFFFFFF | hex | White (`COLORS.HIT_TRAIL`). High contrast on arena background. |
+| HIT_TRAIL_STROKE | 1 | px | Thin line. Visible but not obstructive. |
+| HIT_TRAIL_ALPHA | 0.8 | ratio | Slightly transparent to not obscure targets. |
+| HIT_TRAIL_LINGER_DURATION | 300 | ms | Visible long enough to register the hit visually. |
+| HIT_TRAIL_FADE_DURATION | 200 | ms | Smooth fade-out after linger period. |
+| HIT_TRAIL_DEPTH | 40 | z-index | Below players (50) but above floor grid. |
+
+---
+
 ## Reload Animation Constants
 
 | Constant | Value | Unit | Why |
@@ -624,6 +642,11 @@ aimSway = (sin(time * swaySpeed) + sin(time * swaySpeed * 0.7)) * swayMagnitude
 | RELOAD_ANIM_SCALE | 0.8 | ratio | Weapon shrinks to 80% during pulse. |
 | RELOAD_ANIM_PULSE_DURATION | 200 | ms | Duration of each pulse. |
 | RELOAD_ANIM_PULSE_COUNT | 3 | count | Three pulses (yoyo × 2 repeat = 3 total). |
+| RELOAD_ARC_RADIUS | 25 | px | Circular arc radius around player during reload. |
+| RELOAD_ARC_STROKE | 3 | px | Arc line thickness. |
+| RELOAD_ARC_COLOR | 0x00FF00 | hex | Green (`COLORS.RELOAD_ARC`). Matches healing color convention. |
+| RELOAD_ARC_START_ANGLE | 270 | deg | Starts from top of circle. |
+| RELOAD_ARC_DEPTH | 45 | z-index | Above hit trail (40), below players (50). |
 
 ---
 
@@ -651,6 +674,8 @@ aimSway = (sin(time * swaySpeed) + sin(time * swaySpeed * 0.7)) * swayMagnitude
 | MINIMAP_DYNAMIC_DEPTH | 2000 | z-index | Dynamic layer (players, enemies). |
 | MINIMAP_PLAYER_DOT_RADIUS | 4 | px | Green dot. Slightly larger than enemies. |
 | MINIMAP_ENEMY_DOT_RADIUS | 3 | px | Red dot. Smaller than player. |
+| MINIMAP_BORDER_COLOR | 0x00CCCC | hex | Teal (`COLORS.MINIMAP_BORDER`). Distinct from game elements. |
+| MINIMAP_BORDER_STROKE | 2 | px | Border line thickness. |
 
 ---
 
@@ -821,6 +846,7 @@ if (distance > maxRange * 0.5):
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.1.0 | 2026-02-23 | Removed reticle center dot and tick constants (reticle is now fixed ~20px, no bloom). Added Hit Confirmation Trail constants (HIT_TRAIL_*). Added Reload Arc constants (RELOAD_ARC_*). Added MINIMAP_BORDER_COLOR and MINIMAP_BORDER_STROKE. Updated minimap shape language from circular to square. Added COLORS.HIT_TRAIL, COLORS.MINIMAP_BORDER, COLORS.RELOAD_ARC. |
 | 1.4.0 | 2026-02-18 | Added COLORS constant group (22 visual color constants). Renamed HEALTH_BAR_WIDTH to PLAYER_HEALTH_BAR_WIDTH, added HUD_HEALTH_BAR_WIDTH=200. Updated MINIMAP_SIZE to 170 and MINIMAP_SCALE to 0.106. Updated BLOOD_COLOR to 0xCC3333. Updated FLOOR_GRID_COLOR to 0xD8DCD8. |
 | 1.3.0 | 2026-02-17 | Expanded Camera Effects Constants into four subsections: Hit Feedback Shake (renamed from generic CAMERA_SHAKE), Per-Weapon Recoil Shake (Uzi=0.005, AK47=0.007, Shotgun=0.012, 100ms duration), Bat Melee Hit Shake (150ms/0.008), Camera Flash. |
 | 1.2.0 | 2026-02-16 | Added 14 new constant tables for ported pre-BMM visual systems: melee visual, blood particles, healing particles, death corpse, camera effects, crosshair/reticle, hit indicators, hit markers, gun recoil, aim sway, reload animation, floor grid, minimap, damage numbers. Updated Bat range (64→90px), Katana range (80→110px), melee arc (90°→80°). |

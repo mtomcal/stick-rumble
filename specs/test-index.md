@@ -158,7 +158,7 @@ When implementing from scratch, AI agents need to:
 | TS-GFX-002 | Visual | High | Walk animation oscillates legs |
 | TS-GFX-003 | Unit | High | Player color matches state |
 | TS-GFX-004 | Unit | High | Health bar width reflects percentage |
-| TS-GFX-005 | Visual | Medium | Aim indicator points at mouse |
+| TS-GFX-005 | Visual | Medium | Hit confirmation trail renders on hit |
 | TS-GFX-006 | Visual | High | Projectile has tracer trail |
 | TS-GFX-007 | Visual | Medium | Muzzle flash appears on shoot |
 | TS-GFX-008 | Visual | Medium | Weapon crate renders with glow |
@@ -561,7 +561,7 @@ Tests that verify rendering output using Playwright screenshots.
 - TS-CLIENT-005: Entities render correctly
 - TS-GFX-001: Player renders all body parts
 - TS-GFX-002: Walk animation oscillates legs
-- TS-GFX-005: Aim indicator points at mouse
+- TS-GFX-005: Hit confirmation trail renders on hit
 - TS-GFX-006: Projectile has tracer trail
 - TS-GFX-007: Muzzle flash appears on shoot
 - TS-GFX-008: Weapon crate renders with glow
