@@ -151,7 +151,8 @@ export class GameScene extends Phaser.Scene {
     // Initialize new UI components
     this.scoreDisplayUI = new ScoreDisplayUI(this, camera.width - 10, 10);
     this.killCounterUI = new KillCounterUI(this, camera.width - 10, 42);
-    this.debugOverlayUI = new DebugOverlayUI(this, 10, camera.height - 80);
+    // Minimap is at y=20, height=170, bottom edge at y=190 — debug overlay goes below at y=200
+    this.debugOverlayUI = new DebugOverlayUI(this, 10, 200);
     this.chatLogUI = new ChatLogUI(this, 10, camera.height - 140);
     this.pickupNotificationUI = new PickupNotificationUI(this, camera.width / 2, camera.height / 2);
 
