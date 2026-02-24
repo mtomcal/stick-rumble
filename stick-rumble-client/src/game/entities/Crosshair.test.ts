@@ -7,15 +7,8 @@ describe('Crosshair', () => {
   let crosshair: Crosshair;
   let mockSprite: Phaser.GameObjects.Sprite;
   let mockMakeGraphics: any;
-  let mockTween: any;
 
   beforeEach(() => {
-    mockTween = {
-      stop: vi.fn(),
-      isPlaying: vi.fn().mockReturnValue(false),
-    };
-
-    // Create mock sprite
     mockSprite = {
       setScrollFactor: vi.fn().mockReturnThis(),
       setDepth: vi.fn().mockReturnThis(),
@@ -26,7 +19,6 @@ describe('Crosshair', () => {
       destroy: vi.fn(),
     } as unknown as Phaser.GameObjects.Sprite;
 
-    // Create mock make.graphics for texture generation
     mockMakeGraphics = {
       lineStyle: vi.fn().mockReturnThis(),
       strokeCircle: vi.fn().mockReturnThis(),
@@ -40,7 +32,6 @@ describe('Crosshair', () => {
       destroy: vi.fn(),
     };
 
-    // Create mock scene
     scene = {
       add: {
         sprite: vi.fn(() => mockSprite),
@@ -55,7 +46,7 @@ describe('Crosshair', () => {
         },
       },
       tweens: {
-        add: vi.fn().mockReturnValue(mockTween),
+        add: vi.fn(),
       },
     } as unknown as Phaser.Scene;
 
@@ -78,12 +69,6 @@ describe('Crosshair', () => {
     it('should NOT draw red center dot', () => {
       expect(mockMakeGraphics.fillStyle).not.toHaveBeenCalledWith(0xff0000, 1);
       expect(mockMakeGraphics.fillCircle).not.toHaveBeenCalled();
-    });
-
-    it('should NOT draw old cardinal tick marks', () => {
-      // Old ticks went to coords 2, 8, 24, 30 — these should not appear
-      expect(mockMakeGraphics.moveTo).not.toHaveBeenCalledWith(16, 2);
-      expect(mockMakeGraphics.moveTo).not.toHaveBeenCalledWith(2, 16);
     });
 
     it('should draw vertical bar from (16,6) to (16,26)', () => {
@@ -117,13 +102,27 @@ describe('Crosshair', () => {
     });
   });
 
+  describe('No bloom / no dynamic sizing', () => {
+    it('should NOT have a triggerBloom() method', () => {
+      expect((crosshair as any).triggerBloom).toBeUndefined();
+    });
+
+    it('should NOT have EXPANDED_RADIUS or LERP_SPEED constants', () => {
+      expect((crosshair as any).EXPANDED_RADIUS).toBeUndefined();
+      expect((crosshair as any).LERP_SPEED).toBeUndefined();
+    });
+
+    it('should NOT have a currentScale property that changes', () => {
+      // update() should not call setScale at all (fixed texture, no resizing)
+      (mockSprite.setScale as ReturnType<typeof vi.fn>).mockClear();
+      crosshair.update('Pistol');
+      expect(mockSprite.setScale).not.toHaveBeenCalled();
+    });
+  });
+
   describe('constructor', () => {
     it('should initialize as visible by default', () => {
       expect(crosshair.isVisible()).toBe(true);
-    });
-
-    it('should set initial scale to BASE_SCALE (40/32)', () => {
-      expect(mockSprite.setScale).toHaveBeenCalledWith(40 / 32);
     });
   });
 
@@ -132,7 +131,7 @@ describe('Crosshair', () => {
       scene.input.activePointer.x = 500;
       scene.input.activePointer.y = 400;
 
-      crosshair.update(false, 0);
+      crosshair.update('Pistol');
 
       expect(mockSprite.setPosition).toHaveBeenCalledWith(500, 400);
     });
@@ -141,7 +140,7 @@ describe('Crosshair', () => {
       crosshair.hide();
       (mockSprite.setPosition as ReturnType<typeof vi.fn>).mockClear();
 
-      crosshair.update(true, 5);
+      crosshair.update('Pistol');
 
       expect(mockSprite.setPosition).not.toHaveBeenCalled();
     });
@@ -151,102 +150,36 @@ describe('Crosshair', () => {
         add: { sprite: vi.fn(() => mockSprite) },
         make: { graphics: vi.fn(() => mockMakeGraphics) },
         input: { activePointer: null },
-        tweens: { add: vi.fn().mockReturnValue(mockTween) },
+        tweens: { add: vi.fn() },
       } as unknown as Phaser.Scene;
 
       const crosshairNoPointer = new Crosshair(sceneNoPointer);
       (mockSprite.setPosition as ReturnType<typeof vi.fn>).mockClear();
 
-      crosshairNoPointer.update(true, 5);
+      crosshairNoPointer.update('Pistol');
 
       expect(mockSprite.setPosition).not.toHaveBeenCalled();
     });
 
     it('should not throw when sprite is null (after destroy)', () => {
       crosshair.destroy();
-      expect(() => crosshair.update(true, 5)).not.toThrow();
+      expect(() => crosshair.update('Pistol')).not.toThrow();
     });
 
-    it('should adjust scale when moving with spread', () => {
-      (mockSprite.setScale as ReturnType<typeof vi.fn>).mockClear();
-      crosshair.update(true, 10);
-      // When isMoving=true and spread=10 (full factor), scale = MOVING_EXPANDED_SCALE = 80/32 = 2.5
-      expect(mockSprite.setScale).toHaveBeenCalledWith(80 / 32);
+    it('should hide crosshair for bat weapon via update', () => {
+      crosshair.update('Bat');
+      expect(crosshair.isVisible()).toBe(false);
     });
 
-    it('should adjust scale when stationary with spread', () => {
-      (mockSprite.setScale as ReturnType<typeof vi.fn>).mockClear();
-      crosshair.update(false, 10);
-      // When isMoving=false and spread=10 (full factor), scale = EXPANDED_SCALE = 60/32 = 1.875
-      expect(mockSprite.setScale).toHaveBeenCalledWith(60 / 32);
+    it('should hide crosshair for katana weapon via update', () => {
+      crosshair.update('Katana');
+      expect(crosshair.isVisible()).toBe(false);
     });
 
-    it('should use BASE_SCALE when stationary with zero spread', () => {
-      (mockSprite.setScale as ReturnType<typeof vi.fn>).mockClear();
-      crosshair.update(false, 0);
-      expect(mockSprite.setScale).toHaveBeenCalledWith(40 / 32);
-    });
-
-    it('should not adjust scale while bloom tween is playing', () => {
-      mockTween.isPlaying.mockReturnValue(true);
-      crosshair.triggerBloom();
-      (mockSprite.setScale as ReturnType<typeof vi.fn>).mockClear();
-
-      crosshair.update(false, 10);
-
-      expect(mockSprite.setScale).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('triggerBloom', () => {
-    it('should snap to EXPANDED_SCALE (60/32) from base', () => {
-      (mockSprite.setScale as ReturnType<typeof vi.fn>).mockClear();
-      crosshair.triggerBloom();
-      expect(mockSprite.setScale).toHaveBeenCalledWith(60 / 32);
-    });
-
-    it('should snap to MOVING_EXPANDED_SCALE (80/32) when already expanded', () => {
-      // First expand the crosshair via update with movement
-      crosshair.update(true, 10);
-      (mockSprite.setScale as ReturnType<typeof vi.fn>).mockClear();
-
-      crosshair.triggerBloom();
-      expect(mockSprite.setScale).toHaveBeenCalledWith(80 / 32);
-    });
-
-    it('should start a tween back to BASE_SCALE', () => {
-      crosshair.triggerBloom();
-      expect(scene.tweens.add).toHaveBeenCalledWith(
-        expect.objectContaining({
-          scaleX: 40 / 32,
-          scaleY: 40 / 32,
-          duration: 250,
-        })
-      );
-    });
-
-    it('should stop existing bloom tween before starting new one', () => {
-      crosshair.triggerBloom();
-      crosshair.triggerBloom();
-      expect(mockTween.stop).toHaveBeenCalled();
-    });
-
-    it('should not throw when sprite is null (after destroy)', () => {
-      crosshair.destroy();
-      expect(() => crosshair.triggerBloom()).not.toThrow();
-    });
-  });
-
-  describe('getCurrentSpreadRadius', () => {
-    it('should return BASE_SIZE / 2 (20) at rest', () => {
-      // BASE_SCALE = 40/32, TEXTURE_SIZE = 32, so radius = (40/32 * 32) / 2 = 20
-      expect(crosshair.getCurrentSpreadRadius()).toBe(20);
-    });
-
-    it('should return larger radius when expanded by movement', () => {
-      crosshair.update(true, 10);
-      // MOVING_EXPANDED_SCALE = 80/32, TEXTURE_SIZE = 32, so radius = 80/2 = 40
-      expect(crosshair.getCurrentSpreadRadius()).toBe(40);
+    it('should show crosshair for pistol via update', () => {
+      crosshair.update('Bat');
+      crosshair.update('Pistol');
+      expect(crosshair.isVisible()).toBe(true);
     });
   });
 
@@ -274,6 +207,13 @@ describe('Crosshair', () => {
     it('should handle katana by hiding crosshair', () => {
       crosshair.setWeaponType('Katana');
       expect(crosshair.isVisible()).toBe(false);
+    });
+
+    it('should show crosshair for ranged weapon after switching from melee', () => {
+      crosshair.setWeaponType('Bat');
+      expect(crosshair.isVisible()).toBe(false);
+      crosshair.setWeaponType('Pistol');
+      expect(crosshair.isVisible()).toBe(true);
     });
   });
 
@@ -303,6 +243,13 @@ describe('Crosshair', () => {
       crosshair.setSpectating(false);
       expect(crosshair.isVisible()).toBe(true);
     });
+
+    it('should not show melee weapon crosshair after exiting spectator mode', () => {
+      crosshair.setWeaponType('Katana');
+      crosshair.setSpectating(true);
+      crosshair.setSpectating(false);
+      expect(crosshair.isVisible()).toBe(false);
+    });
   });
 
   describe('destroy', () => {
@@ -314,35 +261,6 @@ describe('Crosshair', () => {
     it('should handle multiple destroy calls safely', () => {
       crosshair.destroy();
       expect(() => crosshair.destroy()).not.toThrow();
-    });
-
-    it('should stop bloom tween on destroy', () => {
-      crosshair.triggerBloom();
-      crosshair.destroy();
-      expect(mockTween.stop).toHaveBeenCalled();
-    });
-  });
-
-  describe('edge cases', () => {
-    it('should show crosshair for ranged weapon after switching from melee', () => {
-      crosshair.setWeaponType('Bat');
-      expect(crosshair.isVisible()).toBe(false);
-
-      crosshair.setWeaponType('Pistol');
-      expect(crosshair.isVisible()).toBe(true);
-    });
-
-    it('should not show crosshair for ranged weapon when spectating', () => {
-      crosshair.setSpectating(true);
-      crosshair.setWeaponType('Pistol');
-      expect(crosshair.isVisible()).toBe(false);
-    });
-
-    it('should not show melee weapon crosshair after exiting spectator mode', () => {
-      crosshair.setWeaponType('Katana');
-      crosshair.setSpectating(true);
-      crosshair.setSpectating(false);
-      expect(crosshair.isVisible()).toBe(false);
     });
   });
 });
