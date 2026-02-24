@@ -42,6 +42,7 @@ const createMockScene = () => {
     setRotation: ReturnType<typeof vi.fn>;
     setPosition: ReturnType<typeof vi.fn>;
     setVisible: ReturnType<typeof vi.fn>;
+    setScale: ReturnType<typeof vi.fn>;
     destroy: ReturnType<typeof vi.fn>;
     scaleY: number;
     rotation: number;
@@ -124,6 +125,7 @@ const createMockScene = () => {
           setRotation: vi.fn(),
           setPosition: vi.fn(),
           setVisible: vi.fn(),
+          setScale: vi.fn(),
           destroy: vi.fn(),
           scaleY: 1,
           rotation: 0,
@@ -2476,6 +2478,83 @@ describe('PlayerManager', () => {
     });
   });
 
+  describe('BUG-2: Enemy weapon visibility restored on respawn', () => {
+    it('should restore weapon visibility when player respawns after death', () => {
+      const aliveState: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+      playerManager.updatePlayers(aliveState);
+
+      const weaponContainer = mockScene.containers[0];
+      (weaponContainer.setVisible as ReturnType<typeof vi.fn>).mockClear();
+
+      // Player dies — weapon gets hidden
+      const deadState: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, deathTime: 1000 },
+      ];
+      playerManager.updatePlayers(deadState);
+      expect(weaponContainer.setVisible).toHaveBeenCalledWith(false);
+
+      (weaponContainer.setVisible as ReturnType<typeof vi.fn>).mockClear();
+
+      // Player respawns — weapon should be made visible again
+      const respawnState: PlayerState[] = [
+        { id: 'player-1', position: { x: 500, y: 300 }, velocity: { x: 0, y: 0 } },
+      ];
+      playerManager.updatePlayers(respawnState);
+      expect(weaponContainer.setVisible).toHaveBeenCalledWith(true);
+    });
+
+    it('should call resetScale on weapon container when player respawns', () => {
+      const aliveState: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+      playerManager.updatePlayers(aliveState);
+
+      // Player dies
+      const deadState: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, deathTime: 1000 },
+      ];
+      playerManager.updatePlayers(deadState);
+
+      const weaponContainer = mockScene.containers[0];
+      (weaponContainer.setScale as ReturnType<typeof vi.fn>).mockClear();
+
+      // Player respawns
+      const respawnState: PlayerState[] = [
+        { id: 'player-1', position: { x: 500, y: 300 }, velocity: { x: 0, y: 0 } },
+      ];
+      playerManager.updatePlayers(respawnState);
+
+      // Scale should be reset to 1
+      expect(weaponContainer.setScale).toHaveBeenCalledWith(1);
+    });
+
+    it('should restore label visibility when player respawns', () => {
+      const aliveState: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+      playerManager.updatePlayers(aliveState);
+
+      const label = mockScene.texts[0];
+
+      // Player dies — label gets hidden
+      const deadState: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, deathTime: 1000 },
+      ];
+      playerManager.updatePlayers(deadState);
+
+      (label.setVisible as ReturnType<typeof vi.fn>).mockClear();
+
+      // Player respawns — label should be visible
+      const respawnState: PlayerState[] = [
+        { id: 'player-1', position: { x: 500, y: 300 }, velocity: { x: 0, y: 0 } },
+      ];
+      playerManager.updatePlayers(respawnState);
+      expect(label.setVisible).toHaveBeenCalledWith(true);
+    });
+  });
+
   describe('setPlayerVisible', () => {
     it('should hide all elements for a player', () => {
       const playerStates: PlayerState[] = [
@@ -2826,6 +2905,25 @@ describe('PlayerManager', () => {
 
       // Corpse should be destroyed
       expect(corpseGfx.destroy).toHaveBeenCalled();
+    });
+
+    it('should draw yellow circle outline (COLORS.SPAWN_RING) around corpse', () => {
+      const aliveState: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
+      ];
+      playerManager.updatePlayers(aliveState);
+
+      const deadState: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, deathTime: clock.now() },
+      ];
+      playerManager.updatePlayers(deadState);
+
+      const corpseGfx = mockScene.graphicsObjects[mockScene.graphicsObjects.length - 1];
+
+      // Yellow outline circle should be drawn using COLORS.SPAWN_RING (0xFFFF00)
+      expect(corpseGfx.lineStyle).toHaveBeenCalledWith(2, COLORS.SPAWN_RING, 1);
+      // Circle at corpse position with radius 25 (~50px diameter)
+      expect(corpseGfx.strokeCircle).toHaveBeenCalledWith(100, 200, 25);
     });
   });
 

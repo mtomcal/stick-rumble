@@ -76,11 +76,25 @@ describe('PickupNotificationUI', () => {
   });
 
   describe('show()', () => {
-    it('should set text to "Picked up {WEAPON_NAME}"', () => {
+    it('should set text to "Picked up {WEAPON_NAME}" with uppercase weapon name', () => {
       const notification = new PickupNotificationUI(mockScene, 960, 540);
       notification.show('AK47');
 
       expect(mockText.setText).toHaveBeenCalledWith('Picked up AK47');
+    });
+
+    it('should uppercase weapon name when showing notification', () => {
+      const notification = new PickupNotificationUI(mockScene, 960, 540);
+      notification.show('pistol');
+
+      expect(mockText.setText).toHaveBeenCalledWith('Picked up PISTOL');
+    });
+
+    it('should uppercase mixed case weapon names', () => {
+      const notification = new PickupNotificationUI(mockScene, 960, 540);
+      notification.show('Katana');
+
+      expect(mockText.setText).toHaveBeenCalledWith('Picked up KATANA');
     });
 
     it('should make text visible with full alpha', () => {

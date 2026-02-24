@@ -208,6 +208,27 @@ describe('ProceduralWeaponGraphics', () => {
     });
   });
 
+  describe('BUG-2: Enemy Weapon Visibility — resetScale', () => {
+    it('should call container.setScale(1) to restore full weapon size', () => {
+      const weapon = new ProceduralWeaponGraphics(scene, 100, 100, 'Pistol');
+      weapon.resetScale();
+
+      expect(container.setScale).toHaveBeenCalledWith(1);
+    });
+
+    it('should reset scale to 1:1 after reload pulse shrinks it', () => {
+      // Simulate reload pulse leaving scaleX/scaleY at 0.8
+      (scene.tweens.add as ReturnType<typeof vi.fn>).mockImplementation(() => ({}));
+      const weapon = new ProceduralWeaponGraphics(scene, 100, 100, 'Pistol');
+      weapon.triggerReloadPulse();
+
+      // Now reset scale (as done when player respawns)
+      weapon.resetScale();
+
+      expect(container.setScale).toHaveBeenCalledWith(1);
+    });
+  });
+
   describe('TS-GFX-020: Reload animation pulses', () => {
     it('should create tween targeting the container with alpha exactly 0.5', () => {
       const weapon = new ProceduralWeaponGraphics(scene, 100, 100, 'Pistol');

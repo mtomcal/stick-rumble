@@ -34,7 +34,7 @@ export class PickupNotificationUI {
    * Fades out after ~2 seconds.
    */
   show(weaponName: string): void {
-    this.text.setText(`Picked up ${weaponName}`);
+    this.text.setText(`Picked up ${weaponName.toUpperCase()}`);
     this.text.setAlpha(1);
     this.text.setVisible(true);
 

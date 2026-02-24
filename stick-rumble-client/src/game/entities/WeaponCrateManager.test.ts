@@ -87,7 +87,7 @@ describe('WeaponCrateManager', () => {
       expect(mockSprite.strokeCircle).toHaveBeenCalledWith(0, 0, 20);
     });
 
-    it('should draw dark cross icon inside circle', () => {
+    it('should draw yellow ⊕ cross icon inside circle using COLORS.WEAPON_CRATE', () => {
       const crateData: WeaponCrateData = {
         id: 'crate_uzi_1',
         position: { x: 500, y: 600 },
@@ -97,11 +97,27 @@ describe('WeaponCrateManager', () => {
 
       manager.spawnCrate(crateData);
 
+      // Cross icon: yellow color (COLORS.WEAPON_CRATE), not dark
+      expect(mockSprite.lineStyle).toHaveBeenCalledWith(2, COLORS.WEAPON_CRATE, 1);
       // Cross icon: vertical and horizontal lines
       expect(mockSprite.moveTo).toHaveBeenCalledWith(0, -8);
       expect(mockSprite.lineTo).toHaveBeenCalledWith(0, 8);
       expect(mockSprite.moveTo).toHaveBeenCalledWith(-8, 0);
       expect(mockSprite.lineTo).toHaveBeenCalledWith(8, 0);
+    });
+
+    it('should NOT use dark/black color for cross icon', () => {
+      const crateData: WeaponCrateData = {
+        id: 'crate_uzi_1',
+        position: { x: 500, y: 600 },
+        weaponType: 'uzi',
+        isAvailable: true,
+      };
+
+      manager.spawnCrate(crateData);
+
+      // Old dark cross (0x000000) must NOT be used
+      expect(mockSprite.lineStyle).not.toHaveBeenCalledWith(2, 0x000000, expect.anything());
     });
 
     it('should NOT use old brown rectangle for crate', () => {
