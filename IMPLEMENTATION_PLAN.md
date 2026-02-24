@@ -1,648 +1,694 @@
-# Art Style Implementation Plan — Code Changes
+# Implementation Plan: Spec Corrections Build-Out
 
-> Goal: Bring client/server code into compliance with updated spec documents (art style alignment).
-> Specs were updated in branch `ralph/art-style-specs` (merged 2026-02-18). Code has NOT been updated yet.
-> Generated: 2026-02-18
-
----
-
-## Executive Summary
-
-The spec documents now describe 60 visual changes to match the prototype art style. The source code still reflects old designs. This plan maps each spec change to concrete code modifications: exact file paths, line numbers, what to change, and dependencies.
-
-**Scope:** ~25 files modified, ~9 new files created, across 6 phases.
+> **Created**: 2026-02-24
+> **Status**: DRAFT — Awaiting approval
+> **Scope**: 17 items (9 bug fixes + 8 feature changes) from spec corrections commit `06e471a`
+> **Affected Code**: Client-side only (`stick-rumble-client/src/`)
 
 ---
 
-## Phase 0: Foundation (Constants & Config)
+## Table of Contents
 
-> Must land first — nearly every other change imports COLORS or depends on renamed constants.
+1. [Change Inventory](#1-change-inventory)
+2. [Agent Team Topology](#2-agent-team-topology)
+3. [Test Quality Verifier Sub-Agent](#3-test-quality-verifier-sub-agent)
+4. [Worktree Isolation Strategy](#4-worktree-isolation-strategy)
+5. [Phase 0 — Constants Foundation](#5-phase-0--constants-foundation)
+6. [Phase 1 — Parallel Agent Execution](#6-phase-1--parallel-agent-execution)
+7. [Phase 2 — Merge & Verify](#7-phase-2--merge--verify)
+8. [Detailed Acceptance Criteria by Agent](#8-detailed-acceptance-criteria-by-agent)
+9. [Risk Mitigation](#9-risk-mitigation)
 
-### Task 0.1: Add COLORS constant group to shared/constants.ts
+---
 
-**Spec changes covered:** #45
-**File:** `stick-rumble-client/src/shared/constants.ts` (lines 1-98, no COLORS exist)
-**Action:** Add `COLORS` export with all 22 prototype palette values:
+## 1. Change Inventory
 
-```typescript
-export const COLORS = {
-  BACKGROUND: 0xC8CCC8,
-  GRID_LINE: 0xD8DCD8,
-  PLAYER_HEAD: 0x2A2A2A,
-  ENEMY_HEAD: 0xFF0000,
-  DEAD_HEAD: 0x888888,
-  BODY: 0x000000,
-  HEALTH_FULL: 0x00CC00,
-  HEALTH_CRITICAL: 0xFF0000,
-  HEALTH_DEPLETED_BG: 0x333333,
-  AMMO_READY: 0xE0A030,
-  AMMO_RELOADING: 0xCC5555,
-  SCORE: 0xFFFFFF,
-  KILL_COUNTER: 0xFF6666,
-  DEBUG_OVERLAY: 0x00FF00,
-  CHAT_SYSTEM: 0xBBA840,
-  MUZZLE_FLASH: 0xFFD700,
-  BULLET_TRAIL: 0xFFA500,
-  DAMAGE_NUMBER: 0xFF4444,
-  BLOOD: 0xCC3333,
-  SPAWN_RING: 0xFFFF00,
-  DAMAGE_FLASH: 0xFF0000,
-  HIT_CHEVRON: 0xCC3333,
-  WEAPON_CRATE: 0xCCCC00,
-} as const;
+### Bug Fixes (code doesn't match spec)
+
+| ID | Bug | Spec | Severity | Agent |
+|----|-----|------|----------|-------|
+| BUG-1 | Floor grid not rendering — flat gray background, no grid lines visible | `arena.md` | Medium | B |
+| BUG-2 | Enemy weapons nearly invisible (render as tiny nubs instead of full-sized) | `graphics.md` | High | A |
+| BUG-3 | Score display shows 7 digits (should be 6-digit zero-padded) | `ui.md` | Low | B |
+| BUG-4 | Minimap dots escape bounds (not clamped to minimap area) | `ui.md` | Medium | B |
+| BUG-5 | Minimap overlaps HUD elements below it (health bar, ammo, debug text) | `ui.md` | Medium | B |
+| BUG-6 | Minimap border gray instead of teal `0x00CCCC` | `ui.md` | Low | B |
+| BUG-7 | Debug/ammo text overlaps minimap — should sit below it | `ui.md` | Low | B |
+| BUG-8 | Chat log is opaque — should be semi-transparent (`#808080` at 70% opacity) | `ui.md` | Low | B |
+| BUG-9 | Weapon crate pickup text lowercase (should be uppercase weapon name) | `weapons.md` | Low | A |
+
+### Feature Changes (spec changed, code needs updating)
+
+| ID | Change | From → To | Agent |
+|----|--------|-----------|-------|
+| FEAT-1 | Aim line → Hit confirmation trail | Continuous aim line from player to cursor → event-driven trail on `hit:confirmed`, barrel→target, 300ms linger + 200ms fade | A |
+| FEAT-2 | Crosshair bloom removed | Dynamic 40→80px expansion on fire → fixed ~20px `⊕` reticle, no bloom, no spread vis | A |
+| FEAT-3 | Minimap circular → square | `fillCircle`/`strokeCircle` → `fillRect`/`strokeRect`, teal border | B |
+| FEAT-4 | Reload circle → player-centered arc | Screen-center circle at depth 1002 → world-space arc on player body, 25px radius, green, clockwise sweep | B |
+| FEAT-5 | Weapon crate icon updated | Dark cross inside circle → yellow `⊕` symbol inside circle | A |
+| FEAT-6 | Death corpse yellow outline | No outline → ~50px yellow circle stroke around corpse | A |
+| FEAT-7 | Reticle constants simplified | Remove center dot color, dot radius, tick length constants | Phase 0 |
+| FEAT-8 | New constants added | `HIT_TRAIL_*`, `RELOAD_ARC_*`, `MINIMAP_BORDER_*`, 3 new COLORS entries | Phase 0 |
+
+---
+
+## 2. Agent Team Topology
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                  MERGE SHEPHERD (Opus)                   │
+│                                                         │
+│  Responsibilities:                                      │
+│  - Phase 0: Update constants.ts on main                 │
+│  - Spawn Phase 0 verifier gate                          │
+│  - Create worktrees + branches                          │
+│  - Launch Worker agents into worktrees                  │
+│  - Monitor progress via task list                       │
+│  - Merge branches back to main                          │
+│  - Run final verification (make test/lint/type)         │
+│  - Spawn Phase 2 final verifier gate (Opus, 3 passes)  │
+│  - Resolve any merge conflicts                          │
+│  - Cleanup worktrees                                    │
+└──────────┬──────────────────┬───────────────────────────┘
+           │                  │
+     ┌─────▼──────┐    ┌─────▼──────┐
+     │ WORKER A   │    │ WORKER B   │
+     │ (Sonnet)   │    │ (Sonnet)   │
+     │            │    │            │
+     │ Visual     │    │ UI Bugs    │
+     │ Systems    │    │ & Layout   │
+     │            │    │            │
+     │ Worktree:  │    │ Worktree:  │
+     │ wt-visual  │    │ wt-ui      │
+     │            │    │            │
+     │ Branch:    │    │ Branch:    │
+     │ fix/visual │    │ fix/ui     │
+     │            │    │            │
+     │ ┌────────┐ │    │ ┌────────┐ │
+     │ │VERIFIER│ │    │ │VERIFIER│ │
+     │ │(Sonnet)│ │    │ │(Sonnet)│ │
+     │ │3 passes│ │    │ │3 passes│ │
+     │ └────────┘ │    │ └────────┘ │
+     └────────────┘    └────────────┘
+
+     Phase 0 Verifier    Phase 2 Final Verifier
+     (Sonnet, 3 passes)  (Opus, 3 passes)
+     ── spawned by Shepherd at each gate ──
 ```
 
-**Complexity:** Simple
-**Tests:** Add/update constants test to verify COLORS object exists with all keys.
+### Model Assignment Rationale
+
+| Role | Model | Why |
+|------|-------|-----|
+| Merge Shepherd | **Opus** | Orchestration, merge conflict resolution, judgment calls, final verification |
+| Worker A (Visual Systems) | **Sonnet** | Mechanical code changes with clear specs — cost-effective for focused file edits |
+| Worker B (UI Bugs & Layout) | **Sonnet** | Mechanical code changes with clear specs — cost-effective for focused file edits |
+| Verifier (Phase 0, A, B) | **Sonnet** | Pattern-matching anti-pattern scans, scoped to branch diff — cost-effective |
+| Verifier (Phase 2 Final) | **Opus** | Full merged codebase audit, needs judgment for cross-branch interaction quality |
+
+### Cost Estimate
+
+| Agent | Model | Est. Turns | Est. Cost |
+|-------|-------|-----------|-----------|
+| Merge Shepherd | Opus | ~15-20 | ~$3-5 |
+| Worker A | Sonnet | ~30-40 | ~$1-2 |
+| Worker B | Sonnet | ~30-40 | ~$1-2 |
+| Verifiers (3× Sonnet) | Sonnet | ~10-15 each | ~$1-2 total |
+| Final Verifier (1× Opus) | Opus | ~10-15 | ~$1-2 |
+| **Total** | | | **~$7-13** |
 
 ---
 
-### Task 0.2: Add MINIMAP constants + rename HEALTH_BAR_WIDTH
+## 3. Test Quality Verifier Sub-Agent
 
-**Spec changes covered:** #46, #47
-**File:** `stick-rumble-client/src/shared/constants.ts`
-**Action:**
-- Add `MINIMAP` constant group: `{ SIZE: 170, SCALE: 0.106, RADAR_RANGE: 600, BG_COLOR: 0x3A3A3A, BORDER_COLOR: 0x00CCCC }`
-- Rename `PLAYER.HEALTH_BAR_WIDTH` → `PLAYER.PLAYER_HEALTH_BAR_WIDTH` (if exists)
-- Add `PLAYER.HUD_HEALTH_BAR_WIDTH = 200`
-- Update all references to the renamed constant
+### Purpose
 
-**Complexity:** Simple
-**Tests:** Update constants tests.
+The **test-quality-verifier** is a sub-agent spawned by the Merge Shepherd (or by workers at phase boundaries) to audit test code quality. It runs **3 passes** at every phase checkpoint to catch regressions before they compound.
 
----
+### What It Checks (Per Pass)
 
-### Task 0.3: Update GameConfig background color
+Each pass focuses on a different quality dimension:
 
-**Spec changes covered:** #48
-**File:** `stick-rumble-client/src/game/config/GameConfig.ts` (or equivalent config file) line 9
-**Action:** Change `backgroundColor: '#282c34'` → `'#C8CCC8'`
-**Complexity:** Trivial
+#### Pass 1: Anti-Pattern Detection
+Scan all modified/created test files for:
+- [ ] **Vague assertions**: Standalone `toBeDefined()`, `toBeTruthy()`, `toBeFalsy()` not guarding a more specific assertion
+- [ ] **Missing argument checks**: `toHaveBeenCalled()` without corresponding `toHaveBeenCalledWith()` in the same test or describe block
+- [ ] **Empty test bodies**: `it('...', () => {})` with no assertions
+- [ ] **TODO/FIXME/SKIP markers**: `it.skip(...)`, `xit(...)`, `// TODO` inside test files
+- [ ] **Overly broad matchers**: `toMatchObject({})` with empty objects, `expect(result).toBe(true)` when testing non-booleans
+- [ ] **Magic numbers in assertions**: Inline hex values or numeric literals that should reference constants
 
----
+#### Pass 2: Coverage & Completeness
+Verify that tests actually cover the changes:
+- [ ] **Every modified source file** has corresponding test assertions that exercise the changed behavior
+- [ ] **New code paths** (e.g., hit trail linger→fade, crosshair melee hide) have at least one test
+- [ ] **Removed features** (e.g., bloom, aim line) have their old test assertions updated or removed — no stale tests passing vacuously
+- [ ] **Edge cases from acceptance criteria** are tested (e.g., off-screen hit trail, melee crosshair hidden, dot clamping at minimap bounds)
+- [ ] **Constants usage**: Tests reference imported constants, not hardcoded values
 
-### Task 0.4: Add isInvulnerable to client PlayerState interface
+#### Pass 3: Structural Quality
+Check test organization and maintainability:
+- [ ] **Descriptive test names**: `it('should ...')` format, not `it('test 1')`
+- [ ] **Proper setup/teardown**: `beforeEach`/`afterEach` used where fixtures repeat
+- [ ] **No test interdependence**: Tests don't rely on execution order or shared mutable state
+- [ ] **Assertion density**: Each `it()` block has at least 1 meaningful assertion
+- [ ] **No console.log/debug output** left in test files
 
-**Spec changes covered:** #56
-**File:** `stick-rumble-client/src/game/entities/PlayerManager.ts` lines 13-28 (PlayerState interface)
-**Action:** Add `isInvulnerable?: boolean` and `invulnerabilityEndTime?: number`
-**Note:** Server already has these fields (`stick-rumble-server/internal/game/player.go` lines 54-55)
-**Complexity:** Trivial
+### Invocation
 
----
+The verifier is spawned as a `general-purpose` sub-agent with this prompt template:
 
-### Task 0.5: Add projectile shape + tracerLength to weapon config interfaces
+```
+You are the test-quality-verifier. Audit ALL test files that were modified or
+created in the current phase. Run three passes:
 
-**Spec changes covered:** #42 (partial), #44 (partial)
-**File:** `stick-rumble-client/src/shared/weaponConfig.ts` lines 6-18
-**Action:**
-- Add `shape: 'chevron' | 'circle'` and `tracerLength: number` to `ProjectileVisuals` interface
-- Add `muzzleFlashShape: 'starburst' | 'circle'` to `WeaponVisuals` interface
-- Update all hardcoded weapon fallback defaults (lines 106-262) with new fields
-**Complexity:** Simple
+PASS 1 — Anti-Pattern Detection: Look for vague assertions, empty tests,
+TODO/SKIP markers, magic numbers, overly broad matchers.
 
----
+PASS 2 — Coverage & Completeness: Verify every source change has corresponding
+test coverage. Check for stale tests from removed features. Verify edge cases
+from acceptance criteria are tested.
 
-## Phase 1: Trivial Color/Value Fixes (One-Line Changes)
+PASS 3 — Structural Quality: Check test names, setup/teardown, independence,
+assertion density, no debug output.
 
-> Each is a single constant/color swap. Can be done in any order after Phase 0.
+WORKING DIRECTORY: {worktree_path}
+SCOPE: Only test files changed in the last N commits on this branch.
 
-### Task 1.1: Arena background color
+For each finding, report:
+- File and line number
+- Which pass caught it (1/2/3)
+- Severity: ERROR (must fix) or WARNING (should fix)
+- Suggested fix
 
-**Spec changes covered:** #17
-**File:** `stick-rumble-client/src/game/scenes/GameScene.ts` line 74
-**Action:** Change `0x222222` → `COLORS.BACKGROUND` (0xC8CCC8)
-**Complexity:** Trivial
+If all three passes are clean, report: "VERIFIER PASS — 0 errors, 0 warnings"
+```
 
-### Task 1.2: Grid line color
+### When It Runs (3× Per Phase Checkpoint)
 
-**Spec changes covered:** #18
-**File:** `stick-rumble-client/src/game/scenes/GameScene.ts` line 83
-**Action:** Change `0xb0bec5` → `COLORS.GRID_LINE` (0xD8DCD8)
-**Complexity:** Trivial
+| Checkpoint | Who Spawns It | Scope | Blocking? |
+|------------|---------------|-------|-----------|
+| **Phase 0 complete** | Merge Shepherd | `constants.ts` and any test files touching constants | Yes — must pass before creating worktrees |
+| **Worker A complete** | Worker A (or Shepherd) | All test files in `wt-visual` branch diff | Yes — must pass before Worker A signals done |
+| **Worker B complete** | Worker B (or Shepherd) | All test files in `wt-ui` branch diff | Yes — must pass before Worker B signals done |
+| **Phase 2 post-merge** | Merge Shepherd | ALL test files changed across both branches on merged `main` | Yes — must pass before declaring job complete |
 
-### Task 1.3: World-space health bar background
+**Each checkpoint = 3 verifier passes.** If any pass returns ERRORs, the responsible agent fixes them and re-runs the verifier until clean.
 
-**Spec changes covered:** #10
-**File:** `stick-rumble-client/src/game/entities/HealthBar.ts` lines 63-66
-**Action:** Change `0x888888` → `COLORS.HEALTH_DEPLETED_BG` (0x333333)
-**Complexity:** Trivial
+### Verifier Model
 
-### Task 1.4: Blood particle color
-
-**Spec changes covered:** #13, #37 (partial)
-**File:** `stick-rumble-client/src/game/entities/HitEffectManager.ts` line 249
-**Action:** Change `0xCC0000` → `COLORS.BLOOD` (0xCC3333). Also increase particle count from 5 to 6-10 (line 247).
-**Complexity:** Trivial
-
-### Task 1.5: Hit direction indicator color
-
-**Spec changes covered:** #14, #36 (partial)
-**File:** `stick-rumble-client/src/game/scenes/GameSceneUI.ts` line 435
-**Action:** Change `indicator.setTint(0xff0000)` → `indicator.setTint(COLORS.HIT_CHEVRON)` (0xCC3333)
-**Complexity:** Trivial
-
-### Task 1.6: Muzzle flash color constant
-
-**Spec changes covered:** #15
-**File:** `stick-rumble-client/src/game/entities/HitEffectManager.ts` line 40
-**Action:** Change `MUZZLE_COLOR = 0xffa500` → `COLORS.MUZZLE_FLASH` (0xFFD700)
-**Complexity:** Trivial
-
-### Task 1.7: Weapon crate respawn glow visible
-
-**Spec changes covered:** #16
-**File:** `stick-rumble-client/src/game/entities/WeaponCrateManager.ts` line 98
-**Action:** Change `crate.glow.setVisible(false)` → `crate.glow.setAlpha(UNAVAILABLE_ALPHA)` (keep visible, just faded)
-**Complexity:** Trivial
-
-### Task 1.8: Pistol tracer color
-
-**Spec changes covered:** #43
-**File:** `stick-rumble-client/src/shared/weaponConfig.ts` line 127
-**Action:** Change `tracerColor: '0xffff00'` → `'0xffaa00'`
-**Also:** Update both `weapon-configs.json` files (root + `stick-rumble-client/public/`) — add `projectile` sub-object to each weapon if missing.
-**Complexity:** Low
-
-### Task 1.9: Muzzle flash duration (Pistol)
-
-**Spec changes covered:** #44 (partial)
-**Files:** `stick-rumble-client/src/shared/weaponConfig.ts` line 123, both `weapon-configs.json` copies
-**Action:** Change Pistol `muzzleFlashDuration: 50` → `33`
-**Complexity:** Trivial
-
-### Task 1.10: Damage number color
-
-**Spec changes covered:** #35 (partial)
-**File:** `stick-rumble-client/src/game/scenes/GameSceneUI.ts` line 379
-**Action:** Change non-kill damage number color from `'#ffffff'` → `'#FF4444'` (COLORS.DAMAGE_NUMBER). Adjust timing from 800ms→600ms and float distance from 50px→40px.
-**Complexity:** Low
+| Verifier Instance | Model | Rationale |
+|-------------------|-------|-----------|
+| Phase 0 verifier | **Sonnet** | Small scope (constants only), mechanical checks |
+| Worker A verifier | **Sonnet** | Scoped to worker's branch, pattern matching |
+| Worker B verifier | **Sonnet** | Scoped to worker's branch, pattern matching |
+| Phase 2 final verifier | **Opus** | Full merged codebase, needs judgment for cross-branch interactions |
 
 ---
 
-## Phase 2: Small Modifications to Existing Files
+## 4. Worktree Isolation Strategy
 
-> Targeted changes to existing methods. 1-2 hours each.
+### Why Worktrees?
 
-### Task 2.1: Player head-only color distinction
+Git worktrees give each agent its own **physical directory** with its own **branch checkout**. Agents can edit files in parallel without:
+- Overwriting each other's uncommitted changes
+- Triggering branch checkout conflicts
+- Accidentally committing to the wrong branch
 
-**Spec changes covered:** #1
-**File:** `stick-rumble-client/src/game/entities/ProceduralPlayerGraphics.ts` lines 61-121
-**Action:**
-- Add `headColor: number` and `bodyColor: number` constructor params (replace single `color`)
-- Lines 61, 85, 99: Change `this.color` → `this.bodyColor` (0x000000 for all players)
-- Lines 118-121: Change `this.color` → `this.headColor` (local 0x2A2A2A, enemy 0xFF0000, dead 0x888888)
-**Also:** `PlayerManager.ts` — update caller to pass headColor/bodyColor instead of single color
-**Complexity:** Small-Medium
-**Tests:** Update `ProceduralPlayerGraphics.test.ts`
+### Setup (Merge Shepherd executes AFTER Phase 0)
 
-### Task 2.2: Crosshair shape — white "+" in circle
+```bash
+# From project root /home/mtomcal/code/stick-rumble-specs/
 
-**Spec changes covered:** #2, #32
-**File:** `stick-rumble-client/src/game/entities/Crosshair.ts` lines 36-57
-**Action in `generateReticleTexture()`:**
-- Remove cardinal tick marks (lines 44-49)
-- Remove red center dot (lines 51-53)
-- Add vertical bar: `moveTo(16, 6); lineTo(16, 26)`
-- Add horizontal bar: `moveTo(6, 16); lineTo(26, 16)`
-**Complexity:** Small
-**Tests:** Update `Crosshair.test.ts`
+# Phase 0: constants update committed to main first (see Section 4)
 
-### Task 2.3: Health bar 2-tier thresholds + percentage format
+# Create isolated worktrees branching from updated main
+git worktree add /home/mtomcal/code/wt-visual -b fix/visual-systems
+git worktree add /home/mtomcal/code/wt-ui -b fix/ui-bugs
+```
 
-**Spec changes covered:** #11, #12, #22
-**File 1:** `stick-rumble-client/src/game/ui/HealthBarUI.ts` lines 82-91
-**Action:**
-- Replace 3-tier color logic (green>60%/yellow>30%/red) with 2-tier (green≥20%/red<20%)
-- Change text format from `"${health}/${maxHealth}"` → `"${Math.round(ratio*100)}%"`
-- Add EKG heartbeat icon graphics object to left of bar (new rendering)
-**File 2:** `stick-rumble-client/src/game/entities/HealthBar.ts` line 71
-**Action:** Apply same 2-tier threshold logic (was always green)
-**Complexity:** Medium
-**Tests:** Update `HealthBarUI.test.ts`, `HealthBar.test.ts`
+### File Ownership Rules (STRICT — NO OVERLAP)
 
-### Task 2.4: Ammo counter rework
+**Worker A owns these files** (working in `/home/mtomcal/code/wt-visual/`):
 
-**Spec changes covered:** #23
-**File:** Locate ammo display in `GameSceneUI.ts` or related UI file
-**Action:**
-- Add crosshair icon (yellow/orange `COLORS.AMMO_READY` when ready; red spinner when reloading)
-- Change ammo text color to `COLORS.AMMO_READY` (#E0A030) when ready
-- Add "RELOADING..." text in `COLORS.AMMO_RELOADING` (#CC5555) during reload
-- Add "INF" display for fist/infinite-ammo weapons
-- Hide ammo counter for melee weapons
-**Complexity:** Medium
-**Tests:** Update relevant ammo display tests
+| File | Path (relative to worktree root) | Changes |
+|------|----------------------------------|---------|
+| AimLine.ts | `stick-rumble-client/src/game/entities/AimLine.ts` | Rewrite as hit confirmation trail |
+| Crosshair.ts | `stick-rumble-client/src/game/entities/Crosshair.ts` | Simplify, remove bloom |
+| WeaponCrateManager.ts | `stick-rumble-client/src/game/entities/WeaponCrateManager.ts` | Update icon + uppercase text |
+| PlayerManager.ts | `stick-rumble-client/src/game/entities/PlayerManager.ts` | Death corpse yellow outline |
+| ProceduralWeaponGraphics.ts | `stick-rumble-client/src/game/entities/ProceduralWeaponGraphics.ts` | Fix enemy weapon scale |
+| GameSceneEventHandlers.ts | `stick-rumble-client/src/game/scenes/GameSceneEventHandlers.ts` | Wire hit:confirmed → trail |
+| GameScene.ts | `stick-rumble-client/src/game/scenes/GameScene.ts` | Update AimLine refs → HitTrail (**entity setup section ONLY**) |
+| PickupNotificationUI.ts | `stick-rumble-client/src/game/ui/PickupNotificationUI.ts` | Uppercase weapon names |
 
-### Task 2.5: Damage screen flash — replace camera.flash with overlay
+**Worker B owns these files** (working in `/home/mtomcal/code/wt-ui/`):
 
-**Spec changes covered:** #9, #33, #38
-**File:** `stick-rumble-client/src/game/scenes/GameSceneUI.ts` lines 86-88, 315-317
-**Action:**
-- Fill in `createDamageFlashOverlay()` no-op stub (line 86-88) with actual red rectangle
-- Replace `showDamageFlash()` body: remove `cameras.main.flash(100, 128, 0, 0)`, add full-viewport `Phaser.GameObjects.Rectangle` at depth 999, `COLORS.DAMAGE_FLASH` alpha 0.35, tween alpha→0 over 300ms
-**Note:** `GameScene.ts` already calls `createDamageFlashOverlay()` at line 133 — just needs the no-op filled in.
-**Complexity:** Low
-**Tests:** Update `GameSceneUI.test.ts`
+| File | Path (relative to worktree root) | Changes |
+|------|----------------------------------|---------|
+| GameSceneUI.ts | `stick-rumble-client/src/game/scenes/GameSceneUI.ts` | Minimap (square, clamp, border), reload arc |
+| GameScene.ts | `stick-rumble-client/src/game/scenes/GameScene.ts` | Fix floor grid rendering (**renderArena section ONLY**) |
+| ScoreDisplayUI.ts | `stick-rumble-client/src/game/ui/ScoreDisplayUI.ts` | Fix 7→6 digit padding |
+| DebugOverlayUI.ts | `stick-rumble-client/src/game/ui/DebugOverlayUI.ts` | Reposition below minimap |
+| ChatLogUI.ts | `stick-rumble-client/src/game/ui/ChatLogUI.ts` | Semi-transparent background |
 
-### Task 2.6: Hit direction indicator timing
+### Conflict Zone: `GameScene.ts`
 
-**Spec changes covered:** #36 (timing)
-**File:** `stick-rumble-client/src/game/scenes/GameSceneUI.ts` lines 436-440
-**Action:** Replace simple fade tween with 3-phase: fade-in 100ms → hold 300ms → fade-out 200ms (total ~600ms)
-**Complexity:** Low
-**Tests:** Update `GameSceneUI.test.ts`
+Both agents touch `GameScene.ts` but in **different sections**:
+- **Worker A**: Entity initialization section (AimLine → HitTrail references)
+- **Worker B**: `renderArena()` / grid rendering method
 
-### Task 2.7: Weapon crate visual — yellow circle
+**Mitigation**: Merge Shepherd reviews both diffs before merging. If edits are in the same hunk, Shepherd resolves manually.
 
-**Spec changes covered:** #3
-**File:** `stick-rumble-client/src/game/entities/WeaponCrateManager.ts` lines 1-63
-**Action:**
-- Remove brown rectangle (`sprite`) creation (lines 43-50)
-- Replace with `Phaser.GameObjects.Graphics` drawing yellow circle outline (~40px diameter, `COLORS.WEAPON_CRATE`) with small dark cross icon inside
-- Update `CrateVisual` interface to use Graphics instead of Rectangle
-- Update bobbing tween target from `sprite` → new graphics object
-**Complexity:** Medium
-**Tests:** Update `WeaponCrateManager.test.ts`
+### Merge Order (Merge Shepherd executes)
 
-### Task 2.8: Minimap rework — size, shape, colors
+```bash
+# From main branch in primary worktree
+git merge fix/visual-systems --no-ff -m "feat: Visual systems corrections (hit trail, crosshair, crate icon, corpse, enemy weapons)"
+git merge fix/ui-bugs --no-ff -m "fix: UI bugs (minimap, grid, score, reload arc, debug overlay, chat)"
 
-**Spec changes covered:** #29 (partial)
-**File:** `stick-rumble-client/src/game/scenes/GameSceneUI.ts` lines 459-533
-**Action:**
-- Line 460: `scale = 0.075` → `MINIMAP.SCALE` (0.106)
-- Line 463: `mapSize = 1600 * scale` → `MINIMAP.SIZE` (170)
-- Line 471: `fillStyle(0x000000, 0.7)` → `fillStyle(MINIMAP.BG_COLOR, 0.5)`
-- Line 472: `fillRect(...)` → `fillCircle(...)` (circular shape)
-- Line 475: `lineStyle(2, 0xffffff, 0.5)` → `lineStyle(2, MINIMAP.BORDER_COLOR, 1)` (teal)
-- Line 476: `strokeRect(...)` → `strokeCircle(...)`
-- Lines 491-492: Update scale references
-**Complexity:** Medium
-**Tests:** Update minimap tests in `GameSceneUI.test.ts`
+# Cleanup
+git worktree remove /home/mtomcal/code/wt-visual
+git worktree remove /home/mtomcal/code/wt-ui
+git branch -d fix/visual-systems fix/ui-bugs
+```
 
 ---
 
-## Phase 3: New UI Component Classes
+## 5. Phase 0 — Constants Foundation
 
-> Independent of each other, but all depend on Phase 0 constants. Can be done in parallel.
+**Executor**: Merge Shepherd (Opus), directly on `main`
+**Duration**: ~5 minutes
+**MUST complete before creating worktrees** (so worktrees inherit the changes)
 
-### Task 3.1: ScoreDisplayUI (new file)
+### Checklist
 
-**Spec changes covered:** #24
-**New file:** `stick-rumble-client/src/game/ui/ScoreDisplayUI.ts`
-**Spec:** 6-digit zero-padded (`String(score).padStart(6, '0')`), monospaced ~28px, white `COLORS.SCORE`, top-right corner, depth 1000.
-**Integration:** Instantiate in `GameScene.ts`. Update on `player:kill_credit` in `GameSceneEventHandlers.ts` lines 472-491 (currently only logs). Score = killerXP.
-**Complexity:** Simple
-**Tests:** Create `ScoreDisplayUI.test.ts`
+- [ ] **FEAT-7**: Remove these constants from `constants.ts`:
+  - `RETICLE_CENTER_DOT_COLOR`
+  - `RETICLE_CENTER_DOT_RADIUS`
+  - `RETICLE_TICK_LENGTH`
+- [ ] **FEAT-8**: Add to `COLORS` object:
+  ```typescript
+  HIT_TRAIL: 0xFFFFFF,
+  MINIMAP_BORDER: 0x00CCCC,
+  RELOAD_ARC: 0x00FF00,
+  ```
+- [ ] **FEAT-8**: Add Hit Confirmation Trail constants section:
+  ```typescript
+  export const HIT_TRAIL = {
+    COLOR: 0xFFFFFF,
+    STROKE: 1,
+    ALPHA: 0.8,
+    LINGER_DURATION: 300,   // ms
+    FADE_DURATION: 200,     // ms
+    DEPTH: 40,
+  } as const;
+  ```
+- [ ] **FEAT-8**: Add Reload Arc constants section:
+  ```typescript
+  export const RELOAD_ARC = {
+    RADIUS: 25,
+    STROKE: 3,
+    COLOR: 0x00FF00,
+    START_ANGLE: 270,       // degrees (top of circle)
+    DEPTH: 45,
+  } as const;
+  ```
+- [ ] **FEAT-8**: Add Minimap Border constants (if not already present):
+  ```typescript
+  // Inside existing MINIMAP object or as additions:
+  BORDER_COLOR: 0x00CCCC,
+  BORDER_STROKE: 2,
+  ```
+- [ ] Commit: `"feat: Update constants for spec corrections (hit trail, reload arc, minimap border)"`
+- [ ] Verify: `make typecheck` passes (no broken references to removed constants)
 
-### Task 3.2: KillCounterUI (new file)
+### Phase 0 Verification Gate
 
-**Spec changes covered:** #25
-**New file:** `stick-rumble-client/src/game/ui/KillCounterUI.ts`
-**Spec:** `"KILLS: N"`, color `COLORS.KILL_COUNTER` (#FF6666), ~16px, right-aligned, below score display.
-**Integration:** Same as ScoreDisplayUI — wire into `player:kill_credit` handler.
-**Complexity:** Simple
-**Tests:** Create `KillCounterUI.test.ts`
+After committing, run the test-quality-verifier (3 passes) on any test files that reference constants:
 
-### Task 3.3: ChatLogUI (new file)
+- [ ] **Verifier Pass 1** (Anti-Pattern Detection): Scan constants test files for magic numbers, vague assertions
+- [ ] **Verifier Pass 2** (Coverage & Completeness): Verify new constants (HIT_TRAIL, RELOAD_ARC, MINIMAP border) have test coverage; verify removed constants have no stale test assertions
+- [ ] **Verifier Pass 3** (Structural Quality): Check test names, no debug output, proper assertions
+- [ ] All 3 passes clean (0 errors) → proceed to create worktrees
+- [ ] If errors found → fix and re-run until clean
 
-**Spec changes covered:** #26
-**New file:** `stick-rumble-client/src/game/ui/ChatLogUI.ts`
-**Spec:** 300×120px, bottom-left, `#808080` at 70% opacity background, scroll factor 0. System messages `COLORS.CHAT_SYSTEM` (#BBA840) prefixed `[SYSTEM]`. Player messages: name in red/orange, text in white. Font sans-serif 14px. Max ~6 visible lines. Depth 1000.
-**Methods:** `addSystemMessage(text)`, `addPlayerMessage(name, text)`
-**Complexity:** Medium (similar to KillFeedUI pattern)
-**Tests:** Create `ChatLogUI.test.ts`
+### Handling Removed Constants
 
-### Task 3.4: DebugOverlayUI (new file)
+Before removing `RETICLE_CENTER_DOT_COLOR`, `RETICLE_CENTER_DOT_RADIUS`, `RETICLE_TICK_LENGTH`:
+1. Grep for usages across codebase
+2. If used in `Crosshair.ts`, that's fine — Worker A will remove those references
+3. If used elsewhere, assess impact
 
-**Spec changes covered:** #28
-**New file:** `stick-rumble-client/src/game/ui/DebugOverlayUI.ts`
-**Spec:** Bright green `COLORS.DEBUG_OVERLAY` (#00FF00), monospaced ~12px. Lines: `FPS: N`, `Update: Nms`, `AI: Nms`, `E: N | B: N`. Below minimap, left side, screen-fixed. Debug flag controlled (not shown in production). Depth 1000.
-**Method:** `update(fps, updateTime, aiTime, entityCount, bulletCount)`
-**Complexity:** Simple
-**Tests:** Create `DebugOverlayUI.test.ts`
-
-### Task 3.5: PickupNotificationUI (new file)
-
-**Spec changes covered:** #31
-**New file:** `stick-rumble-client/src/game/ui/PickupNotificationUI.ts`
-**Spec:** `"Picked up {WEAPON_NAME}"` in gray (#AAAAAA), center screen, fade out after ~2 seconds. Triggered by `weapon:pickup_confirmed`.
-**Integration:** Wire into `weapon:pickup_confirmed` handler in `GameSceneEventHandlers.ts`.
-**Complexity:** Simple
-**Tests:** Create `PickupNotificationUI.test.ts`
-
-### Task 3.6: "YOU" label + enemy name labels
-
-**Spec changes covered:** #5, #6
-**File:** `stick-rumble-client/src/game/entities/ProceduralPlayerGraphics.ts` or `PlayerManager.ts`
-**Action:**
-- For local player: add `Phaser.GameObjects.Text` "YOU", white bold ~14px, dark drop shadow, positioned at `(player.x, player.y - headRadius - 5px)`
-- For enemies: add `Phaser.GameObjects.Text` with player display name, gray/white ~12-14px, same positioning
-- Labels move with player each frame
-**Dependency:** Player names must be available in server state messages (verify)
-**Complexity:** Small
-**Tests:** Update `ProceduralPlayerGraphics.test.ts` or `PlayerManager.test.ts`
-
-### Task 3.7: Spawn invulnerability ring rendering
-
-**Spec changes covered:** #4, #19, #52
-**File:** `stick-rumble-client/src/game/entities/ProceduralPlayerGraphics.ts`
-**Action:** In `draw()` method, add conditional: if `isInvulnerable === true`, draw yellow circle outline (`COLORS.SPAWN_RING`, ~25px radius) around player.
-**Dependency:** Task 0.4 (isInvulnerable in PlayerState)
-**Complexity:** Small
-**Tests:** Update `ProceduralPlayerGraphics.test.ts`
+**Decision**: If the removed constants are referenced in code, do NOT remove them in Phase 0. Instead, mark them as deprecated and let Worker A clean them up as part of FEAT-2.
 
 ---
 
-## Phase 4: Medium Complexity Features
+## 6. Phase 1 — Parallel Agent Execution
 
-> Features requiring new rendering logic or significant rework.
+### Worker A: Visual Systems (Sonnet)
 
-### Task 4.1: Crosshair bloom (dynamic size expansion)
+**Worktree**: `/home/mtomcal/code/wt-visual/`
+**Branch**: `fix/visual-systems`
+**Commit strategy**: One commit per logical change group
 
-**Spec changes covered:** #7, #40
-**File:** `stick-rumble-client/src/game/entities/Crosshair.ts` lines 12, 65-76, 154-156
-**Action:**
-- Remove "No dynamic spread circle" comment (line 12)
-- In `update()`: use `_spreadDegrees` and `_isMoving` to adjust sprite scale (base 40px → expanded 60-80px)
-- Add `triggerBloom()` method: snap to expanded, tween back to base over 200-300ms
-- Update `getCurrentSpreadRadius()` to return actual radius (line 154-156, currently returns 0)
-- Wire: call `triggerBloom()` on `projectile:spawn` for local player
-**Also:** `GameSceneUI.ts` line 221-231 — pass spread/movement state to crosshair update
-**Complexity:** Medium
-**Tests:** Update `Crosshair.test.ts`
+| Task | Items | File(s) | Description | Commit Message |
+|------|-------|---------|-------------|----------------|
+| A1 | FEAT-1 | `AimLine.ts`, `GameScene.ts`, `GameSceneEventHandlers.ts` | Replace continuous aim line with event-driven hit confirmation trail triggered by `hit:confirmed`. Line from barrel→target, white 1px alpha 0.8, depth 40, linger 300ms + fade 200ms. | `feat: Replace aim line with hit confirmation trail` |
+| A2 | FEAT-2 | `Crosshair.ts` | Remove bloom/expansion logic. Fixed ~20px `⊕` reticle. Remove `EXPANDED_RADIUS`, `LERP_SPEED`, firing/movement scaling. Keep white circle + cross. | `fix: Simplify crosshair to fixed-size reticle (no bloom)` |
+| A3 | BUG-2 | `ProceduralWeaponGraphics.ts`, `PlayerManager.ts` | Fix enemy weapon visibility — ensure enemy weapon containers use same scale as local player. Debug why they render as tiny nubs. | `fix: Enemy weapons render at full scale` |
+| A4 | FEAT-5, FEAT-6 | `WeaponCrateManager.ts`, `PlayerManager.ts` | Update weapon crate inner icon to yellow `⊕`. Add ~50px yellow circle stroke around death corpses. | `feat: Yellow crate icon and death corpse outline` |
+| A5 | BUG-9 | `PickupNotificationUI.ts` | Uppercase weapon name in "Picked up [WEAPON]" text. | `fix: Uppercase weapon name in pickup notification` |
+| A6 | — | — | Run `make test-client && make typecheck && make lint` in worktree. Fix any failures. | (no commit if clean) |
 
-### Task 4.2: Aim line visual (new feature)
+#### Worker A Verification Gate (BLOCKING — before signaling done)
 
-**Spec changes covered:** #8, #39
-**Current:** No aim line exists anywhere in codebase.
-**Action:** Add `aimLineGraphics: Phaser.GameObjects.Graphics` — thin white line (`COLORS.AIM_LINE` / #FFFFFF) from barrel tip to crosshair/cursor position. Depth 40. Drawn every frame in `preUpdate()` or `update()`, cleared and redrawn. Local player only (enemies may not show).
-**File:** `ProceduralPlayerGraphics.ts` (add to draw method) or standalone in `GameScene.ts`
-**Need:** `getBarrelPosition()` method if not present
-**Complexity:** Medium
-**Tests:** Add aim line tests
+Run the test-quality-verifier sub-agent (3 passes) on all test files changed in `fix/visual-systems` branch:
 
-### Task 4.3: Projectile chevron shape
+- [ ] **Verifier Pass 1** (Anti-Pattern Detection): Scan for vague assertions, empty tests, TODO/SKIP, magic numbers in all modified test files
+- [ ] **Verifier Pass 2** (Coverage & Completeness): Verify hit trail has tests (linger, fade, off-screen), crosshair simplification has tests (fixed size, melee hide), enemy weapon scale has tests, corpse outline has tests, uppercase pickup has tests. Verify old aim line / bloom tests are updated or removed.
+- [ ] **Verifier Pass 3** (Structural Quality): Test names descriptive, setup/teardown proper, no debug output, assertion density adequate
+- [ ] All 3 passes clean (0 errors) → Worker A signals done
+- [ ] If errors found → Worker A fixes and re-runs verifier until clean
 
-**Spec changes covered:** #42
-**File:** `stick-rumble-client/src/game/entities/ProjectileManager.ts` lines 69-74
-**Action:**
-- Currently: `this.scene.add.circle()` — always circle
-- Replace with: when `shape === 'chevron'`, draw directional triangle polygon pointing in velocity direction
-- Use `tracerLength` (~20px) for tracer trail segments
-- Update all weapon entries in `weaponConfig.ts` hardcoded defaults with `shape: 'chevron'`
-**Also:** Add `projectile` sub-object to both `weapon-configs.json` files for all 6 weapons
-**Complexity:** Medium-High (triangle geometry rendering)
-**Tests:** Update `ProjectileManager.test.ts`
+### Worker B: UI Bugs & Layout (Sonnet)
 
-### Task 4.4: Muzzle flash starburst shape
+**Worktree**: `/home/mtomcal/code/wt-ui/`
+**Branch**: `fix/ui-bugs`
+**Commit strategy**: One commit per logical change group
 
-**Spec changes covered:** #44 (shape)
-**File:** `stick-rumble-client/src/game/entities/ProjectileManager.ts` lines 228-252 (`createMuzzleFlash()`)
-**Action:** Currently always uses `scene.add.circle()`. When `muzzleFlashShape === 'starburst'`, render small starburst polygon at barrel tip instead.
-**Complexity:** Medium
-**Tests:** Update `ProjectileManager.test.ts`
+| Task | Items | File(s) | Description | Commit Message |
+|------|-------|---------|-------------|----------------|
+| B1 | BUG-1 | `GameScene.ts` | Fix floor grid rendering. Grid lines `0xD8DCD8` at alpha 0.5, 100px spacing, depth -1. Debug why grid code isn't producing visible output. | `fix: Floor grid lines now visible on arena` |
+| B2 | FEAT-3, BUG-4, BUG-5, BUG-6 | `GameSceneUI.ts` | Minimap overhaul: circular→square (`fillRect`/`strokeRect`), teal border `0x00CCCC`, clamp all dots to bounds via `Math.min`/`Math.max`, reposition to avoid HUD overlap. | `fix: Minimap square shape, dot clamping, teal border, no HUD overlap` |
+| B3 | BUG-7 | `DebugOverlayUI.ts` | Reposition debug text below the minimap. No overlap with minimap or HUD. | `fix: Debug overlay positioned below minimap` |
+| B4 | BUG-3 | `ScoreDisplayUI.ts` | Fix zero-padding from 7→6 digits (`padStart(6, '0')` not 7). | `fix: Score display uses 6-digit zero-padding` |
+| B5 | BUG-8 | `ChatLogUI.ts` | Change background from opaque to semi-transparent (`#808080` at alpha 0.7). | `fix: Chat log background semi-transparent` |
+| B6 | FEAT-4 | `GameSceneUI.ts` | Replace screen-center reload circle with world-space arc centered on player body. 25px radius, green `0x00FF00`, 3px stroke, clockwise from top (270°). Follows player position. | `feat: Reload arc centered on player (world-space)` |
+| B7 | — | — | Run `make test-client && make typecheck && make lint` in worktree. Fix any failures. | (no commit if clean) |
 
-### Task 4.5: Death screen overlay rewrite
+#### Worker B Verification Gate (BLOCKING — before signaling done)
 
-**Spec changes covered:** #27, #55
-**File:** `stick-rumble-client/src/game/scenes/GameSceneSpectator.ts` lines 46-75
-**Current:** Shows "Spectating..." + countdown text. No overlay, no stats, no button.
-**Required:**
-- Dark overlay rectangle (depth 990, 70% alpha black) over full viewport
-- "YOU DIED" text: ~72px bold white, centered
-- Stats row: trophy icon (yellow/gold) + score (red), skull icon (red) + kill count (white)
-- "TRY AGAIN" button: rectangular, thin white border, white text, centered below stats
-- On button click: send `player:respawn_request` message
-- Dismiss on server `player:respawn` event
-**Complexity:** High (substantial rewrite)
-**Tests:** Update `GameSceneSpectator.test.ts`
+Run the test-quality-verifier sub-agent (3 passes) on all test files changed in `fix/ui-bugs` branch:
+
+- [ ] **Verifier Pass 1** (Anti-Pattern Detection): Scan for vague assertions, empty tests, TODO/SKIP, magic numbers in all modified test files
+- [ ] **Verifier Pass 2** (Coverage & Completeness): Verify floor grid has tests (visibility, color, depth), minimap has tests (square shape, dot clamping, border color, HUD clearance), score padding has tests (6 digits), chat transparency has tests (alpha 0.7), reload arc has tests (world-space, follows player, clockwise sweep). Verify old circular minimap / screen-center reload tests are updated or removed.
+- [ ] **Verifier Pass 3** (Structural Quality): Test names descriptive, setup/teardown proper, no debug output, assertion density adequate
+- [ ] All 3 passes clean (0 errors) → Worker B signals done
+- [ ] If errors found → Worker B fixes and re-runs verifier until clean
 
 ---
 
-## Phase 5: Server-Side & Cross-Cutting
+## 7. Phase 2 — Merge & Verify
 
-### Task 5.1: Document invulnerability on Respawn (server)
+**Executor**: Merge Shepherd (Opus)
 
-**Spec changes covered:** #60
-**File:** `stick-rumble-server/internal/game/` — verify `Respawn()` sets `IsInvulnerable = true`
-**Note:** Server code at `player.go` lines 54-55 already has the fields. Verify the broadcast includes them. If not, add to the broadcast payload.
-**Complexity:** Low (likely already working, just verify)
+### Checklist
 
-### Task 5.2: Reload progress tracking (client-side)
+- [ ] Confirm Worker A signals completion (all A1-A6 done)
+- [ ] Confirm Worker B signals completion (all B1-B7 done)
+- [ ] Review Worker A diff: `git diff main...fix/visual-systems --stat`
+- [ ] Review Worker B diff: `git diff main...fix/ui-bugs --stat`
+- [ ] Check `GameScene.ts` specifically for conflict potential
+- [ ] Merge `fix/visual-systems` into `main` (`--no-ff`)
+- [ ] Merge `fix/ui-bugs` into `main` (`--no-ff`)
+- [ ] If merge conflict in `GameScene.ts`: resolve manually (Worker A's entity setup + Worker B's grid fix)
+- [ ] Run full verification suite:
+  - [ ] `make test` — all tests pass (client + server)
+  - [ ] `make typecheck` — zero TypeScript errors
+  - [ ] `make lint` — zero errors/warnings
 
-**Spec changes covered:** #57
-**File:** `stick-rumble-client/src/game/scenes/GameSceneUI.ts` reload progress bar area
-**Action:** Verify client-side timestamp-based progress works: on first `isReloading: true`, record `reloadStartTime`, compute `progress = (now - reloadStartTime) / weapon.reloadDuration` each frame.
-**Also:** Reload progress bar should be world-space (above player, ~60px wide, white fill) per spec change #30 — currently may be screen-fixed at (10, 70).
-**Complexity:** Low-Medium
+### Phase 2 Final Verification Gate (Opus Verifier — 3 Passes on Merged Main)
 
-### Task 5.3: Wire all new UI components into GameScene
+Spawn the test-quality-verifier as an **Opus** sub-agent on the fully merged `main` branch. This is the most critical gate — it catches cross-branch interaction issues that per-worker verifiers can't see.
 
-**Spec changes covered:** #21 (HUD layout), #50
-**File:** `stick-rumble-client/src/game/scenes/GameScene.ts` (~lines 118-136)
-**Action:** Import and instantiate all new UI classes (ScoreDisplayUI, KillCounterUI, DebugOverlayUI, ChatLogUI, PickupNotificationUI). Wire event handlers in GameSceneEventHandlers.ts.
-**Dependency:** All Phase 3 tasks complete
-**Complexity:** Medium (integration work)
+- [ ] **Verifier Pass 1** (Anti-Pattern Detection): Scan ALL test files modified across both branches for vague assertions, empty tests, TODO/SKIP, magic numbers, overly broad matchers
+- [ ] **Verifier Pass 2** (Coverage & Completeness): Verify every item in the Change Inventory (Section 1) has corresponding test coverage on the merged branch. Check for:
+  - Hit trail tests exercise linger + fade + off-screen behavior
+  - Crosshair tests verify fixed size, no bloom, melee hidden
+  - Enemy weapon scale tests verify full-size rendering
+  - Minimap tests verify square shape, dot clamping, teal border, no HUD overlap
+  - Floor grid tests verify visibility, color, depth
+  - Reload arc tests verify world-space positioning, player-follow, sweep direction
+  - Score tests verify 6-digit padding
+  - Chat tests verify semi-transparency
+  - Removed features (aim line, crosshair bloom, circular minimap, screen-center reload circle) have no stale tests passing vacuously
+- [ ] **Verifier Pass 3** (Structural Quality): Test names, setup/teardown, independence, assertion density, no debug output across all changed test files
+- [ ] All 3 passes clean (0 errors) → Job complete
+- [ ] If errors found → Shepherd fixes on main and re-runs verifier until clean
 
----
+### Post-Verification Cleanup
 
-## Spec Change Coverage Matrix
-
-| Spec # | Phase.Task | Description |
-|--------|-----------|-------------|
-| #1 | 2.1 | Player head-only color |
-| #2 | 2.2 | Crosshair white "+" shape |
-| #3 | 2.7 | Weapon crate yellow circle |
-| #4 | 3.7 | Spawn invulnerability ring |
-| #5 | 3.6 | "YOU" label |
-| #6 | 3.6 | Enemy name labels |
-| #7 | 4.1 | Crosshair bloom |
-| #8 | 4.2 | Aim line visual |
-| #9 | 2.5 | Damage screen flash |
-| #10 | 1.3 | World-space health bar bg |
-| #11 | 2.3 | HUD health bar text format |
-| #12 | 2.3 | Health bar 2-tier thresholds |
-| #13 | 1.4 | Blood effect color |
-| #14 | 1.5 | Hit indicator color |
-| #15 | 1.6 | Muzzle flash color |
-| #16 | 1.7 | Crate respawn glow |
-| #17 | 1.1 | Background color |
-| #18 | 1.2 | Grid line color |
-| #19 | 3.7 | Spawn ring (player.md) |
-| #20 | 2.5 | Damage flash (player.md) |
-| #21 | 5.3 | HUD layout diagram |
-| #22 | 2.3 | Health bar UI rework |
-| #23 | 2.4 | Ammo counter rework |
-| #24 | 3.1 | Score display |
-| #25 | 3.2 | Kill counter |
-| #26 | 3.3 | Chat log |
-| #27 | 4.5 | Death screen overlay |
-| #28 | 3.4 | Debug overlay |
-| #29 | 2.8 | Minimap rework |
-| #30 | 5.2 | Reload progress bar |
-| #31 | 3.5 | Weapon pickup notification |
-| #32 | 2.2 | Crosshair (ui.md) |
-| #33 | 2.5 | Damage flash mechanism |
-| #34 | 0.2 | HEALTH_BAR_WIDTH naming |
-| #35 | 1.10 | Damage number color/timing |
-| #36 | 1.5 + 2.6 | Hit indicator color + timing |
-| #37 | 1.4 | Blood particles color/count |
-| #38 | 2.5 | Damage flash (hit-detection) |
-| #39 | 4.2 | Aim line (shooting.md) |
-| #40 | 4.1 | Crosshair bloom (shooting) |
-| #41 | — | No code change needed |
-| #42 | 0.5 + 4.3 | Projectile chevron shape |
-| #43 | 1.8 | Pistol tracer color |
-| #44 | 0.5 + 1.9 + 4.4 | Muzzle flash duration/shape |
-| #45 | 0.1 | COLORS constants |
-| #46 | 0.2 | HEALTH_BAR_WIDTH rename |
-| #47 | 0.2 | MINIMAP constants |
-| #48 | 0.3 | GameConfig bg color |
-| #49 | 1.1 | Arena fill (architecture) |
-| #50 | 5.3 | HUD components (architecture) |
-| #51 | 2.1 | Player colors (architecture) |
-| #52 | 3.7 | Spawn ring (architecture) |
-| #53 | 2.8 | renderArena grid (architecture) |
-| #54 | 0.4 | PlayerState invulnerability |
-| #55 | 4.5 | GameSceneSpectator (architecture) |
-| #56 | 0.4 | isInvulnerable in messages |
-| #57 | 5.2 | Reload progress tracking |
-| #58 | 3.1 | Score=XP mapping |
-| #59 | — | Field name mismatch (doc-only, see messages.md) |
-| #60 | 5.1 | Server invulnerability on respawn |
+- [ ] Cleanup:
+  - [ ] `git worktree remove /home/mtomcal/code/wt-visual`
+  - [ ] `git worktree remove /home/mtomcal/code/wt-ui`
+  - [ ] `git branch -d fix/visual-systems fix/ui-bugs`
+- [ ] Final sanity: `git log --oneline -10`
 
 ---
 
-## Worker Task Sizing (for loop.sh)
+## 8. Detailed Acceptance Criteria by Agent
 
-Each task below = one commit. Grouped for a Sonnet worker:
+### Worker A: Visual Systems
 
-**Commit 1:** Tasks 0.1-0.5 (Foundation — constants, config, interfaces)
-**Commit 2:** Tasks 1.1-1.10 (All trivial one-line color/value fixes)
-**Commit 3:** Task 2.1 (Player head-only color distinction)
-**Commit 4:** Task 2.2 (Crosshair white "+" shape)
-**Commit 5:** Task 2.3 (Health bar 2-tier + percentage format)
-**Commit 6:** Task 2.4 (Ammo counter rework)
-**Commit 7:** Task 2.5 + 2.6 (Damage flash overlay + hit indicator timing)
-**Commit 8:** Task 2.7 (Weapon crate yellow circle)
-**Commit 9:** Task 2.8 (Minimap rework)
-**Commit 10:** Tasks 3.1 + 3.2 (ScoreDisplayUI + KillCounterUI)
-**Commit 11:** Task 3.3 (ChatLogUI)
-**Commit 12:** Tasks 3.4 + 3.5 (DebugOverlayUI + PickupNotificationUI)
-**Commit 13:** Tasks 3.6 + 3.7 ("YOU"/name labels + spawn ring)
-**Commit 14:** Task 4.1 (Crosshair bloom)
-**Commit 15:** Task 4.2 (Aim line visual)
-**Commit 16:** Tasks 4.3 + 4.4 (Projectile chevron + muzzle starburst)
-**Commit 17:** Task 4.5 (Death screen overlay rewrite)
-**Commit 18:** Tasks 5.1-5.3 (Server verify + reload bar + wire all UI)
+#### A1: Hit Confirmation Trail (FEAT-1) — replaces Aim Line
+- [ ] `AimLine.ts` rewritten (or renamed) — no longer draws continuous per-frame line
+- [ ] Trail triggered ONLY by `hit:confirmed` WebSocket event
+- [ ] Line drawn from local player's gun barrel position to hit target position
+- [ ] Color: white `0xFFFFFF` (use `HIT_TRAIL.COLOR` constant)
+- [ ] Stroke: 1px (`HIT_TRAIL.STROKE`)
+- [ ] Alpha: 0.8 (`HIT_TRAIL.ALPHA`)
+- [ ] Depth: 40 (`HIT_TRAIL.DEPTH`)
+- [ ] Lingers for 300ms after appearing (`HIT_TRAIL.LINGER_DURATION`)
+- [ ] Fades to alpha 0 over 200ms (`HIT_TRAIL.FADE_DURATION`) via Phaser tween
+- [ ] Trail game object destroyed after fade completes
+- [ ] Works for on-screen AND off-screen targets (line extends beyond viewport)
+- [ ] `GameSceneEventHandlers.ts`: `hit:confirmed` handler calls trail renderer with barrel + target positions
+- [ ] `GameScene.ts`: no longer creates/updates AimLine per frame
+- [ ] All old aim line code removed (no dead code remaining)
 
-**Total: ~18 commits**
+#### A2: Crosshair Simplification (FEAT-2)
+- [ ] Fixed ~20-25px diameter (radius ~10px)
+- [ ] Shape: white `⊕` — outer circle (stroke ~1.5px, alpha 0.8) + cross lines (±6px, stroke 2px)
+- [ ] NO `EXPANDED_RADIUS`, `LERP_SPEED`, or bloom logic
+- [ ] NO firing-based expansion
+- [ ] NO movement-based scaling
+- [ ] NO spread visualization or dynamic size changes
+- [ ] Hidden for melee weapons (bat, katana)
+- [ ] Positioned at exact mouse cursor position
+- [ ] Depth: 100
+- [ ] Removed reticle constants (`RETICLE_CENTER_DOT_COLOR`, `RETICLE_CENTER_DOT_RADIUS`, `RETICLE_TICK_LENGTH`) usage if present
+
+#### A3: Enemy Weapon Visibility (BUG-2)
+- [ ] Enemy weapons render at SAME scale as local player weapons
+- [ ] All 6 weapon types (pistol, uzi, ak47, shotgun, bat, katana) visually identifiable on enemies
+- [ ] Not tiny nubs/stubs — full-sized weapon graphics matching local player
+- [ ] Root cause identified and documented in commit message
+
+#### A4: Weapon Crate Icon + Death Corpse Outline (FEAT-5, FEAT-6)
+- [ ] Weapon crate inner icon: yellow `⊕` crosshair/plus symbol (`0xCCCC00`)
+- [ ] Dead enemies: ~50px diameter yellow circle outline around corpse
+- [ ] Circle is stroke-only (no fill), color `COLORS.SPAWN_RING` / `0xFFFF00`
+- [ ] Circle drawn at corpse body position
+
+#### A5: Uppercase Weapon Pickup Text (BUG-9)
+- [ ] `PickupNotificationUI.ts`: "Picked up [WEAPON]" uses `.toUpperCase()` on weapon name
+- [ ] Example: "Picked up AK47" not "Picked up ak47"
 
 ---
 
-## Risk Areas
+### Worker B: UI Bugs & Layout
 
-1. **weapon-configs.json dual copies** — root `weapon-configs.json` and `stick-rumble-client/public/weapon-configs.json` must stay in sync. Both need `projectile` sub-object added.
+#### B1: Floor Grid (BUG-1)
+- [ ] Grid lines visible on arena background
+- [ ] Color: `0xD8DCD8` / `COLORS.GRID_LINE`
+- [ ] Alpha: 0.5
+- [ ] Spacing: 100px
+- [ ] Depth: -1 (below all game objects)
+- [ ] Light gray background `0xC8CCC8` visible between grid lines
+- [ ] Root cause of invisibility identified (likely depth, alpha, or draw order issue)
 
-2. **ProceduralPlayerGraphics constructor signature change** (Task 2.1) — changing from single `color` to `headColor`/`bodyColor` propagates to `PlayerManager.ts` and all test files that instantiate player graphics.
+#### B2: Minimap Overhaul (FEAT-3, BUG-4, BUG-5, BUG-6)
+- [ ] Background shape: `fillRect` (not `fillCircle`)
+- [ ] Border shape: `strokeRect` (not `strokeCircle`)
+- [ ] Border color: teal `0x00CCCC` / `MINIMAP_BORDER_COLOR`, stroke 2px
+- [ ] All dots (player + enemy) clamped to `[mapX, mapX+mapSize]` × `[mapY, mapY+mapSize]`
+- [ ] Clamping uses `Math.min` / `Math.max` helper
+- [ ] Minimap positioned with sufficient vertical clearance — does NOT overlap health bar, ammo, debug text below
+- [ ] Radar range ring still renders as circle (geometric, not shape of minimap)
+- [ ] Player dot: green, 4px radius
+- [ ] Enemy dots: red, 3px radius
+- [ ] Background: `#3A3A3A` at 50% alpha
+- [ ] Static layer depth 1999, dynamic layer depth 2000
 
-3. **GameSceneUI.ts is a large file** — multiple tasks touch it (damage flash, hit indicators, minimap, damage numbers). If parallelizing workers, assign all GameSceneUI changes to one worker to avoid merge conflicts.
+#### B3: Debug Overlay Position (BUG-7)
+- [ ] Debug text renders BELOW the minimap
+- [ ] No overlap with minimap
+- [ ] No overlap with health bar or ammo display
 
-4. **Crosshair.ts overhaul** — Tasks 2.2 and 4.1 both modify `Crosshair.ts` (shape change + bloom). Do them sequentially (shape first, then bloom).
+#### B4: Score Display Padding (BUG-3)
+- [ ] Exactly 6 digits zero-padded (e.g., `000100`)
+- [ ] NOT 7 digits (e.g., `0000100`)
+- [ ] Uses `padStart(6, '0')` or equivalent
 
-5. **Death screen rewrite** (Task 4.5) is the highest-risk item — complete rewrite of `GameSceneSpectator.ts` and introduces `player:respawn_request` client-to-server message. Verify server handles this message type.
+#### B5: Chat Log Transparency (BUG-8)
+- [ ] Background color: `#808080` (or equivalent hex)
+- [ ] Background alpha: 0.7 (70% opacity)
+- [ ] Game world partially visible through chat panel
 
-6. **Missing player names in server messages** — Task 3.6 (enemy labels) requires display names from server state. Verify `player:move` broadcasts include player names, or add them.
+#### B6: Reload Arc (FEAT-4)
+- [ ] World-space arc centered on player body position (NOT screen center)
+- [ ] Follows player as they move
+- [ ] Radius: 25px (`RELOAD_ARC.RADIUS`)
+- [ ] Stroke: 3px (`RELOAD_ARC.STROKE`), green `0x00FF00` (`RELOAD_ARC.COLOR`)
+- [ ] Alpha: 1.0 (fully opaque)
+- [ ] Arc starts at top (270° / -90°)
+- [ ] Sweeps clockwise proportional to reload progress (0% = no arc, 100% = full circle)
+- [ ] Old screen-center reload circle fully removed (no dead code)
+- [ ] `GameSceneUI.ts` reload update logic uses new arc instead of old circle
 
 ---
 
-## Rules for Workers
+## 9. Risk Mitigation
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|------------|
+| `GameScene.ts` merge conflict | Medium | Low | Both agents touch different sections (entity setup vs renderArena). Shepherd resolves manually if needed. |
+| Floor grid bug is non-trivial | Medium | Medium | Worker B should add `console.log` to verify grid draw code executes. May be depth/ordering/clear issue. |
+| Enemy weapon scale is complex | Medium | High | Worker A must read `ProceduralWeaponGraphics.ts` and `PlayerManager.ts` carefully. Bug may be in container scaling, not rendering. Escalate to Opus if Sonnet can't find root cause. |
+| Tests break after changes | Low | High | Each worker runs `make test-client` before signaling done. Shepherd runs full `make test` after merge. |
+| Constants not available in worktrees | Zero | High | Phase 0 commits to `main` BEFORE worktrees are created, so branches inherit constants automatically. |
+| Removed reticle constants break code | Low | Medium | Grep for usages before removing. If used, leave as deprecated in Phase 0 and let Worker A clean up. |
+| Rate limiting (API) | Medium | Medium | Only 2 Sonnet workers + 1 Opus. Light load. If hit, workers pause naturally. |
+
+---
+
+## Execution Timeline
+
+```
+T+0min   ┌─ Phase 0: Shepherd updates constants.ts on main
+T+3min   ├─ Phase 0 Verifier (Sonnet): 3 passes on constants tests
+T+8min   ├─ Shepherd creates worktrees (wt-visual, wt-ui)
+T+10min  ├─ Shepherd launches Worker A + Worker B in parallel
+         │
+T+10min  │  ┌─ Worker A starts (wt-visual)     ┌─ Worker B starts (wt-ui)
+         │  │  A1: Hit trail                    │  B1: Floor grid
+         │  │  A2: Crosshair simplify           │  B2: Minimap overhaul
+         │  │  A3: Enemy weapon scale            │  B3: Debug overlay position
+         │  │  A4: Crate icon + corpse outline  │  B4: Score padding
+         │  │  A5: Uppercase pickup text        │  B5: Chat transparency
+         │  │  A6: Tests & lint                 │  B6: Reload arc
+         │  │  ── Verifier gate (3 passes) ──   │  B7: Tests & lint
+         │  │                                   │  ── Verifier gate (3 passes) ──
+T+45min  │  └─ Worker A verified & done         └─ Worker B verified & done
+         │
+T+47min  ├─ Phase 2: Shepherd reviews diffs
+T+50min  ├─ Shepherd merges fix/visual-systems
+T+52min  ├─ Shepherd merges fix/ui-bugs (resolve conflicts if any)
+T+55min  ├─ Shepherd runs make test && make typecheck && make lint
+T+58min  ├─ Phase 2 Final Verifier (Opus): 3 passes on ALL changed tests
+T+65min  ├─ Shepherd cleans up worktrees + branches
+T+65min  └─ DONE
+```
+
+**Estimated total wall-clock time: ~65-80 minutes**
+
+### Verification Summary
+
+| Checkpoint | Verifier Model | Passes | Scope | Est. Duration |
+|------------|---------------|--------|-------|---------------|
+| Phase 0 complete | Sonnet | 3 | Constants test files | ~5 min |
+| Worker A complete | Sonnet | 3 | All test files in `fix/visual-systems` diff | ~5 min |
+| Worker B complete | Sonnet | 3 | All test files in `fix/ui-bugs` diff | ~5 min |
+| Phase 2 post-merge | **Opus** | 3 | ALL test files changed on merged `main` | ~7 min |
+| **Total verifier runs** | | **12 passes** | | **~22 min overhead** |
+
+---
+
+## Agent Prompt Templates
+
+### Worker A Prompt (Visual Systems)
+
+```
+You are Worker A on the spec-corrections team. Your job is to fix visual systems
+in the Stick Rumble client to match updated specs.
+
+WORKING DIRECTORY: /home/mtomcal/code/wt-visual/
+BRANCH: fix/visual-systems (already checked out)
+
+You MUST:
+- Only edit files in YOUR ownership list (see below)
+- Run `make test-client && make typecheck && make lint` from the worktree root before finishing
+- Commit after each logical change group with descriptive messages
+- Set git identity: git config user.name "mtomcal" && git config user.email "mtomcal@users.noreply.github.com"
+- Read each file BEFORE editing it
+- AFTER completing all tasks and passing tests/lint, spawn a test-quality-verifier
+  sub-agent (Sonnet, general-purpose) to run 3 passes on all test files you
+  modified. See Section 3 for the verifier prompt template and Section 6 for
+  the Worker A Verification Gate checklist. You MUST NOT signal done until the
+  verifier reports 0 errors across all 3 passes. If errors are found, fix them
+  and re-run the verifier.
+
+YOUR FILES (do NOT touch any other files):
+- stick-rumble-client/src/game/entities/AimLine.ts
+- stick-rumble-client/src/game/entities/Crosshair.ts
+- stick-rumble-client/src/game/entities/WeaponCrateManager.ts
+- stick-rumble-client/src/game/entities/PlayerManager.ts
+- stick-rumble-client/src/game/entities/ProceduralWeaponGraphics.ts
+- stick-rumble-client/src/game/entities/HitEffectManager.ts
+- stick-rumble-client/src/game/scenes/GameSceneEventHandlers.ts
+- stick-rumble-client/src/game/scenes/GameScene.ts (entity setup section ONLY)
+- stick-rumble-client/src/game/ui/PickupNotificationUI.ts
+
+TASKS: [See Section 6, Worker A task table]
+ACCEPTANCE CRITERIA: [See Section 8, Worker A acceptance criteria]
+VERIFICATION GATE: [See Section 3 + Section 6 Worker A Verification Gate]
+```
+
+### Worker B Prompt (UI Bugs)
+
+```
+You are Worker B on the spec-corrections team. Your job is to fix UI bugs and
+layout issues in the Stick Rumble client to match updated specs.
+
+WORKING DIRECTORY: /home/mtomcal/code/wt-ui/
+BRANCH: fix/ui-bugs (already checked out)
+
+You MUST:
+- Only edit files in YOUR ownership list (see below)
+- Run `make test-client && make typecheck && make lint` from the worktree root before finishing
+- Commit after each logical change group with descriptive messages
+- Set git identity: git config user.name "mtomcal" && git config user.email "mtomcal@users.noreply.github.com"
+- Read each file BEFORE editing it
+- AFTER completing all tasks and passing tests/lint, spawn a test-quality-verifier
+  sub-agent (Sonnet, general-purpose) to run 3 passes on all test files you
+  modified. See Section 3 for the verifier prompt template and Section 6 for
+  the Worker B Verification Gate checklist. You MUST NOT signal done until the
+  verifier reports 0 errors across all 3 passes. If errors are found, fix them
+  and re-run the verifier.
+
+YOUR FILES (do NOT touch any other files):
+- stick-rumble-client/src/game/scenes/GameSceneUI.ts
+- stick-rumble-client/src/game/scenes/GameScene.ts (renderArena / grid section ONLY)
+- stick-rumble-client/src/game/ui/ScoreDisplayUI.ts
+- stick-rumble-client/src/game/ui/DebugOverlayUI.ts
+- stick-rumble-client/src/game/ui/ChatLogUI.ts
+
+TASKS: [See Section 6, Worker B task table]
+ACCEPTANCE CRITERIA: [See Section 8, Worker B acceptance criteria]
+VERIFICATION GATE: [See Section 3 + Section 6 Worker B Verification Gate]
+```
+
+---
+
+## Rules for All Agents
 
 1. **Read before editing** — always read the target file AND the relevant spec section before making changes
-2. **One commit per task group** — follow the commit sizing above
+2. **One commit per task group** — follow the commit sizing in Section 5
 3. **Run tests after each commit** — `make test-client` must pass
-4. **Import COLORS** — use `COLORS.*` constants, not inline hex values
-5. **Spec is truth** — when plan and spec disagree, spec wins
-6. **Update existing tests** — don't just add new tests; update existing assertions that check old values (e.g., old colors)
-7. **Two JSON files** — always update BOTH `weapon-configs.json` copies
-
----
-
-## Implementation Results
-
-> Completed: 2026-02-18
-
-### Stats
-
-| Metric | Value |
-|--------|-------|
-| **Files changed** | 50 |
-| **Lines added** | 3,778 |
-| **Lines removed** | 878 |
-| **Feature commits** | 21 (19 task + 1 post-merge fix + 1 wiring) |
-| **Tests passing** | 1,632 |
-| **Lint errors** | 0 |
-| **Typecheck errors** | 0 |
-| **Spec changes covered** | 60/60 |
-
-### Timing
-
-| Phase | Wall clock | Notes |
-|-------|-----------|-------|
-| Planning + team setup | ~10 min | Task breakdown, branch creation, dependency graph |
-| Foundation (Phase 0+1) | ~8 min | 1 worker, sequential |
-| Parallel workers (Phase 2-4) | ~35 min | 3 workers simultaneous |
-| Rate limit downtime | ~2.5 hrs | Workers idled 14:32–17:08 |
-| Worker respawn + finish | ~10 min | 2 workers, 1 task each |
-| Merge + wiring (Phase 5) | ~18 min | 1 Opus worker |
-| Test quality verification | ~3 min | 1 Opus worker + test-quality-verifier subagent |
-| **Total productive time** | **~85 min** | Excludes rate limit downtime |
-
-### Test Quality Verification
-
-The plan called for each worker to spawn a `test-quality-verifier` subagent after every commit batch. In practice, rate limits and worker respawns disrupted this cadence — individual workers did not consistently run the verifier during their implementation phase.
-
-Instead, a comprehensive verification pass was run once at the end on the fully merged `art/main` branch:
-
-| When | Scope | Agent | Result |
-|------|-------|-------|--------|
-| Post-merge (17:30) | All 27 modified/created test files | Opus → `test-quality-verifier` subagent | **PASS — no fixes needed** |
-
-**Findings from the audit:**
-- ~60+ `toBeDefined()` usages — all are guard assertions before more specific checks, not standalone vague assertions
-- `toHaveBeenCalled()` without args — used correctly where sibling tests cover argument specifics
-- Boolean `toBe(true/false)` — all test actual boolean return values, not vague
-- Zero empty test bodies, zero TODO/FIXME, zero `toMatchObject({})` anti-patterns
-
-**Lesson for future jobs:** Run the verifier as a final gate on the merged branch rather than per-commit. It's more efficient and catches everything in one pass. Per-commit verification is ideal but hard to enforce when workers hit rate limits or get respawned.
-
-### Team Composition
-
-| Role | Model | Tasks | Commits | Respawns |
-|------|-------|-------|---------|----------|
-| **Lead** (orchestrator) | Opus 4.6 | Coordination, server verification (5.1/5.2), monitoring | — | — |
-| **foundation** | Sonnet 4.6 | Phase 0 constants + Phase 1 trivial fixes | 2 | 0 |
-| **scene-ui** | Sonnet 4.6 | HealthBarUI, ammo counter, damage flash, hit indicators, minimap, reload bar | 6 | 2 (worktree migration, rate limit) |
-| **entities** | Sonnet 4.6 | Player colors, crosshair, crates, bloom, aim line, projectiles | 6 | 2 (worktree migration, rate limit) |
-| **new-ui** | Sonnet 4.6 | 5 new UI components, death screen, labels, spawn ring | 5 | 0 |
-| **merge-shepherd** | Opus 4.6 | Branch merging, conflict resolution, Task 5.3 UI wiring | 2 | 0 |
-| **test-verifier** | Opus 4.6 | Spawned `test-quality-verifier` subagent on merged branch | 0 (no fixes needed) | 0 |
-| **server-verify** | Sonnet 4.6 | Server code research for Tasks 5.1/5.2 | — | 0 |
-
-**Total agents spawned:** 8 (+ 4 respawns = 12 agent instances)
-**Model mix:** 5 Sonnet workers, 3 Opus workers (lead, merge-shepherd, test-verifier)
-
-### Lessons Learned
-
-1. **Worktrees are essential for multi-agent work.** Workers sharing one working directory caused branch checkout stomping and cross-contamination (commits landing on wrong branches). Switching to `git worktree` per worker eliminated the issue. Future jobs should create worktrees *before* spawning workers.
-
-2. **Rate limits still burn time.** ~2.5 hours of idle time from rate limiting. Workers went into idle-spam loops. Mitigation: detect rate limits earlier and pause instead of retrying.
-
-3. **Worker respawns are cheap.** Because each task = one commit, respawning a worker after rate limits or context exhaustion only risks losing the current in-progress task. Committed work is safe on the branch.
-
-4. **File ownership prevents merge conflicts.** Assigning all GameSceneUI.ts changes to one worker (scene-ui) and all entity files to another (entities) meant the only real merge conflict was the expected ProceduralPlayerGraphics constructor change.
-
-5. **Sonnet handled the "hardest" task fine.** The death screen rewrite (Task 4.5, flagged as highest risk) was completed by Sonnet without needing Opus escalation.
-
-6. **Opus for merging was the right call.** The ProceduralPlayerGraphics conflict required understanding both the headColor/bodyColor refactor and the label/ring additions — Opus resolved it cleanly.
+4. **Use constants** — import from `shared/constants.ts`, never use inline hex values for colors
+5. **Spec is truth** — when this plan and the spec disagree, the spec wins
+6. **Stay in your worktree** — never `cd` to another worktree or the main repo
+7. **Git identity** — always `mtomcal` / `mtomcal@users.noreply.github.com`
+8. **No dead code** — remove old code completely, don't comment it out
+9. **Minimal changes** — only change what's needed for your assigned items. Don't refactor surrounding code.
