@@ -470,14 +470,14 @@ export class GameScene extends Phaser.Scene {
       this.meleeWeaponManager.update();
     }
 
-    // Update reload UI progress (world-space bar above local player)
+    // Update reload UI progress (world-space bar and arc above local player)
     if (this.shootingManager && this.shootingManager.isReloading()) {
       const progress = this.shootingManager.getReloadProgress();
       const localPos = this.playerManager?.getLocalPlayerPosition();
       const playerX = localPos?.x ?? 0;
       const playerY = localPos?.y ?? 0;
       this.ui.updateReloadProgress(progress, playerX, playerY, 60, 4);
-      this.ui.updateReloadCircle(progress);
+      this.ui.updateReloadCircle(progress, playerX, playerY);
     }
 
     // Update crosshair

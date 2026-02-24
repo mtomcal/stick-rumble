@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import type { ShootingManager } from '../input/ShootingManager';
 import type { PlayerManager } from '../entities/PlayerManager';
 import { Crosshair } from '../entities/Crosshair';
-import { COLORS, MINIMAP } from '../../shared/constants';
+import { COLORS, MINIMAP, RELOAD_ARC } from '../../shared/constants';
 
 /**
  * GameSceneUI - Manages all UI elements for the game scene
@@ -236,37 +236,35 @@ export class GameSceneUI {
   }
 
   /**
-   * Create circular reload indicator around crosshair
+   * Create world-space reload arc graphics object.
+   * World-space (no scroll factor) so it follows the player.
    */
   createReloadCircleIndicator(): void {
     this.reloadCircle = this.scene.add.graphics();
-    this.reloadCircle.setScrollFactor(0);
-    this.reloadCircle.setDepth(1002);
+    this.reloadCircle.setDepth(RELOAD_ARC.DEPTH);
     this.reloadCircle.setVisible(false);
   }
 
   /**
-   * Update circular reload indicator (0 to 1 progress)
+   * Update world-space reload arc centered on player body position.
+   * @param progress Reload progress 0.0 to 1.0
+   * @param playerX Player world X position
+   * @param playerY Player world Y position
    */
-  updateReloadCircle(progress: number): void {
+  updateReloadCircle(progress: number, playerX: number = 0, playerY: number = 0): void {
     if (!this.reloadCircle) {
       return;
     }
 
-    const camera = this.scene.cameras.main;
-    const centerX = camera.width / 2;
-    const centerY = camera.height / 2;
-    const radius = 20;
-
     this.reloadCircle.clear();
-    this.reloadCircle.lineStyle(3, 0x00ff00, 1.0);
+    this.reloadCircle.lineStyle(RELOAD_ARC.STROKE, RELOAD_ARC.COLOR, 1.0);
 
-    // Draw arc from top (270 degrees) clockwise based on progress
-    const startAngle = Phaser.Math.DegToRad(270);
-    const endAngle = startAngle + Phaser.Math.DegToRad(360 * progress);
+    // Draw arc from top (-90° / 270°) clockwise proportional to reload progress
+    const startAngle = Phaser.Math.DegToRad(RELOAD_ARC.START_ANGLE);
+    const endAngle = startAngle + (progress * Math.PI * 2);
 
     this.reloadCircle.beginPath();
-    this.reloadCircle.arc(centerX, centerY, radius, startAngle, endAngle, false);
+    this.reloadCircle.arc(playerX, playerY, RELOAD_ARC.RADIUS, startAngle, endAngle, false);
     this.reloadCircle.strokePath();
   }
 

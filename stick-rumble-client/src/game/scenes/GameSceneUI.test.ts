@@ -1110,31 +1110,80 @@ describe('GameSceneUI', () => {
     });
 
     describe('createReloadCircleIndicator', () => {
-      it('should create circular reload indicator', () => {
+      it('should create reload arc graphics (world-space, no scroll factor)', () => {
+        const graphicsCountBefore = createdGraphics.length;
         ui.createReloadCircleIndicator();
+        const arcGraphics = createdGraphics[graphicsCountBefore];
 
         expect(mockScene.add.graphics).toHaveBeenCalled();
+        // World-space: NOT setting scroll factor to 0
+        expect(arcGraphics.setScrollFactor).not.toHaveBeenCalled();
       });
     });
 
-    describe('updateReloadCircle', () => {
-      it('should update circular reload indicator progress', () => {
+    describe('updateReloadCircle (world-space reload arc)', () => {
+      it('should draw world-space arc centered on player position', () => {
         const graphicsCountBefore = createdGraphics.length;
         ui.createReloadCircleIndicator();
-        // Get the graphics instance that was just created
         const circleGraphics = createdGraphics[graphicsCountBefore];
 
-        ui.updateReloadCircle(0.75);
+        // Pass player world position
+        ui.updateReloadCircle(0.5, 500, 300);
 
         expect(circleGraphics.clear).toHaveBeenCalled();
-        expect(circleGraphics.lineStyle).toHaveBeenCalled();
-        expect(circleGraphics.arc).toHaveBeenCalled();
+        // Arc centered at player position (500, 300) with RELOAD_ARC.RADIUS=25
+        expect(circleGraphics.arc).toHaveBeenCalledWith(
+          500, 300,
+          25,  // RELOAD_ARC.RADIUS
+          expect.any(Number),  // startAngle
+          expect.any(Number),  // endAngle
+          false
+        );
+      });
+
+      it('should use RELOAD_ARC constants for stroke style', () => {
+        const graphicsCountBefore = createdGraphics.length;
+        ui.createReloadCircleIndicator();
+        const circleGraphics = createdGraphics[graphicsCountBefore];
+
+        ui.updateReloadCircle(0.75, 400, 200);
+
+        // RELOAD_ARC.STROKE=3, RELOAD_ARC.COLOR=0x00FF00, alpha=1.0
+        expect(circleGraphics.lineStyle).toHaveBeenCalledWith(3, 0x00FF00, 1.0);
+      });
+
+      it('should start arc at top (270 degrees) and sweep clockwise', () => {
+        const graphicsCountBefore = createdGraphics.length;
+        ui.createReloadCircleIndicator();
+        const circleGraphics = createdGraphics[graphicsCountBefore];
+
+        ui.updateReloadCircle(0.5, 300, 400);
+
+        const startAngle = Math.PI * 1.5; // 270 degrees = 3*PI/2
+        const endAngle = startAngle + (0.5 * Math.PI * 2); // 50% = PI
+
+        const arcArgs = circleGraphics.arc.mock.calls[0];
+        expect(arcArgs[3]).toBeCloseTo(startAngle, 5);
+        expect(arcArgs[4]).toBeCloseTo(endAngle, 5);
+        expect(arcArgs[5]).toBe(false); // clockwise
       });
 
       it('should handle updateReloadCircle when circle not created', () => {
         expect(() => {
-          ui.updateReloadCircle(0.5);
+          ui.updateReloadCircle(0.5, 300, 400);
         }).not.toThrow();
+      });
+
+      it('should default to position (0, 0) when no player position given', () => {
+        const graphicsCountBefore = createdGraphics.length;
+        ui.createReloadCircleIndicator();
+        const circleGraphics = createdGraphics[graphicsCountBefore];
+
+        ui.updateReloadCircle(1.0);
+
+        expect(circleGraphics.arc).toHaveBeenCalledWith(
+          0, 0, 25, expect.any(Number), expect.any(Number), false
+        );
       });
     });
 
