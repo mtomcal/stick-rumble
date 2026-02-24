@@ -160,6 +160,13 @@ export class ProceduralWeaponGraphics {
   }
 
   /**
+   * Reset container scale to 1:1 (used after death/respawn to ensure full-size rendering)
+   */
+  resetScale(): void {
+    this.container.setScale(1);
+  }
+
+  /**
    * Trigger gun recoil animation (backward kick along aim axis)
    */
   triggerRecoil(): void {

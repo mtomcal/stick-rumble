@@ -278,30 +278,28 @@ export class GameSceneUI {
   }
 
   /**
-   * Update crosshair position and spread
-   * @param isMoving - Whether the player is currently moving
-   * @param spreadDegrees - Current weapon spread in degrees
-   * @param weaponType - Current weapon type (optional)
+   * Update crosshair position each frame.
+   * weaponType is used for melee visibility control.
+   * The reticle is fixed-size — no bloom, no spread visualization.
+   *
+   * @param _isMoving - Unused (no dynamic sizing)
+   * @param _spreadDegrees - Unused (no spread visualization)
+   * @param weaponType - Current weapon type (for melee visibility)
    */
-  updateCrosshair(isMoving: boolean, spreadDegrees: number, weaponType?: string): void {
+  updateCrosshair(_isMoving: boolean, _spreadDegrees: number, weaponType?: string): void {
     if (!this.crosshair) {
       return;
     }
 
-    if (weaponType) {
-      this.crosshair.setWeaponType(weaponType);
-    }
-
-    this.crosshair.update(isMoving, spreadDegrees);
+    this.crosshair.update(weaponType ?? this.crosshair.getWeaponType());
   }
 
   /**
-   * Trigger crosshair bloom animation when local player fires
+   * No-op: Crosshair bloom has been removed per spec.
+   * The crosshair is a fixed-size reticle with no dynamic expansion.
    */
   triggerCrosshairBloom(): void {
-    if (this.crosshair) {
-      this.crosshair.triggerBloom();
-    }
+    // Bloom removed — crosshair is fixed-size per spec
   }
 
   /**

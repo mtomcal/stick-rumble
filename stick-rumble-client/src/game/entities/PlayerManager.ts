@@ -312,6 +312,20 @@ export class PlayerManager {
         const headColor = isLocal ? COLORS.PLAYER_HEAD : COLORS.ENEMY_HEAD;
         playerGraphics.setColor(headColor);
 
+        // Restore visibility of all associated elements (may have been hidden on death)
+        const aliveLabel = this.playerLabels.get(state.id);
+        if (aliveLabel) aliveLabel.setVisible(true);
+        const aliveAimIndicator = this.aimIndicators.get(state.id);
+        if (aliveAimIndicator) aliveAimIndicator.setVisible(true);
+        const aliveWeapon = this.weaponGraphics.get(state.id);
+        if (aliveWeapon) {
+          aliveWeapon.setVisible(true);
+          // Ensure weapon container scale is 1:1 (not left at small value from reload pulse)
+          aliveWeapon.resetScale();
+        }
+        const aliveHealth = this.healthBars.get(state.id);
+        if (aliveHealth) aliveHealth.setVisible(true);
+
         // Clean up corpse if player respawned
         this.destroyCorpse(state.id);
       } else {
@@ -319,6 +333,20 @@ export class PlayerManager {
         const isLocal = state.id === this.localPlayerId;
         const headColor = isLocal ? COLORS.PLAYER_HEAD : COLORS.ENEMY_HEAD;
         playerGraphics.setColor(headColor);
+
+        // Restore visibility of all associated elements
+        const rollingLabel = this.playerLabels.get(state.id);
+        if (rollingLabel) rollingLabel.setVisible(true);
+        const rollingAimIndicator = this.aimIndicators.get(state.id);
+        if (rollingAimIndicator) rollingAimIndicator.setVisible(true);
+        const rollingWeapon = this.weaponGraphics.get(state.id);
+        if (rollingWeapon) {
+          rollingWeapon.setVisible(true);
+          // Ensure weapon container scale is 1:1
+          rollingWeapon.resetScale();
+        }
+        const rollingHealth = this.healthBars.get(state.id);
+        if (rollingHealth) rollingHealth.setVisible(true);
 
         // Clean up corpse if player respawned
         this.destroyCorpse(state.id);
@@ -512,6 +540,10 @@ export class PlayerManager {
     // Head offset along rotation axis
     deadGfx.fillStyle(0x444444);
     deadGfx.fillCircle(x + Math.cos(rot) * 25, y + Math.sin(rot) * 25, 10);
+
+    // Yellow circle outline surrounding corpse (~50px diameter, stroke-only)
+    deadGfx.lineStyle(2, COLORS.SPAWN_RING, 1);
+    deadGfx.strokeCircle(x, y, 25);
 
     deadGfx.setDepth(5);
 

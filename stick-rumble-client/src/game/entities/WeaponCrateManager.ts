@@ -47,8 +47,8 @@ export class WeaponCrateManager {
     sprite.lineStyle(3, COLORS.WEAPON_CRATE, 1);
     sprite.strokeCircle(0, 0, CRATE_RADIUS);
 
-    // Draw small dark cross icon inside
-    sprite.lineStyle(2, 0x000000, 0.8);
+    // Draw yellow ⊕ cross icon inside (matching COLORS.WEAPON_CRATE)
+    sprite.lineStyle(2, COLORS.WEAPON_CRATE, 1);
     sprite.beginPath();
     sprite.moveTo(0, -8);
     sprite.lineTo(0, 8);
