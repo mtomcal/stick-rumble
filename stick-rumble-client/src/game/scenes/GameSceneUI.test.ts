@@ -1110,31 +1110,80 @@ describe('GameSceneUI', () => {
     });
 
     describe('createReloadCircleIndicator', () => {
-      it('should create circular reload indicator', () => {
+      it('should create reload arc graphics (world-space, no scroll factor)', () => {
+        const graphicsCountBefore = createdGraphics.length;
         ui.createReloadCircleIndicator();
+        const arcGraphics = createdGraphics[graphicsCountBefore];
 
         expect(mockScene.add.graphics).toHaveBeenCalled();
+        // World-space: NOT setting scroll factor to 0
+        expect(arcGraphics.setScrollFactor).not.toHaveBeenCalled();
       });
     });
 
-    describe('updateReloadCircle', () => {
-      it('should update circular reload indicator progress', () => {
+    describe('updateReloadCircle (world-space reload arc)', () => {
+      it('should draw world-space arc centered on player position', () => {
         const graphicsCountBefore = createdGraphics.length;
         ui.createReloadCircleIndicator();
-        // Get the graphics instance that was just created
         const circleGraphics = createdGraphics[graphicsCountBefore];
 
-        ui.updateReloadCircle(0.75);
+        // Pass player world position
+        ui.updateReloadCircle(0.5, 500, 300);
 
         expect(circleGraphics.clear).toHaveBeenCalled();
-        expect(circleGraphics.lineStyle).toHaveBeenCalled();
-        expect(circleGraphics.arc).toHaveBeenCalled();
+        // Arc centered at player position (500, 300) with RELOAD_ARC.RADIUS=25
+        expect(circleGraphics.arc).toHaveBeenCalledWith(
+          500, 300,
+          25,  // RELOAD_ARC.RADIUS
+          expect.any(Number),  // startAngle
+          expect.any(Number),  // endAngle
+          false
+        );
+      });
+
+      it('should use RELOAD_ARC constants for stroke style', () => {
+        const graphicsCountBefore = createdGraphics.length;
+        ui.createReloadCircleIndicator();
+        const circleGraphics = createdGraphics[graphicsCountBefore];
+
+        ui.updateReloadCircle(0.75, 400, 200);
+
+        // RELOAD_ARC.STROKE=3, RELOAD_ARC.COLOR=0x00FF00, alpha=1.0
+        expect(circleGraphics.lineStyle).toHaveBeenCalledWith(3, 0x00FF00, 1.0);
+      });
+
+      it('should start arc at top (270 degrees) and sweep clockwise', () => {
+        const graphicsCountBefore = createdGraphics.length;
+        ui.createReloadCircleIndicator();
+        const circleGraphics = createdGraphics[graphicsCountBefore];
+
+        ui.updateReloadCircle(0.5, 300, 400);
+
+        const startAngle = Math.PI * 1.5; // 270 degrees = 3*PI/2
+        const endAngle = startAngle + (0.5 * Math.PI * 2); // 50% = PI
+
+        const arcArgs = circleGraphics.arc.mock.calls[0];
+        expect(arcArgs[3]).toBeCloseTo(startAngle, 5);
+        expect(arcArgs[4]).toBeCloseTo(endAngle, 5);
+        expect(arcArgs[5]).toBe(false); // clockwise
       });
 
       it('should handle updateReloadCircle when circle not created', () => {
         expect(() => {
-          ui.updateReloadCircle(0.5);
+          ui.updateReloadCircle(0.5, 300, 400);
         }).not.toThrow();
+      });
+
+      it('should default to position (0, 0) when no player position given', () => {
+        const graphicsCountBefore = createdGraphics.length;
+        ui.createReloadCircleIndicator();
+        const circleGraphics = createdGraphics[graphicsCountBefore];
+
+        ui.updateReloadCircle(1.0);
+
+        expect(circleGraphics.arc).toHaveBeenCalledWith(
+          0, 0, 25, expect.any(Number), expect.any(Number), false
+        );
       });
     });
 
@@ -1347,22 +1396,22 @@ describe('GameSceneUI', () => {
       expect(staticGraphics.setDepth).toHaveBeenCalledWith(1999);
     });
 
-    it('should draw circular background with MINIMAP.BG_COLOR at 0.5 alpha', () => {
+    it('should draw square background with MINIMAP.BG_COLOR at 0.5 alpha', () => {
       ui.setupMinimap();
 
       const staticGraphics = createdGraphics[0];
-      // MINIMAP.BG_COLOR = 0x3A3A3A, MINIMAP.SIZE = 170, radius = 85, center = (20+85, 20+85) = (105, 105)
+      // MINIMAP.BG_COLOR = 0x3A3A3A, MINIMAP.SIZE = 170, position (20, 20)
       expect(staticGraphics.fillStyle).toHaveBeenCalledWith(0x3A3A3A, 0.5);
-      expect(staticGraphics.fillCircle).toHaveBeenCalledWith(105, 105, 85);
+      expect(staticGraphics.fillRect).toHaveBeenCalledWith(20, 20, 170, 170);
     });
 
-    it('should draw circular teal border with 2px stroke at alpha 1', () => {
+    it('should draw square teal border with 2px stroke at alpha 1', () => {
       ui.setupMinimap();
 
       const staticGraphics = createdGraphics[0];
-      // MINIMAP.BORDER_COLOR = 0x00CCCC
+      // MINIMAP.BORDER_COLOR = 0x00CCCC, MINIMAP.BORDER_STROKE = 2
       expect(staticGraphics.lineStyle).toHaveBeenCalledWith(2, 0x00CCCC, 1);
-      expect(staticGraphics.strokeCircle).toHaveBeenCalledWith(105, 105, 85);
+      expect(staticGraphics.strokeRect).toHaveBeenCalledWith(20, 20, 170, 170);
     });
 
     it('should create dynamic graphics at depth 2000 with scrollFactor 0', () => {
@@ -1374,12 +1423,12 @@ describe('GameSceneUI', () => {
       expect(dynamicGraphics.setDepth).toHaveBeenCalledWith(2000);
     });
 
-    it('should not use fillRect or strokeRect (circular minimap)', () => {
+    it('should not use fillCircle or strokeCircle for static layer (square minimap)', () => {
       ui.setupMinimap();
 
       const staticGraphics = createdGraphics[0];
-      expect(staticGraphics.fillRect).not.toHaveBeenCalled();
-      expect(staticGraphics.strokeRect).not.toHaveBeenCalled();
+      expect(staticGraphics.fillCircle).not.toHaveBeenCalled();
+      expect(staticGraphics.strokeCircle).not.toHaveBeenCalled();
     });
   });
 
@@ -1443,18 +1492,17 @@ describe('GameSceneUI', () => {
       );
     });
 
-    it('should show radar range ring at 0.15 alpha', () => {
+    it('should show radar range ring at 0.15 alpha centered on clamped player position', () => {
       ui.setupMinimap();
       const dynamicGraphics = createdGraphics[1];
 
       ui.updateMinimap(mockPlayerManager);
 
+      // Player at (500, 500): clamped dot = Math.min(Math.max(20+500*0.106, 20), 190) = 73
+      const clampedX = Math.min(Math.max(20 + 500 * 0.106, 20), 190);
+      const clampedY = Math.min(Math.max(20 + 500 * 0.106, 20), 190);
       expect(dynamicGraphics.lineStyle).toHaveBeenCalledWith(1, 0x00ff00, 0.15);
-      expect(dynamicGraphics.strokeCircle).toHaveBeenCalledWith(
-        20 + 500 * 0.106,
-        20 + 500 * 0.106,
-        600 * 0.106
-      );
+      expect(dynamicGraphics.strokeCircle).toHaveBeenCalledWith(clampedX, clampedY, 600 * 0.106);
     });
 
     it('should clear dynamic graphics before redrawing', () => {
@@ -1521,6 +1569,44 @@ describe('GameSceneUI', () => {
 
       // Should return early without errors
       expect(mockPlayerManager.getLocalPlayerPosition).not.toHaveBeenCalled();
+    });
+
+    it('should clamp player dot to minimap bounds when player at arena edge', () => {
+      // Player near right edge of arena (x=1900) — unclamped dot would be at 20+1900*0.106=221.4, beyond mapX+mapSize=190
+      mockPlayerManager.getLocalPlayerPosition.mockReturnValue({ x: 1900, y: 540 });
+      mockPlayerManager.getLivingPlayers.mockReturnValue([
+        { id: 'player-1', position: { x: 1900, y: 540 } },
+      ]);
+
+      ui.setupMinimap();
+      const dynamicGraphics = createdGraphics[1];
+
+      ui.updateMinimap(mockPlayerManager);
+
+      // Clamped: Math.min(Math.max(20+1900*0.106, 20), 190) = Math.min(221.4, 190) = 190
+      const clampedX = Math.min(Math.max(20 + 1900 * 0.106, 20), 190);
+      const clampedY = Math.min(Math.max(20 + 540 * 0.106, 20), 190);
+      expect(dynamicGraphics.fillCircle).toHaveBeenCalledWith(clampedX, clampedY, 4);
+    });
+
+    it('should clamp enemy dot to minimap bounds when enemy at arena edge (right edge)', () => {
+      // Enemy at right edge (x=1920) — within radar range of player at (1400, 500)
+      mockPlayerManager.getLocalPlayerPosition.mockReturnValue({ x: 1400, y: 500 });
+      mockPlayerManager.getLivingPlayers.mockReturnValue([
+        { id: 'player-1', position: { x: 1400, y: 500 } },
+        { id: 'enemy-edge', position: { x: 1920, y: 500 } },  // 520px away, within 600px
+      ]);
+
+      ui.setupMinimap();
+      const dynamicGraphics = createdGraphics[1];
+
+      ui.updateMinimap(mockPlayerManager);
+
+      // Unclamped: 20 + 1920 * 0.106 = 20 + 203.52 = 223.52, beyond mapX+mapSize=190
+      // Clamped: Math.min(Math.max(20+1920*0.106, 20), 190) = Math.min(223.52, 190) = 190
+      const clampedX = Math.min(Math.max(20 + 1920 * 0.106, 20), 190);
+      const clampedY = Math.min(Math.max(20 + 500 * 0.106, 20), 190);
+      expect(dynamicGraphics.fillCircle).toHaveBeenCalledWith(clampedX, clampedY, 3);
     });
   });
 });

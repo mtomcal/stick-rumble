@@ -647,7 +647,11 @@ describe('GameScene - UI', () => {
         60,
         4
       );
-      expect(updateReloadCircleSpy).toHaveBeenCalledWith(0.5);
+      expect(updateReloadCircleSpy).toHaveBeenCalledWith(
+        0.5,
+        expect.any(Number), // playerX (world-space)
+        expect.any(Number), // playerY (world-space)
+      );
     });
 
     it('should not update reload progress UI when shooting manager is not reloading', async () => {

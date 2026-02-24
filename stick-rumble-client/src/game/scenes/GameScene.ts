@@ -82,15 +82,16 @@ export class GameScene extends Phaser.Scene {
     this.physics.world.setBounds(0, 0, ARENA.WIDTH, ARENA.HEIGHT);
     this.cameras.main.setBounds(0, 0, ARENA.WIDTH, ARENA.HEIGHT);
 
-    // Add arena background
-    this.add.rectangle(0, 0, ARENA.WIDTH, ARENA.HEIGHT, COLORS.BACKGROUND).setOrigin(0, 0);
+    // Add arena background (depth -2, below grid)
+    this.add.rectangle(0, 0, ARENA.WIDTH, ARENA.HEIGHT, COLORS.BACKGROUND).setOrigin(0, 0).setDepth(-2);
 
-    // Add arena border
+    // Add arena border (depth -2, same level as background)
     this.add.rectangle(0, 0, ARENA.WIDTH, ARENA.HEIGHT, 0xffffff, 0)
       .setOrigin(0, 0)
-      .setStrokeStyle(2, 0xffffff);
+      .setStrokeStyle(2, 0xffffff)
+      .setDepth(-2);
 
-    // Draw floor grid
+    // Draw floor grid (depth -1, below all game objects but above background)
     const gridGraphics = this.add.graphics();
     gridGraphics.lineStyle(1, COLORS.GRID_LINE, 0.5);
     for (let x = 0; x <= ARENA.WIDTH; x += 100) {
@@ -150,7 +151,8 @@ export class GameScene extends Phaser.Scene {
     // Initialize new UI components
     this.scoreDisplayUI = new ScoreDisplayUI(this, camera.width - 10, 10);
     this.killCounterUI = new KillCounterUI(this, camera.width - 10, 42);
-    this.debugOverlayUI = new DebugOverlayUI(this, 10, camera.height - 80);
+    // Minimap is at y=20, height=170, bottom edge at y=190 — debug overlay goes below at y=200
+    this.debugOverlayUI = new DebugOverlayUI(this, 10, 200);
     this.chatLogUI = new ChatLogUI(this, 10, camera.height - 140);
     this.pickupNotificationUI = new PickupNotificationUI(this, camera.width / 2, camera.height / 2);
 
@@ -457,14 +459,14 @@ export class GameScene extends Phaser.Scene {
       this.meleeWeaponManager.update();
     }
 
-    // Update reload UI progress (world-space bar above local player)
+    // Update reload UI progress (world-space bar and arc above local player)
     if (this.shootingManager && this.shootingManager.isReloading()) {
       const progress = this.shootingManager.getReloadProgress();
       const localPos = this.playerManager?.getLocalPlayerPosition();
       const playerX = localPos?.x ?? 0;
       const playerY = localPos?.y ?? 0;
       this.ui.updateReloadProgress(progress, playerX, playerY, 60, 4);
-      this.ui.updateReloadCircle(progress);
+      this.ui.updateReloadCircle(progress, playerX, playerY);
     }
 
     // Update crosshair — fixed-size reticle, no spread visualization
