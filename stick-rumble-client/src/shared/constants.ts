@@ -31,6 +31,9 @@ export const COLORS = {
   HIT_CHEVRON: 0xCC3333,
   WEAPON_CRATE: 0xCCCC00,
   AIM_LINE: 0xFFFFFF,
+  HIT_TRAIL: 0xFFFFFF,
+  MINIMAP_BORDER: 0x00CCCC,
+  RELOAD_ARC: 0x00FF00,
 } as const;
 
 /**
@@ -42,6 +45,30 @@ export const MINIMAP = {
   RADAR_RANGE: 600,
   BG_COLOR: 0x3A3A3A,
   BORDER_COLOR: 0x00CCCC,
+  BORDER_STROKE: 2,
+} as const;
+
+/**
+ * Hit confirmation trail constants
+ */
+export const HIT_TRAIL = {
+  COLOR: 0xFFFFFF,
+  STROKE: 1,
+  ALPHA: 0.8,
+  LINGER_DURATION: 300,
+  FADE_DURATION: 200,
+  DEPTH: 40,
+} as const;
+
+/**
+ * Reload arc constants
+ */
+export const RELOAD_ARC = {
+  RADIUS: 25,
+  STROKE: 3,
+  COLOR: 0x00FF00,
+  START_ANGLE: 270,
+  DEPTH: 45,
 } as const;
 
 /**
