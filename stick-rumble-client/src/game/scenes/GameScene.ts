@@ -82,15 +82,16 @@ export class GameScene extends Phaser.Scene {
     this.physics.world.setBounds(0, 0, ARENA.WIDTH, ARENA.HEIGHT);
     this.cameras.main.setBounds(0, 0, ARENA.WIDTH, ARENA.HEIGHT);
 
-    // Add arena background
-    this.add.rectangle(0, 0, ARENA.WIDTH, ARENA.HEIGHT, COLORS.BACKGROUND).setOrigin(0, 0);
+    // Add arena background (depth -2, below grid)
+    this.add.rectangle(0, 0, ARENA.WIDTH, ARENA.HEIGHT, COLORS.BACKGROUND).setOrigin(0, 0).setDepth(-2);
 
-    // Add arena border
+    // Add arena border (depth -2, same level as background)
     this.add.rectangle(0, 0, ARENA.WIDTH, ARENA.HEIGHT, 0xffffff, 0)
       .setOrigin(0, 0)
-      .setStrokeStyle(2, 0xffffff);
+      .setStrokeStyle(2, 0xffffff)
+      .setDepth(-2);
 
-    // Draw floor grid
+    // Draw floor grid (depth -1, below all game objects but above background)
     const gridGraphics = this.add.graphics();
     gridGraphics.lineStyle(1, COLORS.GRID_LINE, 0.5);
     for (let x = 0; x <= ARENA.WIDTH; x += 100) {
