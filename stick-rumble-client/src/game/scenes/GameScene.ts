@@ -201,6 +201,7 @@ export class GameScene extends Phaser.Scene {
     this.eventHandlers.setKillCounterUI(this.killCounterUI);
     this.eventHandlers.setChatLogUI(this.chatLogUI);
     this.eventHandlers.setPickupNotificationUI(this.pickupNotificationUI);
+    this.eventHandlers.setAimLine(this.aimLine);
 
     // Inject screen shake into event handlers for recoil feedback (Story 3.3 Polish)
     this.eventHandlers.setScreenShake(this.screenShake);
@@ -420,18 +421,6 @@ export class GameScene extends Phaser.Scene {
       const currentAimAngle = this.inputManager.getAimAngle();
       this.playerManager.updateLocalPlayerAim(currentAimAngle);
 
-      // Update aim line (local player only)
-      if (this.aimLine) {
-        const localPos = this.playerManager.getLocalPlayerPosition();
-        const isMelee = this.shootingManager && this.shootingManager.isMeleeWeapon();
-        if (localPos && !isMelee) {
-          this.aimLine.setEnabled(true);
-          this.aimLine.update(localPos.x, localPos.y, currentAimAngle);
-        } else {
-          this.aimLine.setEnabled(false);
-        }
-      }
-
       // Handle automatic fire for automatic weapons when pointer held
       if (this.isPointerHeld && this.shootingManager && !this.shootingManager.isMeleeWeapon() && this.shootingManager.isAutomatic()) {
         this.shootingManager.setAimAngle(currentAimAngle);
@@ -478,23 +467,10 @@ export class GameScene extends Phaser.Scene {
       this.ui.updateReloadCircle(progress);
     }
 
-    // Update crosshair
-    if (this.playerManager && this.eventHandlers) {
-      const isMoving = this.playerManager.isLocalPlayerMoving();
+    // Update crosshair — fixed-size reticle, no spread visualization
+    if (this.eventHandlers) {
       const weaponType = this.eventHandlers.getCurrentWeaponType();
-
-      // Map weapon type to spread degrees (matching server values)
-      const WEAPON_SPREAD: Record<string, number> = {
-        'uzi': 5.0,
-        'ak47': 3.0,
-        'shotgun': 15.0,
-        'pistol': 2.0,
-        'bat': 0,
-        'katana': 0,
-      };
-
-      const spreadDegrees = WEAPON_SPREAD[weaponType.toLowerCase()] || 0;
-      this.ui.updateCrosshair(isMoving, spreadDegrees, weaponType);
+      this.ui.updateCrosshair(false, 0, weaponType);
     }
 
     // Update minimap

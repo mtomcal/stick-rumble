@@ -19,6 +19,7 @@ import type { ScoreDisplayUI } from '../ui/ScoreDisplayUI';
 import type { KillCounterUI } from '../ui/KillCounterUI';
 import type { ChatLogUI } from '../ui/ChatLogUI';
 import type { PickupNotificationUI } from '../ui/PickupNotificationUI';
+import type { AimLine } from '../entities/AimLine';
 // Import generated schema types for server→client messages (replaces manual type assertions)
 import type {
   RoomJoinedData,
@@ -75,6 +76,7 @@ export class GameSceneEventHandlers {
   private killCounterUI: KillCounterUI | null = null;
   private chatLogUI: ChatLogUI | null = null;
   private pickupNotificationUI: PickupNotificationUI | null = null;
+  private aimLine: AimLine | null = null;
 
   constructor(
     wsClient: WebSocketClient,
@@ -172,6 +174,13 @@ export class GameSceneEventHandlers {
    */
   setPickupNotificationUI(pickupNotificationUI: PickupNotificationUI): void {
     this.pickupNotificationUI = pickupNotificationUI;
+  }
+
+  /**
+   * Set aim line (hit confirmation trail) for showing trails on hit:confirmed events
+   */
+  setAimLine(aimLine: AimLine): void {
+    this.aimLine = aimLine;
   }
 
   /**
@@ -363,11 +372,6 @@ export class GameSceneEventHandlers {
         this.screenShake.shakeOnWeaponFire(this.currentWeaponType);
       }
 
-      // Trigger crosshair bloom when local player fires
-      if (isLocalPlayer) {
-        this.ui.triggerCrosshairBloom();
-      }
-
       // Play weapon firing sound (Story 3.3 Polish: Weapon-Specific Firing Sounds)
       if (this.audioManager) {
         if (isLocalPlayer) {
@@ -495,6 +499,16 @@ export class GameSceneEventHandlers {
       const victimPos = this.playerManager.getPlayerPosition(messageData.victimId);
       if (localPos && victimPos) {
         this.ui.showHitIndicator(localPos.x, localPos.y, victimPos.x, victimPos.y, 'outgoing', false);
+      }
+
+      // Show hit confirmation trail from barrel tip to target (on-screen AND off-screen)
+      if (this.aimLine && localPos) {
+        const localPlayerId = this.playerManager.getLocalPlayerId();
+        const aimAngle = localPlayerId ? (this.playerManager.getPlayerAimAngle(localPlayerId) ?? 0) : 0;
+        const barrel = this.aimLine.getBarrelPosition(localPos.x, localPos.y, aimAngle);
+        const trailTargetX = victimPos ? victimPos.x : localPos.x + Math.cos(aimAngle) * 200;
+        const trailTargetY = victimPos ? victimPos.y : localPos.y + Math.sin(aimAngle) * 200;
+        this.aimLine.showTrail(barrel.x, barrel.y, trailTargetX, trailTargetY);
       }
       // TODO: Audio feedback (ding sound) - deferred to audio story
     };
