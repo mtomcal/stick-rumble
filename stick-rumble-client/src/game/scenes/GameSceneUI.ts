@@ -569,20 +569,20 @@ export class GameSceneUI {
   setupMinimap(): void {
     const mapX = 20;
     const mapY = 20;
-    const mapRadius = MINIMAP.SIZE / 2; // 85px
+    const mapSize = MINIMAP.SIZE; // 170px
 
     // Static layer — drawn once
     this.minimapStaticGraphics = this.scene.add.graphics();
     this.minimapStaticGraphics.setScrollFactor(0);
     this.minimapStaticGraphics.setDepth(1999);
 
-    // Background — circular
+    // Background — square, dark gray at 50% alpha
     this.minimapStaticGraphics.fillStyle(MINIMAP.BG_COLOR, 0.5);
-    this.minimapStaticGraphics.fillCircle(mapX + mapRadius, mapY + mapRadius, mapRadius);
+    this.minimapStaticGraphics.fillRect(mapX, mapY, mapSize, mapSize);
 
-    // Border — circular, teal
-    this.minimapStaticGraphics.lineStyle(2, MINIMAP.BORDER_COLOR, 1);
-    this.minimapStaticGraphics.strokeCircle(mapX + mapRadius, mapY + mapRadius, mapRadius);
+    // Border — square, teal, 2px stroke
+    this.minimapStaticGraphics.lineStyle(MINIMAP.BORDER_STROKE, MINIMAP.BORDER_COLOR, 1);
+    this.minimapStaticGraphics.strokeRect(mapX, mapY, mapSize, mapSize);
 
     // Dynamic layer — cleared and redrawn each frame
     this.minimapDynamicGraphics = this.scene.add.graphics();
@@ -600,6 +600,7 @@ export class GameSceneUI {
     const scale = MINIMAP.SCALE;
     const mapX = 20;
     const mapY = 20;
+    const mapSize = MINIMAP.SIZE;
 
     this.minimapDynamicGraphics.clear();
 
@@ -609,50 +610,46 @@ export class GameSceneUI {
     const localId = playerManager.getLocalPlayerId();
     const livingPlayers = playerManager.getLivingPlayers();
 
-    // Enemy dots (within radar range only)
+    /**
+     * Clamp a world-space dot to stay within minimap bounds.
+     */
+    const clampToMinimap = (worldX: number, worldY: number): { x: number; y: number } => {
+      const dotX = Math.min(Math.max(mapX + worldX * scale, mapX), mapX + mapSize);
+      const dotY = Math.min(Math.max(mapY + worldY * scale, mapY), mapY + mapSize);
+      return { x: dotX, y: dotY };
+    };
+
+    // Enemy dots (within radar range only, clamped to minimap bounds)
     for (const player of livingPlayers) {
       if (player.id === localId) continue;
       const dx = localPos.x - player.position.x;
       const dy = localPos.y - player.position.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
       if (dist <= 600) {
+        const pos = clampToMinimap(player.position.x, player.position.y);
         this.minimapDynamicGraphics.fillStyle(0xff0000, 1);
-        this.minimapDynamicGraphics.fillCircle(
-          mapX + player.position.x * scale,
-          mapY + player.position.y * scale,
-          3
-        );
+        this.minimapDynamicGraphics.fillCircle(pos.x, pos.y, 3);
       }
     }
 
-    // Player dot
+    // Player dot (clamped to minimap bounds)
+    const playerPos = clampToMinimap(localPos.x, localPos.y);
     this.minimapDynamicGraphics.fillStyle(0x00ff00, 1);
-    this.minimapDynamicGraphics.fillCircle(
-      mapX + localPos.x * scale,
-      mapY + localPos.y * scale,
-      4
-    );
+    this.minimapDynamicGraphics.fillCircle(playerPos.x, playerPos.y, 4);
 
-    // Radar range ring
+    // Radar range ring (circle, centered on clamped player dot position)
     this.minimapDynamicGraphics.lineStyle(1, 0x00ff00, 0.15);
-    this.minimapDynamicGraphics.strokeCircle(
-      mapX + localPos.x * scale,
-      mapY + localPos.y * scale,
-      600 * scale
-    );
+    this.minimapDynamicGraphics.strokeCircle(playerPos.x, playerPos.y, 600 * scale);
 
     // Aim direction line
     const localAimAngle = playerManager.getPlayerAimAngle(localId ?? '');
     if (localAimAngle !== null) {
       this.minimapDynamicGraphics.lineStyle(1, 0x00ff00, 0.8);
       this.minimapDynamicGraphics.beginPath();
-      this.minimapDynamicGraphics.moveTo(
-        mapX + localPos.x * scale,
-        mapY + localPos.y * scale
-      );
+      this.minimapDynamicGraphics.moveTo(playerPos.x, playerPos.y);
       this.minimapDynamicGraphics.lineTo(
-        mapX + localPos.x * scale + Math.cos(localAimAngle) * 10,
-        mapY + localPos.y * scale + Math.sin(localAimAngle) * 10
+        playerPos.x + Math.cos(localAimAngle) * 10,
+        playerPos.y + Math.sin(localAimAngle) * 10
       );
       this.minimapDynamicGraphics.strokePath();
     }
