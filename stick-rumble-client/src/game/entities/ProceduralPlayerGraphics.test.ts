@@ -409,6 +409,16 @@ describe('ProceduralPlayerGraphics', () => {
       expect(barrel.x).toBeCloseTo(100);
       expect(barrel.y).toBeCloseTo(220);
     });
+
+    it('should use aim angle for barrel position independently of body rotation', () => {
+      const player = new ProceduralPlayerGraphics(scene, 100, 200, COLORS.ENEMY_HEAD, COLORS.BODY);
+      player.setRotation(0);
+      player.setAimAngle(Math.PI / 2);
+
+      const barrel = player.getBarrelPosition();
+      expect(barrel.x).toBeCloseTo(100);
+      expect(barrel.y).toBeCloseTo(220);
+    });
   });
 
   describe('Task 3.6: YOU / name labels', () => {

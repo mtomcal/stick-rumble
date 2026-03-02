@@ -5,19 +5,34 @@ import { RangedWeapon } from './RangedWeapon';
 describe('RangedWeapon', () => {
   let scene: Phaser.Scene;
   let weapon: RangedWeapon;
+  let muzzleFlashGraphics: {
+    setDepth: ReturnType<typeof vi.fn>;
+    setVisible: ReturnType<typeof vi.fn>;
+    clear: ReturnType<typeof vi.fn>;
+    fillStyle: ReturnType<typeof vi.fn>;
+    fillCircle: ReturnType<typeof vi.fn>;
+    destroy: ReturnType<typeof vi.fn>;
+    visible: boolean;
+  };
 
   beforeEach(() => {
+    muzzleFlashGraphics = {
+      setDepth: vi.fn().mockReturnThis(),
+      setVisible: vi.fn().mockImplementation(function(this: typeof muzzleFlashGraphics, visible: boolean) {
+        this.visible = visible;
+        return this;
+      }),
+      clear: vi.fn().mockReturnThis(),
+      fillStyle: vi.fn().mockReturnThis(),
+      fillCircle: vi.fn().mockReturnThis(),
+      destroy: vi.fn(),
+      visible: false,
+    };
+
     // Create minimal mock scene
     scene = {
       add: {
-        graphics: vi.fn(() => ({
-          setDepth: vi.fn().mockReturnThis(),
-          setVisible: vi.fn(),
-          clear: vi.fn(),
-          fillStyle: vi.fn(),
-          fillCircle: vi.fn(),
-          destroy: vi.fn(),
-        })),
+        graphics: vi.fn(() => muzzleFlashGraphics),
         particles: vi.fn(() => ({
           createEmitter: vi.fn(() => ({
             explode: vi.fn(),
@@ -133,6 +148,33 @@ describe('RangedWeapon', () => {
 
       // Weapon should still be in firing state (stopFiring() must be called explicitly)
       expect(weapon.isFiring()).toBe(true);
+    });
+
+    it('should clear and redraw the muzzle flash as the weapon moves', () => {
+      weapon.startFiring(0);
+      (muzzleFlashGraphics.clear as ReturnType<typeof vi.fn>).mockClear();
+      (muzzleFlashGraphics.fillCircle as ReturnType<typeof vi.fn>).mockClear();
+
+      weapon.setPosition(200, 300);
+      scene.time.now = 25;
+      weapon.update();
+
+      expect(muzzleFlashGraphics.clear).toHaveBeenCalled();
+      expect(muzzleFlashGraphics.fillCircle).toHaveBeenNthCalledWith(1, 225, 300, 8);
+      expect(muzzleFlashGraphics.fillCircle).toHaveBeenNthCalledWith(2, 225, 300, 12);
+    });
+
+    it('should clear and hide a single-shot muzzle flash after its duration', () => {
+      scene.time.now = 0;
+      weapon.triggerMuzzleFlash(0);
+      expect(muzzleFlashGraphics.setVisible).toHaveBeenCalledWith(true);
+
+      (muzzleFlashGraphics.clear as ReturnType<typeof vi.fn>).mockClear();
+      scene.time.now = 150;
+      weapon.update();
+
+      expect(muzzleFlashGraphics.clear).toHaveBeenCalled();
+      expect(muzzleFlashGraphics.setVisible).toHaveBeenCalledWith(false);
     });
   });
 

@@ -151,8 +151,7 @@ export class GameScene extends Phaser.Scene {
     // Initialize new UI components
     this.scoreDisplayUI = new ScoreDisplayUI(this, camera.width - 10, 10);
     this.killCounterUI = new KillCounterUI(this, camera.width - 10, 42);
-    // Minimap is at y=20, height=170, bottom edge at y=190 — debug overlay goes below at y=200
-    this.debugOverlayUI = new DebugOverlayUI(this, 10, 200);
+    this.debugOverlayUI = new DebugOverlayUI(this, 10, GameSceneUI.getDefaultDebugOverlayY());
     this.chatLogUI = new ChatLogUI(this, 10, camera.height - 140);
     this.pickupNotificationUI = new PickupNotificationUI(this, camera.width / 2, camera.height / 2);
 
@@ -509,9 +508,12 @@ export class GameScene extends Phaser.Scene {
     const playerPos = this.playerManager.getLocalPlayerPosition();
     if (!playerPos) return null;
 
-    const barrelOffset = 30;
-    const barrelX = playerPos.x + Math.cos(aimAngle) * barrelOffset;
-    const barrelY = playerPos.y + Math.sin(aimAngle) * barrelOffset;
+    const localPlayerId = this.playerManager.getLocalPlayerId();
+    const barrel = localPlayerId
+      ? this.playerManager.getWeaponBarrelPosition(localPlayerId)
+      : null;
+    const barrelX = barrel?.x ?? (playerPos.x + Math.cos(aimAngle) * 35);
+    const barrelY = barrel?.y ?? (playerPos.y + Math.sin(aimAngle) * 35);
 
     if (barrelX < 0 || barrelX > ARENA.WIDTH || barrelY < 0 || barrelY > ARENA.HEIGHT) {
       return { x: barrelX, y: barrelY };

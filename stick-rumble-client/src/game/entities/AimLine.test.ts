@@ -94,23 +94,23 @@ describe('AimLine (Hit Confirmation Trail)', () => {
   });
 
   describe('getBarrelPosition', () => {
-    it('should return barrel tip offset 30px from player in aim direction', () => {
-      const pos = aimLine.getBarrelPosition(100, 200, 0);
-      expect(pos.x).toBeCloseTo(130, 5);
+    it('should return pistol barrel tip using the rendered weapon origin and length', () => {
+      const pos = aimLine.getBarrelPosition(110, 200, 0, 'Pistol');
+      expect(pos.x).toBeCloseTo(135, 5);
       expect(pos.y).toBeCloseTo(200, 5);
     });
 
     it('should compute correctly for downward aim', () => {
-      const pos = aimLine.getBarrelPosition(0, 0, Math.PI / 2);
+      const pos = aimLine.getBarrelPosition(0, 10, Math.PI / 2, 'Pistol');
       expect(pos.x).toBeCloseTo(0, 5);
-      expect(pos.y).toBeCloseTo(30, 5);
+      expect(pos.y).toBeCloseTo(35, 5);
     });
 
-    it('should compute correctly for diagonal aim', () => {
+    it('should compute correctly for diagonal aim with a longer weapon barrel', () => {
       const angle = Math.PI / 4; // 45 degrees
-      const pos = aimLine.getBarrelPosition(50, 50, angle);
-      expect(pos.x).toBeCloseTo(50 + Math.cos(angle) * 30, 5);
-      expect(pos.y).toBeCloseTo(50 + Math.sin(angle) * 30, 5);
+      const pos = aimLine.getBarrelPosition(50, 50, angle, 'AK47');
+      expect(pos.x).toBeCloseTo(50 + Math.cos(angle) * 40, 5);
+      expect(pos.y).toBeCloseTo(50 + Math.sin(angle) * 40, 5);
     });
   });
 

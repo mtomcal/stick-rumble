@@ -20,6 +20,7 @@ vi.mock('phaser', () => ({
 }));
 
 describe('GameSceneUI', () => {
+  const minimapY = 114;
   let ui: GameSceneUI;
   let mockScene: Phaser.Scene;
   let mockCamera: any;
@@ -1400,9 +1401,9 @@ describe('GameSceneUI', () => {
       ui.setupMinimap();
 
       const staticGraphics = createdGraphics[0];
-      // MINIMAP.BG_COLOR = 0x3A3A3A, MINIMAP.SIZE = 170, position (20, 20)
+      // MINIMAP.BG_COLOR = 0x3A3A3A, MINIMAP.SIZE = 170, positioned below health + ammo HUD
       expect(staticGraphics.fillStyle).toHaveBeenCalledWith(0x3A3A3A, 0.5);
-      expect(staticGraphics.fillRect).toHaveBeenCalledWith(20, 20, 170, 170);
+      expect(staticGraphics.fillRect).toHaveBeenCalledWith(20, minimapY, 170, 170);
     });
 
     it('should draw square teal border with 2px stroke at alpha 1', () => {
@@ -1411,7 +1412,7 @@ describe('GameSceneUI', () => {
       const staticGraphics = createdGraphics[0];
       // MINIMAP.BORDER_COLOR = 0x00CCCC, MINIMAP.BORDER_STROKE = 2
       expect(staticGraphics.lineStyle).toHaveBeenCalledWith(2, 0x00CCCC, 1);
-      expect(staticGraphics.strokeRect).toHaveBeenCalledWith(20, 20, 170, 170);
+      expect(staticGraphics.strokeRect).toHaveBeenCalledWith(20, minimapY, 170, 170);
     });
 
     it('should create dynamic graphics at depth 2000 with scrollFactor 0', () => {
@@ -1459,7 +1460,7 @@ describe('GameSceneUI', () => {
       expect(dynamicGraphics.fillStyle).toHaveBeenCalledWith(0xff0000, 1);
       expect(dynamicGraphics.fillCircle).toHaveBeenCalledWith(
         20 + 700 * 0.106,  // mapX + enemy.x * MINIMAP.SCALE
-        20 + 500 * 0.106,  // mapY + enemy.y * MINIMAP.SCALE
+        minimapY + 500 * 0.106,
         3
       );
     });
@@ -1487,7 +1488,7 @@ describe('GameSceneUI', () => {
       expect(dynamicGraphics.fillStyle).toHaveBeenCalledWith(0x00ff00, 1);
       expect(dynamicGraphics.fillCircle).toHaveBeenCalledWith(
         20 + 500 * 0.106,
-        20 + 500 * 0.106,
+        minimapY + 500 * 0.106,
         4
       );
     });
@@ -1500,7 +1501,7 @@ describe('GameSceneUI', () => {
 
       // Player at (500, 500): clamped dot = Math.min(Math.max(20+500*0.106, 20), 190) = 73
       const clampedX = Math.min(Math.max(20 + 500 * 0.106, 20), 190);
-      const clampedY = Math.min(Math.max(20 + 500 * 0.106, 20), 190);
+      const clampedY = Math.min(Math.max(minimapY + 500 * 0.106, minimapY), minimapY + 170);
       expect(dynamicGraphics.lineStyle).toHaveBeenCalledWith(1, 0x00ff00, 0.15);
       expect(dynamicGraphics.strokeCircle).toHaveBeenCalledWith(clampedX, clampedY, 600 * 0.106);
     });
@@ -1528,7 +1529,7 @@ describe('GameSceneUI', () => {
       // Exactly 600px should be included (dist <= 600)
       expect(dynamicGraphics.fillCircle).toHaveBeenCalledWith(
         20 + 1100 * 0.106,
-        20 + 500 * 0.106,
+        minimapY + 500 * 0.106,
         3
       );
     });
@@ -1547,7 +1548,7 @@ describe('GameSceneUI', () => {
       // 601px should NOT be included
       expect(dynamicGraphics.fillCircle).not.toHaveBeenCalledWith(
         20 + 1101 * 0.106,
-        20 + 500 * 0.106,
+        minimapY + 500 * 0.106,
         3
       );
     });
@@ -1585,7 +1586,7 @@ describe('GameSceneUI', () => {
 
       // Clamped: Math.min(Math.max(20+1900*0.106, 20), 190) = Math.min(221.4, 190) = 190
       const clampedX = Math.min(Math.max(20 + 1900 * 0.106, 20), 190);
-      const clampedY = Math.min(Math.max(20 + 540 * 0.106, 20), 190);
+      const clampedY = Math.min(Math.max(minimapY + 540 * 0.106, minimapY), minimapY + 170);
       expect(dynamicGraphics.fillCircle).toHaveBeenCalledWith(clampedX, clampedY, 4);
     });
 
@@ -1605,7 +1606,7 @@ describe('GameSceneUI', () => {
       // Unclamped: 20 + 1920 * 0.106 = 20 + 203.52 = 223.52, beyond mapX+mapSize=190
       // Clamped: Math.min(Math.max(20+1920*0.106, 20), 190) = Math.min(223.52, 190) = 190
       const clampedX = Math.min(Math.max(20 + 1920 * 0.106, 20), 190);
-      const clampedY = Math.min(Math.max(20 + 500 * 0.106, 20), 190);
+      const clampedY = Math.min(Math.max(minimapY + 500 * 0.106, minimapY), minimapY + 170);
       expect(dynamicGraphics.fillCircle).toHaveBeenCalledWith(clampedX, clampedY, 3);
     });
   });

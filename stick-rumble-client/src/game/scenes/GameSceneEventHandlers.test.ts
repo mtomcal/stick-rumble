@@ -39,6 +39,7 @@ describe('GameSceneEventHandlers', () => {
       getPlayerPosition: vi.fn().mockReturnValue({ x: 100, y: 200 }),
       getLocalPlayerPosition: vi.fn().mockReturnValue({ x: 100, y: 200 }),
       getPlayerAimAngle: vi.fn().mockReturnValue(0),
+      getWeaponBarrelPosition: vi.fn().mockReturnValue({ x: 135, y: 200 }),
       getLivingPlayers: vi.fn().mockReturnValue([]),
       updatePlayerWeapon: vi.fn(),
       triggerWeaponRecoil: vi.fn(),
@@ -1785,6 +1786,49 @@ describe('GameSceneEventHandlers', () => {
       expect(mockGameSceneUI.showCameraShake).toHaveBeenCalled();
       // Should also show hit marker
       expect(mockGameSceneUI.showHitMarker).toHaveBeenCalled();
+    });
+
+    it('should anchor hit trail to the rendered weapon barrel tip on hit:confirmed', () => {
+      const mockAimLine = {
+        getBarrelPosition: vi.fn(),
+        showTrail: vi.fn(),
+      };
+      eventHandlers.setAimLine(mockAimLine as any);
+      eventHandlers.setupEventHandlers();
+
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const hitConfirmedHandler = handlerRefs.get('hit:confirmed');
+
+      hitConfirmedHandler?.({
+        victimId: 'other-player',
+        damage: 25,
+      });
+
+      expect(mockPlayerManager.getWeaponBarrelPosition).toHaveBeenCalledWith('player-1');
+      expect(mockAimLine.showTrail).toHaveBeenCalledWith(135, 200, 100, 200);
+      expect(mockAimLine.getBarrelPosition).not.toHaveBeenCalled();
+    });
+
+    it('should fall back to computed barrel geometry when rendered weapon barrel is unavailable', () => {
+      const mockAimLine = {
+        getBarrelPosition: vi.fn().mockReturnValue({ x: 150, y: 200 }),
+        showTrail: vi.fn(),
+      };
+      (mockPlayerManager.getWeaponBarrelPosition as ReturnType<typeof vi.fn>).mockReturnValue(null);
+      (eventHandlers as any).currentWeaponType = 'AK47';
+      eventHandlers.setAimLine(mockAimLine as any);
+      eventHandlers.setupEventHandlers();
+
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const hitConfirmedHandler = handlerRefs.get('hit:confirmed');
+
+      hitConfirmedHandler?.({
+        victimId: 'other-player',
+        damage: 25,
+      });
+
+      expect(mockAimLine.getBarrelPosition).toHaveBeenCalledWith(110, 200, 0, 'AK47');
+      expect(mockAimLine.showTrail).toHaveBeenCalledWith(150, 200, 100, 200);
     });
 
     it('should process queued weapon spawns on room:joined', () => {

@@ -505,7 +505,12 @@ export class GameSceneEventHandlers {
       if (this.aimLine && localPos) {
         const localPlayerId = this.playerManager.getLocalPlayerId();
         const aimAngle = localPlayerId ? (this.playerManager.getPlayerAimAngle(localPlayerId) ?? 0) : 0;
-        const barrel = this.aimLine.getBarrelPosition(localPos.x, localPos.y, aimAngle);
+        const weaponOriginX = localPos.x + Math.cos(aimAngle) * 10;
+        const weaponOriginY = localPos.y + Math.sin(aimAngle) * 10;
+        const barrel = localPlayerId
+          ? (this.playerManager.getWeaponBarrelPosition(localPlayerId)
+            ?? this.aimLine.getBarrelPosition(weaponOriginX, weaponOriginY, aimAngle, this.currentWeaponType))
+          : this.aimLine.getBarrelPosition(weaponOriginX, weaponOriginY, aimAngle, this.currentWeaponType);
         const trailTargetX = victimPos ? victimPos.x : localPos.x + Math.cos(aimAngle) * 200;
         const trailTargetY = victimPos ? victimPos.y : localPos.y + Math.sin(aimAngle) * 200;
         this.aimLine.showTrail(barrel.x, barrel.y, trailTargetX, trailTargetY);

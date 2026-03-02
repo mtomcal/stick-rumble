@@ -29,9 +29,6 @@ export interface PlayerState {
   invulnerabilityEndTime?: number; // Timestamp when invulnerability expires (ms since epoch)
 }
 
-// Length of the aim indicator line in pixels
-const AIM_INDICATOR_LENGTH = 50;
-
 /**
  * PlayerManager handles rendering and updating all players
  */
@@ -41,7 +38,6 @@ export class PlayerManager {
   private _clock: Clock;
   private players: Map<string, ProceduralPlayerGraphics> = new Map();
   private playerLabels: Map<string, Phaser.GameObjects.Text> = new Map();
-  private aimIndicators: Map<string, Phaser.GameObjects.Line> = new Map();
   private weaponGraphics: Map<string, ProceduralWeaponGraphics> = new Map();
   private weaponTypes: Map<string, string> = new Map();
   private healthBars: Map<string, HealthBar> = new Map();
@@ -168,12 +164,6 @@ export class PlayerManager {
             this.playerLabels.delete(id);
           }
 
-          const aimIndicator = this.aimIndicators.get(id);
-          if (aimIndicator) {
-            aimIndicator.destroy();
-            this.aimIndicators.delete(id);
-          }
-
           const weaponGraphics = this.weaponGraphics.get(id);
           if (weaponGraphics) {
             weaponGraphics.destroy();
@@ -221,6 +211,7 @@ export class PlayerManager {
         );
 
         this.players.set(state.id, playerGraphics);
+        playerGraphics.setAimAngle(state.aimAngle ?? 0);
 
         // Add label
         const label = this.scene.add.text(
@@ -235,19 +226,8 @@ export class PlayerManager {
         label.setOrigin(0.5);
         this.playerLabels.set(state.id, label);
 
-        // Create aim indicator line
-        const aimAngle = state.aimAngle ?? 0;
-        const endX = state.position.x + Math.cos(aimAngle) * AIM_INDICATOR_LENGTH;
-        const endY = state.position.y + Math.sin(aimAngle) * AIM_INDICATOR_LENGTH;
-        const aimLine = this.scene.add.line(
-          0, 0, // Origin point (line coordinates are absolute)
-          state.position.x, state.position.y, // Start point
-          endX, endY, // End point
-          isLocal ? 0x00ff00 : 0xffff00 // Green for local, yellow for others
-        );
-        this.aimIndicators.set(state.id, aimLine);
-
         // Create weapon graphics (default to Pistol)
+        const aimAngle = state.aimAngle ?? 0;
         const weaponType = this.weaponTypes.get(state.id) ?? 'Pistol';
         const weaponOffsetX = Math.cos(aimAngle) * 10;
         const weaponOffsetY = Math.sin(aimAngle) * 10;
@@ -295,8 +275,6 @@ export class PlayerManager {
         // Hide associated elements
         const label = this.playerLabels.get(state.id);
         if (label) label.setVisible(false);
-        const aimIndicator = this.aimIndicators.get(state.id);
-        if (aimIndicator) aimIndicator.setVisible(false);
         const weapon = this.weaponGraphics.get(state.id);
         if (weapon) weapon.setVisible(false);
         const health = this.healthBars.get(state.id);
@@ -315,8 +293,6 @@ export class PlayerManager {
         // Restore visibility of all associated elements (may have been hidden on death)
         const aliveLabel = this.playerLabels.get(state.id);
         if (aliveLabel) aliveLabel.setVisible(true);
-        const aliveAimIndicator = this.aimIndicators.get(state.id);
-        if (aliveAimIndicator) aliveAimIndicator.setVisible(true);
         const aliveWeapon = this.weaponGraphics.get(state.id);
         if (aliveWeapon) {
           aliveWeapon.setVisible(true);
@@ -337,8 +313,6 @@ export class PlayerManager {
         // Restore visibility of all associated elements
         const rollingLabel = this.playerLabels.get(state.id);
         if (rollingLabel) rollingLabel.setVisible(true);
-        const rollingAimIndicator = this.aimIndicators.get(state.id);
-        if (rollingAimIndicator) rollingAimIndicator.setVisible(true);
         const rollingWeapon = this.weaponGraphics.get(state.id);
         if (rollingWeapon) {
           rollingWeapon.setVisible(true);
@@ -457,22 +431,11 @@ export class PlayerManager {
         );
       }
 
-      // Update aim indicator
-      const aimIndicator = this.aimIndicators.get(playerId);
-      if (aimIndicator) {
-        const aimAngle = state.aimAngle ?? 0;
-        const endX = renderPosition.x + Math.cos(aimAngle) * AIM_INDICATOR_LENGTH;
-        const endY = renderPosition.y + Math.sin(aimAngle) * AIM_INDICATOR_LENGTH;
-        aimIndicator.setTo(
-          renderPosition.x, renderPosition.y,
-          endX, endY
-        );
-      }
-
       // Update weapon graphics position (including recoil offset)
       const weaponGraphics = this.weaponGraphics.get(playerId);
       if (weaponGraphics) {
         const aimAngle = state.aimAngle ?? 0;
+        playerGraphics.setAimAngle(aimAngle);
         const weaponOffsetX = Math.cos(aimAngle) * 10;
         const weaponOffsetY = Math.sin(aimAngle) * 10;
         const recoilX = Math.cos(aimAngle) * weaponGraphics.recoilOffset;
@@ -584,11 +547,6 @@ export class PlayerManager {
     }
     this.playerLabels.clear();
 
-    for (const aimIndicator of this.aimIndicators.values()) {
-      aimIndicator.destroy();
-    }
-    this.aimIndicators.clear();
-
     for (const weaponGraphics of this.weaponGraphics.values()) {
       weaponGraphics.destroy();
     }
@@ -684,24 +642,23 @@ export class PlayerManager {
   }
 
   /**
-   * Update local player's aim indicator from current aim angle
-   * This provides immediate visual feedback without waiting for server echo
+   * Update local player's weapon aim from current aim angle.
+   * This provides immediate visual feedback without waiting for server echo.
    */
   updateLocalPlayerAim(aimAngle: number): void {
     if (!this.localPlayerId) {
       return;
     }
 
-    const aimIndicator = this.aimIndicators.get(this.localPlayerId);
     const playerState = this.playerStates.get(this.localPlayerId);
 
-    if (aimIndicator && playerState) {
-      const endX = playerState.position.x + Math.cos(aimAngle) * AIM_INDICATOR_LENGTH;
-      const endY = playerState.position.y + Math.sin(aimAngle) * AIM_INDICATOR_LENGTH;
-      aimIndicator.setTo(
-        playerState.position.x, playerState.position.y,
-        endX, endY
-      );
+    if (playerState) {
+      playerState.aimAngle = aimAngle;
+    }
+
+    const playerGraphics = this.players.get(this.localPlayerId);
+    if (playerGraphics) {
+      playerGraphics.setAimAngle(aimAngle);
     }
 
     // Update weapon graphics immediately for responsive client-side feedback
@@ -789,7 +746,7 @@ export class PlayerManager {
   }
 
   /**
-   * Set visibility of a player and all associated elements (label, aim indicator, weapon, health bar)
+   * Set visibility of a player and all associated elements (label, weapon, health bar).
    */
   setPlayerVisible(playerId: string, visible: boolean): void {
     const playerGraphics = this.players.get(playerId);
@@ -800,11 +757,6 @@ export class PlayerManager {
     const label = this.playerLabels.get(playerId);
     if (label) {
       label.setVisible(visible);
-    }
-
-    const aimIndicator = this.aimIndicators.get(playerId);
-    if (aimIndicator) {
-      aimIndicator.setVisible(visible);
     }
 
     const weaponGraphics = this.weaponGraphics.get(playerId);
@@ -846,19 +798,13 @@ export class PlayerManager {
       label.setPosition(position.x, position.y - PLAYER.HEIGHT / 2 - 10);
     }
 
-    // Update aim indicator
-    const aimIndicator = this.aimIndicators.get(playerId);
-    if (aimIndicator) {
-      const aimAngle = state?.aimAngle ?? 0;
-      const endX = position.x + Math.cos(aimAngle) * AIM_INDICATOR_LENGTH;
-      const endY = position.y + Math.sin(aimAngle) * AIM_INDICATOR_LENGTH;
-      aimIndicator.setTo(position.x, position.y, endX, endY);
-    }
-
     // Update weapon graphics position
     const weaponGraphics = this.weaponGraphics.get(playerId);
     if (weaponGraphics) {
       const aimAngle = state?.aimAngle ?? 0;
+      if (playerGraphics) {
+        playerGraphics.setAimAngle(aimAngle);
+      }
       const weaponOffsetX = Math.cos(aimAngle) * 10;
       const weaponOffsetY = Math.sin(aimAngle) * 10;
       weaponGraphics.setPosition(position.x + weaponOffsetX, position.y + weaponOffsetY);
@@ -906,5 +852,14 @@ export class PlayerManager {
       playerState.position = { ...reconciledState.position };
       playerState.velocity = { ...reconciledState.velocity };
     }
+  }
+
+  getWeaponBarrelPosition(playerId: string): { x: number; y: number } | null {
+    const weaponGraphics = this.weaponGraphics.get(playerId);
+    if (!weaponGraphics) {
+      return null;
+    }
+
+    return weaponGraphics.getBarrelTipPosition();
   }
 }

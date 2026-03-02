@@ -155,6 +155,41 @@ describe('ProceduralWeaponGraphics', () => {
 
       expect(container.setPosition).toHaveBeenCalledWith(200, 300);
     });
+
+    it('should return barrel tip position from the rendered weapon origin', () => {
+      const weapon = new ProceduralWeaponGraphics(scene, 100, 100, 'Pistol');
+      weapon.setPosition(110, 200);
+      weapon.setRotation(0);
+
+      expect(weapon.getBarrelTipPosition()).toEqual({ x: 135, y: 200 });
+    });
+
+    it('should rotate barrel tip position with weapon angle', () => {
+      const weapon = new ProceduralWeaponGraphics(scene, 100, 100, 'AK47');
+      weapon.setPosition(110, 200);
+      weapon.setRotation(Math.PI / 2);
+
+      expect(weapon.getBarrelTipPosition().x).toBeCloseTo(110);
+      expect(weapon.getBarrelTipPosition().y).toBeCloseTo(240);
+    });
+
+    it('should update barrel tip length when switching to AK47', () => {
+      const weapon = new ProceduralWeaponGraphics(scene, 100, 100, 'Pistol');
+      weapon.setWeapon('AK47');
+      weapon.setPosition(110, 200);
+      weapon.setRotation(0);
+
+      expect(weapon.getBarrelTipPosition()).toEqual({ x: 150, y: 200 });
+    });
+
+    it('should update barrel tip length when switching to Shotgun', () => {
+      const weapon = new ProceduralWeaponGraphics(scene, 100, 100, 'Pistol');
+      weapon.setWeapon('Shotgun');
+      weapon.setPosition(110, 200);
+      weapon.setRotation(0);
+
+      expect(weapon.getBarrelTipPosition()).toEqual({ x: 147, y: 200 });
+    });
   });
 
   describe('Weapon switching', () => {

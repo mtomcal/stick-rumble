@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { getWeaponBarrelTipPosition } from './WeaponGeometry';
 
 /**
  * ProceduralWeaponGraphics renders weapons using procedural graphics (rectangles in containers)
@@ -11,9 +12,14 @@ export class ProceduralWeaponGraphics {
   public recoilOffset: number = 0;
   private scene: Phaser.Scene;
   private container: Phaser.GameObjects.Container;
+  private x: number;
+  private y: number;
+  private rotation: number = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number, weaponType: string) {
     this.scene = scene;
+    this.x = x;
+    this.y = y;
     this.weaponType = weaponType;
     this.container = scene.add.container(x, y);
     this.buildWeapon(weaponType);
@@ -120,6 +126,7 @@ export class ProceduralWeaponGraphics {
    * Set weapon rotation (for aiming)
    */
   setRotation(angle: number): void {
+    this.rotation = angle;
     this.container.setRotation(angle);
   }
 
@@ -127,14 +134,20 @@ export class ProceduralWeaponGraphics {
    * Get current rotation
    */
   getRotation(): number {
-    return this.container.rotation;
+    return this.rotation;
   }
 
   /**
    * Set weapon position
    */
   setPosition(x: number, y: number): void {
+    this.x = x;
+    this.y = y;
     this.container.setPosition(x, y);
+  }
+
+  getBarrelTipPosition(): { x: number; y: number } {
+    return getWeaponBarrelTipPosition(this.x, this.y, this.rotation, this.weaponType);
   }
 
   /**

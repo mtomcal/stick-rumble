@@ -476,18 +476,19 @@ describe('PlayerManager', () => {
     });
   });
 
-  describe('aim indicator', () => {
-    it('should create aim indicator line for new players', () => {
+  describe('aim indicator removal', () => {
+    it('should not create aim indicator lines for new players', () => {
       const playerStates: PlayerState[] = [
         { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: 0 },
       ];
 
       playerManager.updatePlayers(playerStates);
 
-      expect(mockScene.add.line).toHaveBeenCalled();
+      expect(mockScene.add.line).not.toHaveBeenCalled();
+      expect(mockScene.lines).toHaveLength(0);
     });
 
-    it('should update aim indicator based on aim angle', () => {
+    it('should apply changed server aim angles to weapon rotation', () => {
       const playerStates: PlayerState[] = [
         { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: 0 },
       ];
@@ -495,28 +496,20 @@ describe('PlayerManager', () => {
       playerManager.updatePlayers(playerStates);
       playerManager.update(16); // Trigger position write
 
-      const line = mockScene.lines[0];
+      const weapon = mockScene.containers[0];
+      (weapon.setRotation as ReturnType<typeof vi.fn>).mockClear();
 
-      // Update with new aim angle (pointing right, angle = 0)
+      // Update with a new server aim angle
       const updatedStates: PlayerState[] = [
-        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: 0 },
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: Math.PI / 2 },
       ];
 
       playerManager.updatePlayers(updatedStates);
-      playerManager.update(16); // Trigger position write
 
-      // Line should be updated from player center to point in aim direction
-      // For angle = 0 (pointing right), line should extend 50px to the right
-      // Expected: setTo(100, 200, 100 + 50*cos(0), 200 + 50*sin(0)) = setTo(100, 200, 150, 200)
-      expect(line.setTo).toHaveBeenCalled();
-      const lastCall = line.setTo.mock.calls[line.setTo.mock.calls.length - 1];
-      expect(lastCall[0]).toBe(100); // x1: player x
-      expect(lastCall[1]).toBe(200); // y1: player y
-      expect(lastCall[2]).toBeCloseTo(150, 1); // x2: player x + 50*cos(0)
-      expect(lastCall[3]).toBeCloseTo(200, 1); // y2: player y + 50*sin(0)
+      expect(weapon.setRotation).toHaveBeenCalledWith(Math.PI / 2);
     });
 
-    it('should update aim indicator when aim angle changes', () => {
+    it('should update weapon position when aim angle changes', () => {
       const playerStates: PlayerState[] = [
         { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: 0 },
       ];
@@ -524,7 +517,9 @@ describe('PlayerManager', () => {
       playerManager.updatePlayers(playerStates);
       playerManager.update(16); // Trigger position write
 
-      const line = mockScene.lines[0];
+      const weapon = mockScene.containers[0];
+      const setPositionSpy = vi.fn();
+      weapon.setPosition = setPositionSpy;
 
       // Update with different aim angle (pointing up, angle = -PI/2)
       const updatedStates: PlayerState[] = [
@@ -534,29 +529,20 @@ describe('PlayerManager', () => {
       playerManager.updatePlayers(updatedStates);
       playerManager.update(16); // Trigger position write
 
-      // For angle = -PI/2 (pointing up), line should extend 50px upward (negative Y)
-      // Expected: setTo(100, 200, 100 + 50*cos(-PI/2), 200 + 50*sin(-PI/2)) = setTo(100, 200, 100, 150)
-      expect(line.setTo).toHaveBeenCalled();
-      const lastCall = line.setTo.mock.calls[line.setTo.mock.calls.length - 1];
-      expect(lastCall[0]).toBe(100); // x1: player x
-      expect(lastCall[1]).toBe(200); // y1: player y
-      expect(lastCall[2]).toBeCloseTo(100, 1); // x2: player x + 50*cos(-PI/2) ≈ 100
-      expect(lastCall[3]).toBeCloseTo(150, 1); // y2: player y + 50*sin(-PI/2) = 200 - 50
+      expect(setPositionSpy).toHaveBeenLastCalledWith(100, 190);
     });
 
-    it('should destroy aim indicator when player is removed', () => {
+    it('should not create or destroy aim indicator lines when player is removed', () => {
       const playerStates: PlayerState[] = [
         { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: 0 },
       ];
 
       playerManager.updatePlayers(playerStates);
 
-      const line = mockScene.lines[0];
-
       // Remove player
       playerManager.updatePlayers([]);
 
-      expect(line.destroy).toHaveBeenCalled();
+      expect(mockScene.lines).toHaveLength(0);
     });
 
     it('should handle players without aim angle (defaults to 0)', () => {
@@ -566,10 +552,10 @@ describe('PlayerManager', () => {
       ];
 
       expect(() => playerManager.updatePlayers(playerStates)).not.toThrow();
-      expect(mockScene.add.line).toHaveBeenCalled();
+      expect(mockScene.add.line).not.toHaveBeenCalled();
     });
 
-    it('should destroy aim indicators on manager destroy', () => {
+    it('should have no aim indicator lines to destroy on manager destroy', () => {
       const playerStates: PlayerState[] = [
         { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: 0 },
       ];
@@ -578,9 +564,7 @@ describe('PlayerManager', () => {
 
       playerManager.destroy();
 
-      for (const line of mockScene.lines) {
-        expect(line.destroy).toHaveBeenCalled();
-      }
+      expect(mockScene.lines).toHaveLength(0);
     });
   });
 
@@ -746,7 +730,7 @@ describe('PlayerManager', () => {
   });
 
   describe('updateLocalPlayerAim', () => {
-    it('should update local player aim indicator immediately', () => {
+    it('should update local player aim state immediately', () => {
       playerManager.setLocalPlayerId('local-player');
 
       const playerStates: PlayerState[] = [
@@ -755,18 +739,11 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(playerStates);
 
-      const line = mockScene.lines[0];
-      const setToSpy = vi.fn();
-      line.setTo = setToSpy;
-
       // Update aim angle to point up (90 degrees = PI/2 radians)
       const newAimAngle = Math.PI / 2;
       playerManager.updateLocalPlayerAim(newAimAngle);
 
-      expect(setToSpy).toHaveBeenCalledWith(
-        100, 200, // Start position (player position)
-        100, 200 + 50, // End position (pointing up, 50 pixels)
-      );
+      expect(playerManager.getPlayerAimAngle('local-player')).toBe(Math.PI / 2);
     });
 
     it('should do nothing if local player ID is not set', () => {
@@ -776,13 +753,13 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(playerStates);
 
-      const line = mockScene.lines[0];
-      const setToSpy = vi.fn();
-      line.setTo = setToSpy;
+      const weapon = mockScene.containers[0];
+      const setRotationSpy = vi.fn();
+      weapon.setRotation = setRotationSpy;
 
       playerManager.updateLocalPlayerAim(Math.PI / 2);
 
-      expect(setToSpy).not.toHaveBeenCalled();
+      expect(setRotationSpy).not.toHaveBeenCalled();
     });
 
     it('should do nothing if local player does not exist', () => {
@@ -794,7 +771,7 @@ describe('PlayerManager', () => {
       expect(mockScene.lines).toHaveLength(0);
     });
 
-    it('should correctly calculate aim line end position for different angles', () => {
+    it('should correctly calculate weapon barrel position for different angles', () => {
       playerManager.setLocalPlayerId('local-player');
 
       const playerStates: PlayerState[] = [
@@ -803,25 +780,38 @@ describe('PlayerManager', () => {
 
       playerManager.updatePlayers(playerStates);
 
-      const line = mockScene.lines[0];
-      const setToSpy = vi.fn();
-      line.setTo = setToSpy;
-
       // Test pointing right (0 radians)
       playerManager.updateLocalPlayerAim(0);
-      expect(setToSpy).toHaveBeenCalledWith(100, 200, 150, 200);
+      expect(playerManager.getWeaponBarrelPosition('local-player')).toEqual({ x: 135, y: 200 });
 
       // Test pointing left (PI radians)
       playerManager.updateLocalPlayerAim(Math.PI);
-      expect(setToSpy).toHaveBeenCalledWith(100, 200, 50, 200);
+      expect(playerManager.getWeaponBarrelPosition('local-player')?.x).toBeCloseTo(65);
+      expect(playerManager.getWeaponBarrelPosition('local-player')?.y).toBeCloseTo(200);
 
       // Test pointing down (PI/2 radians)
       playerManager.updateLocalPlayerAim(Math.PI / 2);
-      expect(setToSpy).toHaveBeenCalledWith(100, 200, 100, 250);
+      expect(playerManager.getWeaponBarrelPosition('local-player')?.x).toBeCloseTo(100);
+      expect(playerManager.getWeaponBarrelPosition('local-player')?.y).toBeCloseTo(235);
 
       // Test pointing up (-PI/2 radians)
       playerManager.updateLocalPlayerAim(-Math.PI / 2);
-      expect(setToSpy).toHaveBeenCalledWith(100, 200, 100, 150);
+      expect(playerManager.getWeaponBarrelPosition('local-player')?.x).toBeCloseTo(100);
+      expect(playerManager.getWeaponBarrelPosition('local-player')?.y).toBeCloseTo(165);
+    });
+
+    it('should use longer barrel geometry after weapon switches', () => {
+      playerManager.setLocalPlayerId('local-player');
+
+      const playerStates: PlayerState[] = [
+        { id: 'local-player', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: 0 },
+      ];
+
+      playerManager.updatePlayers(playerStates);
+      playerManager.updatePlayerWeapon('local-player', 'AK47');
+      playerManager.updateLocalPlayerAim(0);
+
+      expect(playerManager.getWeaponBarrelPosition('local-player')).toEqual({ x: 150, y: 200 });
     });
 
     it('should update local player weapon rotation immediately', () => {
@@ -950,7 +940,7 @@ describe('PlayerManager', () => {
       expect(() => playerManager.updateLocalPlayerAim(Math.PI / 2)).not.toThrow();
     });
 
-    it('should update both aim indicator and weapon simultaneously', () => {
+    it('should update both player aim state and weapon simultaneously', () => {
       playerManager.setLocalPlayerId('local-player');
 
       const playerStates: PlayerState[] = [
@@ -958,10 +948,6 @@ describe('PlayerManager', () => {
       ];
 
       playerManager.updatePlayers(playerStates);
-
-      const line = mockScene.lines[0];
-      const lineSetToSpy = vi.fn();
-      line.setTo = lineSetToSpy;
 
       const weapon = mockScene.containers[0];
       const weaponSetRotationSpy = vi.fn();
@@ -971,8 +957,7 @@ describe('PlayerManager', () => {
       const newAimAngle = Math.PI / 4;
       playerManager.updateLocalPlayerAim(newAimAngle);
 
-      // Both should be updated
-      expect(lineSetToSpy).toHaveBeenCalled();
+      expect(playerManager.getPlayerAimAngle('local-player')).toBe(Math.PI / 4);
       expect(weaponSetRotationSpy).toHaveBeenCalledWith(Math.PI / 4);
     });
   });
@@ -1399,7 +1384,7 @@ describe('PlayerManager', () => {
     });
   });
 
-  describe('edge cases - missing label/aim indicator', () => {
+  describe('edge cases - missing label/weapon graphics', () => {
     it('should handle missing label during player removal', () => {
       const playerStates: PlayerState[] = [
         { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
@@ -1417,18 +1402,17 @@ describe('PlayerManager', () => {
       }).not.toThrow();
     });
 
-    it('should handle missing aim indicator during player removal', () => {
+    it('should handle missing weapon graphics during player removal', () => {
       const playerStates: PlayerState[] = [
         { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 } },
       ];
 
       playerManager.updatePlayers(playerStates);
 
-      // Manually remove the aim indicator from internal map to simulate edge case
-      const aimIndicators = (playerManager as any).aimIndicators as Map<string, any>;
-      aimIndicators.delete('player-1');
+      const weaponGraphics = (playerManager as any).weaponGraphics as Map<string, any>;
+      weaponGraphics.delete('player-1');
 
-      // Remove player - should not throw even though aim indicator is missing
+      // Remove player - should not throw even though weapon graphics are missing
       expect(() => {
         playerManager.updatePlayers([]);
       }).not.toThrow();
@@ -1455,18 +1439,17 @@ describe('PlayerManager', () => {
       }).not.toThrow();
     });
 
-    it('should handle missing aim indicator during angle update', () => {
+    it('should handle missing weapon graphics during angle update', () => {
       const playerStates: PlayerState[] = [
         { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: 0 },
       ];
 
       playerManager.updatePlayers(playerStates);
 
-      // Manually remove the aim indicator from internal map to simulate edge case
-      const aimIndicators = (playerManager as any).aimIndicators as Map<string, any>;
-      aimIndicators.delete('player-1');
+      const weaponGraphics = (playerManager as any).weaponGraphics as Map<string, any>;
+      weaponGraphics.delete('player-1');
 
-      // Update player with new aim angle - should not throw even though aim indicator is missing
+      // Update player with new aim angle - should not throw even though weapon graphics are missing
       const updatedStates: PlayerState[] = [
         { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: Math.PI / 2 },
       ];
@@ -1491,7 +1474,7 @@ describe('PlayerManager', () => {
         expect(mockScene.graphicsObjects.length).toBe(4);
         expect(mockScene.containers.length).toBe(2);
         expect(mockScene.texts.length).toBe(2);
-        expect(mockScene.lines.length).toBe(2);
+        expect(mockScene.lines.length).toBe(0);
 
         // Destroy PlayerManager
         playerManager.destroy();
@@ -1501,8 +1484,6 @@ describe('PlayerManager', () => {
         expect(mockScene.graphicsObjects[1].destroy).toHaveBeenCalled();
         expect(mockScene.texts[0].destroy).toHaveBeenCalled();
         expect(mockScene.texts[1].destroy).toHaveBeenCalled();
-        expect(mockScene.lines[0].destroy).toHaveBeenCalled();
-        expect(mockScene.lines[1].destroy).toHaveBeenCalled();
       });
 
       it('should allow recreation after destroy', () => {
@@ -1524,7 +1505,7 @@ describe('PlayerManager', () => {
         expect(newMockScene.graphicsObjects.length).toBe(2);
         expect(newMockScene.containers.length).toBe(1);
         expect(newMockScene.texts.length).toBe(1);
-        expect(newMockScene.lines.length).toBe(1);
+        expect(newMockScene.lines.length).toBe(0);
       });
 
       it('should track graphics count matches player count', () => {
@@ -1650,12 +1631,10 @@ describe('PlayerManager', () => {
         // Verify maps have data
         const players = (playerManager as any).players as Map<string, any>;
         const playerLabels = (playerManager as any).playerLabels as Map<string, any>;
-        const aimIndicators = (playerManager as any).aimIndicators as Map<string, any>;
         const playerStatesMap = (playerManager as any).playerStates as Map<string, any>;
 
         expect(players.size).toBe(1);
         expect(playerLabels.size).toBe(1);
-        expect(aimIndicators.size).toBe(1);
         expect(playerStatesMap.size).toBe(1);
 
         // Destroy
@@ -1664,7 +1643,6 @@ describe('PlayerManager', () => {
         // All maps should be cleared
         expect(players.size).toBe(0);
         expect(playerLabels.size).toBe(0);
-        expect(aimIndicators.size).toBe(0);
         expect(playerStatesMap.size).toBe(0);
       });
 
@@ -1964,7 +1942,7 @@ describe('PlayerManager', () => {
       expect(graphics.clear.mock.calls.length).toBeGreaterThan(clearCallsAfterCreate);
     });
 
-    it('should update all UI elements (label, aim, weapon, health bar) only in update()', () => {
+    it('should update all UI elements (label, weapon, health bar) only in update()', () => {
       const playerStates: PlayerState[] = [
         { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: 0, health: 100 },
       ];
@@ -1972,13 +1950,11 @@ describe('PlayerManager', () => {
       playerManager.updatePlayers(playerStates);
 
       const label = mockScene.texts[0];
-      const aimIndicator = mockScene.lines[0];
       const weaponGraphics = mockScene.containers[0];
       const healthBarGraphics = mockScene.graphicsObjects[1];
 
       // Clear call counts from constructor/initialization
       const labelCalls = label.setPosition.mock.calls.length;
-      const aimCalls = aimIndicator.setTo.mock.calls.length;
       const weaponCalls = weaponGraphics.setPosition.mock.calls.length;
       const healthBarCalls = healthBarGraphics.setPosition.mock.calls.length;
 
@@ -1991,7 +1967,6 @@ describe('PlayerManager', () => {
 
       // After updatePlayers(), UI elements should NOT have additional position updates
       expect(label.setPosition.mock.calls.length).toBe(labelCalls);
-      expect(aimIndicator.setTo.mock.calls.length).toBe(aimCalls);
       expect(weaponGraphics.setPosition.mock.calls.length).toBe(weaponCalls);
       expect(healthBarGraphics.setPosition.mock.calls.length).toBe(healthBarCalls);
 
@@ -1999,7 +1974,6 @@ describe('PlayerManager', () => {
       playerManager.update(16);
 
       expect(label.setPosition.mock.calls.length).toBeGreaterThan(labelCalls);
-      expect(aimIndicator.setTo.mock.calls.length).toBeGreaterThan(aimCalls);
       expect(weaponGraphics.setPosition.mock.calls.length).toBeGreaterThan(weaponCalls);
       expect(healthBarGraphics.setPosition.mock.calls.length).toBeGreaterThan(healthBarCalls);
     });
@@ -2018,11 +1992,11 @@ describe('PlayerManager', () => {
       playerManager.updatePlayers(playerStates);
 
       const label = mockScene.texts[0];
-      const aimIndicator = mockScene.lines[0];
+      const weaponGraphics = mockScene.containers[0];
 
       // Clear spy counters
       label.setPosition.mockClear();
-      aimIndicator.setTo.mockClear();
+      weaponGraphics.setPosition.mockClear();
 
       // Update player state
       const updatedStates: PlayerState[] = [
@@ -2033,14 +2007,14 @@ describe('PlayerManager', () => {
 
       // KEY ASSERTION: updatePlayers() should NOT update UI element positions
       expect(label.setPosition).not.toHaveBeenCalled();
-      expect(aimIndicator.setTo).not.toHaveBeenCalled();
+      expect(weaponGraphics.setPosition).not.toHaveBeenCalled();
 
       // Now call update()
       playerManager.update(16);
 
       // AFTER update(), UI elements should be positioned
       expect(label.setPosition).toHaveBeenCalled();
-      expect(aimIndicator.setTo).toHaveBeenCalled();
+      expect(weaponGraphics.setPosition).toHaveBeenCalled();
     });
 
     it('should handle multiple update() calls per updatePlayers() call (60 FPS vs 20Hz)', () => {
@@ -2564,7 +2538,6 @@ describe('PlayerManager', () => {
 
       const graphics = mockScene.graphicsObjects[0]; // player graphics
       const label = mockScene.texts[0];
-      const line = mockScene.lines[0];
       const container = mockScene.containers[0]; // weapon
       const healthBarGraphics = mockScene.graphicsObjects[1]; // health bar
 
@@ -2572,7 +2545,6 @@ describe('PlayerManager', () => {
 
       expect(graphics.setVisible).toHaveBeenCalledWith(false);
       expect(label.setVisible).toHaveBeenCalledWith(false);
-      expect(line.setVisible).toHaveBeenCalledWith(false);
       expect(container.setVisible).toHaveBeenCalledWith(false);
       expect(healthBarGraphics.setVisible).toHaveBeenCalledWith(false);
     });
@@ -2588,7 +2560,6 @@ describe('PlayerManager', () => {
 
       const graphics = mockScene.graphicsObjects[0];
       const label = mockScene.texts[0];
-      const line = mockScene.lines[0];
       const container = mockScene.containers[0];
       const healthBarGraphics = mockScene.graphicsObjects[1];
 
@@ -2597,7 +2568,6 @@ describe('PlayerManager', () => {
 
       expect(graphics.setVisible).toHaveBeenCalledWith(true);
       expect(label.setVisible).toHaveBeenCalledWith(true);
-      expect(line.setVisible).toHaveBeenCalledWith(true);
       expect(container.setVisible).toHaveBeenCalledWith(true);
       expect(healthBarGraphics.setVisible).toHaveBeenCalledWith(true);
     });
@@ -2648,17 +2618,27 @@ describe('PlayerManager', () => {
       expect(label.setPosition).toHaveBeenCalledWith(500, 258); // 300 - 64/2 - 10
     });
 
-    it('should update aim indicator position', () => {
+    it('should update weapon barrel position', () => {
       const playerStates: PlayerState[] = [
         { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: 0 },
       ];
       playerManager.updatePlayers(playerStates);
 
-      const line = mockScene.lines[0];
+      playerManager.teleportPlayer('player-1', { x: 500, y: 300 });
+
+      expect(playerManager.getWeaponBarrelPosition('player-1')).toEqual({ x: 535, y: 300 });
+    });
+
+    it('should update switched-weapon barrel position after teleport', () => {
+      const playerStates: PlayerState[] = [
+        { id: 'player-1', position: { x: 100, y: 200 }, velocity: { x: 0, y: 0 }, aimAngle: 0 },
+      ];
+      playerManager.updatePlayers(playerStates);
+      playerManager.updatePlayerWeapon('player-1', 'Shotgun');
 
       playerManager.teleportPlayer('player-1', { x: 500, y: 300 });
 
-      expect(line.setTo).toHaveBeenCalledWith(500, 300, 550, 300); // angle=0, endX = 500+50, endY = 300
+      expect(playerManager.getWeaponBarrelPosition('player-1')).toEqual({ x: 547, y: 300 });
     });
 
     it('should update weapon graphics position', () => {

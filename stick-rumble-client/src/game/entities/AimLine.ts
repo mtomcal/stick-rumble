@@ -1,8 +1,6 @@
 import Phaser from 'phaser';
 import { HIT_TRAIL } from '../../shared/constants';
-
-// Offset from player center to approximate barrel tip
-const BARREL_OFFSET = 30;
+import { getWeaponBarrelTipPosition } from './WeaponGeometry';
 
 /**
  * AimLine (renamed internally to HitConfirmationTrail) draws a temporary white line
@@ -23,14 +21,10 @@ export class AimLine {
   }
 
   /**
-   * Get the barrel tip position for the given player position and aim angle.
-   * Exposed for testing and for callers computing where the trail should start.
+   * Get the barrel tip position from the rendered weapon origin and aim angle.
    */
-  getBarrelPosition(playerX: number, playerY: number, aimAngle: number): { x: number; y: number } {
-    return {
-      x: playerX + Math.cos(aimAngle) * BARREL_OFFSET,
-      y: playerY + Math.sin(aimAngle) * BARREL_OFFSET,
-    };
+  getBarrelPosition(weaponX: number, weaponY: number, aimAngle: number, weaponType: string = 'Pistol'): { x: number; y: number } {
+    return getWeaponBarrelTipPosition(weaponX, weaponY, aimAngle, weaponType);
   }
 
   /**

@@ -19,6 +19,7 @@ export class ProceduralPlayerGraphics {
   private x: number;
   private y: number;
   private rotation: number = 0;
+  private aimAngle: number | null = null;
   private headColor: number;
   private bodyColor: number;
   private walkCycle: number = 0;
@@ -28,7 +29,8 @@ export class ProceduralPlayerGraphics {
   // Head radius (used for label positioning)
   private static readonly HEAD_RADIUS = 13;
 
-  // Barrel tip position relative to player center (same as hand position)
+  private static readonly WEAPON_GRIP_OFFSET = 12;
+  private static readonly HAND_SPREAD = 3;
   private static readonly BARREL_X = 20;
 
   // Animation constants (from prototype)
@@ -108,6 +110,14 @@ export class ProceduralPlayerGraphics {
       };
     };
 
+    const weaponAim = this.aimAngle ?? this.rotation;
+    const calcAimPoint = (distance: number, sideOffset: number) => {
+      return {
+        x: cx + (distance * Math.cos(weaponAim) - sideOffset * Math.sin(weaponAim)),
+        y: cy + (distance * Math.sin(weaponAim) + sideOffset * Math.cos(weaponAim)),
+      };
+    };
+
     // --- SPAWN INVULNERABILITY RING ---
     if (this.isInvulnerable) {
       this.graphics.lineStyle(2, COLORS.SPAWN_RING, 1);
@@ -145,13 +155,8 @@ export class ProceduralPlayerGraphics {
 
     // --- ARMS ---
     // Default arm positions (can be adjusted based on weapon type in future)
-    const leftHandX = 20;
-    const rightHandX = 20;
-    const leftHandY = -3;
-    const rightHandY = 3;
-
-    const leftHandPos = calcPoint(leftHandX, leftHandY);
-    const rightHandPos = calcPoint(rightHandX, rightHandY);
+    const leftHandPos = calcAimPoint(ProceduralPlayerGraphics.WEAPON_GRIP_OFFSET, -ProceduralPlayerGraphics.HAND_SPREAD);
+    const rightHandPos = calcAimPoint(ProceduralPlayerGraphics.WEAPON_GRIP_OFFSET, ProceduralPlayerGraphics.HAND_SPREAD);
 
     this.graphics.lineStyle(2, this.bodyColor, 1);
 
@@ -189,9 +194,10 @@ export class ProceduralPlayerGraphics {
    * Get the world-space barrel tip position (where shots come from)
    */
   getBarrelPosition(): { x: number; y: number } {
+    const weaponAim = this.aimAngle ?? this.rotation;
     return {
-      x: this.x + ProceduralPlayerGraphics.BARREL_X * Math.cos(this.rotation),
-      y: this.y + ProceduralPlayerGraphics.BARREL_X * Math.sin(this.rotation),
+      x: this.x + ProceduralPlayerGraphics.BARREL_X * Math.cos(weaponAim),
+      y: this.y + ProceduralPlayerGraphics.BARREL_X * Math.sin(weaponAim),
     };
   }
 
@@ -237,6 +243,11 @@ export class ProceduralPlayerGraphics {
    */
   setRotation(rotation: number): void {
     this.rotation = rotation;
+    this.draw();
+  }
+
+  setAimAngle(aimAngle: number): void {
+    this.aimAngle = aimAngle;
     this.draw();
   }
 

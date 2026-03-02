@@ -58,11 +58,11 @@ describe('Crosshair', () => {
       expect(mockMakeGraphics.generateTexture).toHaveBeenCalledWith('reticle', 32, 32);
     });
 
-    it('should draw outer ring with strokeCircle(16, 16, 10)', () => {
-      expect(mockMakeGraphics.strokeCircle).toHaveBeenCalledWith(16, 16, 10);
+    it('should NOT draw an outer ring or circle', () => {
+      expect(mockMakeGraphics.strokeCircle).not.toHaveBeenCalled();
     });
 
-    it('should draw ring with 2px white stroke', () => {
+    it('should draw the plus shape with 2px white stroke', () => {
       expect(mockMakeGraphics.lineStyle).toHaveBeenCalledWith(2, 0xffffff, 1);
     });
 

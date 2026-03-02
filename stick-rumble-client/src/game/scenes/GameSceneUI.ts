@@ -9,6 +9,14 @@ import { COLORS, MINIMAP, RELOAD_ARC } from '../../shared/constants';
  * Responsibility: UI rendering, updates, and visual feedback
  */
 export class GameSceneUI {
+  static readonly HUD_LAYOUT = {
+    AMMO_Y: 50,
+    AMMO_HEIGHT: 16,
+    HEALTH_BAR_Y: 70,
+    HEALTH_BAR_HEIGHT: 34,
+    MINIMAP_PADDING: 10,
+  } as const;
+
   private scene: Phaser.Scene;
   private ammoText!: Phaser.GameObjects.Text;
   private ammoIcon: Phaser.GameObjects.Graphics | null = null;
@@ -28,11 +36,25 @@ export class GameSceneUI {
   private crosshair: Crosshair | null = null;
   private minimapStaticGraphics: Phaser.GameObjects.Graphics | null = null;
   private minimapDynamicGraphics: Phaser.GameObjects.Graphics | null = null;
+  private minimapX: number = 20;
+  private minimapY: number = GameSceneUI.getDefaultMinimapY();
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
     this.generateHitMarkerTexture();
     this.generateHitIndicatorTexture();
+  }
+
+  static getDefaultMinimapY(): number {
+    const { AMMO_Y, AMMO_HEIGHT, HEALTH_BAR_Y, HEALTH_BAR_HEIGHT, MINIMAP_PADDING } = GameSceneUI.HUD_LAYOUT;
+    return Math.max(
+      AMMO_Y + AMMO_HEIGHT + MINIMAP_PADDING,
+      HEALTH_BAR_Y + HEALTH_BAR_HEIGHT + MINIMAP_PADDING
+    );
+  }
+
+  static getDefaultDebugOverlayY(): number {
+    return GameSceneUI.getDefaultMinimapY() + MINIMAP.SIZE + 10;
   }
 
   /**
@@ -563,8 +585,6 @@ export class GameSceneUI {
    * Called once during scene creation.
    */
   setupMinimap(): void {
-    const mapX = 20;
-    const mapY = 20;
     const mapSize = MINIMAP.SIZE; // 170px
 
     // Static layer — drawn once
@@ -574,11 +594,11 @@ export class GameSceneUI {
 
     // Background — square, dark gray at 50% alpha
     this.minimapStaticGraphics.fillStyle(MINIMAP.BG_COLOR, 0.5);
-    this.minimapStaticGraphics.fillRect(mapX, mapY, mapSize, mapSize);
+    this.minimapStaticGraphics.fillRect(this.minimapX, this.minimapY, mapSize, mapSize);
 
     // Border — square, teal, 2px stroke
     this.minimapStaticGraphics.lineStyle(MINIMAP.BORDER_STROKE, MINIMAP.BORDER_COLOR, 1);
-    this.minimapStaticGraphics.strokeRect(mapX, mapY, mapSize, mapSize);
+    this.minimapStaticGraphics.strokeRect(this.minimapX, this.minimapY, mapSize, mapSize);
 
     // Dynamic layer — cleared and redrawn each frame
     this.minimapDynamicGraphics = this.scene.add.graphics();
@@ -594,8 +614,8 @@ export class GameSceneUI {
     if (!this.minimapDynamicGraphics) return;
 
     const scale = MINIMAP.SCALE;
-    const mapX = 20;
-    const mapY = 20;
+    const mapX = this.minimapX;
+    const mapY = this.minimapY;
     const mapSize = MINIMAP.SIZE;
 
     this.minimapDynamicGraphics.clear();

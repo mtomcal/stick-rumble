@@ -1,13 +1,10 @@
 import Phaser from 'phaser';
 
 /**
- * Crosshair renders a fixed-size ⊕ reticle (~20-25px) at the mouse cursor position.
- *
- * Visual: white outer circle (radius 10, 1.5px stroke, alpha 0.8) with a white "+"
- * cross shape inside (±6px, 2px stroke). The reticle is a pre-generated 32×32 texture.
+ * Crosshair renders a fixed-size white "+" crosshair at the mouse cursor position.
  *
  * Spec requirements (TS-GFX-023):
- * - Fixed compact size — NO bloom, NO expansion during firing, NO spread visualization
+ * - Fixed compact size — NO circle, NO bloom, NO expansion during firing, NO spread visualization
  * - Hidden for melee weapons (Bat, Katana)
  * - Depth: 100, alpha: 0.8
  * - Positioned at exact mouse cursor position (scrollFactor = 0)
@@ -33,13 +30,12 @@ export class Crosshair {
   }
 
   /**
-   * Generate the reticle texture: ring + white '+' cross (32×32, generated once)
+   * Generate the reticle texture: white '+' cross only (32×32, generated once)
    */
   private generateReticleTexture(): void {
     const gfx = this.scene.make.graphics({ x: 0, y: 0 }, false);
 
     gfx.lineStyle(2, 0xffffff, 1);
-    gfx.strokeCircle(16, 16, 10);
 
     gfx.beginPath();
     gfx.moveTo(16, 6); gfx.lineTo(16, 26);
