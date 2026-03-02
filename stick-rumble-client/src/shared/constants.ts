@@ -30,7 +30,6 @@ export const COLORS = {
   DAMAGE_FLASH: 0xFF0000,
   HIT_CHEVRON: 0xCC3333,
   WEAPON_CRATE: 0xCCCC00,
-  AIM_LINE: 0xFFFFFF,
   HIT_TRAIL: 0xFFFFFF,
   MINIMAP_BORDER: 0x00CCCC,
   RELOAD_ARC: 0x00FF00,
@@ -121,7 +120,7 @@ export const PLAYER = {
   HEIGHT: 64,
 
   /** World-space health bar width in pixels */
-  PLAYER_HEALTH_BAR_WIDTH: 60,
+  PLAYER_HEALTH_BAR_WIDTH: 32,
 
   /** HUD health bar width in pixels */
   HUD_HEALTH_BAR_WIDTH: 200,

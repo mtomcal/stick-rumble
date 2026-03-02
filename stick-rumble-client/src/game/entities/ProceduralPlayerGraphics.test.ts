@@ -8,10 +8,8 @@ describe('ProceduralPlayerGraphics', () => {
   let graphics: Phaser.GameObjects.Graphics;
   let mockText: any;
 
-  let aimLineGraphics: Phaser.GameObjects.Graphics;
-
   beforeEach(() => {
-    const makeGraphicsMock = () => ({
+    graphics = {
       clear: vi.fn(),
       lineStyle: vi.fn(),
       fillStyle: vi.fn(),
@@ -29,10 +27,7 @@ describe('ProceduralPlayerGraphics', () => {
       depth: 0,
       x: 0,
       y: 0,
-    } as unknown as Phaser.GameObjects.Graphics);
-
-    graphics = makeGraphicsMock();
-    aimLineGraphics = makeGraphicsMock();
+    } as unknown as Phaser.GameObjects.Graphics;
 
     mockText = {
       setOrigin: vi.fn().mockReturnThis(),
@@ -44,13 +39,9 @@ describe('ProceduralPlayerGraphics', () => {
       y: 0,
     };
 
-    let callCount = 0;
     scene = {
       add: {
-        graphics: vi.fn(() => {
-          callCount++;
-          return callCount === 1 ? graphics : aimLineGraphics;
-        }),
+        graphics: vi.fn(() => graphics),
         text: vi.fn(() => mockText),
       },
     } as unknown as Phaser.Scene;
@@ -400,54 +391,7 @@ describe('ProceduralPlayerGraphics', () => {
     });
   });
 
-  describe('Aim line (Task 4.2)', () => {
-    it('should create aim line graphics at depth 40', () => {
-      const player = new ProceduralPlayerGraphics(scene, 100, 100, COLORS.ENEMY_HEAD, COLORS.BODY);
-      player.createAimLine();
-
-      expect(aimLineGraphics.setDepth).toHaveBeenCalledWith(40);
-    });
-
-    it('should not create duplicate aim line graphics if called twice', () => {
-      const player = new ProceduralPlayerGraphics(scene, 100, 100, COLORS.ENEMY_HEAD, COLORS.BODY);
-      player.createAimLine();
-      player.createAimLine();
-
-      // Only 2 total graphics created: player + aim line (not a third)
-      expect(scene.add.graphics).toHaveBeenCalledTimes(2);
-    });
-
-    it('should draw a line from barrel tip to target in updateAimLine', () => {
-      const player = new ProceduralPlayerGraphics(scene, 100, 200, COLORS.ENEMY_HEAD, COLORS.BODY);
-      player.setRotation(0); // Facing right
-      player.createAimLine();
-
-      player.updateAimLine(400, 200);
-
-      expect(aimLineGraphics.clear).toHaveBeenCalled();
-      expect(aimLineGraphics.lineStyle).toHaveBeenCalled();
-      expect(aimLineGraphics.beginPath).toHaveBeenCalled();
-      // barrel tip at rotation=0: x = 100+20 = 120, y = 200
-      expect(aimLineGraphics.moveTo).toHaveBeenCalledWith(120, 200);
-      expect(aimLineGraphics.lineTo).toHaveBeenCalledWith(400, 200);
-      expect(aimLineGraphics.strokePath).toHaveBeenCalled();
-    });
-
-    it('should use COLORS.AIM_LINE (white) for aim line', () => {
-      const player = new ProceduralPlayerGraphics(scene, 100, 100, COLORS.ENEMY_HEAD, COLORS.BODY);
-      player.createAimLine();
-      player.updateAimLine(400, 100);
-
-      const lineStyleCalls = (aimLineGraphics.lineStyle as any).mock.calls;
-      const hasAimLineColor = lineStyleCalls.some((call: any[]) => call[1] === 0xFFFFFF);
-      expect(hasAimLineColor).toBe(true);
-    });
-
-    it('should not throw when updateAimLine called without createAimLine', () => {
-      const player = new ProceduralPlayerGraphics(scene, 100, 100, COLORS.ENEMY_HEAD, COLORS.BODY);
-      expect(() => player.updateAimLine(400, 100)).not.toThrow();
-    });
-
+  describe('Barrel position', () => {
     it('getBarrelPosition should return rotated position', () => {
       const player = new ProceduralPlayerGraphics(scene, 100, 200, COLORS.ENEMY_HEAD, COLORS.BODY);
       player.setRotation(0); // Facing right: barrel at (100+20, 200)
@@ -464,30 +408,6 @@ describe('ProceduralPlayerGraphics', () => {
       const barrel = player.getBarrelPosition();
       expect(barrel.x).toBeCloseTo(100);
       expect(barrel.y).toBeCloseTo(220);
-    });
-
-    it('should hide aim line with hideAimLine()', () => {
-      const player = new ProceduralPlayerGraphics(scene, 100, 100, COLORS.ENEMY_HEAD, COLORS.BODY);
-      player.createAimLine();
-      player.hideAimLine();
-
-      expect(aimLineGraphics.setVisible).toHaveBeenCalledWith(false);
-    });
-
-    it('should show aim line with showAimLine()', () => {
-      const player = new ProceduralPlayerGraphics(scene, 100, 100, COLORS.ENEMY_HEAD, COLORS.BODY);
-      player.createAimLine();
-      player.showAimLine();
-
-      expect(aimLineGraphics.setVisible).toHaveBeenCalledWith(true);
-    });
-
-    it('should destroy aim line graphics on destroy()', () => {
-      const player = new ProceduralPlayerGraphics(scene, 100, 100, COLORS.ENEMY_HEAD, COLORS.BODY);
-      player.createAimLine();
-      player.destroy();
-
-      expect(aimLineGraphics.destroy).toHaveBeenCalled();
     });
   });
 

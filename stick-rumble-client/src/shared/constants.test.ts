@@ -45,7 +45,7 @@ describe('MINIMAP constants', () => {
 
 describe('PLAYER constants', () => {
   it('should have PLAYER_HEALTH_BAR_WIDTH', () => {
-    expect(PLAYER.PLAYER_HEALTH_BAR_WIDTH).toBe(60);
+    expect(PLAYER.PLAYER_HEALTH_BAR_WIDTH).toBe(32);
   });
 
   it('should have HUD_HEALTH_BAR_WIDTH', () => {
