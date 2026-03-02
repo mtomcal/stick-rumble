@@ -17,6 +17,7 @@ Use the root-level `Makefile` for normal development tasks.
 Important:
 - Run commands from the repository root unless you are doing package-specific work.
 - Prefer `make ...` targets over manually `cd`-ing into `stick-rumble-client/` or `stick-rumble-server/`.
+- Use conventional commits for all commit messages.
 - Before committing, ensure git identity is set to:
 
 ```bash
