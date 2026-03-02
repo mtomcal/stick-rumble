@@ -10,6 +10,8 @@ Stick Rumble is a multiplayer stick figure arena shooter with a dual-application
 
 The architecture is server-authoritative for game state, with client-side prediction for responsiveness.
 
+`docs/` is legacy documentation. Use `specs/` as the active requirements source of truth unless a task explicitly asks for historical material.
+
 ## Root Workflow
 
 Use the root-level `Makefile` for normal development tasks.
@@ -72,6 +74,8 @@ make help
 ## Required Agent Workflow
 
 - Start from the repo root.
+- Before making code changes, update the relevant specs first.
+- Specs must be written clearly enough that a different engineer could implement them in a completely different language or stack without needing the current codebase as hidden context.
 - Use `make dev-server` for backend-only work or `make dev` for full-stack work.
 - Use `make test` to verify integrated changes.
 - Use `make test-client` instead of manually running client tests when possible.
@@ -166,14 +170,106 @@ Key files:
 - Server networking: `stick-rumble-server/internal/network/websocket_handler.go`
 - Client WebSocket wrapper: `stick-rumble-client/src/game/network/WebSocketClient.ts`
 
+## Spec-First Rule
+
+- Treat `specs/` as the implementation contract.
+- Before code changes, update the relevant spec documents so they describe the intended behavior first.
+- Specs should capture intent, not just mechanics. They should explain what problem is being solved, what outcome is desired, and any important constraints or tradeoffs behind the decision.
+- Write specs in product and system terms, not in terms of the current implementation details of TypeScript, Go, Phaser, React, or current file names unless that reference is unavoidable.
+- The target standard is that the specs could be handed to another engineer and implemented in a different language stack without relying on this repository’s code as unstated context.
+
 ## Important Paths
 
+- `docs/`: legacy documentation and archives, not the default source of truth
 - `events-schema/`: shared TypeBox schemas and generated JSON schemas
 - `stick-rumble-client/src/game/`: Phaser game code
 - `stick-rumble-client/src/ui/`: React UI
 - `stick-rumble-server/cmd/server/`: server entrypoint
 - `stick-rumble-server/internal/game/`: game logic
 - `stick-rumble-server/internal/network/`: WebSocket and network handling
+
+## Codebase Map
+
+Top level:
+
+```text
+.
+├── AGENTS.md
+├── CLAUDE.md -> AGENTS.md
+├── Makefile
+├── README.md
+├── docs/                # LEGACY documentation and archives
+├── events-schema/       # Shared message/schema package
+├── research/            # Active research notes
+├── specs/               # Active requirements and visual/game specs
+├── stick-rumble-client/ # Frontend game client
+├── stick-rumble-server/ # Go game server
+└── weapon-configs.json  # Shared weapon tuning/config data
+```
+
+Source of truth by area:
+- `specs/`: active gameplay and product requirements
+- `events-schema/src/`: schema definitions for network contracts
+- `stick-rumble-client/src/`: client runtime behavior
+- `stick-rumble-server/internal/` and `stick-rumble-server/cmd/server/`: server runtime behavior
+- `research/`: active implementation notes and investigations
+- `docs/`: legacy and historical only
+
+Client map:
+
+```text
+stick-rumble-client/src
+├── shared/             # Constants, types, weapon config access
+├── game/
+│   ├── audio/         # Audio playback and weapon sounds
+│   ├── config/        # Client config
+│   ├── effects/       # Screen shake and effect helpers
+│   ├── entities/      # Players, weapons, projectiles, crates, hit visuals
+│   ├── input/         # Keyboard/mouse input and combat input state
+│   ├── network/       # WebSocket client and network helpers
+│   ├── physics/       # Prediction and interpolation
+│   ├── scenes/        # Phaser scene orchestration and event routing
+│   ├── simulation/    # Headless simulation and scenarios
+│   ├── ui/            # In-game Phaser HUD widgets
+│   └── utils/         # Shared client utilities
+└── ui/
+    ├── common/        # React/Phaser bridge
+    ├── debug/         # React debug panels
+    └── match/         # Match-end React UI
+```
+
+Server map:
+
+```text
+stick-rumble-server
+├── cmd/server/        # Server entrypoint
+├── internal/game/     # Core game rules, rooms, combat, physics, weapons
+├── internal/network/  # WebSocket handling, schemas, broadcast, deltas
+├── scripts/           # Coverage and helper scripts
+└── research/          # Server-specific investigation notes
+```
+
+Shared schema map:
+
+```text
+events-schema
+├── src/
+│   ├── build-schemas.ts
+│   ├── validate-schemas.ts
+│   ├── check-schemas-up-to-date.ts
+│   └── schemas/
+│       ├── common.ts
+│       ├── client-to-server.ts
+│       └── server-to-client.ts
+└── schemas/           # Generated JSON schema artifacts
+```
+
+Default navigation order:
+1. `specs/`
+2. `events-schema/src/`
+3. `stick-rumble-client/src/` or `stick-rumble-server/internal/`
+4. `research/`
+5. `docs/` only for historical context
 
 ## Quality Standards
 
