@@ -53,8 +53,7 @@ This is an active development project. Current limitations:
 
 | Metric | Value |
 |--------|-------|
-| **Test Cases** | 2,000+ (1,340 client + 682 server) |
-
+| **Test Cases** | 2,300+ (1,642 client + 682 server) |
 | **WebSocket Message Types** | 28 (22 server→client, 6 client→server) |
 | **Test Coverage Target** | >90% statement coverage |
 
@@ -135,8 +134,9 @@ make test
 
 | Document | Description |
 |----------|-------------|
-| [Architecture](docs/ARCHITECTURE.md) | System design, data flow, and component diagrams |
-| [Testing Strategy](docs/TESTING-STRATEGY.md) | Validation infrastructure and testing approach |
+| [Specs](specs/) | Active requirements and game specs (source of truth) |
+| [Architecture](docs/ARCHITECTURE.md) | System design, data flow, and component diagrams (legacy) |
+| [Testing Strategy](docs/TESTING-STRATEGY.md) | Validation infrastructure and testing approach (legacy) |
 | [CLAUDE.md](CLAUDE.md) | AI agent instructions and project context |
 
 ---
@@ -154,7 +154,7 @@ All game state lives on the server. Clients send inputs, server calculates resul
 - **Lag compensation** for fair hit detection across latencies
 
 ### Comprehensive Test Coverage
-- **Unit tests** verify business logic (2,000+ tests)
+- **Unit tests** verify business logic (2,300+ tests)
 - **Integration tests** validate WebSocket communication
 - **Human playtesting** remains essential—real-time games require human perception for final validation
 
@@ -182,9 +182,11 @@ stick-rumble/
 │
 ├── events-schema/           # Shared TypeBox message schemas
 │   ├── src/schemas/         # TypeScript definitions
-│   └── generated/           # JSON schemas for Go validation
+│   └── schemas/             # Generated JSON schemas for Go validation
 │
-└── docs/                    # Documentation
+├── specs/                   # Active requirements and game specs
+│
+└── docs/                    # Legacy documentation and archives
 ```
 
 ---
@@ -202,6 +204,7 @@ make test             # All tests
 make test-client      # Client unit tests
 make test-server      # Server unit tests
 make test-integration # WebSocket integration tests
+
 # Code Quality
 make lint             # ESLint + go vet + gofmt
 make typecheck        # TypeScript checking
