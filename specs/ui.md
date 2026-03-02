@@ -1,7 +1,7 @@
 # UI System
 
-> **Spec Version**: 2.1.0
-> **Last Updated**: 2026-02-23
+> **Spec Version**: 2.2.0
+> **Last Updated**: 2026-03-02
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [match.md](match.md), [client-architecture.md](client-architecture.md), [graphics.md](graphics.md)
 > **Depended By**: [test-index.md](test-index.md)
 
@@ -116,11 +116,11 @@ interface UIElementPosition {
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ [Minimap]  [EKG] [====Health Bar====] 100%      [000000]    │
-│ FPS: N     [Ammo Icon] 20/20                     KILLS: 0   │
-│ Update: Nms                                                  │
-│ AI: Nms                            [Timer]      [Kill Feed]  │
-│ E: N | B: N                        MM:SS           Entry 1   │
+│ [EKG] [====Health Bar====] 100%                 [000000]    │
+│ [Ammo Icon] 20/20                                KILLS: 0   │
+│ [Minimap]                                                    │
+│ 170x170                            [Timer]      [Kill Feed]  │
+│ FPS: N (debug below minimap)       MM:SS           Entry 1   │
 │                                                    Entry 2   │
 │                                                    Entry 3   │
 │                      [Crosshair]                   Entry 4   │
@@ -697,18 +697,16 @@ export class PickupNotificationUI {
 **Position**: Follows mouse pointer
 
 **Visual Specification:**
-- Crosshair shape: Fixed-size `⊕` reticle — a circle with a `+` (cross) inside. All elements white (#FFFFFF)
-- Size: ~20-25px diameter (fixed, no expansion or bloom)
+- Crosshair shape: Simple `+` (plus/cross) shape only — **no circle, no ring**. White color (#FFFFFF), 2px stroke.
+- Size: ~20px span (fixed, no expansion or bloom)
 - Visibility: Hidden for melee weapons (Bat, Katana), hidden when spectating
 - Depth: 1000
 
-> **Correction**: The crosshair is a compact, fixed-size reticle. There is no bloom, no expansion during firing, and no spread visualization. The corrected video footage confirms a small ~20px `⊕` at the cursor position with no size changes.
+> **Correction (2026-03-02)**: The crosshair is a bare `+` shape with NO surrounding circle. Previous spec described a `⊕` (circle+cross) but visual feedback confirms the crosshair should be a simple plus sign only.
 
 **TypeScript:**
 ```typescript
 export class Crosshair {
-  private readonly RETICLE_RADIUS = 10; // ~20px diameter
-
   update(weaponType: string): void {
     this.graphics.clear();
 
@@ -719,14 +717,10 @@ export class Crosshair {
     const x = pointer.x;
     const y = pointer.y;
 
-    // White "+" cross
+    // White "+" cross ONLY — no circle
     this.graphics.lineStyle(2, 0xffffff);
-    this.graphics.lineBetween(x - 6, y, x + 6, y);
-    this.graphics.lineBetween(x, y - 6, x, y + 6);
-
-    // Outer circle outline (fixed size)
-    this.graphics.lineStyle(1.5, 0xffffff, 0.8);
-    this.graphics.strokeCircle(x, y, this.RETICLE_RADIUS);
+    this.graphics.lineBetween(x - 10, y, x + 10, y);  // Horizontal bar
+    this.graphics.lineBetween(x, y - 10, x, y + 10);  // Vertical bar
   }
 }
 ```
@@ -905,7 +899,7 @@ this.cameras.main.shake(150, 0.008);
 
 ### Minimap
 
-A minimap in the top-left corner shows the arena layout, player position, and nearby enemies within radar range.
+A minimap in the top-left corner shows the arena layout, player position, and nearby enemies within radar range. The minimap is positioned **below** the health bar and ammo display to avoid overlap.
 
 **Architecture**: Two graphics layers, both with `setScrollFactor(0)` (screen-fixed). Square shape with teal/green outline border:
 1. **Static layer** (depth 1999): Square background, teal border, walls — drawn once
@@ -913,12 +907,14 @@ A minimap in the top-left corner shows the arena layout, player position, and ne
 
 **Dot Clamping**: All dots (player and enemy) must be clamped to stay within the minimap bounds using `Math.min`/`Math.max`. This prevents dots from rendering outside the minimap when the player or enemies are near arena edges.
 
-> **Positioning Note**: The minimap must be positioned so it does not overlap HUD elements below it (health bar, ammo display, debug overlay). Ensure sufficient vertical clearance.
+> **Positioning Rule**: The minimap MUST be positioned **below** the health bar and ammo display. It should NOT share the same vertical space as those HUD elements. The Y position should be calculated as: `healthBarY + healthBarHeight + ammoHeight + padding`.
 
 **Static Layer** (drawn once in `setupMinimap()`):
 ```typescript
 const scale = 0.106;  // MINIMAP_SCALE = 170 / 1600
-const mapX = 20, mapY = 20;
+const mapX = 20;
+// mapY positioned BELOW health bar + ammo display (not at 20)
+const mapY = healthBarY + healthBarHeight + ammoHeight + 10; // e.g., ~110+
 const mapSize = 170;  // MINIMAP_SIZE
 
 // Background
@@ -981,7 +977,7 @@ minimapGraphics.strokePath();
 
 | Property | Value | Source |
 |----------|-------|--------|
-| Position | (20, 20) top-left | `constants.md § Minimap Constants` |
+| Position | (20, below health bar + ammo) top-left | `constants.md § Minimap Constants` |
 | Scale | 0.106 (MINIMAP_SCALE) | 1600px → 170px |
 | Size | 170 × 170 px (MINIMAP_SIZE) | `constants.md § Minimap Constants` |
 | Shape | Square with teal/green outline border | — |
@@ -1757,6 +1753,7 @@ it('should sort scoreboard by kills descending, deaths ascending', () => {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.2.0 | 2026-03-02 | Minimap repositioned below health bar + ammo (was overlapping). Crosshair changed from `⊕` (circle+cross) to simple `+` (cross only, no circle). Updated HUD layout diagram to reflect new minimap position. |
 | 2.1.0 | 2026-02-23 | Rewrote minimap: circular → square shape, added dot clamping, teal border. Renamed "Reload Circle" → "Reload Arc (Player-Centered)", world-space green arc. Rewrote crosshair: fixed ~20-25px reticle, removed bloom. Added score bug note (7 digits → must be 6). Added chat log bug note (opaque → semi-transparent). Added debug overlay positioning rule and overlap bug note. Verified death screen overlay against visual spec. |
 | 1.4.0 | 2026-02-18 | Art style alignment: Rewrote HUD layout diagram. Health bar updated to 2-tier (green/red at 20%), EKG icon, "N%" format, #333333 depleted bg. Ammo counter updated with icon, #E0A030 color, RELOADING text, INF state. Added Score Display (6-digit zero-padded), Kill Counter (KILLS: N), Chat Log, Death Screen Overlay, Debug Overlay, Weapon Pickup Notification sections. Minimap updated to 170x170px circular with teal border. Reload progress bar moved to world-space 60px white. Crosshair changed to white "+" in circle with bloom. Damage flash changed from camera flash to persistent red overlay at depth 999. Renamed HEALTH_BAR_WIDTH to HUD_HEALTH_BAR_WIDTH. Replaced stale CAMERA_FLASH constants with DAMAGE_FLASH constants. Updated tests TS-UI-001, TS-UI-013, TS-UI-018. |
 | 1.3.0 | 2026-02-17 | Expanded camera shake section to document all three shake systems: hit feedback shake (server-confirmed, 50ms/0.001), per-weapon recoil shake (client-side, 100ms, Uzi=0.005/AK47=0.007/Shotgun=0.012), and bat melee hit shake (150ms/0.008). Renamed constants from generic CAMERA_SHAKE to specific HIT_FEEDBACK_SHAKE. Added tests TS-UI-020 and TS-UI-021. |

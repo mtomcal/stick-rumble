@@ -1,7 +1,7 @@
 # Graphics
 
-> **Spec Version**: 2.0.0
-> **Last Updated**: 2026-02-16
+> **Spec Version**: 2.3.0
+> **Last Updated**: 2026-03-02
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [arena.md](arena.md)
 > **Depended By**: [client-architecture.md](client-architecture.md), [test-index.md](test-index.md)
 
@@ -187,8 +187,15 @@ function renderStickFigure(player, walkCycle):
     graphics.fillCircle(rightFootPos, 3)
 
     // ARMS — black for all players
-    leftHandPos = calcPoint(20, -3)
-    rightHandPos = calcPoint(20, 3)
+    // Hands MUST grip the weapon and follow its rotation.
+    // Hand positions are computed from the weapon's grip area, NOT fixed offsets.
+    // Both hands should be placed along the weapon body at the grip point,
+    // rotating with the aim angle so hands visually hold the gun.
+    weaponGripOffset = 12  // Distance along aim direction to weapon grip
+    handSpread = 3         // Perpendicular offset for two-handed grip
+
+    leftHandPos = calcPoint(weaponGripOffset, -handSpread)
+    rightHandPos = calcPoint(weaponGripOffset, handSpread)
 
     graphics.lineStyle(2, 0x000000)  // Black body
     drawLine(cx, cy, leftHandPos)
@@ -294,6 +301,12 @@ update(delta: number, isMoving: boolean): void {
   this.draw();
 }
 ```
+
+### Player Rendering Bugs
+
+> **Bug (to fix)**: A 50px green aim indicator line (`AIM_INDICATOR_LENGTH`) is drawn from the player center along the aim direction in `PlayerManager.ts`. This line (green `0x00FF00` for local, yellow `0xFFFF00` for enemies) does NOT appear in the prototype and must be **completely removed**. It is not part of the intended visual design — the hit confirmation trail serves the purpose of showing shot direction on hit.
+
+> **Bug (to fix)**: An orange dot appears in the top-left corner of the screen during gameplay. This is likely a stale muzzle flash circle (`fillCircle` with orange color `0xFFAA00` / `0xFFCC00` / `0xFF8800`) that is not being properly cleared or positioned. Investigate `RangedWeapon.ts` muzzle flash rendering and ensure muzzle flash graphics are cleared each frame and only drawn at the barrel tip position during the flash duration.
 
 ### Player Colors
 
@@ -527,12 +540,14 @@ Provides visual confirmation when a shot connects, especially useful for confirm
 **Trigger:** `hit:confirmed` event (appears for ALL hits — on-screen and off-screen targets)
 
 **Visual:**
-- Shape: Line from gun barrel position to the hit target's position
+- Shape: Line from the **actual gun barrel tip** to the hit target's position
+- The barrel position MUST be computed from the weapon graphic's rendered position and aim angle — not from a generic player-center offset. The trail must visually originate from the end of the gun barrel.
 - Color: `HIT_TRAIL_COLOR` / `0xFFFFFF` (white)
 - Stroke: `HIT_TRAIL_STROKE` / 1px
 - Alpha: `HIT_TRAIL_ALPHA` / 0.8
 - Depth: `HIT_TRAIL_DEPTH` / 40
 - Lingers for `HIT_TRAIL_LINGER_DURATION` / 300ms, then fades over `HIT_TRAIL_FADE_DURATION` / 200ms
+- **Bug (to fix)**: Trail start point is offset from the actual gun barrel — it should originate from the weapon tip, not a detached position.
 
 **Pseudocode:**
 ```
@@ -557,17 +572,16 @@ function showHitTrail(barrelX, barrelY, targetX, targetY):
 
 ### Crosshair / Reticle
 
-The crosshair is a **fixed-size `⊕` reticle** (~20-25px) rendered as a pre-generated texture. It consists of a white outer circle with a white "+" (cross) shape inside. All elements are white (`#FFFFFF`). There is no red center dot. There is **no dynamic expansion or bloom** — the reticle remains at a fixed compact size at all times.
+The crosshair is a **simple `+` (plus/cross) shape** — no circle, no ring. White color (`#FFFFFF`), ~20px span, 2px stroke. There is **no dynamic expansion or bloom** — the crosshair remains at a fixed size at all times.
 
 **Texture Generation** (32×32, generated once in `preload()`):
 
 ```typescript
-// TextureGenerator.ts — reticle texture
+// TextureGenerator.ts — crosshair texture (plus shape only, NO circle)
 const gfx = scene.make.graphics({ x: 0, y: 0 }, false);
 gfx.lineStyle(2, 0xffffff, 1);
-gfx.strokeCircle(16, 16, 10);           // Outer circle (radius 10)
 
-// White "+" cross shape
+// White "+" cross shape ONLY — no outer circle
 gfx.beginPath();
 gfx.moveTo(16, 6); gfx.lineTo(16, 26);  // Vertical bar
 gfx.moveTo(6, 16); gfx.lineTo(26, 16);  // Horizontal bar
@@ -576,7 +590,7 @@ gfx.strokePath();
 gfx.generateTexture('reticle', 32, 32);
 ```
 
-**Placement**: Sprite at exact mouse cursor position, depth 100, alpha 0.8. The compact `⊕` reticle sits directly at the cursor location.
+**Placement**: Sprite at exact mouse cursor position, depth 100, alpha 0.8. The `+` crosshair sits directly at the cursor location.
 
 **Constants**: See [constants.md § Crosshair / Reticle Constants](constants.md#crosshair--reticle-constants).
 
@@ -1570,6 +1584,7 @@ test "player renders all body parts":
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.3.0 | 2026-03-02 | Crosshair changed from `⊕` (circle+cross) to simple `+` (cross only, no circle). Hands/arms now grip weapon and follow aim rotation. Hit trail must originate from actual gun barrel tip. Added bugs: remove green aim indicator line, remove orange dot artifact, fix hit trail barrel attachment. |
 | 2.2.0 | 2026-02-23 | Renamed "Aim Indicator" → "Hit Confirmation Trail" (triggered by hit:confirmed, not continuously visible). Rewrote crosshair section: fixed ~20-25px reticle, no bloom. Updated weapon crate icon to yellow `⊕` symbol. Added yellow circle outline to death corpse rendering. Added "Enemy Weapon Visibility" section with bug note. Updated tests TS-GFX-005, TS-GFX-023, TS-GFX-008. |
 | 2.1.0 | 2026-02-18 | Art style alignment: Head-only player color distinction (body/limbs always black). Crosshair changed to white "+" in circle with bloom on firing. Weapon crate changed to yellow circle outline. Added spawn invulnerability ring, "YOU" label, enemy name labels, damage screen flash sections. Aim line changed to white, extends to crosshair. Health bar updated to 2-tier thresholds (green ≥20%, red <20%), "N%" text format, EKG icon, dark depleted background. Blood/hit indicator colors updated to 0xCC3333. Muzzle flash color updated to 0xFFD700. Unavailable weapon crate glow remains visible. Updated tests TS-GFX-003, TS-GFX-004, TS-GFX-008, TS-GFX-009, TS-GFX-015, TS-GFX-022, TS-GFX-023. |
 | 2.0.0 | 2026-02-16 | Major overhaul: Ported all pre-BMM visual systems. Replaced crosshair with pre-generated reticle texture. Replaced melee arc with white stroke-only + container tween. Replaced dead player with splayed corpse. Added blood particles, healing particles, wall spark, gun recoil, aim sway, reload animation, directional hit indicators. Updated depth table. Added tests TS-GFX-015 through TS-GFX-024. |

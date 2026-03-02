@@ -70,15 +70,15 @@
 +--------------------------------------------------+
 ```
 
-### Minimap (top-left)
+### Minimap (top-left, below health bar)
 - Size: ~170x170px
 - Dark semi-transparent background (`#3A3A3A` @ ~50% opacity)
 - Square border (teal/green outline)
 - Green dot = local player
 - Red dots = enemies
 - Shows simplified map layout with dark rectangles for walls/platforms *(from prototype -- minimap wall rendering is currently a no-op since no internal wall geometry exists)*
+- **Position**: The minimap must be positioned **below** the health bar and ammo display to avoid overlap. It should NOT share the same vertical space as health/ammo HUD elements.
 - **Bug (to fix)**: Player and enemy dots are NOT clipped to the minimap bounds — they visibly travel outside the minimap as the player moves. Dots should be clamped to stay within the minimap bounds.
-- **Bug (to fix)**: The minimap overlaps and obscures the HUD elements directly beneath it (health bar, ammo, debug text). The minimap needs to be positioned or sized so it does not overlap critical HUD info.
 - **Bug (to fix)**: Minimap border is rendering as gray instead of the specified teal/green outline color.
 - **Ref frames**: `02-gameplay-respawn-full-hud.jpg`, `53-corrections-aim-line-overshoots-cursor.jpg` through `71-corrections-cursor-directly-above-player-short-line.jpg`
 
@@ -128,10 +128,12 @@
 - **Label**: "YOU" in white bold text with dark shadow, ~14px, floats above head
 - **Weapon**: Dark stick extending from body in aim direction
 - **Aim direction**: Character arm/gun rotates to follow crosshair/mouse position
-- **Bug (to fix)**: A short green horizontal bar/line renders near the player's head in the current build. This does NOT appear in the original prototype. It should be removed — it is not part of the intended visual design. Likely an erroneous health bar or debug indicator rendered on the player sprite itself rather than in the HUD.
+- **Bug (to fix)**: A green aim indicator line renders from the player's body in the current build. This is the `AIM_INDICATOR_LENGTH` (50px) green line drawn in `PlayerManager.ts`. This does NOT appear in the original prototype and must be **completely removed** — it is not part of the intended visual design.
   - **Ref frames**: `53-corrections-aim-line-overshoots-cursor.jpg`, `56-corrections-shooting-damage-number-on-enemy.jpg`, `63-corrections-ak47-equipped-aim-line-cursor.jpg`, `65-corrections-aiming-at-red-enemy-two-players.jpg`
-- **Crosshair cursor**: Small crosshair reticle (`⊕`) — a circle with a `+` inside, ~20-25px diameter, follows mouse position
-  - **Correction**: NOT a large 40-60px circle. The reticle is compact and sits at the exact mouse cursor location.
+- **Bug (to fix)**: An orange dot renders in the top-left corner of the screen. This appears to be a stale muzzle flash or debug artifact. It must be identified and removed.
+- **Hands/Arms**: The player's hands (small circles at arm endpoints) must **grip the weapon** and follow the weapon's rotation. Currently hands are drawn at fixed positions relative to the body and do not move with the gun. Both hands should be positioned at the weapon grip area and rotate with the aim angle.
+- **Crosshair cursor**: Simple `+` (plus/cross) shape only — **no circle**. White color (`#FFFFFF`), ~20px span, 2px stroke. Follows mouse position.
+  - **Correction**: NOT a circle-with-cross (`⊕`) reticle. The crosshair is a bare `+` shape with no surrounding circle.
   - No evidence of size expansion during firing in corrected footage
 - **Ref frames**: `02-gameplay-respawn-full-hud.jpg`, `03-gameplay-player-moving-right.jpg`, `54-corrections-aim-line-terminates-at-cursor.jpg`, `59-corrections-aim-line-short-reticle-near-player.jpg`, `64-corrections-ak47-aiming-small-crosshair-reticle.jpg`, `69-corrections-small-crosshair-reticle-at-cursor.jpg`
 
@@ -169,10 +171,12 @@
 - **Ref frames**: `04-combat-shooting-muzzle-flash-bullet.jpg`, `21-heavy-fire-multiple-projectiles.jpg`
 
 ### Hit Trail Line
-- Thin white line from the player's gun barrel to the hit target — appears **after firing** when a bullet hits another player
+- Thin white line from the player's **gun barrel tip** to the hit target — appears **after firing** when a bullet hits another player
 - This is a **hit confirmation trail**, NOT a live aim line. It shows the path of a successful hit.
+- **Origin**: The trail MUST originate from the gun barrel tip (the end of the weapon graphic), NOT from the player center or some arbitrary offset. The barrel position should be computed from the weapon's actual rendered position and rotation.
 - Useful for confirming hits on off-screen enemies (blind fire confirmation), but appears for all hits regardless of whether the target is on-screen
 - Lingers for a short duration after the hit, then fades
+- **Bug (to fix)**: Hit trail is not visually attached to the gun barrel — it appears offset/detached from the weapon. The trail start point must match the actual rendered barrel tip position.
 - **Ref frames**: `11-shooting-downward-trajectory-line.jpg`, `48-firing-upward-aim-line.jpg`, `53-corrections-aim-line-overshoots-cursor.jpg`, `55-corrections-aim-line-far-overshoot-bottom.jpg`, `56-corrections-shooting-damage-number-on-enemy.jpg`, `70-corrections-aim-line-long-diagonal-to-cursor.jpg`
 
 ### Damage Numbers (Floating)
