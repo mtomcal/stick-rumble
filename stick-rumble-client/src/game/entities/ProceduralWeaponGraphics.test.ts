@@ -170,7 +170,7 @@ describe('ProceduralWeaponGraphics', () => {
       weapon.setRotation(Math.PI / 2);
 
       expect(weapon.getBarrelTipPosition().x).toBeCloseTo(110);
-      expect(weapon.getBarrelTipPosition().y).toBeCloseTo(240);
+      expect(weapon.getBarrelTipPosition().y).toBeCloseTo(250);
     });
 
     it('should update barrel tip length when switching to AK47', () => {
@@ -179,7 +179,7 @@ describe('ProceduralWeaponGraphics', () => {
       weapon.setPosition(110, 200);
       weapon.setRotation(0);
 
-      expect(weapon.getBarrelTipPosition()).toEqual({ x: 150, y: 200 });
+      expect(weapon.getBarrelTipPosition()).toEqual({ x: 160, y: 200 });
     });
 
     it('should update barrel tip length when switching to Shotgun', () => {
@@ -188,7 +188,7 @@ describe('ProceduralWeaponGraphics', () => {
       weapon.setPosition(110, 200);
       weapon.setRotation(0);
 
-      expect(weapon.getBarrelTipPosition()).toEqual({ x: 147, y: 200 });
+      expect(weapon.getBarrelTipPosition()).toEqual({ x: 157, y: 200 });
     });
   });
 

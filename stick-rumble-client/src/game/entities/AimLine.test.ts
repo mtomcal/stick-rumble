@@ -6,22 +6,26 @@ import { HIT_TRAIL } from '../../shared/constants';
 describe('AimLine (Hit Confirmation Trail)', () => {
   let scene: Phaser.Scene;
   let aimLine: AimLine;
-  let mockLine: any;
+  let mockGraphics: any;
   let mockTween: any;
 
   beforeEach(() => {
     mockTween = { stop: vi.fn() };
 
-    mockLine = {
+    mockGraphics = {
+      lineStyle: vi.fn().mockReturnThis(),
+      beginPath: vi.fn().mockReturnThis(),
+      moveTo: vi.fn().mockReturnThis(),
+      lineTo: vi.fn().mockReturnThis(),
+      strokePath: vi.fn().mockReturnThis(),
       setAlpha: vi.fn().mockReturnThis(),
       setDepth: vi.fn().mockReturnThis(),
-      setLineWidth: vi.fn().mockReturnThis(),
       destroy: vi.fn(),
     };
 
     scene = {
       add: {
-        line: vi.fn(() => mockLine),
+        graphics: vi.fn(() => mockGraphics),
       },
       tweens: {
         add: vi.fn().mockReturnValue(mockTween),
@@ -32,25 +36,28 @@ describe('AimLine (Hit Confirmation Trail)', () => {
   });
 
   describe('TS-GFX-005: Hit Confirmation Trail Renders on Hit', () => {
-    it('should create a line from barrel to target position', () => {
+    it('should draw a line from barrel to target position in world coordinates', () => {
       aimLine.showTrail(100, 100, 300, 200);
 
-      expect(scene.add.line).toHaveBeenCalledWith(0, 0, 100, 100, 300, 200, HIT_TRAIL.COLOR);
+      expect(scene.add.graphics).toHaveBeenCalled();
+      expect(mockGraphics.moveTo).toHaveBeenCalledWith(100, 100);
+      expect(mockGraphics.lineTo).toHaveBeenCalledWith(300, 200);
+      expect(mockGraphics.strokePath).toHaveBeenCalled();
     });
 
     it('should set trail alpha to HIT_TRAIL.ALPHA (0.8)', () => {
       aimLine.showTrail(100, 100, 300, 200);
-      expect(mockLine.setAlpha).toHaveBeenCalledWith(HIT_TRAIL.ALPHA);
+      expect(mockGraphics.setAlpha).toHaveBeenCalledWith(HIT_TRAIL.ALPHA);
     });
 
     it('should set trail depth to HIT_TRAIL.DEPTH (40)', () => {
       aimLine.showTrail(100, 100, 300, 200);
-      expect(mockLine.setDepth).toHaveBeenCalledWith(HIT_TRAIL.DEPTH);
+      expect(mockGraphics.setDepth).toHaveBeenCalledWith(HIT_TRAIL.DEPTH);
     });
 
     it('should set trail stroke to HIT_TRAIL.STROKE (1)', () => {
       aimLine.showTrail(100, 100, 300, 200);
-      expect(mockLine.setLineWidth).toHaveBeenCalledWith(HIT_TRAIL.STROKE);
+      expect(mockGraphics.lineStyle).toHaveBeenCalledWith(HIT_TRAIL.STROKE, HIT_TRAIL.COLOR, 1);
     });
 
     it('should tween trail alpha to 0 after linger delay', () => {
@@ -58,7 +65,7 @@ describe('AimLine (Hit Confirmation Trail)', () => {
 
       expect(scene.tweens.add).toHaveBeenCalledWith(
         expect.objectContaining({
-          targets: mockLine,
+          targets: mockGraphics,
           alpha: 0,
           duration: HIT_TRAIL.FADE_DURATION,
           delay: HIT_TRAIL.LINGER_DURATION,
@@ -77,19 +84,20 @@ describe('AimLine (Hit Confirmation Trail)', () => {
 
       expect(onCompleteCallback).toBeDefined();
       if (onCompleteCallback) onCompleteCallback();
-      expect(mockLine.destroy).toHaveBeenCalled();
+      expect(mockGraphics.destroy).toHaveBeenCalled();
     });
 
     it('should work for off-screen targets (no range check)', () => {
       // Target far off screen — no clamping
       expect(() => aimLine.showTrail(100, 100, 5000, 5000)).not.toThrow();
-      expect(scene.add.line).toHaveBeenCalledWith(0, 0, 100, 100, 5000, 5000, HIT_TRAIL.COLOR);
+      expect(mockGraphics.moveTo).toHaveBeenCalledWith(100, 100);
+      expect(mockGraphics.lineTo).toHaveBeenCalledWith(5000, 5000);
     });
 
     it('should use white color (HIT_TRAIL.COLOR = 0xFFFFFF)', () => {
       expect(HIT_TRAIL.COLOR).toBe(0xFFFFFF);
       aimLine.showTrail(0, 0, 100, 100);
-      expect(scene.add.line).toHaveBeenCalledWith(0, 0, 0, 0, 100, 100, 0xFFFFFF);
+      expect(mockGraphics.lineStyle).toHaveBeenCalledWith(HIT_TRAIL.STROKE, 0xFFFFFF, 1);
     });
   });
 
@@ -109,8 +117,8 @@ describe('AimLine (Hit Confirmation Trail)', () => {
     it('should compute correctly for diagonal aim with a longer weapon barrel', () => {
       const angle = Math.PI / 4; // 45 degrees
       const pos = aimLine.getBarrelPosition(50, 50, angle, 'AK47');
-      expect(pos.x).toBeCloseTo(50 + Math.cos(angle) * 40, 5);
-      expect(pos.y).toBeCloseTo(50 + Math.sin(angle) * 40, 5);
+      expect(pos.x).toBeCloseTo(50 + Math.cos(angle) * 50, 5);
+      expect(pos.y).toBeCloseTo(50 + Math.sin(angle) * 50, 5);
     });
   });
 

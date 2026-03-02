@@ -1811,7 +1811,7 @@ describe('GameSceneEventHandlers', () => {
 
     it('should fall back to computed barrel geometry when rendered weapon barrel is unavailable', () => {
       const mockAimLine = {
-        getBarrelPosition: vi.fn().mockReturnValue({ x: 150, y: 200 }),
+        getBarrelPosition: vi.fn().mockReturnValue({ x: 160, y: 200 }),
         showTrail: vi.fn(),
       };
       (mockPlayerManager.getWeaponBarrelPosition as ReturnType<typeof vi.fn>).mockReturnValue(null);
@@ -1828,7 +1828,7 @@ describe('GameSceneEventHandlers', () => {
       });
 
       expect(mockAimLine.getBarrelPosition).toHaveBeenCalledWith(110, 200, 0, 'AK47');
-      expect(mockAimLine.showTrail).toHaveBeenCalledWith(150, 200, 100, 200);
+      expect(mockAimLine.showTrail).toHaveBeenCalledWith(160, 200, 100, 200);
     });
 
     it('should process queued weapon spawns on room:joined', () => {

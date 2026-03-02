@@ -7,7 +7,7 @@ import { getWeaponBarrelTipPosition } from './WeaponGeometry';
  * from the local player's gun barrel to the hit target position.
  *
  * The trail is triggered ONLY by a `hit:confirmed` WebSocket event — it is NOT
- * drawn continuously each frame. Each trail is a transient Phaser Line object that
+ * drawn continuously each frame. Each trail is a transient Graphics object that
  * lingers for HIT_TRAIL.LINGER_DURATION ms, then fades over HIT_TRAIL.FADE_DURATION ms,
  * and is destroyed when complete.
  *
@@ -37,15 +37,14 @@ export class AimLine {
    * @param targetY - World Y of the hit target position
    */
   showTrail(barrelX: number, barrelY: number, targetX: number, targetY: number): void {
-    const trail = this.scene.add.line(
-      0, 0,
-      barrelX, barrelY,
-      targetX, targetY,
-      HIT_TRAIL.COLOR
-    );
+    const trail = this.scene.add.graphics();
+    trail.lineStyle(HIT_TRAIL.STROKE, HIT_TRAIL.COLOR, 1);
+    trail.beginPath();
+    trail.moveTo(barrelX, barrelY);
+    trail.lineTo(targetX, targetY);
+    trail.strokePath();
     trail.setAlpha(HIT_TRAIL.ALPHA);
     trail.setDepth(HIT_TRAIL.DEPTH);
-    trail.setLineWidth(HIT_TRAIL.STROKE);
 
     this.scene.tweens.add({
       targets: trail,

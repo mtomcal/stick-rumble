@@ -811,7 +811,7 @@ describe('PlayerManager', () => {
       playerManager.updatePlayerWeapon('local-player', 'AK47');
       playerManager.updateLocalPlayerAim(0);
 
-      expect(playerManager.getWeaponBarrelPosition('local-player')).toEqual({ x: 150, y: 200 });
+      expect(playerManager.getWeaponBarrelPosition('local-player')).toEqual({ x: 160, y: 200 });
     });
 
     it('should update local player weapon rotation immediately', () => {
@@ -2638,7 +2638,7 @@ describe('PlayerManager', () => {
 
       playerManager.teleportPlayer('player-1', { x: 500, y: 300 });
 
-      expect(playerManager.getWeaponBarrelPosition('player-1')).toEqual({ x: 547, y: 300 });
+      expect(playerManager.getWeaponBarrelPosition('player-1')).toEqual({ x: 557, y: 300 });
     });
 
     it('should update weapon graphics position', () => {
