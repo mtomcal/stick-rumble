@@ -1,9 +1,9 @@
 # Overview
 
-> **Spec Version**: 1.0.0
-> **Last Updated**: 2026-02-02
+> **Spec Version**: 1.1.0
+> **Last Updated**: 2026-04-07
 > **Depends On**: None (root specification)
-> **Depended By**: [constants.md](constants.md), [arena.md](arena.md), [player.md](player.md), [networking.md](networking.md), [client-architecture.md](client-architecture.md), [server-architecture.md](server-architecture.md)
+> **Depended By**: [constants.md](constants.md), [maps.md](maps.md), [arena.md](arena.md), [player.md](player.md), [networking.md](networking.md), [client-architecture.md](client-architecture.md), [server-architecture.md](server-architecture.md)
 
 ---
 
@@ -78,6 +78,10 @@ Six weapons provide diverse combat options:
 | **Melee** | Bat, Katana | Close range, unlimited uses |
 
 Players spawn with a Pistol and can pick up other weapons from crates around the arena.
+
+### Maps
+
+Each match is played on a selected map loaded from shared configuration files. The map defines the match's world size, obstacle geometry, fixed spawn points, and weapon spawn locations. The server enforces the selected map authoritatively; the client loads the same map by ID for rendering and local spatial logic.
 
 ### Movement
 

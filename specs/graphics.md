@@ -1467,7 +1467,7 @@ test "player renders all body parts":
 **Preconditions:**
 - Player fires with barrel position extending outside the arena boundaries
 
-> **Note:** "Wall" here means arena boundary edges. No internal wall geometry exists yet.
+> **Note:** "Wall" may mean either arena boundary edges or authored map obstacles that block projectiles.
 
 **Expected Output:**
 - Yellow spark (0xFFFF00) appears at barrel position

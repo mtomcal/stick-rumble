@@ -179,14 +179,14 @@ type RollState struct {
 
 When a player connects, they receive a fresh PlayerState with default values.
 
-**Why spawn at arena center?** For the first player in a room, center is the safest position. Subsequent spawns use balanced spawning (see [arena.md](arena.md)).
+**Why initialize at map center?** For the first player in a room, the selected map center is the safest neutral fallback. Subsequent spawns use authored fixed spawn points chosen by the server's safety scoring (see [maps.md](maps.md) and [arena.md](arena.md)).
 
 **Pseudocode:**
 ```
 function createPlayer(playerId):
     return PlayerState {
         ID: playerId,
-        Position: (ARENA_WIDTH / 2, ARENA_HEIGHT / 2),  // (960, 540)
+        Position: (map.width / 2, map.height / 2),
         Velocity: (0, 0),
         Health: PLAYER_MAX_HEALTH,  // 100
         AimAngle: 0,
@@ -207,8 +207,8 @@ func NewPlayerState(id string) *PlayerState {
     return &PlayerState{
         ID: id,
         Position: Vector2{
-            X: ArenaWidth / 2,
-            Y: ArenaHeight / 2,
+            X: map.Width / 2,
+            Y: map.Height / 2,
         },
         Velocity:       Vector2{X: 0, Y: 0},
         Health:         PlayerMaxHealth,

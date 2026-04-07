@@ -1,7 +1,7 @@
 # Test Index
 
-> **Spec Version**: 1.2.0
-> **Last Updated**: 2026-02-16
+> **Spec Version**: 1.3.0
+> **Last Updated**: 2026-04-07
 > **Depends On**: All specs (cross-reference document)
 > **Depended By**: None (reference document)
 
@@ -29,11 +29,11 @@ When implementing from scratch, AI agents need to:
 
 | Metric | Value |
 |--------|-------|
-| **Total Test Scenarios** | 244 |
-| **Specs with Tests** | 19 (+Epic 4 cross-spec) |
-| **Average Tests per Spec** | 12.2 |
-| **Critical Priority Tests** | 71 |
-| **High Priority Tests** | 111 |
+| **Total Test Scenarios** | 250 |
+| **Specs with Tests** | 20 (+Epic 4 cross-spec) |
+| **Average Tests per Spec** | 12.5 |
+| **Critical Priority Tests** | 75 |
+| **High Priority Tests** | 113 |
 | **Medium Priority Tests** | 62 |
 | **Low Priority Tests** | 0 |
 
@@ -41,8 +41,8 @@ When implementing from scratch, AI agents need to:
 
 | Category | Count | Percentage |
 |----------|-------|------------|
-| Unit | 155 | 64% |
-| Integration | 57 | 23% |
+| Unit | 159 | 64% |
+| Integration | 59 | 24% |
 | Visual | 32 | 13% |
 
 ### By Spec (Sorted by Count)
@@ -56,6 +56,7 @@ When implementing from scratch, AI agents need to:
 | hit-detection.md | 14 | 6 | 7 | 1 | 0 |
 | player.md | 14 | 3 | 8 | 3 | 0 |
 | match.md | 13 | 3 | 5 | 5 | 0 |
+| maps.md | 6 | 4 | 2 | 0 | 0 |
 | arena.md | 13 | 4 | 2 | 7 | 0 |
 | shooting.md | 13 | 5 | 6 | 2 | 0 |
 | audio.md | 10 | 3 | 3 | 4 | 0 |
@@ -79,17 +80,9 @@ When implementing from scratch, AI agents need to:
 |----|----------|----------|-------------|
 | TS-ARENA-001 | Unit | Critical | Player cannot move beyond left boundary |
 | TS-ARENA-002 | Unit | Critical | Player cannot move beyond right boundary |
-| TS-ARENA-003 | Unit | Critical | Player cannot move beyond top boundary |
-| TS-ARENA-004 | Unit | Critical | Player cannot move beyond bottom boundary |
-| TS-ARENA-005 | Unit | High | Projectile destroyed at boundary |
-| TS-ARENA-006 | Integration | High | Dodge roll terminates at boundary |
-| TS-ARENA-007 | Unit | Medium | Weapon crates spawn at correct positions |
-| TS-ARENA-008 | Integration | Medium | Balanced spawn avoids enemies |
-| TS-ARENA-009 | Unit | Medium | Spawn fallback to center when no enemies |
-| TS-ARENA-010 | Unit | Medium | Distance calculation is accurate |
-| TS-ARENA-011 | Unit | Medium | Weapon pickup radius check works |
-| TS-ARENA-012 | Unit | Medium | Player cannot pick up weapon from far away |
-| TS-ARENA-013 | Visual | Medium | Floor grid renders at correct depth and spacing |
+| TS-ARENA-003 | Unit | Critical | Player collides with movement-blocking obstacle |
+| TS-ARENA-004 | Integration | Critical | Projectile is destroyed by projectile-blocking obstacle |
+| TS-ARENA-005 | Integration | High | Dodge roll ends on obstacle collision |
 
 ### Audio Tests (audio.md)
 
@@ -215,6 +208,17 @@ When implementing from scratch, AI agents need to:
 | TS-MATCH-011 | Unit | Medium | Players with 0 kills included in final scores |
 | TS-MATCH-012 | Unit | Medium | RegisteredPlayers set includes all players |
 | TS-MATCH-013 | Unit | Medium | Match state machine prevents re-ending |
+
+### Map Tests (maps.md)
+
+| ID | Category | Priority | Description |
+|----|----------|----------|-------------|
+| TS-MAP-001 | Unit | Critical | Invalid map file fails validation |
+| TS-MAP-002 | Unit | Critical | Spawn point inside solid obstacle is rejected |
+| TS-MAP-003 | Unit | High | Positive-area obstacle overlap is rejected |
+| TS-MAP-004 | Integration | Critical | room:joined announces selected map ID |
+| TS-MAP-005 | Unit | High | Server selects safest authored spawn point |
+| TS-MAP-006 | Integration | Critical | Client and server load same map by ID |
 
 ### Melee Tests (melee.md)
 

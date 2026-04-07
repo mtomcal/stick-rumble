@@ -1,15 +1,15 @@
 # Rooms
 
-> **Spec Version**: 1.1.0
-> **Last Updated**: 2026-02-15
-> **Depends On**: [constants.md](constants.md), [player.md](player.md), [networking.md](networking.md), [messages.md](messages.md)
+> **Spec Version**: 1.2.0
+> **Last Updated**: 2026-04-07
+> **Depends On**: [constants.md](constants.md), [player.md](player.md), [networking.md](networking.md), [messages.md](messages.md), [maps.md](maps.md)
 > **Depended By**: [match.md](match.md), [server-architecture.md](server-architecture.md)
 
 ---
 
 ## Overview
 
-The room system manages how players are grouped together for matches. It handles matchmaking (pairing waiting players), room lifecycle (creation and destruction), and message broadcasting within rooms. The design prioritizes simplicity: when two players are waiting, a room is automatically created and the match begins. This removes the complexity of lobbies or manual room selection while ensuring minimal wait times for a fast-paced arena shooter.
+The room system manages how players are grouped together for matches. It handles matchmaking (pairing waiting players), room lifecycle (creation and destruction), room-level map assignment, and message broadcasting within rooms. The design prioritizes simplicity: when two players are waiting, a room is automatically created, assigned a map, and the match begins.
 
 **Why rooms instead of a single global arena?**
 - Isolated game state prevents cheating across matches
@@ -34,6 +34,7 @@ The room system manages how players are grouped together for matches. It handles
 - [player.md](player.md) - Player state structure
 - [networking.md](networking.md) - WebSocket connection lifecycle
 - [messages.md](messages.md) - `room:joined` and `player:left` message formats
+- [maps.md](maps.md) - map registry ownership and room-level map assignment
 
 ---
 
@@ -87,6 +88,7 @@ type Room struct {
     ID         string       // UUID, unique room identifier
     Players    []*Player    // Current room members
     MaxPlayers int          // Always 8
+    MapID      string       // Selected map for this room
     Match      *Match       // Match state (timer, scores)
     mu         sync.RWMutex // Protects Players slice
 }
@@ -94,10 +96,11 @@ type Room struct {
 
 **TypeScript (Client doesn't track room state explicitly):**
 ```typescript
-// Client receives both roomId and playerId after room:joined
+// Client receives roomId, playerId, and mapId after room:joined
 interface RoomJoinedData {
     roomId: string;
     playerId: string;
+    mapId: string;
 }
 ```
 
@@ -131,7 +134,7 @@ type RoomManager struct {
 
 ### Room Creation (Auto-Matchmaking)
 
-When a player connects, they're added to the waiting queue. When the queue reaches 2 players, a room is automatically created.
+When a player connects, they're added to the waiting queue. When the queue reaches 2 players, a room is automatically created and assigned the default map ID.
 
 **Pseudocode:**
 ```
@@ -156,7 +159,7 @@ function addPlayer(player):
         player1 = waitingPlayers.pop()
         player2 = waitingPlayers.pop()
 
-        room = createRoom()
+        room = createRoom(defaultMapId)
         room.addPlayer(player1)
         room.addPlayer(player2)
         room.match.registerPlayer(player1)
@@ -166,8 +169,8 @@ function addPlayer(player):
         playerToRoom[player1.id] = room.id
         playerToRoom[player2.id] = room.id
 
-        send room:joined { roomId: room.id, playerId: player1.id } to player1
-        send room:joined { roomId: room.id, playerId: player2.id } to player2
+        send room:joined { roomId: room.id, playerId: player1.id, mapId: room.mapId } to player1
+        send room:joined { roomId: room.id, playerId: player2.id, mapId: room.mapId } to player2
 
         return room
 
@@ -201,7 +204,7 @@ func (rm *RoomManager) AddPlayer(player *Player) *Room {
         player1 := rm.waitingPlayers[0]
         player2 := rm.waitingPlayers[1]
 
-        room := NewRoom()
+        room := NewRoom(defaultMapID)
         room.AddPlayer(player1)
         room.AddPlayer(player2)
         room.Match.RegisterPlayer(player1.ID)
@@ -381,7 +384,7 @@ func (r *Room) Broadcast(message []byte, excludePlayerID string) {
 
 ### Client Room Handling
 
-The client doesn't maintain room state explicitly. It only knows its own player ID after receiving `room:joined`.
+The client doesn't maintain full room state explicitly. It learns the minimum required context after `room:joined`: `roomId`, `playerId`, and `mapId`.
 
 **TypeScript:**
 ```typescript

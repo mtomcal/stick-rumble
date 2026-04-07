@@ -451,10 +451,10 @@ function checkProjectileExpiration(projectile):
     if now() - projectile.createdAt >= PROJECTILE_MAX_LIFETIME:
         return true
 
-    // Check arena bounds
-    if projectile.position.x < 0 or projectile.position.x > ARENA_WIDTH:
+    // Check selected map bounds
+    if projectile.position.x < 0 or projectile.position.x > map.width:
         return true
-    if projectile.position.y < 0 or projectile.position.y > ARENA_HEIGHT:
+    if projectile.position.y < 0 or projectile.position.y > map.height:
         return true
 
     return false

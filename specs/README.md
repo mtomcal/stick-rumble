@@ -1,7 +1,7 @@
 # Stick Rumble Specification Suite
 
-> **Version**: 1.2.0
-> **Last Updated**: 2026-02-16
+> **Version**: 1.3.0
+> **Last Updated**: 2026-04-07
 > **Purpose**: Complete specification for recreating Stick Rumble from scratch
 
 ---
@@ -37,45 +37,46 @@ For an AI agent recreating Stick Rumble from scratch, read specs in this order:
 ### Phase 1: Foundation (Start Here)
 
 1. **[constants.md](constants.md)** - All game constants with rationale
-2. **[arena.md](arena.md)** - World boundaries and spatial rules
+2. **[maps.md](maps.md)** - Shared map configuration contract and validation rules
+3. **[arena.md](arena.md)** - Match-selected world bounds and spatial rules
 
 ### Phase 2: Core Entities
 
-3. **[player.md](player.md)** - Player state, health, death, respawn
-4. **[movement.md](movement.md)** - Physics, WASD, sprint, acceleration
+4. **[player.md](player.md)** - Player state, health, death, respawn
+5. **[movement.md](movement.md)** - Physics, WASD, sprint, acceleration
 
 ### Phase 3: Networking
 
-5. **[messages.md](messages.md)** - All 28 WebSocket message types
-6. **[networking.md](networking.md)** - Connection lifecycle, reconnection
-7. **[rooms.md](rooms.md)** - Matchmaking, room management
+6. **[messages.md](messages.md)** - All WebSocket message types
+7. **[networking.md](networking.md)** - Connection lifecycle, reconnection
+8. **[rooms.md](rooms.md)** - Matchmaking, room management
 
 ### Phase 4: Combat
 
-8. **[weapons.md](weapons.md)** - All 6 weapons, stats, recoil, spread
-9. **[shooting.md](shooting.md)** - Ranged attacks, projectiles, reload
-10. **[hit-detection.md](hit-detection.md)** - Collision detection, damage
-11. **[melee.md](melee.md)** - Bat and Katana mechanics, knockback
+9. **[weapons.md](weapons.md)** - All 6 weapons, stats, recoil, spread
+10. **[shooting.md](shooting.md)** - Ranged attacks, projectiles, reload
+11. **[hit-detection.md](hit-detection.md)** - Collision detection, damage
+12. **[melee.md](melee.md)** - Bat and Katana mechanics, knockback
 
 ### Phase 5: Advanced Mechanics
 
-12. **[dodge-roll.md](dodge-roll.md)** - Evasion, i-frames, cooldown
-13. **[match.md](match.md)** - Win conditions, timer, state machine
+13. **[dodge-roll.md](dodge-roll.md)** - Evasion, i-frames, cooldown
+14. **[match.md](match.md)** - Win conditions, timer, state machine
 
 ### Phase 6: Client Implementation
 
-14. **[client-architecture.md](client-architecture.md)** - Phaser scenes, managers
-15. **[graphics.md](graphics.md)** - Procedural rendering
-16. **[ui.md](ui.md)** - HUD elements, kill feed
-17. **[audio.md](audio.md)** - Sound effects and audio system
+15. **[client-architecture.md](client-architecture.md)** - Phaser scenes, managers
+16. **[graphics.md](graphics.md)** - Procedural rendering
+17. **[ui.md](ui.md)** - HUD elements, kill feed
+18. **[audio.md](audio.md)** - Sound effects and audio system
 
 ### Phase 7: Server Implementation
 
-18. **[server-architecture.md](server-architecture.md)** - Game loop, concurrency
+19. **[server-architecture.md](server-architecture.md)** - Game loop, concurrency
 
 ### Phase 8: Verification
 
-19. **[test-index.md](test-index.md)** - All test scenarios cross-reference
+20. **[test-index.md](test-index.md)** - All test scenarios cross-reference
 
 ---
 
@@ -159,8 +160,9 @@ For an AI agent recreating Stick Rumble from scratch, read specs in this order:
 
 | Spec | Description | Lines | Version |
 |------|-------------|-------|---------|
-| [constants.md](constants.md) | All magic numbers with rationale (speeds, damage, timing) | ~540 | 1.2.0 |
-| [arena.md](arena.md) | 1920x1080 world, boundaries, spawn points, collision | ~970 | 1.1.0 |
+| [constants.md](constants.md) | All magic numbers with rationale (speeds, damage, timing) | ~540 | 1.4.0 |
+| [maps.md](maps.md) | Shared map config contract, validation, spawn and obstacle authoring | ~260 | 1.0.0 |
+| [arena.md](arena.md) | Match-selected world bounds, collision, and spatial rules | ~220 | 2.0.0 |
 | [player.md](player.md) | 100 HP, 5s regen delay, 3s respawn, 2s invuln | ~960 | 1.2.0 |
 | [movement.md](movement.md) | 200/300 px/s walk/sprint, 50/1500 px/s² accel/decel | ~950 | 1.1.0 |
 | [messages.md](messages.md) | 6 client→server, 22 server→client message types | ~1810 | 1.1.0 |

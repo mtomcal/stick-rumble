@@ -434,9 +434,12 @@ Echo test message for connection verification.
 
 ### `room:joined`
 
-Confirms player successfully joined a room and provides their assigned ID.
+Confirms player successfully joined a room and provides the authoritative room and map context needed to initialize gameplay.
 
-**Why assigned ID?** Server generates UUIDs to prevent ID collisions and ensure uniqueness across all connections.
+**Why include room, player, and map identity together?**
+- the server generates the player ID to prevent spoofing and collisions
+- the client needs the room ID for contextual state
+- the client must know the selected `mapId` before it can load the shared map config and initialize arena geometry correctly
 
 **When Sent:** Player's WebSocket connection is accepted and assigned to a room
 
@@ -447,14 +450,18 @@ Confirms player successfully joined a room and provides their assigned ID.
 **TypeScript:**
 ```typescript
 interface RoomJoinedData {
+  roomId: string;   // UUID of the assigned room
   playerId: string; // UUID assigned to this player
+  mapId: string;    // ID of the selected authoritative map config
 }
 ```
 
 **Go:**
 ```go
 type RoomJoinedData struct {
+    RoomID   string `json:"roomId"`
     PlayerID string `json:"playerId"`
+    MapID    string `json:"mapId"`
 }
 ```
 
@@ -464,17 +471,21 @@ type RoomJoinedData struct {
   "type": "room:joined",
   "timestamp": 1704067200100,
   "data": {
+    "roomId": "6d64957a-5330-4bca-a668-e2f9f8df7970",
+    "mapId": "default_office",
     "playerId": "550e8400-e29b-41d4-a716-446655440000"
   }
 }
 ```
 
 **Client Handling:**
-1. Store local player ID
-2. Clear any existing player sprites
-3. Process queued `weapon:spawned` messages
-4. Initialize health bar to 100%
-5. Begin listening for `player:move` updates
+1. Store local room ID and player ID
+2. Resolve the local shared map config by `mapId`
+3. Initialize arena bounds and obstacle geometry from that map
+4. Clear any existing player sprites
+5. Process queued `weapon:spawned` messages
+6. Initialize health bar to 100%
+7. Begin listening for `player:move` updates
 
 ---
 

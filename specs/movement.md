@@ -416,8 +416,8 @@ function clampToArena(pos):
     halfWidth = PLAYER_WIDTH / 2   // 16
     halfHeight = PLAYER_HEIGHT / 2 // 32
 
-    x = clamp(pos.x, halfWidth, ARENA_WIDTH - halfWidth)   // [16, 1904]
-    y = clamp(pos.y, halfHeight, ARENA_HEIGHT - halfHeight) // [32, 1048]
+    x = clamp(pos.x, halfWidth, map.width - halfWidth)
+    y = clamp(pos.y, halfHeight, map.height - halfHeight)
 
     return Vector2(x, y)
 ```

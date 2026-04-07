@@ -1,7 +1,7 @@
 # Constants
 
-> **Spec Version**: 1.3.0
-> **Last Updated**: 2026-02-17
+> **Spec Version**: 1.4.0
+> **Last Updated**: 2026-04-07
 > **Depends On**: None (foundational spec)
 > **Depended By**: [arena.md](arena.md), [player.md](player.md), [movement.md](movement.md), [dodge-roll.md](dodge-roll.md), [weapons.md](weapons.md), [shooting.md](shooting.md), [melee.md](melee.md), [hit-detection.md](hit-detection.md), [match.md](match.md), [rooms.md](rooms.md), [networking.md](networking.md), [audio.md](audio.md), [ui.md](ui.md), [graphics.md](graphics.md)
 
@@ -41,14 +41,16 @@ Constants serve three critical purposes:
 
 ---
 
-## Arena Constants
+## World Bounds Constants
 
-These define the game world boundaries.
+These define the canonical baseline dimensions for the first playable map and for shared tuning discussions. The selected map remains authoritative for actual match dimensions.
 
 | Constant | Value | Unit | Why |
 |----------|-------|------|-----|
-| ARENA_WIDTH | 1920 | px | Standard 1080p width; provides room for 8 players with comfortable spacing. 40 Phaser tiles at 48px each. |
-| ARENA_HEIGHT | 1080 | px | Standard 1080p height; maintains 16:9 aspect ratio for modern displays. |
+| ARENA_WIDTH | 1920 | px | Canonical width for the initial shipped map (`default_office`) and one-screen competitive format. |
+| ARENA_HEIGHT | 1080 | px | Canonical height for the initial shipped map (`default_office`) and one-screen competitive format. |
+
+**Important:** These values are no longer the source of truth for every match. The selected map file defines authoritative runtime width and height.
 
 **TypeScript:**
 ```typescript

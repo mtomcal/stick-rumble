@@ -1,8 +1,8 @@
 # Weapons
 
-> **Spec Version**: 1.1.0
-> **Last Updated**: 2026-02-16
-> **Depends On**: [constants.md](constants.md), [arena.md](arena.md), [player.md](player.md)
+> **Spec Version**: 1.2.0
+> **Last Updated**: 2026-04-07
+> **Depends On**: [constants.md](constants.md), [arena.md](arena.md), [maps.md](maps.md), [player.md](player.md)
 > **Depended By**: [shooting.md](shooting.md), [melee.md](melee.md), [hit-detection.md](hit-detection.md)
 
 ---
@@ -34,7 +34,8 @@ All weapon stats are defined in a shared `weapon-configs.json` file that both cl
 ### Spec Dependencies
 
 - [constants.md](constants.md) - Weapon respawn delay, pickup radius, sprint spread multiplier
-- [arena.md](arena.md) - Arena dimensions for spawn locations and boundary clamping
+- [arena.md](arena.md) - Arena bounds and collision context
+- [maps.md](maps.md) - Authored weapon spawn ownership and validation
 - [player.md](player.md) - Health system for damage calculations
 
 ---
@@ -550,33 +551,22 @@ func applyKnockback(attacker *PlayerState, target *PlayerState, knockbackDistanc
 
 ## Weapon Spawn System
 
-### Spawn Locations
+### Spawn Ownership
 
-Weapons spawn at **5 fixed locations** forming a strategic pattern across the arena.
+Weapon crate locations are authored per map in [maps.md](maps.md). This spec defines weapon pickup behavior, respawn timing, and runtime crate state, but not the source-of-truth coordinates.
 
-**Why fixed spawns?**
-- Players learn map control (knowing where weapons are)
-- Creates contested "hot spots" for gameplay
-- No randomness = fair access for all players
+**Why move spawn ownership into maps?**
+- weapon access is part of map balance
+- crate locations must align with cover, lanes, and spawns
+- keeping locations outside the map file creates client/server drift risk
 
-| Position | Weapon | Coordinates | Strategic Reasoning |
-|----------|--------|-------------|---------------------|
-| Center Top | Uzi | (960, 216) | Early aggression, contested center |
-| Left Mid | AK47 | (480, 540) | Power weapon, side control |
-| Right Mid | Shotgun | (1440, 540) | Power weapon, opposite side |
-| Bottom Center | Katana | (960, 864) | High-risk melee, back line |
-| Top Left | Bat | (288, 162) | Corner utility, knockback control |
+### Spawn Model
 
-**Coordinate Calculation:**
-```
-ArenaWidth = 1920, ArenaHeight = 1080
-
-uzi.position     = (ArenaWidth / 2, ArenaHeight * 0.2)       = (960, 216)
-ak47.position    = (ArenaWidth * 0.25, ArenaHeight / 2)      = (480, 540)
-shotgun.position = (ArenaWidth * 0.75, ArenaHeight / 2)      = (1440, 540)
-katana.position  = (ArenaWidth / 2, ArenaHeight * 0.8)       = (960, 864)
-bat.position     = (ArenaWidth * 0.15, ArenaHeight * 0.15)   = (288, 162)
-```
+In v1:
+- each authored weapon spawn has a stable ID
+- each authored weapon spawn specifies one fixed weapon type
+- weapon respawn timing remains global (`WeaponRespawnDelay = 30s`)
+- runtime availability is layered over authored spawn positions
 
 ### Pickup Mechanics
 

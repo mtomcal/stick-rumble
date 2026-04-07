@@ -338,8 +338,8 @@ function create():
     // Register cleanup for scene shutdown
     registerShutdownHandler()
 
-    // Configure world bounds
-    physics.world.setBounds(0, 0, ARENA_WIDTH, ARENA_HEIGHT)
+    // Configure world bounds from the selected map
+    physics.world.setBounds(0, 0, map.width, map.height)
 
     // Render arena background
     renderArena()
