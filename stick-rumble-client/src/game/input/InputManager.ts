@@ -194,11 +194,7 @@ export class InputManager {
   private sendInputState(): void {
     const timestamp = Date.now();
 
-    this.wsClient.send({
-      type: 'input:state',
-      timestamp,
-      data: this.currentState,
-    });
+    this.wsClient.sendInputState(this.currentState);
 
     // Store in input history for reconciliation
     this.inputHistory.push({
