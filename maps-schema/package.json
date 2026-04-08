@@ -1,0 +1,35 @@
+{
+  "name": "@stick-rumble/maps-schema",
+  "version": "1.0.0",
+  "description": "Shared map schema definitions and validation helpers",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "schemas"
+  ],
+  "scripts": {
+    "build": "tsc && npm run generate:schemas",
+    "generate:schemas": "node --import tsx src/build-schemas.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist schemas/*.json"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.27"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "tsx": "^4.19.4",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.14"
+  }
+}

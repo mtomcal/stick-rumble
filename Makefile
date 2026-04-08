@@ -95,6 +95,7 @@ test-server-verbose:
 test-integration:
 	@echo "Building server binary for integration tests..."; \
 	ROOT_DIR=$$(pwd); \
+	TEST_SERVER_PORT=$${TEST_SERVER_PORT:-8081}; \
 	cd stick-rumble-server && go build -o server-test cmd/server/main.go; \
 	if [ ! -f server-test ]; then \
 		echo "ERROR: Failed to build server binary"; \
@@ -102,13 +103,13 @@ test-integration:
 	fi; \
 	cd $$ROOT_DIR; \
 	echo "Starting server for integration tests..."; \
-	cd stick-rumble-server && ./server-test > ../integration-server.log 2>&1 & \
+	cd stick-rumble-server && PORT=$$TEST_SERVER_PORT ./server-test > ../integration-server.log 2>&1 & \
 	SERVER_PID=$$!; \
 	cd $$ROOT_DIR; \
 	echo "Server PID: $$SERVER_PID"; \
 	echo "Waiting for server health check..."; \
 	for i in 1 2 3 4 5 6 7 8 9 10; do \
-		if curl -s -f http://localhost:8080/health > /dev/null 2>&1; then \
+		if curl -s -f http://localhost:$$TEST_SERVER_PORT/health > /dev/null 2>&1; then \
 			echo "Server is ready!"; \
 			break; \
 		fi; \
@@ -127,7 +128,7 @@ test-integration:
 		sleep 0.5; \
 	done; \
 	echo "Running integration tests..."; \
-	cd $$ROOT_DIR/stick-rumble-client && npm run test:integration; \
+	cd $$ROOT_DIR/stick-rumble-client && TEST_SERVER_PORT=$$TEST_SERVER_PORT npm run test:integration; \
 	TEST_EXIT=$$?; \
 	echo "Stopping server (PID: $$SERVER_PID)..."; \
 	pkill -P $$SERVER_PID 2>/dev/null || true; \
@@ -135,7 +136,7 @@ test-integration:
 	sleep 1; \
 	pkill -9 -P $$SERVER_PID 2>/dev/null || true; \
 	kill -9 $$SERVER_PID 2>/dev/null || true; \
-	lsof -ti:8080 | xargs kill -9 2>/dev/null || true; \
+	lsof -ti:$$TEST_SERVER_PORT | xargs kill -9 2>/dev/null || true; \
 	wait $$SERVER_PID 2>/dev/null || true; \
 	rm -f stick-rumble-server/server-test; \
 	if [ $$TEST_EXIT -ne 0 ]; then \

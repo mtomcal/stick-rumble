@@ -1,0 +1,48 @@
+{
+  "$id": "MapWeaponSpawn",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "id",
+    "x",
+    "y",
+    "weaponType"
+  ],
+  "properties": {
+    "id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "x": {
+      "type": "number"
+    },
+    "y": {
+      "type": "number"
+    },
+    "weaponType": {
+      "description": "Supported authored weapon spawn types",
+      "anyOf": [
+        {
+          "const": "uzi",
+          "type": "string"
+        },
+        {
+          "const": "ak47",
+          "type": "string"
+        },
+        {
+          "const": "shotgun",
+          "type": "string"
+        },
+        {
+          "const": "katana",
+          "type": "string"
+        },
+        {
+          "const": "bat",
+          "type": "string"
+        }
+      ]
+    }
+  }
+}

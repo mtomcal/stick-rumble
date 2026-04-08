@@ -118,14 +118,20 @@ describe('GameScene - Connection & Initialization', () => {
 
       scene.create();
 
-      // Should create 5 rectangles (arena bg, arena border, health bar bg, health bar, damage flash overlay)
-      const rectangleCalls = mockSceneContext.add.rectangle.mock.calls;
-      expect(rectangleCalls.length).toBe(5);
-      // Second rectangle is the arena border
-      expect(rectangleCalls[1]).toEqual([0, 0, 1920, 1080, 0xffffff, 0]);
+      const borderCallIndex = mockSceneContext.add.rectangle.mock.calls.findIndex(
+        (call: unknown[]) =>
+          call[0] === 0 &&
+          call[1] === 0 &&
+          call[2] === 1920 &&
+          call[3] === 1080 &&
+          call[4] === 0xffffff &&
+          call[5] === 0
+      );
+
+      expect(borderCallIndex).toBeGreaterThanOrEqual(0);
 
       // Verify setStrokeStyle was called on the border rectangle
-      const borderRectangle = mockSceneContext.add.rectangle.mock.results[1].value;
+      const borderRectangle = mockSceneContext.add.rectangle.mock.results[borderCallIndex].value;
       expect(borderRectangle.setStrokeStyle).toHaveBeenCalledWith(2, 0xffffff);
     });
 

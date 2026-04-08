@@ -51,9 +51,11 @@
 import { beforeEach, afterEach, vi } from 'vitest';
 import { WebSocketClient } from './WebSocketClient';
 
-// Test server configuration - assumes server is running on port 8080
-export const SERVER_URL = 'ws://localhost:8080/ws';
-export const HEALTH_URL = 'http://localhost:8080/health';
+const TEST_SERVER_PORT = process.env.TEST_SERVER_PORT ?? '8081';
+
+// Test server configuration - uses a dedicated integration port to avoid local dev conflicts.
+export const SERVER_URL = `ws://localhost:${TEST_SERVER_PORT}/ws`;
+export const HEALTH_URL = `http://localhost:${TEST_SERVER_PORT}/health`;
 
 // Global client tracker for cleanup
 export const clients: WebSocketClient[] = [];

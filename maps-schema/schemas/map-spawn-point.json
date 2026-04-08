@@ -1,0 +1,22 @@
+{
+  "$id": "MapSpawnPoint",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "id",
+    "x",
+    "y"
+  ],
+  "properties": {
+    "id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "x": {
+      "type": "number"
+    },
+    "y": {
+      "type": "number"
+    }
+  }
+}

@@ -93,11 +93,13 @@ func NewPlayerState(id string) *PlayerState {
 
 // NewPlayerStateWithClock creates a new player state with a custom clock (for testing)
 func NewPlayerStateWithClock(id string, clock Clock) *PlayerState {
+	mapConfig := MustDefaultMapConfig()
+
 	return &PlayerState{
 		ID: id,
 		Position: Vector2{
-			X: ArenaWidth / 2,
-			Y: ArenaHeight / 2,
+			X: mapConfig.Width / 2,
+			Y: mapConfig.Height / 2,
 		},
 		Velocity:       Vector2{X: 0, Y: 0},
 		Health:         PlayerMaxHealth,

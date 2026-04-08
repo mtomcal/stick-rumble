@@ -32,13 +32,18 @@ type Room struct {
 	ID         string
 	Players    []*Player
 	MaxPlayers int
+	MapID      string
 	Match      *Match // Match state tracking
 	mu         sync.RWMutex
 }
 
 // NewRoom creates a new room with a unique ID
-func NewRoom() *Room {
+func NewRoom(mapIDs ...string) *Room {
 	match := NewMatch()
+	mapID := DefaultMapID
+	if len(mapIDs) > 0 && mapIDs[0] != "" {
+		mapID = mapIDs[0]
+	}
 
 	// Enable test mode if TEST_MODE environment variable is set
 	if os.Getenv("TEST_MODE") == "true" {
@@ -50,6 +55,7 @@ func NewRoom() *Room {
 		ID:         uuid.New().String(),
 		Players:    make([]*Player, 0, 8),
 		MaxPlayers: 8,
+		MapID:      mapID,
 		Match:      match,
 	}
 }
@@ -151,15 +157,22 @@ type RoomManager struct {
 	rooms          map[string]*Room
 	waitingPlayers []*Player
 	playerToRoom   map[string]string // Maps player ID to room ID
+	defaultMapID   string
 	mu             sync.RWMutex
 }
 
 // NewRoomManager creates a new room manager
-func NewRoomManager() *RoomManager {
+func NewRoomManager(defaultMapIDs ...string) *RoomManager {
+	defaultMapID := DefaultMapID
+	if len(defaultMapIDs) > 0 && defaultMapIDs[0] != "" {
+		defaultMapID = defaultMapIDs[0]
+	}
+
 	return &RoomManager{
 		rooms:          make(map[string]*Room),
 		waitingPlayers: make([]*Player, 0),
 		playerToRoom:   make(map[string]string),
+		defaultMapID:   defaultMapID,
 	}
 }
 
@@ -198,7 +211,7 @@ func (rm *RoomManager) AddPlayer(player *Player) *Room {
 	// If we have 2 players, create a room
 	if len(rm.waitingPlayers) >= 2 {
 		// Create new room
-		room := NewRoom()
+		room := NewRoom(rm.defaultMapID)
 
 		// Add both waiting players to the room
 		player1 := rm.waitingPlayers[0]
@@ -244,6 +257,7 @@ func (rm *RoomManager) sendRoomJoinedMessage(player *Player, room *Room) {
 		"data": map[string]interface{}{
 			"roomId":   room.ID,
 			"playerId": player.ID,
+			"mapId":    room.MapID,
 		},
 	}
 

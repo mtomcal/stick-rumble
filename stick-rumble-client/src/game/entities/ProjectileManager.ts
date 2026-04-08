@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { ARENA, EFFECTS, WEAPON } from '../../shared/constants';
+import { EFFECTS, WEAPON } from '../../shared/constants';
+import { getDefaultMatchMapContext } from '../../shared/maps';
 import type { Clock } from '../utils/Clock';
 import { RealClock } from '../utils/Clock';
 import { getWeaponConfigSync, parseHexColor } from '../../shared/weaponConfig';
@@ -39,10 +40,19 @@ export class ProjectileManager {
   private scene: Phaser.Scene;
   private projectiles: Map<string, Projectile> = new Map();
   private clock: Clock;
+  private worldBounds = getDefaultMatchMapContext();
 
   constructor(scene: Phaser.Scene, clock: Clock = new RealClock()) {
     this.scene = scene;
     this.clock = clock;
+  }
+
+  setWorldBounds(width: number, height: number): void {
+    this.worldBounds = {
+      ...this.worldBounds,
+      width,
+      height,
+    };
   }
 
   /**
@@ -243,9 +253,9 @@ export class ProjectileManager {
   private isOutOfBounds(position: { x: number; y: number }): boolean {
     return (
       position.x < 0 ||
-      position.x > ARENA.WIDTH ||
+      position.x > this.worldBounds.width ||
       position.y < 0 ||
-      position.y > ARENA.HEIGHT
+      position.y > this.worldBounds.height
     );
   }
 

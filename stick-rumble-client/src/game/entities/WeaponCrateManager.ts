@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { COLORS } from '../../shared/constants';
+import type { MapWeaponSpawn } from '../../shared/maps';
 
 export interface WeaponCrateData {
   id: string;
@@ -39,6 +40,21 @@ export class WeaponCrateManager {
   }
 
   spawnCrate(data: WeaponCrateData): void {
+    const existingCrate = this.crates.get(data.id);
+    if (existingCrate) {
+      existingCrate.sprite.setPosition(data.position.x, data.position.y);
+      existingCrate.glow.setPosition(data.position.x, data.position.y);
+      existingCrate.position = data.position;
+      existingCrate.weaponType = data.weaponType;
+
+      if (data.isAvailable) {
+        this.markAvailable(data.id);
+      } else {
+        this.markUnavailable(data.id);
+      }
+      return;
+    }
+
     // Create weapon crate graphics: yellow circle outline with dark cross icon
     const sprite = this.scene.add.graphics();
     sprite.setPosition(data.position.x, data.position.y);
@@ -92,6 +108,21 @@ export class WeaponCrateManager {
     // Apply initial availability state
     if (!data.isAvailable) {
       this.markUnavailable(data.id);
+    }
+  }
+
+  initializeFromMapWeaponSpawns(weaponSpawns: readonly MapWeaponSpawn[]): void {
+    for (const weaponSpawn of weaponSpawns) {
+      if (this.crates.has(weaponSpawn.id)) {
+        continue;
+      }
+
+      this.spawnCrate({
+        id: weaponSpawn.id,
+        position: { x: weaponSpawn.x, y: weaponSpawn.y },
+        weaponType: weaponSpawn.weaponType,
+        isAvailable: false,
+      });
     }
   }
 

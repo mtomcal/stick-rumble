@@ -68,7 +68,9 @@ describe('GameScene - Events', () => {
           type: 'room:joined',
           timestamp: Date.now(),
           data: {
-            playerId: 'my-player-id'
+            playerId: 'my-player-id',
+            roomId: 'room-1',
+            mapId: 'default_office',
           }
         })
       };

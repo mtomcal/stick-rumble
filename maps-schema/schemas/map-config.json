@@ -1,0 +1,180 @@
+{
+  "$id": "MapConfig",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "width",
+    "height",
+    "obstacles",
+    "spawnPoints",
+    "weaponSpawns"
+  ],
+  "properties": {
+    "id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "name": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "width": {
+      "exclusiveMinimum": 0,
+      "type": "number"
+    },
+    "height": {
+      "exclusiveMinimum": 0,
+      "type": "number"
+    },
+    "obstacles": {
+      "type": "array",
+      "items": {
+        "$id": "MapObstacle",
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "shape",
+          "x",
+          "y",
+          "width",
+          "height",
+          "blocksMovement",
+          "blocksProjectiles",
+          "blocksLineOfSight"
+        ],
+        "properties": {
+          "id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "const": "wall",
+                "type": "string"
+              },
+              {
+                "const": "desk",
+                "type": "string"
+              },
+              {
+                "const": "pillar",
+                "type": "string"
+              }
+            ]
+          },
+          "shape": {
+            "const": "rectangle",
+            "type": "string"
+          },
+          "x": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "y": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "width": {
+            "exclusiveMinimum": 0,
+            "type": "number"
+          },
+          "height": {
+            "exclusiveMinimum": 0,
+            "type": "number"
+          },
+          "blocksMovement": {
+            "type": "boolean"
+          },
+          "blocksProjectiles": {
+            "type": "boolean"
+          },
+          "blocksLineOfSight": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "spawnPoints": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "$id": "MapSpawnPoint",
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "x",
+          "y"
+        ],
+        "properties": {
+          "id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "weaponSpawns": {
+      "type": "array",
+      "items": {
+        "$id": "MapWeaponSpawn",
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "x",
+          "y",
+          "weaponType"
+        ],
+        "properties": {
+          "id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          },
+          "weaponType": {
+            "description": "Supported authored weapon spawn types",
+            "anyOf": [
+              {
+                "const": "uzi",
+                "type": "string"
+              },
+              {
+                "const": "ak47",
+                "type": "string"
+              },
+              {
+                "const": "shotgun",
+                "type": "string"
+              },
+              {
+                "const": "katana",
+                "type": "string"
+              },
+              {
+                "const": "bat",
+                "type": "string"
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

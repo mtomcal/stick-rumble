@@ -124,6 +124,9 @@ func TestGameServerPhysicsIntegration(t *testing.T) {
 
 	gs.AddPlayer(playerID)
 
+	player, _ := gs.world.GetPlayer(playerID)
+	player.SetPosition(Vector2{X: 960, Y: 860})
+
 	// Set player to move right
 	gs.UpdatePlayerInput(playerID, InputState{Right: true})
 
@@ -152,10 +155,9 @@ func TestGameServerPhysicsIntegration(t *testing.T) {
 		t.Errorf("Velocity should not exceed max speed (%v), got %v", MovementSpeed, state.Velocity.X)
 	}
 
-	// Position should have moved significantly right
-	centerX := ArenaWidth / 2
-	if state.Position.X <= centerX {
-		t.Errorf("Player should have moved right from center (%v), got %v", centerX, state.Position.X)
+	// Position should have moved significantly right from its explicit starting position.
+	if state.Position.X <= 960 {
+		t.Errorf("Player should have moved right from the starting position (960), got %v", state.Position.X)
 	}
 }
 

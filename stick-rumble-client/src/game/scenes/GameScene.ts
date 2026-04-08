@@ -26,7 +26,13 @@ import { KillCounterUI } from '../ui/KillCounterUI';
 import { DebugOverlayUI } from '../ui/DebugOverlayUI';
 import { ChatLogUI } from '../ui/ChatLogUI';
 import { PickupNotificationUI } from '../ui/PickupNotificationUI';
-import { ARENA, COLORS } from '../../shared/constants';
+import { COLORS } from '../../shared/constants';
+import {
+  getDefaultMatchMapContext,
+  getMatchMapContext,
+  isPointInsideBlockingObstacle,
+  type MatchMapContext,
+} from '../../shared/maps';
 
 export class GameScene extends Phaser.Scene {
   private wsClient!: WebSocketClient;
@@ -60,6 +66,11 @@ export class GameScene extends Phaser.Scene {
   private debugOverlayUI!: DebugOverlayUI;
   private chatLogUI!: ChatLogUI;
   private pickupNotificationUI!: PickupNotificationUI;
+  private matchMapContext: MatchMapContext = getDefaultMatchMapContext();
+  private arenaBackground: Phaser.GameObjects.Rectangle | null = null;
+  private arenaBorder: Phaser.GameObjects.Rectangle | null = null;
+  private floorGridGraphics: Phaser.GameObjects.Graphics | null = null;
+  private obstacleGraphics: Phaser.GameObjects.Graphics | null = null;
 
   constructor() {
     super({ key: 'GameScene' });
@@ -77,33 +88,6 @@ export class GameScene extends Phaser.Scene {
     this.events.once('shutdown', () => {
       this.cleanup();
     });
-
-    // Set world and camera bounds to match arena size
-    this.physics.world.setBounds(0, 0, ARENA.WIDTH, ARENA.HEIGHT);
-    this.cameras.main.setBounds(0, 0, ARENA.WIDTH, ARENA.HEIGHT);
-
-    // Add arena background (depth -2, below grid)
-    this.add.rectangle(0, 0, ARENA.WIDTH, ARENA.HEIGHT, COLORS.BACKGROUND).setOrigin(0, 0).setDepth(-2);
-
-    // Add arena border (depth -2, same level as background)
-    this.add.rectangle(0, 0, ARENA.WIDTH, ARENA.HEIGHT, 0xffffff, 0)
-      .setOrigin(0, 0)
-      .setStrokeStyle(2, 0xffffff)
-      .setDepth(-2);
-
-    // Draw floor grid (depth -1, below all game objects but above background)
-    const gridGraphics = this.add.graphics();
-    gridGraphics.lineStyle(1, COLORS.GRID_LINE, 0.5);
-    for (let x = 0; x <= ARENA.WIDTH; x += 100) {
-      gridGraphics.moveTo(x, 0);
-      gridGraphics.lineTo(x, ARENA.HEIGHT);
-    }
-    for (let y = 0; y <= ARENA.HEIGHT; y += 100) {
-      gridGraphics.moveTo(0, y);
-      gridGraphics.lineTo(ARENA.WIDTH, y);
-    }
-    gridGraphics.strokePath();
-    gridGraphics.setDepth(-1);
 
     // Add title (fixed to screen)
     const titleText = this.add.text(10, 10, 'Stick Rumble - WASD to move', {
@@ -136,17 +120,18 @@ export class GameScene extends Phaser.Scene {
     // Initialize health bar UI (top-left corner)
     this.healthBarUI = new HealthBarUI(this, 10, 70);
 
+    const camera = this.cameras.main;
+
     // Initialize kill feed UI (top-right corner)
-    this.killFeedUI = new KillFeedUI(this, ARENA.WIDTH - 10, 100);
+    this.killFeedUI = new KillFeedUI(this, camera.width - 10, 100);
 
     // Initialize UI module
     this.ui = new GameSceneUI(this);
-    const camera = this.cameras.main;
     this.ui.createMatchTimer(camera.width / 2, 10);
 
     // Initialize dodge roll cooldown UI (bottom-right corner, fixed to screen)
     this.dodgeRollCooldownUI = new DodgeRollCooldownUI(this, camera.width - 50, camera.height - 50);
-    this.ui.createDamageFlashOverlay(ARENA.WIDTH, ARENA.HEIGHT);
+    this.ui.createDamageFlashOverlay(camera.width, camera.height);
 
     // Initialize new UI components
     this.scoreDisplayUI = new ScoreDisplayUI(this, camera.width - 10, 10);
@@ -154,6 +139,8 @@ export class GameScene extends Phaser.Scene {
     this.debugOverlayUI = new DebugOverlayUI(this, 10, GameSceneUI.getDefaultDebugOverlayY());
     this.chatLogUI = new ChatLogUI(this, 10, camera.height - 140);
     this.pickupNotificationUI = new PickupNotificationUI(this, camera.width / 2, camera.height / 2);
+
+    this.applyMatchMapContext(this.matchMapContext);
 
     // Initialize spectator module
     this.spectator = new GameSceneSpectator(this, this.playerManager, () => this.stopCameraFollow());
@@ -194,7 +181,8 @@ export class GameScene extends Phaser.Scene {
       this.weaponCrateManager,
       this.pickupPromptUI,
       this.meleeWeaponManager,
-      this.hitEffectManager
+      this.hitEffectManager,
+      (mapId: string) => this.applyMatchMapContext(getMatchMapContext(mapId))
     );
 
     // Inject new UI components into event handlers
@@ -504,6 +492,90 @@ export class GameScene extends Phaser.Scene {
    * Check if the weapon barrel position is inside arena wall geometry.
    * Returns the barrel position if obstructed, or null if clear.
    */
+  private applyMatchMapContext(mapContext: MatchMapContext): void {
+    this.matchMapContext = mapContext;
+
+    this.physics.world.setBounds(0, 0, mapContext.width, mapContext.height);
+    this.cameras.main.setBounds(0, 0, mapContext.width, mapContext.height);
+
+    if (!this.arenaBackground) {
+      this.arenaBackground = this.add.rectangle(0, 0, mapContext.width, mapContext.height, COLORS.BACKGROUND)
+        .setOrigin(0, 0)
+        .setDepth(-2);
+    } else {
+      this.arenaBackground.setPosition(0, 0);
+      this.arenaBackground.setDisplaySize(mapContext.width, mapContext.height);
+    }
+
+    if (!this.arenaBorder) {
+      this.arenaBorder = this.add.rectangle(0, 0, mapContext.width, mapContext.height, 0xffffff, 0)
+        .setOrigin(0, 0)
+        .setStrokeStyle(2, 0xffffff)
+        .setDepth(-2);
+    } else {
+      this.arenaBorder.setPosition(0, 0);
+      this.arenaBorder.setDisplaySize(mapContext.width, mapContext.height);
+    }
+
+    if (!this.floorGridGraphics) {
+      this.floorGridGraphics = this.add.graphics();
+      this.floorGridGraphics.setDepth(-1);
+    }
+    this.drawFloorGrid(mapContext);
+
+    if (!this.obstacleGraphics) {
+      this.obstacleGraphics = this.add.graphics();
+      this.obstacleGraphics.setDepth(1);
+    }
+    this.drawObstacles(mapContext);
+
+    if (this.ui) {
+      this.ui.setMinimapWorldSize(mapContext.width, mapContext.height);
+    }
+    if (this.projectileManager) {
+      this.projectileManager.setWorldBounds(mapContext.width, mapContext.height);
+    }
+    if (this.weaponCrateManager) {
+      this.weaponCrateManager.initializeFromMapWeaponSpawns(mapContext.weaponSpawns);
+    }
+  }
+
+  private drawFloorGrid(mapContext: MatchMapContext): void {
+    if (!this.floorGridGraphics) {
+      return;
+    }
+
+    this.floorGridGraphics.clear();
+    this.floorGridGraphics.lineStyle(1, COLORS.GRID_LINE, 0.5);
+
+    for (let x = 0; x <= mapContext.width; x += 100) {
+      this.floorGridGraphics.moveTo(x, 0);
+      this.floorGridGraphics.lineTo(x, mapContext.height);
+    }
+    for (let y = 0; y <= mapContext.height; y += 100) {
+      this.floorGridGraphics.moveTo(0, y);
+      this.floorGridGraphics.lineTo(mapContext.width, y);
+    }
+
+    this.floorGridGraphics.strokePath();
+  }
+
+  private drawObstacles(mapContext: MatchMapContext): void {
+    if (!this.obstacleGraphics) {
+      return;
+    }
+
+    this.obstacleGraphics.clear();
+
+    for (const obstacle of mapContext.obstacles) {
+      const fillColor = obstacle.type === 'desk' ? 0x8f948f : 0x646864;
+      this.obstacleGraphics.fillStyle(fillColor, 1);
+      this.obstacleGraphics.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+      this.obstacleGraphics.lineStyle(2, 0x2f3330, 1);
+      this.obstacleGraphics.strokeRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+    }
+  }
+
   private getObstructedBarrelPosition(aimAngle: number): { x: number; y: number } | null {
     const playerPos = this.playerManager.getLocalPlayerPosition();
     if (!playerPos) return null;
@@ -515,7 +587,13 @@ export class GameScene extends Phaser.Scene {
     const barrelX = barrel?.x ?? (playerPos.x + Math.cos(aimAngle) * 35);
     const barrelY = barrel?.y ?? (playerPos.y + Math.sin(aimAngle) * 35);
 
-    if (barrelX < 0 || barrelX > ARENA.WIDTH || barrelY < 0 || barrelY > ARENA.HEIGHT) {
+    if (
+      barrelX < 0 ||
+      barrelX > this.matchMapContext.width ||
+      barrelY < 0 ||
+      barrelY > this.matchMapContext.height ||
+      isPointInsideBlockingObstacle(barrelX, barrelY, this.matchMapContext.obstacles)
+    ) {
       return { x: barrelX, y: barrelY };
     }
 
@@ -646,6 +724,18 @@ export class GameScene extends Phaser.Scene {
     }
     if (this.pickupNotificationUI) {
       this.pickupNotificationUI.destroy();
+    }
+    if (this.floorGridGraphics) {
+      this.floorGridGraphics.destroy();
+    }
+    if (this.obstacleGraphics) {
+      this.obstacleGraphics.destroy();
+    }
+    if (this.arenaBackground) {
+      this.arenaBackground.destroy();
+    }
+    if (this.arenaBorder) {
+      this.arenaBorder.destroy();
     }
     if (this.inputManager) {
       this.inputManager.destroy();

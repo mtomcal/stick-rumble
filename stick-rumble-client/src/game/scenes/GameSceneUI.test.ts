@@ -21,6 +21,7 @@ vi.mock('phaser', () => ({
 
 describe('GameSceneUI', () => {
   const minimapY = 114;
+  const minimapScale = 170 / 1920;
   let ui: GameSceneUI;
   let mockScene: Phaser.Scene;
   let mockCamera: any;
@@ -1456,11 +1457,10 @@ describe('GameSceneUI', () => {
       ui.updateMinimap(mockPlayerManager);
 
       // enemy-near at 200px distance should be shown
-      // MINIMAP.SCALE = 0.106
       expect(dynamicGraphics.fillStyle).toHaveBeenCalledWith(0xff0000, 1);
       expect(dynamicGraphics.fillCircle).toHaveBeenCalledWith(
-        20 + 700 * 0.106,  // mapX + enemy.x * MINIMAP.SCALE
-        minimapY + 500 * 0.106,
+        20 + 700 * minimapScale,
+        minimapY + 500 * minimapScale,
         3
       );
     });
@@ -1473,8 +1473,8 @@ describe('GameSceneUI', () => {
 
       // enemy-far at 700px distance should NOT be shown
       expect(dynamicGraphics.fillCircle).not.toHaveBeenCalledWith(
-        20 + 1200 * 0.106,
-        20 + 500 * 0.106,
+        20 + 1200 * minimapScale,
+        minimapY + 500 * minimapScale,
         3
       );
     });
@@ -1487,8 +1487,8 @@ describe('GameSceneUI', () => {
 
       expect(dynamicGraphics.fillStyle).toHaveBeenCalledWith(0x00ff00, 1);
       expect(dynamicGraphics.fillCircle).toHaveBeenCalledWith(
-        20 + 500 * 0.106,
-        minimapY + 500 * 0.106,
+        20 + 500 * minimapScale,
+        minimapY + 500 * minimapScale,
         4
       );
     });
@@ -1499,11 +1499,10 @@ describe('GameSceneUI', () => {
 
       ui.updateMinimap(mockPlayerManager);
 
-      // Player at (500, 500): clamped dot = Math.min(Math.max(20+500*0.106, 20), 190) = 73
-      const clampedX = Math.min(Math.max(20 + 500 * 0.106, 20), 190);
-      const clampedY = Math.min(Math.max(minimapY + 500 * 0.106, minimapY), minimapY + 170);
+      const clampedX = Math.min(Math.max(20 + 500 * minimapScale, 20), 190);
+      const clampedY = Math.min(Math.max(minimapY + 500 * minimapScale, minimapY), minimapY + 170);
       expect(dynamicGraphics.lineStyle).toHaveBeenCalledWith(1, 0x00ff00, 0.15);
-      expect(dynamicGraphics.strokeCircle).toHaveBeenCalledWith(clampedX, clampedY, 600 * 0.106);
+      expect(dynamicGraphics.strokeCircle).toHaveBeenCalledWith(clampedX, clampedY, 600 * minimapScale);
     });
 
     it('should clear dynamic graphics before redrawing', () => {
@@ -1528,8 +1527,8 @@ describe('GameSceneUI', () => {
 
       // Exactly 600px should be included (dist <= 600)
       expect(dynamicGraphics.fillCircle).toHaveBeenCalledWith(
-        20 + 1100 * 0.106,
-        minimapY + 500 * 0.106,
+        20 + 1100 * minimapScale,
+        minimapY + 500 * minimapScale,
         3
       );
     });
@@ -1547,8 +1546,8 @@ describe('GameSceneUI', () => {
 
       // 601px should NOT be included
       expect(dynamicGraphics.fillCircle).not.toHaveBeenCalledWith(
-        20 + 1101 * 0.106,
-        minimapY + 500 * 0.106,
+        20 + 1101 * minimapScale,
+        minimapY + 500 * minimapScale,
         3
       );
     });
@@ -1573,7 +1572,7 @@ describe('GameSceneUI', () => {
     });
 
     it('should clamp player dot to minimap bounds when player at arena edge', () => {
-      // Player near right edge of arena (x=1900) — unclamped dot would be at 20+1900*0.106=221.4, beyond mapX+mapSize=190
+      // Player near right edge of arena, so the minimap dot should clamp to the square.
       mockPlayerManager.getLocalPlayerPosition.mockReturnValue({ x: 1900, y: 540 });
       mockPlayerManager.getLivingPlayers.mockReturnValue([
         { id: 'player-1', position: { x: 1900, y: 540 } },
@@ -1584,9 +1583,8 @@ describe('GameSceneUI', () => {
 
       ui.updateMinimap(mockPlayerManager);
 
-      // Clamped: Math.min(Math.max(20+1900*0.106, 20), 190) = Math.min(221.4, 190) = 190
-      const clampedX = Math.min(Math.max(20 + 1900 * 0.106, 20), 190);
-      const clampedY = Math.min(Math.max(minimapY + 540 * 0.106, minimapY), minimapY + 170);
+      const clampedX = Math.min(Math.max(20 + 1900 * minimapScale, 20), 190);
+      const clampedY = Math.min(Math.max(minimapY + 540 * minimapScale, minimapY), minimapY + 170);
       expect(dynamicGraphics.fillCircle).toHaveBeenCalledWith(clampedX, clampedY, 4);
     });
 
@@ -1603,10 +1601,8 @@ describe('GameSceneUI', () => {
 
       ui.updateMinimap(mockPlayerManager);
 
-      // Unclamped: 20 + 1920 * 0.106 = 20 + 203.52 = 223.52, beyond mapX+mapSize=190
-      // Clamped: Math.min(Math.max(20+1920*0.106, 20), 190) = Math.min(223.52, 190) = 190
-      const clampedX = Math.min(Math.max(20 + 1920 * 0.106, 20), 190);
-      const clampedY = Math.min(Math.max(minimapY + 500 * 0.106, minimapY), minimapY + 170);
+      const clampedX = Math.min(Math.max(20 + 1920 * minimapScale, 20), 190);
+      const clampedY = Math.min(Math.max(minimapY + 500 * minimapScale, minimapY), minimapY + 170);
       expect(dynamicGraphics.fillCircle).toHaveBeenCalledWith(clampedX, clampedY, 3);
     });
   });

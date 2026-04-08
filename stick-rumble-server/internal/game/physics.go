@@ -6,11 +6,13 @@ import (
 )
 
 // Physics handles game physics calculations
-type Physics struct{}
+type Physics struct {
+	mapConfig MapConfig
+}
 
 // NewPhysics creates a new physics engine
-func NewPhysics() *Physics {
-	return &Physics{}
+func NewPhysics(mapConfigs ...MapConfig) *Physics {
+	return &Physics{mapConfig: resolveMapConfig(mapConfigs...)}
 }
 
 // UpdatePlayerResult contains the result of updating a player's physics
@@ -99,12 +101,12 @@ func (p *Physics) UpdatePlayer(player *PlayerState, deltaTime float64) UpdatePla
 		Y: currentPos.Y + currentVel.Y*deltaTime,
 	}
 
-	// Clamp position to arena bounds
-	clampedPos := clampToArena(newPos)
+	// Clamp position to map bounds and resolve obstacle collisions.
+	clampedPos, movementBlocked := p.resolveMovement(currentPos, newPos)
 
 	// Check if position was clamped during a roll (wall collision)
 	isRolling := player.IsRolling()
-	if isRolling && (clampedPos.X != newPos.X || clampedPos.Y != newPos.Y) {
+	if isRolling && movementBlocked {
 		// Wall collision detected during roll - end the roll
 		player.EndDodgeRoll()
 		result.RollCancelled = true
@@ -177,16 +179,86 @@ func decelerateToZero(current Vector2, decel, deltaTime float64) Vector2 {
 	return accelerateToward(current, Vector2{X: 0, Y: 0}, decel, deltaTime)
 }
 
-// clampToArena ensures position stays within arena bounds
-func clampToArena(pos Vector2) Vector2 {
-	// Clamp to arena boundaries (accounting for player size)
+// clampToArena ensures position stays within map bounds
+func clampToArena(pos Vector2, mapConfigs ...MapConfig) Vector2 {
+	mapConfig := resolveMapConfig(mapConfigs...)
 	halfWidth := PlayerWidth / 2
 	halfHeight := PlayerHeight / 2
 
-	x := math.Max(halfWidth, math.Min(pos.X, ArenaWidth-halfWidth))
-	y := math.Max(halfHeight, math.Min(pos.Y, ArenaHeight-halfHeight))
+	x := math.Max(halfWidth, math.Min(pos.X, mapConfig.Width-halfWidth))
+	y := math.Max(halfHeight, math.Min(pos.Y, mapConfig.Height-halfHeight))
 
 	return Vector2{X: x, Y: y}
+}
+
+func (p *Physics) resolveMovement(currentPos, desiredPos Vector2) (Vector2, bool) {
+	blocked := false
+
+	resolvedX := clampToArena(Vector2{X: desiredPos.X, Y: currentPos.Y}, p.mapConfig)
+	if resolvedX.X != desiredPos.X {
+		blocked = true
+	}
+	var blockedX bool
+	resolvedX.X, blockedX = p.resolveAxisCollisions(currentPos.X, resolvedX.X, currentPos.Y, true)
+	blocked = blocked || blockedX
+
+	resolvedY := clampToArena(Vector2{X: resolvedX.X, Y: desiredPos.Y}, p.mapConfig)
+	if resolvedY.Y != desiredPos.Y {
+		blocked = true
+	}
+	var blockedY bool
+	resolvedY.Y, blockedY = p.resolveAxisCollisions(currentPos.Y, resolvedY.Y, resolvedX.X, false)
+	blocked = blocked || blockedY
+
+	return resolvedY, blocked
+}
+
+func (p *Physics) resolveAxisCollisions(oldAxis, newAxis, fixedAxis float64, horizontal bool) (float64, bool) {
+	resolved := newAxis
+	blocked := false
+
+	for _, obstacle := range movementBlockingObstacles(p.mapConfig) {
+		if !playerIntersectsObstacle(resolved, fixedAxis, obstacle, horizontal) {
+			continue
+		}
+
+		if horizontal {
+			if resolved > oldAxis {
+				resolved = obstacle.X - PlayerWidth/2
+			} else if resolved < oldAxis {
+				resolved = obstacle.X + obstacle.Width + PlayerWidth/2
+			}
+		} else {
+			if resolved > oldAxis {
+				resolved = obstacle.Y - PlayerHeight/2
+			} else if resolved < oldAxis {
+				resolved = obstacle.Y + obstacle.Height + PlayerHeight/2
+			}
+		}
+
+		blocked = true
+	}
+
+	return resolved, blocked
+}
+
+func playerIntersectsObstacle(axis, fixedAxis float64, obstacle MapObstacle, horizontal bool) bool {
+	playerLeft := axis - PlayerWidth/2
+	playerRight := axis + PlayerWidth/2
+	playerTop := fixedAxis - PlayerHeight/2
+	playerBottom := fixedAxis + PlayerHeight/2
+
+	if !horizontal {
+		playerLeft = fixedAxis - PlayerWidth/2
+		playerRight = fixedAxis + PlayerWidth/2
+		playerTop = axis - PlayerHeight/2
+		playerBottom = axis + PlayerHeight/2
+	}
+
+	return playerRight > obstacle.X &&
+		playerLeft < obstacle.X+obstacle.Width &&
+		playerBottom > obstacle.Y &&
+		playerTop < obstacle.Y+obstacle.Height
 }
 
 // HitEvent represents a successful projectile hit
@@ -337,8 +409,8 @@ func (p *Physics) ValidatePlayerMovement(oldPos, newPos, velocity Vector2, delta
 	// 1. Check bounds: player must stay within arena
 	halfWidth := PlayerWidth / 2
 	halfHeight := PlayerHeight / 2
-	if newPos.X < halfWidth || newPos.X > ArenaWidth-halfWidth ||
-		newPos.Y < halfHeight || newPos.Y > ArenaHeight-halfHeight {
+	if newPos.X < halfWidth || newPos.X > p.mapConfig.Width-halfWidth ||
+		newPos.Y < halfHeight || newPos.Y > p.mapConfig.Height-halfHeight {
 		return ValidationResult{Valid: false, Reason: "out_of_bounds"}
 	}
 

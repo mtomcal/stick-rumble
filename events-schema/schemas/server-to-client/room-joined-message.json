@@ -23,11 +23,23 @@
       "description": "Room joined event payload",
       "type": "object",
       "required": [
-        "playerId"
+        "roomId",
+        "playerId",
+        "mapId"
       ],
       "properties": {
+        "roomId": {
+          "description": "Unique identifier for the room",
+          "minLength": 1,
+          "type": "string"
+        },
         "playerId": {
           "description": "Unique identifier for the player",
+          "minLength": 1,
+          "type": "string"
+        },
+        "mapId": {
+          "description": "Selected shared map identifier for the room",
           "minLength": 1,
           "type": "string"
         }

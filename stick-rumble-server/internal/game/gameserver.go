@@ -25,6 +25,7 @@ type ShootResult struct {
 
 // GameServer manages the game loop and physics simulation
 type GameServer struct {
+	mapRegistry        *MapRegistry
 	world              *World
 	physics            *Physics
 	projectileManager  *ProjectileManager
@@ -78,11 +79,15 @@ func NewGameServer(broadcastFunc func(playerStates []PlayerStateSnapshot)) *Game
 
 // NewGameServerWithClock creates a new game server with a custom clock (for testing)
 func NewGameServerWithClock(broadcastFunc func(playerStates []PlayerStateSnapshot), clock Clock) *GameServer {
+	mapRegistry := MustDefaultMapRegistry()
+	mapConfig := mapRegistry.MustGet(DefaultMapID)
+
 	return &GameServer{
-		world:              NewWorldWithClock(clock),
-		physics:            NewPhysics(),
-		projectileManager:  NewProjectileManager(),
-		weaponCrateManager: NewWeaponCrateManager(),
+		mapRegistry:        mapRegistry,
+		world:              NewWorldWithClock(clock, mapConfig),
+		physics:            NewPhysics(mapConfig),
+		projectileManager:  NewProjectileManager(mapConfig),
+		weaponCrateManager: NewWeaponCrateManager(mapConfig),
 		weaponStates:       make(map[string]*WeaponState),
 		positionHistory:    NewPositionHistory(), // Initialize position history for lag compensation
 		tickRate:           time.Duration(ServerTickInterval) * time.Millisecond,

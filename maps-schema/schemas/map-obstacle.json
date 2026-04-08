@@ -1,0 +1,68 @@
+{
+  "$id": "MapObstacle",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "id",
+    "type",
+    "shape",
+    "x",
+    "y",
+    "width",
+    "height",
+    "blocksMovement",
+    "blocksProjectiles",
+    "blocksLineOfSight"
+  ],
+  "properties": {
+    "id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "type": {
+      "anyOf": [
+        {
+          "const": "wall",
+          "type": "string"
+        },
+        {
+          "const": "desk",
+          "type": "string"
+        },
+        {
+          "const": "pillar",
+          "type": "string"
+        }
+      ]
+    },
+    "shape": {
+      "const": "rectangle",
+      "type": "string"
+    },
+    "x": {
+      "minimum": 0,
+      "type": "number"
+    },
+    "y": {
+      "minimum": 0,
+      "type": "number"
+    },
+    "width": {
+      "exclusiveMinimum": 0,
+      "type": "number"
+    },
+    "height": {
+      "exclusiveMinimum": 0,
+      "type": "number"
+    },
+    "blocksMovement": {
+      "type": "boolean"
+    },
+    "blocksProjectiles": {
+      "type": "boolean"
+    },
+    "blocksLineOfSight": {
+      "type": "boolean"
+    }
+  }
+}

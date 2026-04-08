@@ -254,9 +254,9 @@ func TestApplyKnockback_RightEdgeClamping(t *testing.T) {
 	applyKnockback(attacker, target, 40)
 
 	newPos := target.GetPosition()
-	// Target should be clamped to arena width
-	if newPos.X != ArenaWidth {
-		t.Errorf("Expected target X clamped to ArenaWidth (%f), got %f", ArenaWidth, newPos.X)
+	expectedX := ArenaWidth - PlayerWidth/2
+	if newPos.X != expectedX {
+		t.Errorf("Expected target X clamped to %f, got %f", expectedX, newPos.X)
 	}
 }
 
@@ -268,9 +268,9 @@ func TestApplyKnockback_LeftEdgeClamping(t *testing.T) {
 	applyKnockback(attacker, target, 40)
 
 	newPos := target.GetPosition()
-	// Target should be clamped to 0
-	if newPos.X != 0 {
-		t.Errorf("Expected target X clamped to 0, got %f", newPos.X)
+	expectedX := PlayerWidth / 2
+	if newPos.X != expectedX {
+		t.Errorf("Expected target X clamped to %f, got %f", expectedX, newPos.X)
 	}
 }
 
@@ -282,9 +282,9 @@ func TestApplyKnockback_TopEdgeClamping(t *testing.T) {
 	applyKnockback(attacker, target, 40)
 
 	newPos := target.GetPosition()
-	// Target should be clamped to 0
-	if newPos.Y != 0 {
-		t.Errorf("Expected target Y clamped to 0, got %f", newPos.Y)
+	expectedY := PlayerHeight / 2
+	if newPos.Y != expectedY {
+		t.Errorf("Expected target Y clamped to %f, got %f", expectedY, newPos.Y)
 	}
 }
 
@@ -296,9 +296,9 @@ func TestApplyKnockback_BottomEdgeClamping(t *testing.T) {
 	applyKnockback(attacker, target, 40)
 
 	newPos := target.GetPosition()
-	// Target should be clamped to ArenaHeight
-	if newPos.Y != ArenaHeight {
-		t.Errorf("Expected target Y clamped to ArenaHeight (%f), got %f", ArenaHeight, newPos.Y)
+	expectedY := ArenaHeight - PlayerHeight/2
+	if newPos.Y != expectedY {
+		t.Errorf("Expected target Y clamped to %f, got %f", expectedY, newPos.Y)
 	}
 }
 

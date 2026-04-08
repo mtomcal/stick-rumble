@@ -56,6 +56,7 @@ describe('GameSceneEventHandlers', () => {
       spawnCrate: vi.fn(),
       markUnavailable: vi.fn(),
       markAvailable: vi.fn(),
+      initializeFromMapWeaponSpawns: vi.fn(),
     } as any;
 
     mockPickupPromptUI = {
@@ -841,6 +842,34 @@ describe('GameSceneEventHandlers', () => {
       expect(mockPlayerManager.setLocalPlayerId).not.toHaveBeenCalled();
     });
 
+    it('should forward room:joined mapId to the map bootstrap callback', () => {
+      const onMatchMapChanged = vi.fn();
+      const mapAwareHandlers = new GameSceneEventHandlers(
+        mockWsClient,
+        mockPlayerManager,
+        mockProjectileManager,
+        () => mockHealthBarUI,
+        mockKillFeedUI,
+        mockGameSceneUI,
+        mockGameSceneSpectator,
+        vi.fn(),
+        mockWeaponCrateManager,
+        mockPickupPromptUI,
+        mockMeleeWeaponManager,
+        mockHitEffectManager,
+        onMatchMapChanged
+      );
+
+      mapAwareHandlers.setupEventHandlers();
+
+      const handlerRefs = (mapAwareHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const roomJoinedHandler = handlerRefs.get('room:joined');
+
+      roomJoinedHandler?.({ playerId: 'player-1', roomId: 'room-1', mapId: 'default_office' });
+
+      expect(onMatchMapChanged).toHaveBeenCalledWith('default_office');
+    });
+
     it('should handle weapon:state when shootingManager is null', () => {
       // Create event handlers without shooting manager
       const eventHandlersNoShooting = new GameSceneEventHandlers(
@@ -892,7 +921,7 @@ describe('GameSceneEventHandlers', () => {
       const playerMoveHandler = handlerRefs.get('player:move');
 
       // First, join the room to set local player ID
-      roomJoinedHandler?.({ playerId: 'player-1', roomId: 'room-1' });
+      roomJoinedHandler?.({ playerId: 'player-1', roomId: 'room-1', mapId: 'default_office' });
 
       // Clear the initial health bar update from room:joined
       vi.clearAllMocks();
@@ -1391,7 +1420,7 @@ describe('GameSceneEventHandlers', () => {
       const roomJoinedHandler = handlerRefs.get('room:joined');
 
       // Join room with empty pending queue (nothing queued before)
-      roomJoinedHandler?.({ playerId: 'player-1', roomId: 'room-1' });
+      roomJoinedHandler?.({ playerId: 'player-1', roomId: 'room-1', mapId: 'default_office' });
 
       // Should not crash with empty queue
       const pendingSpawns = (eventHandlers as any).pendingWeaponSpawns;
@@ -1871,7 +1900,7 @@ describe('GameSceneEventHandlers', () => {
       expect(mockWeaponCrateManager.spawnCrate).not.toHaveBeenCalled();
 
       // Now join the room
-      roomJoinedHandler?.({ playerId: 'player-1', roomId: 'room-1' });
+      roomJoinedHandler?.({ playerId: 'player-1', roomId: 'room-1', mapId: 'default_office' });
 
       // Queued weapon spawns should have been processed
       expect(mockWeaponCrateManager.spawnCrate).toHaveBeenCalledWith(

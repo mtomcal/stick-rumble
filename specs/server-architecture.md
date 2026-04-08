@@ -1,15 +1,15 @@
 # Server Architecture
 
-> **Spec Version**: 1.1.0
-> **Last Updated**: 2026-02-15
-> **Depends On**: [overview.md](overview.md), [constants.md](constants.md), [networking.md](networking.md), [rooms.md](rooms.md), [messages.md](messages.md)
+> **Spec Version**: 1.2.0
+> **Last Updated**: 2026-04-07
+> **Depends On**: [overview.md](overview.md), [constants.md](constants.md), [networking.md](networking.md), [rooms.md](rooms.md), [messages.md](messages.md), [maps.md](maps.md)
 > **Depended By**: None (leaf spec)
 
 ---
 
 ## Overview
 
-The Stick Rumble server is a **server-authoritative** game server written in Go that handles all game logic, physics simulation, and state management. The client is treated as an untrusted display layer—all validation happens server-side to prevent cheating.
+The Stick Rumble server is a **server-authoritative** game server written in Go that handles all game logic, physics simulation, shared map validation, and state management. The client is treated as an untrusted display layer. All authoritative validation, including selected-map geometry enforcement, happens server-side to prevent cheating and content drift.
 
 **Why Server-Authoritative?**
 
@@ -41,6 +41,7 @@ The server uses a **dual-loop architecture**: a 60Hz physics tick for accurate s
 - [networking.md](networking.md) - WebSocket protocol and message format
 - [rooms.md](rooms.md) - Room management and matchmaking logic
 - [messages.md](messages.md) - Complete message catalog
+- [maps.md](maps.md) - Shared map registry, room-level `mapId`, and obstacle semantics
 
 ---
 
@@ -56,6 +57,7 @@ stick-rumble-server/
     │   ├── clock.go           # Time abstraction for testing
     │   ├── constants.go       # Game constants
     │   ├── gameserver.go      # Dual-loop game engine
+    │   ├── maps.go            # Shared map registry loading and validation
     │   ├── match.go           # Match lifecycle and win conditions
     │   ├── melee_attack.go    # Melee hit detection
     │   ├── physics.go         # Movement and collision
@@ -99,6 +101,7 @@ The central orchestrator that runs the game simulation.
 **Go:**
 ```go
 type GameServer struct {
+    mapRegistry        *MapRegistry
     world              *World
     physics            *Physics
     projectileManager  *ProjectileManager
@@ -163,8 +166,29 @@ type Message struct {
 
 All WebSocket connections share a single handler instance to ensure:
 1. All connections share the same RoomManager (matchmaking state)
-2. All connections share the same GameServer (physics simulation)
+2. All connections share the same GameServer bootstrap and shared map registry
 3. Global broadcasts reach all players correctly
+
+### MapRegistry
+
+Shared startup-owned registry of all playable maps.
+
+**Go:**
+```go
+type MapRegistry struct {
+    maps map[string]MapConfig
+}
+```
+
+**Required behavior:**
+- load all required maps during server startup before accepting traffic
+- reject startup if any required map is missing or invalid
+- expose lookup by `mapId` for room creation, spawn selection, weapon spawn ownership, and obstacle enforcement
+
+**Why centralize registry loading?**
+1. Room creation must not guess about map availability
+2. Spawn points, crate locations, and obstacle geometry must come from the same validated content source
+3. Startup failure is safer than partially running with broken content
 
 ### World
 
@@ -173,14 +197,20 @@ Central state container for all players.
 **Go:**
 ```go
 type World struct {
+    mapConfig MapConfig
     players map[string]*PlayerState  // playerID → state
     clock   Clock                    // Injectable for testing
-    rng     *rand.Rand              // For spawn point randomization
+    rng     *rand.Rand               // For deterministic tie-breaking when authored spawn scores are equal
 
     mu    sync.RWMutex  // Protects players map
     rngMu sync.Mutex    // Protects rand.Rand (not thread-safe)
 }
 ```
+
+**Why keep map config on the world?**
+1. Authoritative bounds and obstacle geometry must be available on every movement and projectile tick
+2. Respawn scoring depends on authored spawn points from the selected map
+3. It keeps room-selected spatial rules explicit instead of falling back to global arena assumptions
 
 **Why Separate RNG Mutex?**
 

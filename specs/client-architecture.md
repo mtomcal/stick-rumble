@@ -1,15 +1,15 @@
 # Client Architecture
 
-> **Spec Version**: 1.1.0
-> **Last Updated**: 2026-02-15
-> **Depends On**: [constants.md](constants.md), [messages.md](messages.md), [networking.md](networking.md), [player.md](player.md), [movement.md](movement.md), [weapons.md](weapons.md)
+> **Spec Version**: 1.2.0
+> **Last Updated**: 2026-04-07
+> **Depends On**: [constants.md](constants.md), [messages.md](messages.md), [networking.md](networking.md), [player.md](player.md), [movement.md](movement.md), [weapons.md](weapons.md), [maps.md](maps.md)
 > **Depended By**: [graphics.md](graphics.md), [ui.md](ui.md), [audio.md](audio.md)
 
 ---
 
 ## Overview
 
-The Stick Rumble client is a browser-based game built with Phaser 3 and React. This spec documents the complete frontend architecture: application structure, scene lifecycle, manager classes, input handling, network integration, and rendering pipeline.
+The Stick Rumble client is a browser-based game built with Phaser 3 and React. This spec documents the complete frontend architecture: application structure, scene lifecycle, manager classes, input handling, network integration, shared map loading, and rendering pipeline.
 
 **Why This Architecture:**
 - **Phaser 3** provides battle-tested 2D game engine with WebGL acceleration
@@ -18,6 +18,7 @@ The Stick Rumble client is a browser-based game built with Phaser 3 and React. T
 - **Procedural graphics** eliminate asset dependencies and allow infinite customization
 - **Event-driven networking** decouples game logic from network layer
 - **Client-side prediction** provides responsive controls despite network latency
+- **Shared map bootstrap** keeps client rendering aligned with the server-selected map
 
 **Key Design Principles:**
 1. **Server is authoritative** - Client renders server state, never modifies game logic
@@ -50,6 +51,7 @@ The Stick Rumble client is a browser-based game built with Phaser 3 and React. T
 - [player.md](player.md) - Player state structure
 - [movement.md](movement.md) - Input state and physics
 - [weapons.md](weapons.md) - Weapon configurations
+- [maps.md](maps.md) - Shared map registry, `mapId`, obstacle and spawn ownership
 
 ---
 
@@ -59,8 +61,8 @@ See [constants.md](constants.md) for all values. Key constants for client archit
 
 | Constant | Value | Description |
 |----------|-------|-------------|
-| ARENA_WIDTH | 1920 | Arena width in pixels |
-| ARENA_HEIGHT | 1080 | Arena height in pixels |
+| ARENA_WIDTH | 1920 | Canonical baseline for the first shipped map; selected map remains authoritative at runtime |
+| ARENA_HEIGHT | 1080 | Canonical baseline for the first shipped map; selected map remains authoritative at runtime |
 | WINDOW_WIDTH | 1280 | Default browser window width |
 | WINDOW_HEIGHT | 720 | Default browser window height |
 | SERVER_TICK_RATE | 60 | Server physics updates per second |
@@ -209,6 +211,26 @@ interface WeaponCrateData {
 **Why:**
 - `isAvailable` controls visual alpha (1.0 vs 0.3)
 - `weaponType` determines icon displayed on crate
+
+### MatchMapContext
+
+Client-side runtime context for the selected room map.
+
+**TypeScript:**
+```typescript
+interface MatchMapContext {
+  mapId: string;
+  width: number;
+  height: number;
+  obstacles: MapObstacle[];
+  weaponSpawns: MapWeaponSpawn[];
+}
+```
+
+**Why:**
+- `room:joined` tells the client which shared map to load
+- scene bounds, background extents, minimap scaling, and crate placement must come from the selected map
+- the client must fail fast locally if the referenced map is not present in the shared registry
 
 ---
 

@@ -122,20 +122,9 @@ func applyKnockback(attacker *PlayerState, target *PlayerState, knockbackDistanc
 	newX := targetPos.X + dirX*knockbackDistance
 	newY := targetPos.Y + dirY*knockbackDistance
 
-	// Ensure target stays within arena bounds
-	if newX < 0 {
-		newX = 0
-	}
-	if newX > ArenaWidth {
-		newX = ArenaWidth
-	}
-	if newY < 0 {
-		newY = 0
-	}
-	if newY > ArenaHeight {
-		newY = ArenaHeight
-	}
+	// Ensure target stays within selected map bounds.
+	clamped := clampToArena(Vector2{X: newX, Y: newY})
 
 	// Update position (thread-safe)
-	target.SetPosition(Vector2{X: newX, Y: newY})
+	target.SetPosition(clamped)
 }

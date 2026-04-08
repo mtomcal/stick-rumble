@@ -58,9 +58,10 @@ func (p *Projectile) IsExpired() bool {
 }
 
 // IsOutOfBounds returns true if the projectile is outside the arena
-func (p *Projectile) IsOutOfBounds() bool {
-	return p.Position.X < 0 || p.Position.X > ArenaWidth ||
-		p.Position.Y < 0 || p.Position.Y > ArenaHeight
+func (p *Projectile) IsOutOfBounds(mapConfigs ...MapConfig) bool {
+	mapConfig := resolveMapConfig(mapConfigs...)
+	return p.Position.X < 0 || p.Position.X > mapConfig.Width ||
+		p.Position.Y < 0 || p.Position.Y > mapConfig.Height
 }
 
 // Deactivate marks the projectile as inactive (for removal)
@@ -81,13 +82,15 @@ func (p *Projectile) Snapshot() ProjectileSnapshot {
 
 // ProjectileManager manages all active projectiles in the game
 type ProjectileManager struct {
+	mapConfig   MapConfig
 	projectiles map[string]*Projectile
 	mu          sync.RWMutex
 }
 
 // NewProjectileManager creates a new projectile manager
-func NewProjectileManager() *ProjectileManager {
+func NewProjectileManager(mapConfigs ...MapConfig) *ProjectileManager {
 	return &ProjectileManager{
+		mapConfig:   resolveMapConfig(mapConfigs...),
 		projectiles: make(map[string]*Projectile),
 	}
 }
@@ -112,16 +115,17 @@ func (pm *ProjectileManager) Update(deltaTime float64) {
 
 	for id, proj := range pm.projectiles {
 		// Check if projectile should be removed
-		if !proj.Active || proj.IsExpired() || proj.IsOutOfBounds() {
+		if !proj.Active || proj.IsExpired() || proj.IsOutOfBounds(pm.mapConfig) {
 			toRemove = append(toRemove, id)
 			continue
 		}
 
 		// Update position
+		previousPosition := proj.Position
 		proj.Update(deltaTime)
 
 		// Check bounds after update
-		if proj.IsOutOfBounds() {
+		if proj.IsOutOfBounds(pm.mapConfig) || pm.intersectsProjectileObstacle(previousPosition, proj.Position) {
 			toRemove = append(toRemove, id)
 		}
 	}
@@ -144,6 +148,64 @@ func (pm *ProjectileManager) GetActiveProjectiles() []*Projectile {
 		}
 	}
 	return result
+}
+
+func (pm *ProjectileManager) intersectsProjectileObstacle(start, end Vector2) bool {
+	for _, obstacle := range projectileBlockingObstacles(pm.mapConfig) {
+		if lineIntersectsRect(start, end, rectFromObstacle(obstacle)) {
+			return true
+		}
+	}
+	return false
+}
+
+func lineIntersectsRect(start, end Vector2, area rect) bool {
+	if pointInsideRect(start.X, start.Y, area) || pointInsideRect(end.X, end.Y, area) {
+		return true
+	}
+
+	dx := end.X - start.X
+	dy := end.Y - start.Y
+
+	tMin := 0.0
+	tMax := 1.0
+
+	clips := [][2]float64{
+		{-dx, start.X - area.x},
+		{dx, area.x + area.width - start.X},
+		{-dy, start.Y - area.y},
+		{dy, area.y + area.height - start.Y},
+	}
+
+	for _, clip := range clips {
+		p := clip[0]
+		q := clip[1]
+		if p == 0 {
+			if q < 0 {
+				return false
+			}
+			continue
+		}
+
+		t := q / p
+		if p < 0 {
+			if t > tMax {
+				return false
+			}
+			if t > tMin {
+				tMin = t
+			}
+		} else {
+			if t < tMin {
+				return false
+			}
+			if t < tMax {
+				tMax = t
+			}
+		}
+	}
+
+	return true
 }
 
 // GetProjectileByID returns a projectile by its ID, or nil if not found

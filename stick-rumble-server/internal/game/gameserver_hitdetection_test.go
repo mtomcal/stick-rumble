@@ -27,9 +27,12 @@ func TestGameServerHitDetection(t *testing.T) {
 	gs.AddPlayer(player1ID)
 	gs.AddPlayer(player2ID)
 
-	// Position player2 at a specific location
+	// Position both players in the same open lane within projectile range.
+	player1, _ := gs.world.GetPlayer(player1ID)
+	player1.SetPosition(Vector2{X: 220, Y: 540})
+
 	player2, _ := gs.world.GetPlayer(player2ID)
-	player2.SetPosition(Vector2{X: 1000, Y: 540})
+	player2.SetPosition(Vector2{X: 680, Y: 540})
 
 	// Shoot from player1 toward player2
 	result := gs.PlayerShoot(player1ID, 0.0, 0) // Angle 0 = right
@@ -42,7 +45,7 @@ func TestGameServerHitDetection(t *testing.T) {
 	if proj == nil {
 		t.Fatal("Projectile should exist")
 	}
-	proj.Position = Vector2{X: 1000, Y: 540}
+	proj.Position = Vector2{X: 680, Y: 540}
 
 	// Run one hit detection check
 	gs.checkHitDetection()
@@ -143,8 +146,11 @@ func TestGameServerHitDetection_MultipleHits(t *testing.T) {
 	gs.AddPlayer(player1ID)
 	gs.AddPlayer(player2ID)
 
+	player1, _ := gs.world.GetPlayer(player1ID)
+	player1.SetPosition(Vector2{X: 220, Y: 540})
+
 	player2, _ := gs.world.GetPlayer(player2ID)
-	player2.SetPosition(Vector2{X: 1000, Y: 540})
+	player2.SetPosition(Vector2{X: 680, Y: 540})
 
 	// Fire 4 shots (should kill with 25 damage each = 100 total)
 	for i := 0; i < 4; i++ {
@@ -155,7 +161,7 @@ func TestGameServerHitDetection_MultipleHits(t *testing.T) {
 
 		// Position projectile at player2
 		proj := gs.projectileManager.GetProjectileByID(result.Projectile.ID)
-		proj.Position = Vector2{X: 1000, Y: 540}
+		proj.Position = Vector2{X: 680, Y: 540}
 
 		// Run hit detection
 		gs.checkHitDetection()
@@ -203,8 +209,11 @@ func TestGameServerHitDetection_DeadPlayerNoHit(t *testing.T) {
 	gs.AddPlayer(player1ID)
 	gs.AddPlayer(player2ID)
 
+	player1, _ := gs.world.GetPlayer(player1ID)
+	player1.SetPosition(Vector2{X: 220, Y: 540})
+
 	player2, _ := gs.world.GetPlayer(player2ID)
-	player2.SetPosition(Vector2{X: 1000, Y: 540})
+	player2.SetPosition(Vector2{X: 680, Y: 540})
 	player2.TakeDamage(100) // Kill player2
 
 	// Shoot at dead player
@@ -215,7 +224,7 @@ func TestGameServerHitDetection_DeadPlayerNoHit(t *testing.T) {
 
 	// Position projectile at dead player
 	proj := gs.projectileManager.GetProjectileByID(result.Projectile.ID)
-	proj.Position = Vector2{X: 1000, Y: 540}
+	proj.Position = Vector2{X: 680, Y: 540}
 
 	// Run hit detection
 	gs.checkHitDetection()

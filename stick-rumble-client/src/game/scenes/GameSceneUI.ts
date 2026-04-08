@@ -3,6 +3,7 @@ import type { ShootingManager } from '../input/ShootingManager';
 import type { PlayerManager } from '../entities/PlayerManager';
 import { Crosshair } from '../entities/Crosshair';
 import { COLORS, MINIMAP, RELOAD_ARC } from '../../shared/constants';
+import { getDefaultMatchMapContext } from '../../shared/maps';
 
 /**
  * GameSceneUI - Manages all UI elements for the game scene
@@ -38,6 +39,8 @@ export class GameSceneUI {
   private minimapDynamicGraphics: Phaser.GameObjects.Graphics | null = null;
   private minimapX: number = 20;
   private minimapY: number = GameSceneUI.getDefaultMinimapY();
+  private minimapWorldWidth: number = getDefaultMatchMapContext().width;
+  private minimapWorldHeight: number = getDefaultMatchMapContext().height;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -55,6 +58,11 @@ export class GameSceneUI {
 
   static getDefaultDebugOverlayY(): number {
     return GameSceneUI.getDefaultMinimapY() + MINIMAP.SIZE + 10;
+  }
+
+  setMinimapWorldSize(width: number, height: number): void {
+    this.minimapWorldWidth = width;
+    this.minimapWorldHeight = height;
   }
 
   /**
@@ -613,7 +621,7 @@ export class GameSceneUI {
   updateMinimap(playerManager: PlayerManager): void {
     if (!this.minimapDynamicGraphics) return;
 
-    const scale = MINIMAP.SCALE;
+    const scale = MINIMAP.SIZE / Math.max(this.minimapWorldWidth, this.minimapWorldHeight);
     const mapX = this.minimapX;
     const mapY = this.minimapY;
     const mapSize = MINIMAP.SIZE;
@@ -641,7 +649,7 @@ export class GameSceneUI {
       const dx = localPos.x - player.position.x;
       const dy = localPos.y - player.position.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist <= 600) {
+      if (dist <= MINIMAP.RADAR_RANGE) {
         const pos = clampToMinimap(player.position.x, player.position.y);
         this.minimapDynamicGraphics.fillStyle(0xff0000, 1);
         this.minimapDynamicGraphics.fillCircle(pos.x, pos.y, 3);
@@ -655,7 +663,7 @@ export class GameSceneUI {
 
     // Radar range ring (circle, centered on clamped player dot position)
     this.minimapDynamicGraphics.lineStyle(1, 0x00ff00, 0.15);
-    this.minimapDynamicGraphics.strokeCircle(playerPos.x, playerPos.y, 600 * scale);
+    this.minimapDynamicGraphics.strokeCircle(playerPos.x, playerPos.y, MINIMAP.RADAR_RANGE * scale);
 
     // Aim direction line
     const localAimAngle = playerManager.getPlayerAimAngle(localId ?? '');

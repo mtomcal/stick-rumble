@@ -177,15 +177,14 @@ func TestWorldThreadSafety(t *testing.T) {
 func TestWorld_GetBalancedSpawnPoint_NoEnemies(t *testing.T) {
 	world := NewWorld()
 
-	// With no players, should spawn at center
+	// With no living enemies, should use the first authored spawn point.
 	spawnPos := world.GetBalancedSpawnPoint("player-1")
 
-	expectedX := ArenaWidth / 2
-	expectedY := ArenaHeight / 2
+	expected := world.GetMapConfig().SpawnPoints[0]
 
-	if spawnPos.X != expectedX || spawnPos.Y != expectedY {
+	if spawnPos.X != expected.X || spawnPos.Y != expected.Y {
 		t.Errorf("GetBalancedSpawnPoint() with no enemies = {%v, %v}, want {%v, %v}",
-			spawnPos.X, spawnPos.Y, expectedX, expectedY)
+			spawnPos.X, spawnPos.Y, expected.X, expected.Y)
 	}
 }
 
@@ -199,15 +198,14 @@ func TestWorld_GetBalancedSpawnPoint_WithDeadPlayers(t *testing.T) {
 	player1.MarkDead()
 	player2.MarkDead()
 
-	// Should spawn at center since all players are dead
+	// Should use the first authored spawn point since all players are dead.
 	spawnPos := world.GetBalancedSpawnPoint("player-3")
 
-	expectedX := ArenaWidth / 2
-	expectedY := ArenaHeight / 2
+	expected := world.GetMapConfig().SpawnPoints[0]
 
-	if spawnPos.X != expectedX || spawnPos.Y != expectedY {
+	if spawnPos.X != expected.X || spawnPos.Y != expected.Y {
 		t.Errorf("GetBalancedSpawnPoint() with only dead players = {%v, %v}, want {%v, %v}",
-			spawnPos.X, spawnPos.Y, expectedX, expectedY)
+			spawnPos.X, spawnPos.Y, expected.X, expected.Y)
 	}
 }
 

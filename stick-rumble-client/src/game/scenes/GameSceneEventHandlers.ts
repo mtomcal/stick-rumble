@@ -77,6 +77,7 @@ export class GameSceneEventHandlers {
   private chatLogUI: ChatLogUI | null = null;
   private pickupNotificationUI: PickupNotificationUI | null = null;
   private aimLine: AimLine | null = null;
+  private onMatchMapChanged: (mapId: string) => void;
 
   constructor(
     wsClient: WebSocketClient,
@@ -90,7 +91,8 @@ export class GameSceneEventHandlers {
     weaponCrateManager: WeaponCrateManager,
     pickupPromptUI: PickupPromptUI,
     meleeWeaponManager: MeleeWeaponManager,
-    hitEffectManager: HitEffectManager
+    hitEffectManager: HitEffectManager,
+    onMatchMapChanged: (mapId: string) => void = () => {}
   ) {
     this.wsClient = wsClient;
     this.playerManager = playerManager;
@@ -104,6 +106,7 @@ export class GameSceneEventHandlers {
     this.pickupPromptUI = pickupPromptUI;
     this.meleeWeaponManager = meleeWeaponManager;
     this.hitEffectManager = hitEffectManager;
+    this.onMatchMapChanged = onMatchMapChanged;
   }
 
   /**
@@ -310,6 +313,10 @@ export class GameSceneEventHandlers {
       // Clear existing players to prevent duplication if room:joined fires multiple times
       // This handles reconnect scenarios and future match restart functionality
       this.playerManager.destroy();
+
+      if (messageData.mapId) {
+        this.onMatchMapChanged(messageData.mapId);
+      }
 
       // Set local player ID so we can highlight our player
       if (messageData.playerId) {

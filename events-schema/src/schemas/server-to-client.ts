@@ -35,7 +35,9 @@ const VelocityRef = Type.Object(
  */
 export const RoomJoinedDataSchema = Type.Object(
   {
+    roomId: Type.String({ description: 'Unique identifier for the room', minLength: 1 }),
     playerId: Type.String({ description: 'Unique identifier for the player', minLength: 1 }),
+    mapId: Type.String({ description: 'Selected shared map identifier for the room', minLength: 1 }),
   },
   { $id: 'RoomJoinedData', description: 'Room joined event payload' }
 );

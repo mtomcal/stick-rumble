@@ -8,24 +8,28 @@ import (
 
 // World manages the game state and all players
 type World struct {
-	players map[string]*PlayerState
-	clock   Clock
-	rng     *rand.Rand // Random number generator for spawn points (protected by rngMu)
-	mu      sync.RWMutex
-	rngMu   sync.Mutex // Protects rng access (rand.Rand is not thread-safe)
+	mapConfig MapConfig
+	players   map[string]*PlayerState
+	clock     Clock
+	rng       *rand.Rand // Random number generator for deterministic spawn tie-breaking (protected by rngMu)
+	mu        sync.RWMutex
+	rngMu     sync.Mutex // Protects rng access (rand.Rand is not thread-safe)
 }
 
 // NewWorld creates a new game world with a real clock
-func NewWorld() *World {
-	return NewWorldWithClock(&RealClock{})
+func NewWorld(mapConfigs ...MapConfig) *World {
+	return NewWorldWithClock(&RealClock{}, mapConfigs...)
 }
 
 // NewWorldWithClock creates a new game world with a custom clock (for testing)
-func NewWorldWithClock(clock Clock) *World {
+func NewWorldWithClock(clock Clock, mapConfigs ...MapConfig) *World {
+	mapConfig := resolveMapConfig(mapConfigs...)
+
 	return &World{
-		players: make(map[string]*PlayerState),
-		clock:   clock,
-		rng:     rand.New(rand.NewSource(rand.Int63())), // Use a random seed by default
+		mapConfig: mapConfig,
+		players:   make(map[string]*PlayerState),
+		clock:     clock,
+		rng:       rand.New(rand.NewSource(rand.Int63())), // Use a random seed by default
 	}
 }
 
@@ -57,44 +61,7 @@ func (w *World) getBalancedSpawnPointLocked(excludePlayerID string) Vector2 {
 		}
 	}
 
-	// If no enemies, spawn at center
-	if len(enemyPositions) == 0 {
-		return Vector2{X: ArenaWidth / 2, Y: ArenaHeight / 2}
-	}
-
-	// Try 10 random spawn candidates and pick the one furthest from enemies
-	bestSpawn := Vector2{X: ArenaWidth / 2, Y: ArenaHeight / 2}
-	bestMinDistance := 0.0
-
-	for i := 0; i < 10; i++ {
-		// Generate random spawn point with margin from edges
-		margin := 100.0
-
-		// Protect rand.Rand access (not thread-safe)
-		w.rngMu.Lock()
-		candidate := Vector2{
-			X: margin + w.rng.Float64()*(ArenaWidth-2*margin),
-			Y: margin + w.rng.Float64()*(ArenaHeight-2*margin),
-		}
-		w.rngMu.Unlock()
-
-		// Find minimum distance to any enemy
-		minDistance := 1e18 // Use large value instead of math.MaxFloat64 to avoid import
-		for _, enemyPos := range enemyPositions {
-			dist := distance(candidate, enemyPos)
-			if dist < minDistance {
-				minDistance = dist
-			}
-		}
-
-		// Keep the spawn point with the largest minimum distance
-		if minDistance > bestMinDistance {
-			bestMinDistance = minDistance
-			bestSpawn = candidate
-		}
-	}
-
-	return bestSpawn
+	return w.selectBestSpawnPoint(enemyPositions)
 }
 
 // RemovePlayer removes a player from the world
@@ -164,44 +131,76 @@ func (w *World) GetBalancedSpawnPoint(excludePlayerID string) Vector2 {
 		}
 	}
 
-	// If no enemies, spawn at center
-	if len(enemyPositions) == 0 {
-		return Vector2{X: ArenaWidth / 2, Y: ArenaHeight / 2}
+	return w.selectBestSpawnPoint(enemyPositions)
+}
+
+func (w *World) GetMapConfig() MapConfig {
+	return w.mapConfig
+}
+
+func (w *World) selectBestSpawnPoint(enemyPositions []Vector2) Vector2 {
+	candidates := w.validSpawnCandidates()
+	if len(candidates) == 0 {
+		return Vector2{X: w.mapConfig.Width / 2, Y: w.mapConfig.Height / 2}
 	}
 
-	// Try 10 random spawn candidates and pick the one furthest from enemies
-	bestSpawn := Vector2{X: ArenaWidth / 2, Y: ArenaHeight / 2}
-	bestMinDistance := 0.0
+	if len(enemyPositions) == 0 {
+		return candidates[0]
+	}
 
-	for i := 0; i < 10; i++ {
-		// Generate random spawn point with margin from edges
-		margin := 100.0
+	bestSpawn := candidates[0]
+	bestScore := -1.0
 
-		// Protect rand.Rand access (not thread-safe)
-		w.rngMu.Lock()
-		candidate := Vector2{
-			X: margin + w.rng.Float64()*(ArenaWidth-2*margin),
-			Y: margin + w.rng.Float64()*(ArenaHeight-2*margin),
-		}
-		w.rngMu.Unlock()
-
-		// Find minimum distance to any enemy
-		minDistance := math.MaxFloat64
+	for _, candidate := range candidates {
+		score := math.MaxFloat64
 		for _, enemyPos := range enemyPositions {
 			dist := distance(candidate, enemyPos)
-			if dist < minDistance {
-				minDistance = dist
+			if dist < score {
+				score = dist
 			}
 		}
 
-		// Keep the spawn point with the largest minimum distance
-		if minDistance > bestMinDistance {
-			bestMinDistance = minDistance
+		if score > bestScore {
+			bestScore = score
 			bestSpawn = candidate
 		}
 	}
 
 	return bestSpawn
+}
+
+func (w *World) validSpawnCandidates() []Vector2 {
+	blockingObstacles := movementBlockingObstacles(w.mapConfig)
+	candidates := make([]Vector2, 0, len(w.mapConfig.SpawnPoints))
+
+	for _, spawnPoint := range w.mapConfig.SpawnPoints {
+		if !pointWithinBounds(spawnPoint.X, spawnPoint.Y, w.mapConfig) {
+			continue
+		}
+
+		blocked := false
+		for _, obstacle := range blockingObstacles {
+			if pointInsideRect(spawnPoint.X, spawnPoint.Y, rectFromObstacle(obstacle)) {
+				blocked = true
+				break
+			}
+		}
+		if blocked {
+			continue
+		}
+
+		candidates = append(candidates, Vector2{X: spawnPoint.X, Y: spawnPoint.Y})
+	}
+
+	return candidates
+}
+
+func resolveMapConfig(mapConfigs ...MapConfig) MapConfig {
+	if len(mapConfigs) > 0 {
+		return mapConfigs[0]
+	}
+
+	return MustDefaultMapConfig()
 }
 
 // distance calculates the Euclidean distance between two points

@@ -54,17 +54,26 @@ import {
 describe('Server-to-Client Schemas', () => {
   describe('RoomJoinedDataSchema', () => {
     it('should validate valid room joined data', () => {
-      const data = { playerId: 'player-123' };
+      const data = {
+        roomId: 'room-123',
+        playerId: 'player-123',
+        mapId: 'default_office',
+      };
       expect(Value.Check(RoomJoinedDataSchema, data)).toBe(true);
     });
 
-    it('should reject data without playerId', () => {
-      const data = {};
+    it('should reject data without roomId', () => {
+      const data = { playerId: 'player-123', mapId: 'default_office' };
       expect(Value.Check(RoomJoinedDataSchema, data)).toBe(false);
     });
 
     it('should reject empty playerId', () => {
-      const data = { playerId: '' };
+      const data = { roomId: 'room-123', playerId: '', mapId: 'default_office' };
+      expect(Value.Check(RoomJoinedDataSchema, data)).toBe(false);
+    });
+
+    it('should reject empty mapId', () => {
+      const data = { roomId: 'room-123', playerId: 'player-123', mapId: '' };
       expect(Value.Check(RoomJoinedDataSchema, data)).toBe(false);
     });
   });
@@ -74,7 +83,11 @@ describe('Server-to-Client Schemas', () => {
       const message = {
         type: 'room:joined',
         timestamp: Date.now(),
-        data: { playerId: 'player-123' },
+        data: {
+          roomId: 'room-123',
+          playerId: 'player-123',
+          mapId: 'default_office',
+        },
       };
       expect(Value.Check(RoomJoinedMessageSchema, message)).toBe(true);
     });
@@ -83,7 +96,11 @@ describe('Server-to-Client Schemas', () => {
       const message = {
         type: 'wrong:type',
         timestamp: Date.now(),
-        data: { playerId: 'player-123' },
+        data: {
+          roomId: 'room-123',
+          playerId: 'player-123',
+          mapId: 'default_office',
+        },
       };
       expect(Value.Check(RoomJoinedMessageSchema, message)).toBe(false);
     });
@@ -872,7 +889,11 @@ describe('Server-to-Client Schemas', () => {
           message: {
             type: 'room:joined',
             timestamp,
-            data: { playerId: 'p1' },
+            data: {
+              roomId: 'room-1',
+              playerId: 'p1',
+              mapId: 'default_office',
+            },
           },
         },
         {

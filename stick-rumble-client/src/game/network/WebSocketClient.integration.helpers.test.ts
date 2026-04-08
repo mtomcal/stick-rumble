@@ -26,11 +26,11 @@ describe('WebSocketClient.integration.helpers', () => {
 
   describe('Constants', () => {
     it('should export SERVER_URL', () => {
-      expect(SERVER_URL).toBe('ws://localhost:8080/ws');
+      expect(SERVER_URL).toBe('ws://localhost:8081/ws');
     });
 
     it('should export HEALTH_URL', () => {
-      expect(HEALTH_URL).toBe('http://localhost:8080/health');
+      expect(HEALTH_URL).toBe('http://localhost:8081/health');
     });
 
     it('should export DEFAULT_TIMEOUT', () => {

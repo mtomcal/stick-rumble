@@ -17,50 +17,33 @@ type WeaponCrate struct {
 
 // WeaponCrateManager manages all weapon crates in the game
 type WeaponCrateManager struct {
-	crates map[string]*WeaponCrate
-	mu     sync.RWMutex
+	mapConfig MapConfig
+	crates    map[string]*WeaponCrate
+	mu        sync.RWMutex
 }
 
 // NewWeaponCrateManager creates a new weapon crate manager with default spawn points
-func NewWeaponCrateManager() *WeaponCrateManager {
+func NewWeaponCrateManager(mapConfigs ...MapConfig) *WeaponCrateManager {
+	mapConfig := resolveMapConfig(mapConfigs...)
 	manager := &WeaponCrateManager{
-		crates: make(map[string]*WeaponCrate),
+		mapConfig: mapConfig,
+		crates:    make(map[string]*WeaponCrate),
 	}
-	manager.InitializeDefaultSpawns()
+	manager.InitializeMapSpawns()
 	return manager
 }
 
-// InitializeDefaultSpawns creates the default weapon spawn points for the arena
-// Based on the weapon acquisition system design (Story 3.3A):
-// - 5 fixed spawn points (one for each non-pistol weapon)
-// - Balanced positions across the map
-// - Strategic placement considering weapon power levels
-func (wcm *WeaponCrateManager) InitializeDefaultSpawns() {
-	spawns := []struct {
-		Position   Vector2
-		WeaponType string
-	}{
-		// Center top - Uzi (medium range, spray weapon)
-		{Position: Vector2{X: ArenaWidth / 2, Y: ArenaHeight * 0.2}, WeaponType: "uzi"},
+// InitializeMapSpawns creates weapon crate runtime state from authored map spawn points.
+func (wcm *WeaponCrateManager) InitializeMapSpawns() {
+	for _, spawn := range wcm.mapConfig.WeaponSpawns {
+		crateID := spawn.ID
+		if crateID == "" {
+			crateID = fmt.Sprintf("crate_%s", spawn.WeaponType)
+		}
 
-		// Left mid - AK47 (powerful long-range weapon, contested position)
-		{Position: Vector2{X: ArenaWidth * 0.25, Y: ArenaHeight / 2}, WeaponType: "ak47"},
-
-		// Right mid - Shotgun (close-range power weapon)
-		{Position: Vector2{X: ArenaWidth * 0.75, Y: ArenaHeight / 2}, WeaponType: "shotgun"},
-
-		// Bottom center - Katana (melee, high skill weapon)
-		{Position: Vector2{X: ArenaWidth / 2, Y: ArenaHeight * 0.8}, WeaponType: "katana"},
-
-		// Top left corner - Bat (melee, knockback weapon)
-		{Position: Vector2{X: ArenaWidth * 0.15, Y: ArenaHeight * 0.15}, WeaponType: "bat"},
-	}
-
-	for i, spawn := range spawns {
-		crateID := fmt.Sprintf("crate_%s_%d", spawn.WeaponType, i)
 		wcm.crates[crateID] = &WeaponCrate{
 			ID:          crateID,
-			Position:    spawn.Position,
+			Position:    Vector2{X: spawn.X, Y: spawn.Y},
 			WeaponType:  spawn.WeaponType,
 			IsAvailable: true,
 		}
