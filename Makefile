@@ -44,6 +44,8 @@ install:
 	cd stick-rumble-server && go mod download
 	@echo "Installing events-schema dependencies..."
 	cd events-schema && npm install
+	@echo "Installing maps-schema dependencies..."
+	cd maps-schema && npm install
 	@echo "All dependencies installed"
 
 # Development - Run both client and server
@@ -211,6 +213,7 @@ kill-dev:
 schema-generate:
 	@echo "Generating JSON Schema files..."
 	cd events-schema && npm run generate:schemas
+	cd maps-schema && npm run generate:schemas
 
 # Validate all JSON Schema files
 schema-validate:
@@ -218,11 +221,13 @@ schema-validate:
 	cd events-schema && npm run validate
 	@echo "Checking schema files are up to date..."
 	cd events-schema && npm run check:schemas
+	cd maps-schema && npm run build
 
-# Run events-schema tests
+# Run schema tests
 test-schema:
-	@echo "Running events-schema tests..."
+	@echo "Running schema tests..."
 	cd events-schema && npm test
+	cd maps-schema && npm test
 
 # Validate weapon configs
 weapon-config-validate:

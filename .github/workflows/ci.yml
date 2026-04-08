@@ -22,8 +22,10 @@ jobs:
       - name: Install dependencies
         run: make install
 
-      - name: Install and build events-schema
-        run: cd events-schema && npm install && npm run build
+      - name: Install and build schemas
+        run: |
+          cd events-schema && npm install && npm run build
+          cd ../maps-schema && npm install && npm run build
 
       - name: Run linters
         run: make lint
@@ -40,8 +42,10 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install and build events-schema
-        run: cd events-schema && npm install && npm run build
+      - name: Install and build schemas
+        run: |
+          cd events-schema && npm install && npm run build
+          cd ../maps-schema && npm install && npm run build
 
       - name: Install client dependencies
         run: cd stick-rumble-client && npm install
@@ -64,8 +68,10 @@ jobs:
       - name: Install server dependencies
         run: cd stick-rumble-server && go mod download
 
-      - name: Install and build events-schema
-        run: cd events-schema && npm install && npm run build
+      - name: Install and build schemas
+        run: |
+          cd events-schema && npm install && npm run build
+          cd ../maps-schema && npm install && npm run build
 
       - name: Run server tests
         run: make test-server
@@ -79,8 +85,10 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install and build events-schema
-        run: cd events-schema && npm install && npm run build
+      - name: Install and build schemas
+        run: |
+          cd events-schema && npm install && npm run build
+          cd ../maps-schema && npm install && npm run build
 
       - name: Validate JSON schemas
         run: make schema-validate
@@ -100,8 +108,10 @@ jobs:
       - name: Install dependencies
         run: make install
 
-      - name: Install and build events-schema
-        run: cd events-schema && npm install && npm run build
+      - name: Install and build schemas
+        run: |
+          cd events-schema && npm install && npm run build
+          cd ../maps-schema && npm install && npm run build
 
       - name: Build server binary
         run: cd stick-rumble-server && go build -o server-ci cmd/server/main.go
