@@ -77,6 +77,9 @@ export const MOVEMENT = {
   /** Maximum movement speed in pixels per second */
   SPEED: 200,
 
+  /** Maximum sprint speed in pixels per second (1.5x normal speed) */
+  SPRINT_SPEED: 300,
+
   /** Acceleration rate in pixels per second squared */
   ACCELERATION: 50,
 

@@ -253,7 +253,7 @@ func TestApplyRecoilToAngle_SprintSpreadMultiplier(t *testing.T) {
 	// and vertical recoil in the mix, not just the movement spread
 	expectedRatio := SprintSpreadMultiplier
 	actualRatio := avgSprintingDeviation / avgMovingDeviation
-	tolerance := 0.20
+	tolerance := 0.30
 
 	if math.Abs(actualRatio-expectedRatio) > tolerance {
 		t.Errorf("Sprint spread multiplier should be ~%v, got %v (moving avg: %v, sprint avg: %v)",

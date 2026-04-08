@@ -119,12 +119,14 @@ export class PredictionEngine {
     // Calculate new velocity with acceleration
     let newVelocityX = currentVelocity.x;
     let newVelocityY = currentVelocity.y;
+    
+    const maxSpeed = input.isSprinting ? MOVEMENT.SPRINT_SPEED : MOVEMENT.SPEED;
 
     if (directionMagnitude > 0) {
       // Apply acceleration toward desired direction
       const targetVelocity = {
-        x: directionX * MOVEMENT.SPEED,
-        y: directionY * MOVEMENT.SPEED,
+        x: directionX * maxSpeed,
+        y: directionY * maxSpeed,
       };
 
       // Accelerate toward target velocity using direction-based algorithm
@@ -150,8 +152,8 @@ export class PredictionEngine {
 
     // Cap velocity at max speed
     const velocityMagnitude = Math.sqrt(newVelocityX ** 2 + newVelocityY ** 2);
-    if (velocityMagnitude > MOVEMENT.SPEED) {
-      const scale = MOVEMENT.SPEED / velocityMagnitude;
+    if (velocityMagnitude > maxSpeed) {
+      const scale = maxSpeed / velocityMagnitude;
       newVelocityX *= scale;
       newVelocityY *= scale;
     }

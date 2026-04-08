@@ -117,7 +117,7 @@ func (p *Physics) UpdatePlayer(player *PlayerState, deltaTime float64) UpdatePla
 
 	// Validate the movement for anti-cheat detection
 	input := player.GetInput()
-	validation := p.ValidatePlayerMovement(oldPos, clampedPos, currentVel, deltaTime, isRolling, input.IsSprinting)
+	validation := p.ValidatePlayerMovement(oldPos, clampedPos, currentVel, deltaTime, isRolling, input.IsSprinting, movementBlocked)
 	if !validation.Valid {
 		// Movement failed validation - mark for correction
 		result.CorrectionNeeded = true
@@ -402,7 +402,7 @@ type ValidationResult struct {
 // ValidatePlayerMovement checks if a player's movement is physically possible
 // This is used for server-side anti-cheat to detect impossible movements
 // Returns a ValidationResult indicating if the movement is valid
-func (p *Physics) ValidatePlayerMovement(oldPos, newPos, velocity Vector2, deltaTime float64, isRolling, isSprinting bool) ValidationResult {
+func (p *Physics) ValidatePlayerMovement(oldPos, newPos, velocity Vector2, deltaTime float64, isRolling, isSprinting, movementBlocked bool) ValidationResult {
 	// Constants for validation tolerance (allow small floating point errors)
 	const speedTolerance = 1.05 // 5% tolerance for floating point precision
 
@@ -430,6 +430,12 @@ func (p *Physics) ValidatePlayerMovement(oldPos, newPos, velocity Vector2, delta
 	// Check if velocity exceeds max speed (with tolerance)
 	if velocityMagnitude > maxSpeed*speedTolerance {
 		return ValidationResult{Valid: false, Reason: "speed_exceeded"}
+	}
+
+	// If movement was blocked by a wall or obstacle, actual delta will be less than expected
+	// Skip the strict position matching check in this case
+	if movementBlocked {
+		return ValidationResult{Valid: true, Reason: ""}
 	}
 
 	// 3. Check if position change matches velocity * deltaTime (with tolerance)

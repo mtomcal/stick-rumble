@@ -150,7 +150,7 @@ func TestValidatePlayerMovement(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := physics.ValidatePlayerMovement(tt.oldPos, tt.newPos, tt.velocity, tt.deltaTime, tt.isRolling, tt.isSprinting)
+			result := physics.ValidatePlayerMovement(tt.oldPos, tt.newPos, tt.velocity, tt.deltaTime, tt.isRolling, tt.isSprinting, false)
 
 			if result.Valid != tt.expectValid {
 				t.Errorf("ValidatePlayerMovement() valid = %v, want %v", result.Valid, tt.expectValid)
@@ -176,7 +176,7 @@ func TestValidatePlayerMovementWithTolerance(t *testing.T) {
 	velocity := Vector2{X: 200.1, Y: 0}
 	deltaTime := 0.01
 
-	result := physics.ValidatePlayerMovement(oldPos, newPos, velocity, deltaTime, false, false)
+	result := physics.ValidatePlayerMovement(oldPos, newPos, velocity, deltaTime, false, false, false)
 
 	if !result.Valid {
 		t.Errorf("ValidatePlayerMovement() should allow minor floating point errors, got valid=%v reason=%v", result.Valid, result.Reason)
