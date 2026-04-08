@@ -32,6 +32,7 @@ import type {
   HitConfirmedData,
   PlayerDeathData,
   PlayerKillCreditData,
+  PlayerLeftData,
   PlayerRespawnData,
   MatchTimerData,
   MatchEndedData,
@@ -348,6 +349,14 @@ export class GameSceneEventHandlers {
     };
     this.handlerRefs.set('room:joined', roomJoinedHandler);
     this.wsClient.on('room:joined', roomJoinedHandler);
+
+    const playerLeftHandler = (data: unknown) => {
+      const messageData = data as PlayerLeftData;
+      this.playerManager.removePlayer(messageData.playerId);
+      this.meleeWeaponManager.removeWeapon(messageData.playerId);
+    };
+    this.handlerRefs.set('player:left', playerLeftHandler);
+    this.wsClient.on('player:left', playerLeftHandler);
 
     // Store and register projectile:spawn handler
     const projectileSpawnHandler = (data: unknown) => {

@@ -153,36 +153,9 @@ export class PlayerManager {
     // Remove players that no longer exist (only in snapshot mode)
     // In delta mode, missing players are simply unchanged, not disconnected
     if (!isDelta) {
-      for (const [id, sprite] of this.players) {
+      for (const [id] of this.players) {
         if (!currentPlayerIds.has(id)) {
-          sprite.destroy();
-          this.players.delete(id);
-
-          const label = this.playerLabels.get(id);
-          if (label) {
-            label.destroy();
-            this.playerLabels.delete(id);
-          }
-
-          const weaponGraphics = this.weaponGraphics.get(id);
-          if (weaponGraphics) {
-            weaponGraphics.destroy();
-            this.weaponGraphics.delete(id);
-          }
-
-          const healthBar = this.healthBars.get(id);
-          if (healthBar) {
-            healthBar.destroy();
-            this.healthBars.delete(id);
-          }
-
-          this.weaponTypes.delete(id);
-
-          // Clean up corpse graphic if any
-          this.destroyCorpse(id);
-
-          // Clear interpolation data for removed player
-          this.interpolationEngine.clearPlayer(id);
+          this.removePlayer(id);
         }
       }
     }
@@ -531,6 +504,40 @@ export class PlayerManager {
       corpse.destroy();
       this.corpseGraphics.delete(playerId);
     }
+  }
+
+  /**
+   * Remove a single player and all associated visuals/state.
+   */
+  removePlayer(playerId: string): void {
+    const playerGraphics = this.players.get(playerId);
+    if (playerGraphics) {
+      playerGraphics.destroy();
+      this.players.delete(playerId);
+    }
+
+    const label = this.playerLabels.get(playerId);
+    if (label) {
+      label.destroy();
+      this.playerLabels.delete(playerId);
+    }
+
+    const weaponGraphics = this.weaponGraphics.get(playerId);
+    if (weaponGraphics) {
+      weaponGraphics.destroy();
+      this.weaponGraphics.delete(playerId);
+    }
+
+    const healthBar = this.healthBars.get(playerId);
+    if (healthBar) {
+      healthBar.destroy();
+      this.healthBars.delete(playerId);
+    }
+
+    this.weaponTypes.delete(playerId);
+    this.playerStates.delete(playerId);
+    this.destroyCorpse(playerId);
+    this.interpolationEngine.clearPlayer(playerId);
   }
 
   /**

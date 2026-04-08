@@ -34,6 +34,7 @@ describe('GameSceneEventHandlers', () => {
     mockPlayerManager = {
       updatePlayers: vi.fn(),
       destroy: vi.fn(),
+      removePlayer: vi.fn(),
       setLocalPlayerId: vi.fn(),
       getLocalPlayerId: vi.fn().mockReturnValue('player-1'),
       getPlayerPosition: vi.fn().mockReturnValue({ x: 100, y: 200 }),
@@ -67,6 +68,7 @@ describe('GameSceneEventHandlers', () => {
 
     mockMeleeWeaponManager = {
       createWeapon: vi.fn(),
+      removeWeapon: vi.fn(),
       updatePosition: vi.fn(),
       startSwing: vi.fn(),
       update: vi.fn(),
@@ -132,6 +134,7 @@ describe('GameSceneEventHandlers', () => {
       // Verify all event types are registered
       expect(mockWsClient.on).toHaveBeenCalledWith('player:move', expect.any(Function));
       expect(mockWsClient.on).toHaveBeenCalledWith('room:joined', expect.any(Function));
+      expect(mockWsClient.on).toHaveBeenCalledWith('player:left', expect.any(Function));
       expect(mockWsClient.on).toHaveBeenCalledWith('projectile:spawn', expect.any(Function));
       expect(mockWsClient.on).toHaveBeenCalledWith('projectile:destroy', expect.any(Function));
       expect(mockWsClient.on).toHaveBeenCalledWith('weapon:state', expect.any(Function));
@@ -164,7 +167,7 @@ describe('GameSceneEventHandlers', () => {
       expect(secondCallCount).toBe(firstCallCount * 2);
 
       // But off() should have been called to remove previous handlers
-      expect(mockWsClient.off).toHaveBeenCalledTimes(19); // 19 event types cleaned up (16 base + melee:hit + roll:start + roll:end)
+      expect(mockWsClient.off).toHaveBeenCalledTimes(20);
     });
 
     it('should call cleanupHandlers before registering new handlers', () => {
@@ -189,10 +192,11 @@ describe('GameSceneEventHandlers', () => {
       // Call cleanup
       (eventHandlers as any).cleanupHandlers();
 
-      // Verify all handlers were removed (19 event types including roll:start and roll:end)
-      expect(mockWsClient.off).toHaveBeenCalledTimes(19);
+      // Verify all handlers were removed
+      expect(mockWsClient.off).toHaveBeenCalledTimes(20);
       expect(mockWsClient.off).toHaveBeenCalledWith('player:move', expect.any(Function));
       expect(mockWsClient.off).toHaveBeenCalledWith('room:joined', expect.any(Function));
+      expect(mockWsClient.off).toHaveBeenCalledWith('player:left', expect.any(Function));
       expect(mockWsClient.off).toHaveBeenCalledWith('projectile:spawn', expect.any(Function));
       expect(mockWsClient.off).toHaveBeenCalledWith('projectile:destroy', expect.any(Function));
       expect(mockWsClient.off).toHaveBeenCalledWith('weapon:state', expect.any(Function));
@@ -252,8 +256,8 @@ describe('GameSceneEventHandlers', () => {
       // Destroy
       eventHandlers.destroy();
 
-      // Verify all handlers were removed (19 event types including roll:start and roll:end)
-      expect(mockWsClient.off).toHaveBeenCalledTimes(19);
+      // Verify all handlers were removed
+      expect(mockWsClient.off).toHaveBeenCalledTimes(20);
     });
   });
 
@@ -263,10 +267,11 @@ describe('GameSceneEventHandlers', () => {
 
       const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
 
-      // Verify all 19 event types have stored references (including roll:start and roll:end)
-      expect(handlerRefs.size).toBe(19);
+      // Verify all 20 event types have stored references
+      expect(handlerRefs.size).toBe(20);
       expect(handlerRefs.has('player:move')).toBe(true);
       expect(handlerRefs.has('room:joined')).toBe(true);
+      expect(handlerRefs.has('player:left')).toBe(true);
       expect(handlerRefs.has('projectile:spawn')).toBe(true);
       expect(handlerRefs.has('projectile:destroy')).toBe(true);
       expect(handlerRefs.has('weapon:state')).toBe(true);
@@ -1712,6 +1717,18 @@ describe('GameSceneEventHandlers', () => {
 
       // Should NOT exit spectator mode for non-local player respawn
       expect(mockGameSceneSpectator.exitSpectatorMode).not.toHaveBeenCalled();
+    });
+
+    it('should remove disconnected players on player:left', () => {
+      eventHandlers.setupEventHandlers();
+
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const playerLeftHandler = handlerRefs.get('player:left');
+
+      playerLeftHandler?.({ playerId: 'other-player' });
+
+      expect(mockPlayerManager.removePlayer).toHaveBeenCalledWith('other-player');
+      expect(mockMeleeWeaponManager.removeWeapon).toHaveBeenCalledWith('other-player');
     });
 
     it('should skip player:move after match has ended', () => {

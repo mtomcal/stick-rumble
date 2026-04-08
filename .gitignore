@@ -30,3 +30,7 @@ trees/
 
 # loop.sh iteration logs
 .loop-logs/
+
+# Playwright local artifacts
+.playright*
+.playwright*

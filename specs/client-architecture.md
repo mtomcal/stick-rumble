@@ -581,10 +581,12 @@ localPlayerId: string | null
 **Pseudocode:**
 ```
 function updatePlayers(states: PlayerState[]):
-    // Remove disconnected players
-    for each playerId in players.keys():
-        if playerId not in states:
-            destroyPlayer(playerId)
+    // Only full snapshots imply roster removal.
+    // Delta payloads may omit unchanged players.
+    if isFullSnapshot:
+        for each playerId in players.keys():
+            if playerId not in states:
+                destroyPlayer(playerId)
 
     // Update or create players
     for each state in states:
@@ -621,9 +623,9 @@ function updatePlayers(states: PlayerState[]):
 updatePlayers(states: PlayerState[]): void {
   const currentIds = new Set(states.map(s => s.id));
 
-  // Remove disconnected
+  // Only full snapshots remove missing players.
   for (const id of this.players.keys()) {
-    if (!currentIds.has(id)) {
+    if (isFullSnapshot && !currentIds.has(id)) {
       this.destroyPlayer(id);
     }
   }
@@ -662,6 +664,8 @@ updatePlayers(states: PlayerState[]): void {
   }
 }
 ```
+
+When the server sends `player:left`, the client must remove that player immediately by `playerId`. This keeps disconnect cleanup correct even when the steady-state movement stream is using delta payloads.
 
 **Why:**
 - Map-based storage for O(1) lookup by player ID

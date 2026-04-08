@@ -518,7 +518,8 @@ interface PlayerLeftData {
 ```
 
 **Client Handling:**
-1. Remove player sprite from scene
+1. Remove the disconnected player's scene objects immediately using `playerId`
+2. Do not wait for omission from a future `player:move` payload, because delta updates may omit unchanged players without implying disconnection
 2. Update scoreboard/UI
 
 ---

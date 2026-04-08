@@ -70,6 +70,7 @@ const createMockScene = () => {
 // Create mock WebSocketClient
 const createMockWsClient = () => ({
   send: vi.fn(),
+  sendInputState: vi.fn(),
   connect: vi.fn(),
   disconnect: vi.fn(),
   on: vi.fn(),
@@ -167,7 +168,7 @@ describe('InputManager', () => {
 
       uninitializedManager.update();
 
-      expect(mockWsClient.send).not.toHaveBeenCalled();
+      expect(mockWsClient.sendInputState).not.toHaveBeenCalled();
     });
 
     it('should send input state when W key is pressed', () => {
@@ -175,18 +176,14 @@ describe('InputManager', () => {
 
       inputManager.update();
 
-      expect(mockWsClient.send).toHaveBeenCalledWith({
-        type: 'input:state',
-        timestamp: expect.any(Number),
-        data: {
-          up: true,
-          down: false,
-          left: false,
-          right: false,
-          aimAngle: expect.any(Number),
-          isSprinting: false,
-          sequence: expect.any(Number),
-        },
+      expect(mockWsClient.sendInputState).toHaveBeenCalledWith({
+        up: true,
+        down: false,
+        left: false,
+        right: false,
+        aimAngle: expect.any(Number),
+        isSprinting: false,
+        sequence: expect.any(Number),
       });
     });
 
@@ -195,18 +192,14 @@ describe('InputManager', () => {
 
       inputManager.update();
 
-      expect(mockWsClient.send).toHaveBeenCalledWith({
-        type: 'input:state',
-        timestamp: expect.any(Number),
-        data: {
-          up: false,
-          down: false,
-          left: true,
-          right: false,
-          aimAngle: expect.any(Number),
-          isSprinting: false,
-          sequence: expect.any(Number),
-        },
+      expect(mockWsClient.sendInputState).toHaveBeenCalledWith({
+        up: false,
+        down: false,
+        left: true,
+        right: false,
+        aimAngle: expect.any(Number),
+        isSprinting: false,
+        sequence: expect.any(Number),
       });
     });
 
@@ -215,18 +208,14 @@ describe('InputManager', () => {
 
       inputManager.update();
 
-      expect(mockWsClient.send).toHaveBeenCalledWith({
-        type: 'input:state',
-        timestamp: expect.any(Number),
-        data: {
-          up: false,
-          down: true,
-          left: false,
-          right: false,
-          aimAngle: expect.any(Number),
-          isSprinting: false,
-          sequence: expect.any(Number),
-        },
+      expect(mockWsClient.sendInputState).toHaveBeenCalledWith({
+        up: false,
+        down: true,
+        left: false,
+        right: false,
+        aimAngle: expect.any(Number),
+        isSprinting: false,
+        sequence: expect.any(Number),
       });
     });
 
@@ -235,18 +224,14 @@ describe('InputManager', () => {
 
       inputManager.update();
 
-      expect(mockWsClient.send).toHaveBeenCalledWith({
-        type: 'input:state',
-        timestamp: expect.any(Number),
-        data: {
-          up: false,
-          down: false,
-          left: false,
-          right: true,
-          aimAngle: expect.any(Number),
-          isSprinting: false,
-          sequence: expect.any(Number),
-        },
+      expect(mockWsClient.sendInputState).toHaveBeenCalledWith({
+        up: false,
+        down: false,
+        left: false,
+        right: true,
+        aimAngle: expect.any(Number),
+        isSprinting: false,
+        sequence: expect.any(Number),
       });
     });
 
@@ -256,18 +241,14 @@ describe('InputManager', () => {
 
       inputManager.update();
 
-      expect(mockWsClient.send).toHaveBeenCalledWith({
-        type: 'input:state',
-        timestamp: expect.any(Number),
-        data: {
-          up: true,
-          down: false,
-          left: false,
-          right: true,
-          aimAngle: expect.any(Number),
-          isSprinting: false,
-          sequence: expect.any(Number),
-        },
+      expect(mockWsClient.sendInputState).toHaveBeenCalledWith({
+        up: true,
+        down: false,
+        left: false,
+        right: true,
+        aimAngle: expect.any(Number),
+        isSprinting: false,
+        sequence: expect.any(Number),
       });
     });
 
@@ -275,36 +256,32 @@ describe('InputManager', () => {
       // First update - sends initial state change
       mockScene.mockKeys.W.isDown = true;
       inputManager.update();
-      expect(mockWsClient.send).toHaveBeenCalledTimes(1);
+      expect(mockWsClient.sendInputState).toHaveBeenCalledTimes(1);
 
       // Second update - same state, should not send
       inputManager.update();
-      expect(mockWsClient.send).toHaveBeenCalledTimes(1);
+      expect(mockWsClient.sendInputState).toHaveBeenCalledTimes(1);
     });
 
     it('should send input state when key is released', () => {
       // Press key
       mockScene.mockKeys.W.isDown = true;
       inputManager.update();
-      expect(mockWsClient.send).toHaveBeenCalledTimes(1);
+      expect(mockWsClient.sendInputState).toHaveBeenCalledTimes(1);
 
       // Release key
       mockScene.mockKeys.W.isDown = false;
       inputManager.update();
-      expect(mockWsClient.send).toHaveBeenCalledTimes(2);
+      expect(mockWsClient.sendInputState).toHaveBeenCalledTimes(2);
 
-      expect(mockWsClient.send).toHaveBeenLastCalledWith({
-        type: 'input:state',
-        timestamp: expect.any(Number),
-        data: {
-          up: false,
-          down: false,
-          left: false,
-          right: false,
-          aimAngle: expect.any(Number),
-          isSprinting: false,
-          sequence: expect.any(Number),
-        },
+      expect(mockWsClient.sendInputState).toHaveBeenLastCalledWith({
+        up: false,
+        down: false,
+        left: false,
+        right: false,
+        aimAngle: expect.any(Number),
+        isSprinting: false,
+        sequence: expect.any(Number),
       });
     });
 
@@ -312,21 +289,21 @@ describe('InputManager', () => {
       // Press W
       mockScene.mockKeys.W.isDown = true;
       inputManager.update();
-      expect(mockWsClient.send).toHaveBeenCalledTimes(1);
+      expect(mockWsClient.sendInputState).toHaveBeenCalledTimes(1);
 
       // Also press D (state changed)
       mockScene.mockKeys.D.isDown = true;
       inputManager.update();
-      expect(mockWsClient.send).toHaveBeenCalledTimes(2);
+      expect(mockWsClient.sendInputState).toHaveBeenCalledTimes(2);
 
       // Release W (state changed)
       mockScene.mockKeys.W.isDown = false;
       inputManager.update();
-      expect(mockWsClient.send).toHaveBeenCalledTimes(3);
+      expect(mockWsClient.sendInputState).toHaveBeenCalledTimes(3);
 
       // Same state (no change)
       inputManager.update();
-      expect(mockWsClient.send).toHaveBeenCalledTimes(3);
+      expect(mockWsClient.sendInputState).toHaveBeenCalledTimes(3);
     });
   });
 
@@ -381,7 +358,7 @@ describe('InputManager', () => {
 
       // First update should send (enabled by default)
       inputManager.update();
-      expect(mockWsClient.send).toHaveBeenCalledTimes(1);
+      expect(mockWsClient.sendInputState).toHaveBeenCalledTimes(1);
 
       // Disable input
       inputManager.disable();
@@ -392,7 +369,7 @@ describe('InputManager', () => {
 
       // Update should NOT send when disabled
       inputManager.update();
-      expect(mockWsClient.send).toHaveBeenCalledTimes(1); // Still 1
+      expect(mockWsClient.sendInputState).toHaveBeenCalledTimes(1); // Still 1
     });
 
     it('should enable input handling when enable() is called', () => {
@@ -401,32 +378,28 @@ describe('InputManager', () => {
 
       mockScene.mockKeys.W.isDown = true;
       inputManager.update();
-      expect(mockWsClient.send).not.toHaveBeenCalled();
+      expect(mockWsClient.sendInputState).not.toHaveBeenCalled();
 
       // Enable input
       inputManager.enable();
 
       // Now update should send
       inputManager.update();
-      expect(mockWsClient.send).toHaveBeenCalledWith({
-        type: 'input:state',
-        timestamp: expect.any(Number),
-        data: {
-          up: true,
-          down: false,
-          left: false,
-          right: false,
-          aimAngle: expect.any(Number),
-          isSprinting: false,
-          sequence: expect.any(Number),
-        },
+      expect(mockWsClient.sendInputState).toHaveBeenCalledWith({
+        up: true,
+        down: false,
+        left: false,
+        right: false,
+        aimAngle: expect.any(Number),
+        isSprinting: false,
+        sequence: expect.any(Number),
       });
     });
 
     it('should be enabled by default', () => {
       mockScene.mockKeys.W.isDown = true;
       inputManager.update();
-      expect(mockWsClient.send).toHaveBeenCalledTimes(1);
+      expect(mockWsClient.sendInputState).toHaveBeenCalledTimes(1);
     });
 
     it('should not send input when disabled even with state changes', () => {
@@ -441,7 +414,7 @@ describe('InputManager', () => {
       inputManager.update();
 
       // Should never send
-      expect(mockWsClient.send).not.toHaveBeenCalled();
+      expect(mockWsClient.sendInputState).not.toHaveBeenCalled();
     });
   });
 
@@ -531,23 +504,19 @@ describe('InputManager', () => {
 
       inputManager.update();
 
-      expect(mockWsClient.send).toHaveBeenCalledWith({
-        type: 'input:state',
-        timestamp: expect.any(Number),
-        data: {
-          up: true,
-          down: false,
-          left: false,
-          right: false,
-          aimAngle: expect.any(Number),
-          isSprinting: false,
-          sequence: expect.any(Number),
-        },
+      expect(mockWsClient.sendInputState).toHaveBeenCalledWith({
+        up: true,
+        down: false,
+        left: false,
+        right: false,
+        aimAngle: expect.any(Number),
+        isSprinting: false,
+        sequence: expect.any(Number),
       });
 
       // Verify aim angle is approximately 0
-      const call = mockWsClient.send.mock.calls[0][0];
-      expect(call.data.aimAngle).toBeCloseTo(0, 2);
+      const call = mockWsClient.sendInputState.mock.calls[0][0];
+      expect(call.aimAngle).toBeCloseTo(0, 2);
     });
 
     it('should send update when aim angle changes significantly', () => {
@@ -560,14 +529,14 @@ describe('InputManager', () => {
       // Press key to trigger initial send
       mockScene.mockKeys.W.isDown = true;
       inputManager.update();
-      expect(mockWsClient.send).toHaveBeenCalledTimes(1);
+      expect(mockWsClient.sendInputState).toHaveBeenCalledTimes(1);
 
       // Move mouse significantly (more than threshold)
       mockScene.mockActivePointer.x = 400;
       mockScene.mockActivePointer.y = 200; // Now pointing up
 
       inputManager.update();
-      expect(mockWsClient.send).toHaveBeenCalledTimes(2);
+      expect(mockWsClient.sendInputState).toHaveBeenCalledTimes(2);
     });
 
     it('should not send update for small aim angle changes', () => {
@@ -580,7 +549,7 @@ describe('InputManager', () => {
       // Press key to trigger initial send
       mockScene.mockKeys.W.isDown = true;
       inputManager.update();
-      expect(mockWsClient.send).toHaveBeenCalledTimes(1);
+      expect(mockWsClient.sendInputState).toHaveBeenCalledTimes(1);
 
       // Very small mouse movement (below threshold)
       mockScene.mockActivePointer.x = 501;
@@ -588,7 +557,7 @@ describe('InputManager', () => {
 
       inputManager.update();
       // Should not send because change is too small
-      expect(mockWsClient.send).toHaveBeenCalledTimes(1);
+      expect(mockWsClient.sendInputState).toHaveBeenCalledTimes(1);
     });
 
     it('should return 0 aim angle by default', () => {
@@ -682,9 +651,9 @@ describe('InputManager', () => {
       mockScene.mockKeys.W.isDown = true;
       inputManager.update();
 
-      const call = mockWsClient.send.mock.calls[0][0];
+      const call = mockWsClient.sendInputState.mock.calls[0][0];
       // aimAngle in sent data should include sway offset
-      expect(call.data.aimAngle).toBeCloseTo(0 + 0.1, 2);
+      expect(call.aimAngle).toBeCloseTo(0 + 0.1, 2);
     });
 
     it('should apply exact sway values matching spec constants', () => {
