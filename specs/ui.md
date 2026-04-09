@@ -1,7 +1,7 @@
 # UI System
 
-> **Spec Version**: 2.2.0
-> **Last Updated**: 2026-03-02
+> **Spec Version**: 2.3.0
+> **Last Updated**: 2026-04-09
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [match.md](match.md), [client-architecture.md](client-architecture.md), [graphics.md](graphics.md)
 > **Depended By**: [test-index.md](test-index.md)
 
@@ -13,7 +13,7 @@ The UI system provides all heads-up display (HUD) elements, feedback indicators,
 
 **Why this architecture?** Phaser handles real-time, frame-synced UI that must update at 60 FPS (crosshair, cooldowns). React handles static modals where responsiveness matters less but accessibility and standard UI patterns matter more (forms, buttons, text input).
 
-All in-game UI elements are screen-fixed (scroll factor 0) and render at depth 1000+ to always appear above game entities.
+All in-game HUD elements are screen-fixed (scroll factor 0) and render above world entities. The player-facing contract is stronger than a depth number: fixed HUD pixels are sacrosanct and may never be visually overlapped by world-space entities at any camera position.
 
 ---
 
@@ -118,22 +118,30 @@ interface UIElementPosition {
 ┌─────────────────────────────────────────────────────────────┐
 │ [EKG] [====Health Bar====] 100%                 [000000]    │
 │ [Ammo Icon] 20/20                                KILLS: 0   │
-│ [Minimap]                                                    │
-│ 170x170                            [Timer]      [Kill Feed]  │
-│ FPS: N (debug below minimap)       MM:SS           Entry 1   │
-│                                                    Entry 2   │
-│                                                    Entry 3   │
+│                                              [Timer/KillFeed]│
+│                                                             │
 │                      [Crosshair]                   Entry 4   │
-│                       (fixed ⊕)                    Entry 5   │
+│                       (fixed +)                    Entry 5   │
 │                      [Reload Arc]                            │
 │                      [RELOAD! text]                          │
 │                                                              │
-│                  [Pickup Prompt]              [Dodge Roll]   │
-│              Press E to pick up {WEAPON}          ○          │
+│ [Minimap]                                 [Dodge Roll/Action]│
+│ 170x170                                                     │
 │                                                              │
-│ [Chat Log Panel (bottom-left)]                               │
+│                  [Pickup Prompt]                             │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+### Corner Ownership
+
+The HUD must remain spatially stable during gameplay. It may be redesigned, but it must not dynamically reflow based on state.
+
+- top-left: immediate survival/combat state only
+- bottom-left: minimap/navigation only
+- top-right: score, kills, timer, kill feed
+- bottom-right: action-state widgets such as cooldowns
+
+The title banner, connection hint text, gameplay chat log, and Phaser debug overlay are not part of the normal in-match HUD contract.
 
 ---
 
@@ -143,7 +151,7 @@ interface UIElementPosition {
 
 **Position**: (10, 70)
 
-**Why this location?** Top-left follows FPS conventions where primary player stats live. Below title/status text.
+**Why this location?** Top-left is reserved for immediate survival/combat state and must remain a clean first-glance zone.
 
 **Visual Specification:**
 - Dimensions: 200×30 px
@@ -899,7 +907,7 @@ this.cameras.main.shake(150, 0.008);
 
 ### Minimap
 
-A minimap in the top-left corner shows the arena layout, player position, and nearby enemies within radar range. The minimap is positioned **below** the health bar and ammo display to avoid overlap.
+A minimap in the bottom-left corner shows the arena layout, player position, and nearby enemies within radar range. The minimap owns that corner and must not share it with gameplay chat or the Phaser debug overlay.
 
 **Architecture**: Two graphics layers, both with `setScrollFactor(0)` (screen-fixed). Square shape with teal/green outline border:
 1. **Static layer** (depth 1999): Square background, teal border, walls — drawn once
@@ -907,14 +915,13 @@ A minimap in the top-left corner shows the arena layout, player position, and ne
 
 **Dot Clamping**: All dots (player and enemy) must be clamped to stay within the minimap bounds using `Math.min`/`Math.max`. This prevents dots from rendering outside the minimap when the player or enemies are near arena edges.
 
-> **Positioning Rule**: The minimap MUST be positioned **below** the health bar and ammo display. It should NOT share the same vertical space as those HUD elements. The Y position should be calculated as: `healthBarY + healthBarHeight + ammoHeight + padding`.
+> **Positioning Rule**: The minimap is a bottom-left navigation widget, not part of the top-left survival cluster. It must remain in a fixed bottom-left location across gameplay states.
 
 **Static Layer** (drawn once in `setupMinimap()`):
 ```typescript
 const scale = 0.106;  // MINIMAP_SCALE = 170 / 1600
 const mapX = 20;
-// mapY positioned BELOW health bar + ammo display (not at 20)
-const mapY = healthBarY + healthBarHeight + ammoHeight + 10; // e.g., ~110+
+const mapY = viewportHeight - mapSize - 20;
 const mapSize = 170;  // MINIMAP_SIZE
 
 // Background
@@ -977,7 +984,7 @@ minimapGraphics.strokePath();
 
 | Property | Value | Source |
 |----------|-------|--------|
-| Position | (20, below health bar + ammo) top-left | `constants.md § Minimap Constants` |
+| Position | Bottom-left, fixed | `constants.md § Minimap Constants` |
 | Scale | 0.106 (MINIMAP_SCALE) | 1600px → 170px |
 | Size | 170 × 170 px (MINIMAP_SIZE) | `constants.md § Minimap Constants` |
 | Shape | Square with teal/green outline border | — |
@@ -1119,55 +1126,8 @@ export function MatchEndScreen({ matchData, localPlayerId, onClose, onPlayAgain 
 **Position**: (10, 30), below title
 
 **Visual Specification:**
-- Font size: 14px
-- Connected: "Connected! WASD=move, Click=shoot, R=reload, E=pickup, SPACE=dodge"
-  - Color: Green (#00ff00)
-- Failed: "Failed to connect to server"
-  - Color: Red (#ff0000)
-- Reconnecting: **Console only** — `console.log("Reconnecting in ${delay}ms... (attempt ${n})")`
-  - No visible on-screen UI for reconnecting state
-
-**Why detailed connected message?** First-time players need control hints. Experienced players ignore it.
-
----
-
-### Chat Log (Bottom Left)
-
-**Position**: Bottom-left of viewport, screen-fixed (scroll factor 0)
-
-**Why this location?** Bottom-left is underutilized and doesn't conflict with combat HUD elements. Chat is secondary info players glance at between fights.
-
-**Visual Specification:**
-- Dimensions: ~300x120px
-- Background: #808080 at 70% opacity
-- System messages: Yellow (#BBA840 / COLORS.CHAT_SYSTEM), prefixed `[SYSTEM]` (e.g., "Welcome to Stick Rumble. Survive.")
-- Player messages: Name in red/orange, message text in white (e.g., "Reaper: Bruh")
-- Font: Sans-serif, 14px
-- Max visible lines: ~6 (overflow scrolls oldest off top)
-- Scroll behavior: Auto-scrolls to newest message; manual scroll pauses auto-scroll
-- Depth: 1000
-
-**TypeScript:**
-```typescript
-export class ChatLogUI {
-  private container: Phaser.GameObjects.Container;
-  private background: Phaser.GameObjects.Graphics;
-  private messages: Phaser.GameObjects.Text[] = [];
-  private readonly MAX_VISIBLE = 6;
-
-  addSystemMessage(text: string): void {
-    this.addMessage(`[SYSTEM] ${text}`, '#BBA840'); // COLORS.CHAT_SYSTEM
-  }
-
-  addPlayerMessage(playerName: string, text: string): void {
-    const nameColor = '#E07040'; // Red/orange for player name
-    // Render: "{playerName}: {text}" with name colored, message white
-    this.addMessage(`${playerName}: ${text}`, '#FFFFFF');
-  }
-}
-```
-
-> **Bug (to fix)**: Current build renders chat panel as flat opaque gray. Background must be semi-transparent (`#808080` at 70% opacity) so game world is partially visible through it.
+- Connection state may be logged or exposed outside the main gameplay HUD
+- Control-hint text is not part of the in-match HUD contract
 
 ---
 
@@ -1221,44 +1181,16 @@ export class DeathScreenOverlay {
 
 ---
 
-### Debug Overlay (Top Left, Below Minimap)
+### Normal Gameplay HUD Exclusions
 
-**Position**: Below minimap, left side, screen-fixed
+The following elements are not part of the normal in-match HUD contract:
 
-**Why this location?** Groups diagnostic info near the minimap without overlapping combat HUD. Only visible during development.
+- Phaser debug overlay
+- gameplay chat log
+- title banner
+- connection hint/status text occupying fixed HUD corners
 
-> Must be positioned below the minimap. Debug text must NOT overlap the minimap.
-
-> **Bug (to fix)**: Debug/ammo text currently overlaps the top-left corner of the minimap instead of sitting below it. Reposition so it renders beneath the minimap. (Ref: visual spec line 119)
-
-**Visual Specification:**
-- Color: Bright green (#00FF00 / COLORS.DEBUG_OVERLAY)
-- Font: Monospaced, ~12px
-- Lines:
-  - `FPS: N`
-  - `Update: Nms`
-  - `AI: Nms`
-  - `E: N | B: N` (entity count | bullet count)
-- Controlled by a debug flag (not shown in production)
-- Depth: 1000
-
-> **Note:** This is distinct from the [Debug Network Panel](#debug-network-panel-epic-4), which is a React component for simulating network conditions. The Debug Overlay is a Phaser-rendered performance readout.
-
-**TypeScript:**
-```typescript
-export class DebugOverlayUI {
-  private lines: Phaser.GameObjects.Text[];
-  private enabled = false;
-
-  update(fps: number, updateMs: number, aiMs: number, entities: number, bullets: number): void {
-    if (!this.enabled) return;
-    this.lines[0].setText(`FPS: ${fps}`);
-    this.lines[1].setText(`Update: ${updateMs}ms`);
-    this.lines[2].setText(`AI: ${aiMs}ms`);
-    this.lines[3].setText(`E: ${entities} | B: ${bullets}`);
-  }
-}
-```
+If any of these exist for development or diagnostics, they must be treated as out-of-band tooling and must not compete with the fixed gameplay HUD corners.
 
 ---
 
@@ -1343,13 +1275,15 @@ All UI is created and updated through `GameSceneUI` in `GameScene.create()` and 
 | Depth | Element |
 |-------|---------|
 | 999 | Damage flash overlay |
-| 1000 | Base UI (health, timer, kill feed) |
+| 1000 | Base UI (health, ammo, timer, kill feed, pickup prompt) |
 | 1001 | Hit marker, reload progress |
 | 1002 | Reload arc (now world-space, but depth retained for reference) |
 | 1003 | RELOAD! flashing text |
 
 **Screen-Fixed Elements:**
 All HUD elements use `setScrollFactor(0)` to prevent movement with camera.
+
+**Occlusion Rule:** no world-space player, weapon, corpse, projectile, effect, or pickup may visually overlap fixed HUD pixels at any camera position.
 
 ### Event Handler Integration
 
@@ -1753,6 +1687,7 @@ it('should sort scoreboard by kills descending, deaths ascending', () => {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.3.0 | 2026-04-09 | Re-zoned the HUD into stable corner ownership: top-left survival, bottom-left minimap, top-right match status, bottom-right action state. Removed chat/debug/title/connection text from the normal gameplay HUD contract and made HUD non-occlusion by world entities an explicit outcome requirement. |
 | 2.2.0 | 2026-03-02 | Minimap repositioned below health bar + ammo (was overlapping). Crosshair changed from `⊕` (circle+cross) to simple `+` (cross only, no circle). Updated HUD layout diagram to reflect new minimap position. |
 | 2.1.0 | 2026-02-23 | Rewrote minimap: circular → square shape, added dot clamping, teal border. Renamed "Reload Circle" → "Reload Arc (Player-Centered)", world-space green arc. Rewrote crosshair: fixed ~20-25px reticle, removed bloom. Added score bug note (7 digits → must be 6). Added chat log bug note (opaque → semi-transparent). Added debug overlay positioning rule and overlap bug note. Verified death screen overlay against visual spec. |
 | 1.4.0 | 2026-02-18 | Art style alignment: Rewrote HUD layout diagram. Health bar updated to 2-tier (green/red at 20%), EKG icon, "N%" format, #333333 depleted bg. Ammo counter updated with icon, #E0A030 color, RELOADING text, INF state. Added Score Display (6-digit zero-padded), Kill Counter (KILLS: N), Chat Log, Death Screen Overlay, Debug Overlay, Weapon Pickup Notification sections. Minimap updated to 170x170px circular with teal border. Reload progress bar moved to world-space 60px white. Crosshair changed to white "+" in circle with bloom. Damage flash changed from camera flash to persistent red overlay at depth 999. Renamed HEALTH_BAR_WIDTH to HUD_HEALTH_BAR_WIDTH. Replaced stale CAMERA_FLASH constants with DAMAGE_FLASH constants. Updated tests TS-UI-001, TS-UI-013, TS-UI-018. |

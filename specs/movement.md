@@ -1,7 +1,7 @@
 # Movement
 
-> **Spec Version**: 1.1.0
-> **Last Updated**: 2026-02-15
+> **Spec Version**: 1.2.0
+> **Last Updated**: 2026-04-09
 > **Depends On**: [constants.md](constants.md), [arena.md](arena.md), [player.md](player.md)
 > **Depended By**: [dodge-roll.md](dodge-roll.md), [shooting.md](shooting.md), [hit-detection.md](hit-detection.md)
 
@@ -9,9 +9,9 @@
 
 ## Overview
 
-The movement system translates player input into physics-based motion. Players control their character using WASD keys for direction and Shift for sprinting. The system uses acceleration-based physics for smooth, responsive movement that feels natural.
+The movement system translates player input into prototype-faithful arena motion. Players control their character using WASD keys for direction and Shift for sprinting. The implementation may remain acceleration-based internally, but the player-facing requirement is immediate-feeling ground response with no perceptible wind-up, coast, or sluggish reversal.
 
-**Why acceleration-based physics?** Instant velocity changes feel robotic and make aiming difficult. Acceleration creates smooth start/stop that players can anticipate, improving both control feel and competitive skill expression.
+**Why this framing?** The prototype feel is the source of truth. Numeric tuning exists to support that feel, not to override it. If an implementation technically matches a constant but feels sluggish from rest, sticky on release, or heavy when reversing direction, the behavior is out of spec.
 
 **Why server-authoritative movement?** All position updates are validated server-side to prevent speed hacking or teleportation cheats. Clients predict movement locally for responsiveness, but server state is always authoritative.
 
@@ -44,7 +44,7 @@ All movement constants are defined in [constants.md](constants.md). Key values:
 | MOVEMENT_SPEED | 200 | px/s | Normal maximum speed |
 | SPRINT_SPEED | 300 | px/s | Sprint maximum speed |
 | SPRINT_MULTIPLIER | 1.5 | ratio | Sprint speed / normal speed |
-| ACCELERATION | 50 | px/s² | Rate of speed increase |
+| ACCELERATION | implementation-defined | px/s² | Internal tuning used to achieve instant-feeling response |
 | DECELERATION | 1500 | px/s² | Rate of speed decrease (near-instant stop) |
 | SERVER_TICK_RATE | 60 | Hz | Physics update frequency |
 | CLIENT_UPDATE_RATE | 20 | Hz | Position broadcast frequency |
@@ -207,21 +207,24 @@ function normalize(v: Vector2): Vector2 {
 
 ### Velocity Calculation
 
-Movement uses an acceleration/deceleration model for smooth transitions.
+Movement may use an acceleration/deceleration model internally, but it must produce prototype-faithful behavior:
 
-**Why asymmetric accel/decel?** Acceleration is gradual (50 px/s²) for smooth ramp-up, but deceleration is near-instant (1500 px/s²) so players stop within ~0.13 seconds when releasing input. This prevents "ice physics" sliding and is critical for accurate client-side prediction — fast deceleration means fewer frames of drift between predicted and authoritative states.
+- pressing a movement key from rest produces no perceptible wind-up
+- releasing movement produces no perceptible coast
+- reversing direction feels immediate and combat-usable
+- wall and desk contact resolves into clean sliding rather than sticky corner catches
 
-**Why 50 px/s² acceleration?** At 50 px/s², reaching 200 px/s takes 4 seconds. This is intentionally slow—players feel the momentum but can still make quick direction changes.
+**Why keep an internal acceleration model at all?** A shared continuous model is still useful for server authority, prediction, reconciliation, and roll integration. The contract is not "visible momentum." The contract is "internally coherent physics that still feels immediate."
 
-**Why 1500 px/s² deceleration?** At full speed (200 px/s), the player stops in ~0.13 seconds (200/1500). This makes directional changes feel crisp and responsive — releasing a key immediately halts movement.
+**Priority rule:** If a numeric tuning value conflicts with these perceptual requirements, the perceptual requirements win.
 
 **Speed Selection:**
 ```
 function getTargetSpeed(input):
     if input.isSprinting:
-        return SPRINT_SPEED     // 300 px/s
+        return SPRINT_SPEED
     else:
-        return MOVEMENT_SPEED   // 200 px/s
+        return MOVEMENT_SPEED
 ```
 
 **Target Velocity:**
@@ -568,31 +571,25 @@ Each client frame in `GameScene.update()`:
 4. Render local player at predicted position
 ```
 
-**PredictionEngine.predictPosition()** (`PredictionEngine.ts:100-170`):
+**PredictionEngine.predictPosition()** must mirror server movement semantics closely enough that ordinary wall contact and sprint usage do not create routine local corrections.
 
 ```typescript
 predictPosition(position, velocity, input, deltaTime):
-    // 1. Calculate normalized input direction from WASD
     direction = getInputDirection(input)
+    maxSpeed = input.isSprinting ? SPRINT_SPEED : MOVEMENT_SPEED
 
-    // 2. Accelerate or decelerate (always uses MOVEMENT.SPEED = 200)
     if direction != (0,0):
-        targetVel = direction * MOVEMENT.SPEED
+        targetVel = direction * maxSpeed
         newVel = accelerateToward(velocity, targetVel, ACCELERATION, dt)
     else:
         newVel = accelerateToward(velocity, (0,0), DECELERATION, dt)
 
-    // 3. Cap velocity to MOVEMENT.SPEED (200 px/s)
-    if magnitude(newVel) > MOVEMENT.SPEED:
-        newVel = normalize(newVel) * MOVEMENT.SPEED
+    if magnitude(newVel) > maxSpeed:
+        newVel = normalize(newVel) * maxSpeed
 
-    // 4. Integrate position
     newPos = position + newVel * dt
-
     return { position: newPos, velocity: newVel }
 ```
-
-> **Known asymmetry:** The client PredictionEngine always uses `MOVEMENT.SPEED` (200 px/s). It does NOT check `input.isSprinting` or use `SPRINT_SPEED` (300 px/s). The server's `Physics.UpdatePlayer()` does use `SprintSpeed` when sprinting. This means sprinting players will experience visible reconciliation corrections as the server position advances faster than the client prediction. The client constants (`constants.ts`) also lack `SPRINT_SPEED` and `SPRINT_MULTIPLIER` definitions.
 
 ### Server Reconciliation
 
@@ -606,11 +603,13 @@ When the server sends a `player:move` update (20 Hz), the client reconciles pred
 3. Starting from server's authoritative position/velocity:
    - Replay each pending input through PredictionEngine.predictPosition()
 4. Result = reconciled position (server truth + unprocessed predictions)
-5. If distance(reconciled, currentPredicted) >= 100px: instant teleport
-6. Otherwise: smooth lerp to reconciled position
+5. Small ordinary corrections are hidden with smoothing
+6. Hard snaps are reserved for exceptional divergence only
 ```
 
 **Why replay pending inputs?** The server state reflects inputs up to `lastProcessedSequence`. The client may have already predicted several frames ahead. Replaying unprocessed inputs on top of server state produces the correct predicted position.
+
+**Player-facing requirement:** noticeable rubberbanding during normal local movement is a defect, not an accepted consequence of server authority. The local player experience takes priority over remote temporal purity.
 
 **Input history**: The client maintains a buffer of sent inputs with sequence numbers via `InputManager.getInputHistory()`. Inputs older than `lastProcessedSequence` are discarded during reconciliation.
 
@@ -659,25 +658,16 @@ if renderTime > latestSnapshot.time:
 
 ---
 
-## Movement Timeline Example
+## Acceptance Criteria
 
-Starting from rest, pressing W (move up):
+The movement system is correct when all of the following are true in live play:
 
-```
-Time     Velocity (px/s)   Position (y)   Notes
-0.0s     0                 540            Start at rest
-0.017s   0.83              539.99         First tick: 50 * 0.017 = 0.83 px/s
-0.033s   1.67              539.97         Second tick
-0.05s    2.5               539.93         Third tick
-...
-1.0s     50                537.5          After 1 second: 50 px/s
-2.0s     100               487.5          After 2 seconds: 100 px/s
-3.0s     150               412.5          After 3 seconds: 150 px/s
-4.0s     200               312.5          After 4 seconds: max speed (200 px/s)
-4.017s   200               309.17         At max speed
-```
-
-**Time to reach max speed:** 200 px/s ÷ 50 px/s² = 4 seconds
+- starting from standstill feels immediate rather than wound up
+- stopping feels immediate rather than slippery
+- reversing direction in close-quarters combat is crisp rather than heavy
+- sprint feels like a distinct faster locomotion state, not a prediction bug source
+- ordinary wall contact produces sliding, not sticky snagging
+- local corrections during normal movement are effectively invisible
 
 ---
 
@@ -733,7 +723,7 @@ Time     Velocity (px/s)   Position (y)   Notes
 
 ## Test Scenarios
 
-### TS-MOVE-001: Player accelerates to target velocity
+### TS-MOVE-001: Player reaches combat-usable speed immediately from rest
 
 **Category**: Unit
 **Priority**: Critical
@@ -743,26 +733,19 @@ Time     Velocity (px/s)   Position (y)   Notes
 - Input: W key pressed (up)
 
 **Input:**
-- Run physics for 4 seconds (240 ticks at 60 Hz)
+- Press W from rest in normal movement
 
 **Expected Output:**
-- Velocity Y approaches -200 px/s
-- Velocity magnitude ≈ 200 px/s
+- Movement begins without perceptible wind-up
+- Player reaches combat-usable speed almost immediately
+- Any internal acceleration curve remains visually imperceptible
 
 **Go:**
 ```go
-func TestAccelerationToMaxSpeed(t *testing.T) {
-    player := NewPlayerState("test")
-    input := InputState{Up: true}
-
-    // Simulate 4 seconds at 60 Hz
-    for i := 0; i < 240; i++ {
-        physics.UpdatePlayer(player, 1.0/60.0)
-    }
-
-    vel := player.GetVelocity()
-    assert.InDelta(t, -200.0, vel.Y, 1.0)
-}
+test "player reaches immediate-feeling speed from rest":
+    setup: player at rest
+    action: press W
+    expect: no perceptible delay before movement
 ```
 
 ### TS-MOVE-002: Player decelerates when no input
@@ -775,12 +758,12 @@ func TestAccelerationToMaxSpeed(t *testing.T) {
 
 **Input:**
 - Release all keys
-- Run physics for ~0.15 seconds (9 ticks at 60 Hz)
 
 **Expected Output:**
-- Velocity approaches (0, 0) within ~0.13 seconds (200 px/s ÷ 1500 px/s²)
+- Player stops without perceptible coast
+- Releasing input does not create ice-like sliding
 
-### TS-MOVE-003: Sprint increases speed to 300 px/s
+### TS-MOVE-003: Sprint remains a distinct faster movement state
 
 **Category**: Unit
 **Priority**: High
@@ -790,10 +773,11 @@ func TestAccelerationToMaxSpeed(t *testing.T) {
 - Input: W + Shift
 
 **Input:**
-- Run physics for 6 seconds
+- Hold W + Shift
 
 **Expected Output:**
-- Velocity Y approaches -300 px/s
+- Sprint top speed exceeds normal movement speed
+- Sprint prediction matches server behavior closely enough that visible corrections are not routine
 
 **Go:**
 ```go
@@ -889,7 +873,7 @@ func TestDiagonalNormalization(t *testing.T) {
 **Expected Output:**
 - Spread = 5° * 1.5 = 7.5°
 
-### TS-MOVE-008: Acceleration rate is 50 px/s²
+### TS-MOVE-008: Numeric tuning supports the perceptual movement contract
 
 **Category**: Unit
 **Priority**: High
@@ -898,13 +882,13 @@ func TestDiagonalNormalization(t *testing.T) {
 - Player at rest
 
 **Input:**
-- W key pressed
-- Check velocity after 1 second (60 ticks)
+- W key pressed from rest
 
 **Expected Output:**
-- Velocity ≈ 50 px/s
+- Internal tuning values may vary
+- If tuning causes perceptible sluggishness, the implementation is out of spec
 
-### TS-MOVE-009: Direction changes smoothly
+### TS-MOVE-009: Direction reversal is immediate-feeling
 
 **Category**: Unit
 **Priority**: Medium
@@ -916,8 +900,8 @@ func TestDiagonalNormalization(t *testing.T) {
 - Press W (change to up)
 
 **Expected Output:**
-- Velocity smoothly transitions from (200, 0) toward (0, -200)
-- No instant snap
+- Direction reversal feels crisp and combat-usable
+- No sticky delay while changing axes
 
 ### TS-MOVE-010: Zero input produces zero velocity
 
@@ -934,12 +918,29 @@ func TestDiagonalNormalization(t *testing.T) {
 **Expected Output:**
 - Velocity remains (0, 0)
 
+### TS-MOVE-011: Local wall contact does not create routine visible correction
+
+**Category**: Integration
+**Priority**: Critical
+
+**Preconditions:**
+- Local player moving along blocking geometry
+
+**Input:**
+- Slide against a wall or desk during ordinary movement
+
+**Expected Output:**
+- Player slides cleanly along the surface
+- No sticky corner trapping in normal traversal
+- No routine visible rubberbanding from obstacle disagreement
+
 ---
 
 ## Changelog
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.2.0 | 2026-04-09 | Reframed movement around prototype-faithful perceptual outcomes: immediate-feeling start/stop/reversal, sprint retained as a distinct state, visible rubberbanding treated as a defect, prediction/reconciliation updated to match sprint and obstacle semantics, and tests rewritten away from endorsing a 4-second acceleration ramp. |
 | 1.0.0 | 2026-02-02 | Initial specification extracted from codebase |
 | 1.1.0 | 2026-02-15 | Updated DECELERATION from 50→1500 px/s². Rewrote Client-Side Prediction section to document PredictionEngine, server reconciliation (with input sequence replay), and InterpolationEngine. Updated deceleration test scenario timing. Added file location table for new physics modules. |
 | 1.1.1 | 2026-02-16 | Removed nonexistent `sanitizeDeltaTime` function from Error Handling section to match source code (raw delta used) |

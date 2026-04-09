@@ -594,27 +594,27 @@ gfx.generateTexture('reticle', 32, 32);
 
 **Constants**: See [constants.md § Crosshair / Reticle Constants](constants.md#crosshair--reticle-constants).
 
-### Weapon Crate Rendering
+### Weapon Pickup Rendering
 
-**Why Bobbing Animation?**
-Draws attention to pickups, makes them feel valuable and interactive.
+**Why this design?**
+Players should know what they are walking toward before they enter prompt range. Pickup readability comes primarily from the weapon itself, not from a generic marker.
 
-**Crate Shape:**
-- Shape: Circle outline (~40px diameter, radius 20px)
-- Color: `COLORS.WEAPON_CRATE` / `0xCCCC00` (yellow)
-- Stroke: 2px
-- Origin: Center
-- A visible `⊕` crosshair/plus symbol in yellow (`#CCCC00`) is drawn inside the circle to indicate it is a pickup
+**Available State:**
+- the floor pickup renders as the actual weapon silhouette for its weapon type
+- the weapon uses recognizable pickup coloring and contrast against the arena floor
+- melee pickups must read as their real objects: the bat should look like a brown bat, not blend into the floor; the katana should read as a blade, not a generic stub
+- a subtle persistent pickup-zone affordance remains visible around the weapon as a secondary cue
+
+**Unavailable State:**
+- the pickup spot remains visible while on respawn cooldown
+- the empty spot still communicates the exact returning weapon type
+- unavailable presentation is visibly subdued relative to the active pickup, but still readable as a future item location
 
 **Bobbing Animation:**
 - Distance: 5px up/down
 - Duration: 1000ms cycle
 - Ease: Sine.easeInOut
 - Type: Yoyo (repeat forever)
-
-**Availability States:**
-- Available: Alpha 1.0, yellow circle fully visible
-- Unavailable: Alpha 0.3, yellow circle remains visible (faded) as a ghostly respawning indicator
 
 ### Melee Swing Arc
 
