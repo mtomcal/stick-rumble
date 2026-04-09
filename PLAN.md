@@ -1,271 +1,385 @@
-# Config-Driven Map System Plan
+# Spec Implementation Plan
 
 ## Goal
 
-Implement the spec changes from `HEAD~1..HEAD` so the game uses a shared, config-driven map system instead of hardcoded arena geometry, spawn logic, and weapon crate placement.
+Implement the behavior changes introduced by the latest spec commit (`eb5c235`) using red/green TDD, then finish with explicit test-quality audits and a pre-mortem.
 
-The shipped v1 target is one authoritative default map, `default_office`, with:
-- shared JSON content loaded by both client and server
-- schema validation and startup failure on invalid content
-- room-level `mapId`
-- map-authored spawn points and weapon spawns
-- map-authored obstacles affecting movement, projectiles, and client rendering
+This plan covers four real change areas from the spec diff:
+
+- movement is now prototype-faithful and immediate-feeling, not slow-ramp constant-driven
+- HUD ownership changed, with a fixed bottom-left minimap and gameplay HUD exclusions
+- weapon pickups must render as weapon-specific floor pickups rather than generic crate circles
+- maps now include readability-driven acceptance requirements, including canonical viewpoints for visual QA
+
+## Product Decisions Captured
+
+These choices were confirmed before implementation and should drive both tests and code:
+
+- movement should feel immediate from rest
+- movement release should have no perceptible coast
+- direction reversal should feel snappy and gamey rather than weighty
+- sprint should behave as simply faster movement, not as a momentum-heavy committed state
+- wall and desk contact should favor clean sliding over sticky snagging
+- title text, connection status/hint text, chat, and debug overlay should be removed completely from normal gameplay HUD
+- pickup rendering should be literal, weapon-specific floor silhouettes rather than abstract markers
 
 ## Scope From The Diff
 
-The spec commit changes the contract in these ways:
-- adds a new `maps.md` source-of-truth spec
-- makes selected map dimensions authoritative instead of global arena constants
-- adds `mapId` to room assignment and `room:joined`
-- moves spawn selection and weapon spawn ownership into map data
-- introduces blocking obstacle geometry for movement, projectiles, and LOS
+Changed specs:
 
-## Implementation Strategy
+- `specs/movement.md`
+- `specs/ui.md`
+- `specs/graphics.md`
+- `specs/maps.md`
 
-Work in thin vertical slices with strict red/green TDD. Keep each slice small enough that failing tests clearly name the missing behavior.
+Implementation consequences in the current codebase:
+
+- movement tuning and prediction/reconciliation are out of spec on both client and server
+- the scene still creates gameplay title text, connection text, chat, and debug overlay in HUD space
+- the minimap is still laid out using the old top-left cluster assumptions
+- pickups still use the old yellow-circle crate rendering
+- shared map schema/content does not yet encode canonical visual acceptance viewpoints
+
+## Known Spec Gaps To Resolve While Implementing
+
+These should be treated as explicit cleanup tasks during the work:
+
+- `specs/ui.md` now places the minimap bottom-left, but `TS-UI-018` still says the minimap is at `(20, 20)`
+- `specs/maps.md` uses validation language for readability outcomes that cannot be proven by static schema checks alone
+
+Working interpretation:
+
+- static validation should enforce geometry/reachability invariants
+- viewpoint-based visual readability should be enforced by authored metadata plus visual QA, not only by schema validation
+
+## Delivery Strategy
+
+Work in thin vertical slices with strict red/green cycles. Do not mix all four change areas into one batch.
 
 Order:
-1. Shared map contract and default content
-2. Shared/network message contract updates
-3. Server map registry and room assignment
-4. Server spawn and weapon-crate ownership migration
-5. Server obstacle and world-bound enforcement
-6. Client map loading and visual/runtime adoption
-7. End-to-end verification, test-quality review, and pre-mortem
 
-## Phase 0: Contract Freeze
+1. spec clarification pass
+2. executable acceptance targets
+3. movement red/green
+4. HUD red/green
+5. pickup rendering red/green
+6. map viewpoint/readability infrastructure red/green
+7. repo-wide verification
+8. subagent test-quality pass x3
+9. subagent pre-mortem pass x1
 
-Before code changes:
-- treat the spec diff as the contract baseline
-- confirm whether `server-architecture.md` or client/server architecture docs need follow-up edits after implementation
-- identify the archived office-layout reference that should inform `default_office.json`
+## Phase 0: Spec Clarification Pass
+
+Before code changes, update the relevant specs so the written contract reflects the confirmed product decisions and does not contain stale contradictions.
+
+Target specs:
+
+- `specs/movement.md`
+- `specs/ui.md`
+- `specs/graphics.md`
+- `specs/maps.md`
+
+Required clarifications:
+
+- movement explicitly favors immediate start, no perceptible coast, crisp reversal, responsive sprint, and sliding over snagging
+- UI explicitly removes title text, connection text, chat, and debug overlay from normal gameplay rather than merely moving them out of HUD corners
+- pickup rendering explicitly favors literal weapon-specific floor silhouettes
+- map spec distinguishes static validation from viewpoint-driven visual acceptance
+- stale minimap expectations in `specs/ui.md` test scenarios are corrected to match the bottom-left contract
 
 Definition of done:
-- no hidden requirements remain in legacy docs or code comments that contradict the new specs
 
-## Phase 1: Shared Map Contract And Content
+- the relevant specs can be handed to another engineer without relying on our conversation as hidden context
+- the spec text no longer contains contradictions that would produce misleading red tests
 
-Target files and areas:
-- `maps/`
-- `maps-schema/`
-- `events-schema/` if map schemas are exported there or reused from there
+## Phase 1: Acceptance Target Freeze
 
-Red:
-- add schema/unit tests for invalid map structure
-- add schema/unit tests for spatial validation failures:
-  - spawn inside blocking obstacle
-  - weapon spawn inside blocking obstacle
-  - positive-area obstacle overlap
-  - out-of-bounds authored geometry
-- add a success test for loading `default_office`
+Before changing behavior, translate the new spec language into measurable checks.
 
-Green:
-- create `maps/default_office.json`
-- create `maps-schema` schema definitions and validators
-- implement registry loading and validation helpers shared by both runtimes
+Define concrete thresholds for:
 
-Refactor:
-- centralize map types and validation errors
-- keep IDs and geometry helpers reusable across client and server
+- immediate-feeling start from rest
+- immediate-feeling stop on release
+- crisp reversal
+- sprint remaining clearly faster than normal movement
+- acceptable reconciliation drift during ordinary movement
+- acceptable wall-slide behavior along desks and walls
+- HUD corner ownership and non-occlusion expectations
+- pickup readability states
+- canonical viewpoint data shape for map visual QA
 
-Exit criteria:
-- one valid default map exists
-- bad content fails deterministically before runtime use
+Initial interpretation for movement feel:
 
-## Phase 2: Shared Message Contract
+- first movement input should produce visible motion immediately
+- combat-usable speed should be reached very quickly rather than over a long ramp
+- releasing input should drive the player to near-stop almost immediately
+- reversing direction should clear prior-direction momentum quickly enough to feel arcade-like
+- sprint should preserve the same responsiveness as normal movement while increasing top speed
+- wall contact should resolve into clean slide behavior rather than sticky corner catches
 
-Target files and areas:
-- [events-schema/src/schemas/server-to-client.ts](/home/mtomcal/code/stick-rumble/events-schema/src/schemas/server-to-client.ts)
-- generated JSON schema artifacts
-- client/server tests asserting `room:joined`
+Definition of done:
 
-Red:
-- update schema tests so `room:joined` requires `roomId`, `playerId`, and `mapId`
-- update integration tests that currently only assert `playerId`
+- the team can point to a concrete test or visual check for each new spec requirement
+- stale or contradictory test text discovered during this phase is queued for correction
 
-Green:
-- extend `RoomJoinedDataSchema`
-- regenerate or refresh generated JSON schema artifacts if required by the repo workflow
-
-Refactor:
-- remove duplicated ad hoc `room:joined` payload assumptions in tests
-
-Exit criteria:
-- schema contract matches spec and downstream tests compile against it
-
-## Phase 3: Server Map Registry And Room Assignment
+## Phase 2: Movement Red
 
 Target files and areas:
-- [stick-rumble-server/internal/game/room.go](/home/mtomcal/code/stick-rumble/stick-rumble-server/internal/game/room.go)
-- room lifecycle tests
-- server startup/bootstrap path that constructs shared game services
 
-Red:
-- add tests for room creation assigning the default `mapId`
-- add tests for `room:joined` including `mapId`
-- add tests for startup failure when required maps are missing or invalid
+- `stick-rumble-client/src/game/physics/PredictionEngine.ts`
+- `stick-rumble-client/src/game/physics/PredictionEngine.test.ts`
+- `stick-rumble-client/src/game/scenes/GameSceneEventHandlers.reconciliation.test.ts`
+- `stick-rumble-server/internal/game/physics.go`
+- `stick-rumble-server/internal/game/physics_movement_test.go`
+- any reconciliation and wall-contact integration tests that expose routine correction behavior
 
-Green:
-- add `MapID` to `Room`
-- change `NewRoom()` to accept a selected/default map ID
-- load the server map registry during startup
-- emit `mapId` in `room:joined`
+Add failing tests for:
 
-Refactor:
-- avoid stringly-typed default-map duplication by defining one server-side constant/config entry
+- client prediction reaching combat-usable speed quickly from rest
+- server movement reaching combat-usable speed quickly from rest
+- stop behavior on input release with no perceptible coast
+- crisp direction reversal
+- sprint prediction parity between client and server
+- local wall contact sliding cleanly without sticky snagging
+- no routine visible correction during normal obstacle contact
+
+Important rule:
+
+- do not keep tests that explicitly bless the old 4-second acceleration ramp
+- do not add tests that reward weighty movement, sprint wind-up, or visible release slide
 
 Exit criteria:
-- every room has one authoritative `mapId`
-- server will not boot with broken map content
 
-## Phase 4: Server Spawn Selection And Weapon Spawn Ownership
+- the failing test set names the desired behavior clearly enough that implementation choices are obvious
+
+## Phase 3: Movement Green
+
+Implement the new movement semantics in the smallest cross-runtime slice possible.
+
+Likely code changes:
+
+- retune shared movement constants
+- keep client and server movement math aligned
+- ensure client prediction respects sprint semantics exactly
+- tighten reconciliation so ordinary movement corrections remain effectively invisible
+- preserve deterministic wall sliding and anti-cheat validation behavior
+
+Refactor goals:
+
+- centralize movement tuning values where client/server parity depends on them
+- remove stale comments and test assumptions that describe visible momentum as desired behavior
+
+Exit criteria:
+
+- movement tests pass on both client and server
+- ordinary sprinting and wall contact no longer rely on known prediction mismatch behavior
+
+## Phase 4: HUD Red
 
 Target files and areas:
-- [stick-rumble-server/internal/game/world.go](/home/mtomcal/code/stick-rumble/stick-rumble-server/internal/game/world.go)
-- [stick-rumble-server/internal/game/weapon_crate.go](/home/mtomcal/code/stick-rumble/stick-rumble-server/internal/game/weapon_crate.go)
-- related tests in `world_test.go` and `weapon_crate_test.go`
 
-Red:
-- add tests for selecting the safest authored spawn point from map spawn points
-- add tests that weapon crates are created from authored map spawn entries instead of hardcoded arena fractions
-- add tests for rejecting authored spawn points that should have been filtered out by validation or runtime sanity checks
+- `stick-rumble-client/src/game/scenes/GameScene.ts`
+- `stick-rumble-client/src/game/scenes/GameSceneUI.ts`
+- `stick-rumble-client/src/game/scenes/GameSceneUI.test.ts`
+- any scene/UI tests that currently assert the old HUD layout
 
-Green:
-- inject selected map config into world/spawn logic
-- replace random spawn candidate generation with scoring over authored spawn points
-- initialize weapon crates from map `weaponSpawns`
+Add failing tests for:
 
-Refactor:
-- separate authored map data from mutable runtime crate state
-- keep spawn scoring logic pure enough for focused unit tests
+- minimap anchored bottom-left
+- minimap no longer positioned under the health/ammo cluster
+- top-left reserved for immediate survival/combat HUD only
+- top-right reserved for score/kills/timer/feed
+- bottom-right reserved for action-state widgets
+- title text removed from normal gameplay scene
+- connection hint/status text removed from normal gameplay scene
+- chat removed from normal gameplay scene
+- debug overlay removed from normal gameplay scene
+
+If a mechanical non-occlusion assertion is feasible, add it. If not, capture it for the later visual QA pass.
 
 Exit criteria:
-- respawns and weapon crate positions come from map data only
 
-## Phase 5: Server Obstacle And World-Bound Enforcement
+- tests fail specifically on the current scene/UI layout assumptions
+
+## Phase 5: HUD Green
+
+Implement the HUD rezoning.
+
+Likely code changes:
+
+- move minimap to a fixed bottom-left anchor
+- stop creating gameplay title/connection hint text in the normal gameplay scene
+- remove chat/debug from the normal gameplay scene
+- preserve existing required HUD widgets while aligning them to the new corner contract
+
+Refactor goals:
+
+- avoid scattering hardcoded HUD coordinates across scene bootstrap
+- make corner ownership obvious in layout code
+
+Exit criteria:
+
+- gameplay HUD matches the new zoning rules
+- stale tests that still encode the old minimap position are corrected
+
+## Phase 6: Pickup Rendering Red
 
 Target files and areas:
-- [stick-rumble-server/internal/game/physics.go](/home/mtomcal/code/stick-rumble/stick-rumble-server/internal/game/physics.go)
-- projectile logic
-- dodge-roll logic
-- any server-side LOS or hit-detection helpers affected by obstacle blocking
 
-Red:
-- add unit tests for clamping using selected map width/height instead of global constants
-- add unit tests for player collision against movement-blocking rectangles
-- add integration tests for projectile destruction on projectile-blocking obstacles
-- add integration tests for dodge roll cancellation on obstacle collision
+- `stick-rumble-client/src/game/entities/WeaponCrateManager.ts`
+- `stick-rumble-client/src/game/entities/WeaponCrateManager.test.ts`
+- any scene tests that assume old crate visuals
 
-Green:
-- thread selected map dimensions into clamping and bounds checks
-- add rectangle collision/resolution for movement-blocking obstacles
-- destroy projectiles when they intersect projectile-blocking obstacles
-- terminate rolls when movement is stopped by obstacle collision
+Add failing tests for:
 
-Refactor:
-- introduce shared rectangle/spatial helpers instead of duplicating geometry math
-- keep movement collision resolution deterministic between server ticks
+- available pickup renders a weapon-specific silhouette
+- unavailable pickup remains visible but subdued
+- unavailable pickup still communicates returning weapon type
+- persistent secondary pickup-zone affordance remains visible
+- ranged pickups read as literal weapon objects rather than generic markers
+- melee pickup visuals read as actual bat/katana objects instead of generic markers
+
+Keep these tests assertion-focused. Prefer checking drawing calls, state transitions, and per-weapon rendering selection rather than broad snapshots first.
 
 Exit criteria:
-- no authoritative movement or projectile system depends on hardcoded empty-arena assumptions
 
-## Phase 6: Client Map Loading, Bootstrap, And Rendering
+- tests clearly reject the old yellow-circle-only crate presentation
+
+## Phase 7: Pickup Rendering Green
+
+Implement the pickup redesign.
+
+Likely code changes:
+
+- replace generic crate-circle rendering with weapon-specific pickup rendering
+- keep bobbing behavior if still desired by the spec
+- preserve runtime available/unavailable state transitions
+- ensure the empty/unavailable state still communicates weapon identity
+- prefer literal silhouettes over abstract iconography
+
+Refactor goals:
+
+- separate pickup state from pickup drawing
+- isolate per-weapon pickup art routines so tests stay readable
+
+Exit criteria:
+
+- pickup rendering behavior matches the new spec at the unit level
+
+## Phase 8: Map Readability And Viewpoint Infrastructure Red
 
 Target files and areas:
-- [stick-rumble-client/src/game/scenes/GameScene.ts](/home/mtomcal/code/stick-rumble/stick-rumble-client/src/game/scenes/GameScene.ts)
-- [stick-rumble-client/src/game/scenes/GameSceneEventHandlers.ts](/home/mtomcal/code/stick-rumble/stick-rumble-client/src/game/scenes/GameSceneEventHandlers.ts)
-- crate/minimap/background rendering code
-- client shared constants and map-loading helpers
 
-Red:
-- add tests for `room:joined` carrying `mapId` through client bootstrap
-- add tests that the client resolves the same local map config by `mapId`
-- add tests for rendering/initializing obstacles and weapon crates from map data
-- add tests for replacing hardcoded arena bounds in scene setup where required
+- `maps/default_office.json`
+- `maps-schema/src/map-schema.ts`
+- `maps-schema/src/map-schema.test.ts`
+- shared client map-loading helpers
+- any test harness used for visual acceptance or scripted viewpoints
 
-Green:
-- load the shared client map registry at startup
-- store/use `mapId` from `room:joined`
-- set world bounds, camera bounds, background extents, minimap scale inputs, and crate positions from selected map
-- render map obstacles in the scene
+Add failing tests for:
 
-Refactor:
-- move map bootstrap logic out of large scene methods where possible
-- keep map rendering separate from authoritative network event handling
+- map content supports canonical viewpoint metadata
+- viewpoint entries include player position, facing/aim direction, and expected readability outcome
+- any new static geometry checks required by the updated map spec
+- optional reachability/safety-margin checks if they can be expressed deterministically
+
+Do not overclaim static validation:
+
+- false openings and invisible blockers are primarily visual acceptance concerns
+- encode the authored viewpoints first so later visual QA has a contract to run against
 
 Exit criteria:
-- client view is driven by the same map content ID as the server
-- visible geometry and crate placement match authoritative behavior
 
-## Phase 7: Verification And Finish
+- the map/schema layer can describe the new canonical acceptance viewpoints
 
-Primary verification sequence:
+## Phase 9: Map Readability And Viewpoint Infrastructure Green
+
+Implement the map contract extensions.
+
+Likely code changes:
+
+- extend the map schema/types with viewpoint metadata
+- add canonical viewpoints to `default_office`
+- expose viewpoint data to any client-side visual QA harness if needed
+- add any deterministic static validation that is actually enforceable from authored geometry alone
+
+Refactor goals:
+
+- keep viewpoint metadata independent from runtime state
+- avoid polluting geometry validation with subjective render judgments
+
+Exit criteria:
+
+- the office map now declares the visual acceptance viewpoints required by the spec
+
+## Verification Sequence
+
+Use narrow targets during red/green loops, but finish with repo-level gates from the repo instructions.
+
+Recommended final sequence:
+
 1. `make lint`
 2. `make typecheck`
 3. `make test`
-4. `make test-integration`
 
-If the test surface becomes too large during development, use narrower targets during red/green, but finish with the full repo gates above.
+If a reliable visual or integration pass exists for the viewpoint work, run it after the unit/integration gates.
 
-## Test Plan
+If any gate cannot be run, record exactly what was skipped and why.
 
-Minimum new or updated test coverage:
-- map schema validation unit tests
-- `room:joined` schema and integration tests
-- server room lifecycle tests for `mapId`
-- spawn selection tests over authored points
-- weapon crate initialization tests from map config
-- physics tests for bounds and obstacle collision
-- projectile obstacle-destruction tests
-- client bootstrap tests using `mapId`
-- client map rendering or manager tests for obstacle/crate loading
+## Test Quality Subagent Pass
 
-## Test-Quality Subagents
+Run after the code is green.
 
-Run after the code is green and before final sign-off.
+Requirement:
 
-Subagent pass 1:
-- use an `explorer` or `worker` focused only on changed tests
-- ask for vague assertions, missing behavioral coverage, and false-positive risk
-- focus on map schema tests, room lifecycle tests, physics tests, and client bootstrap/render tests
+- use `gpt-5.4`
+- run three separate subagent reviews focused on changed unit tests
 
-Suggested prompt:
-`Review the recent test changes in /home/mtomcal/code/stick-rumble for vague assertions, weak tests, or coverage gaps. Focus on these files: <changed test file list>. Be specific: identify bad assertions or meaningful missing cases only.`
+Suggested split:
 
-Subagent pass 2:
-- if client and server test surfaces are both large, split review into two parallel subagents:
-  - server tests
-  - client and schema tests
+1. movement tests
+2. HUD and pickup tests
+3. map schema/viewpoint tests
+
+Review prompt shape:
+
+`Review the recent test changes in /home/mtomcal/code/stick-rumble for vague assertions, weak tests, false positives, or meaningful missing cases. Focus only on these files: <file list>. Be specific: identify bad assertions or meaningful missing coverage only.`
 
 Gate:
-- address any high-signal findings before finalizing
 
-## Pre-Mortem Checklist
+- address high-signal findings before final sign-off
 
-Run after tests are green and after the test-quality subagent pass.
+## Pre-Mortem Subagent Pass
 
-Questions to answer:
-- Are client and server definitely loading the same `mapId` and same content version?
-- Can any remaining hardcoded `ARENA_WIDTH` or `ARENA_HEIGHT` assumptions still affect runtime behavior?
-- Does any startup path bypass map validation?
-- Could obstacle collision behave differently between movement, dodge roll, projectile, and spawn logic?
-- Do any tests only prove happy-path loading but not invalid-content failure?
-- Could `room:joined` race with map bootstrap and leave the client in a partially initialized state?
-- Are generated schema artifacts updated, committed, and actually used by the server validator?
-- Could map-authored IDs collide or be relied on implicitly by brittle tests?
-- Does the default office map preserve intended lane/control relationships, not just compile successfully?
+Run after tests are green and after the test-quality passes.
 
-## Risks To Watch Early
+Requirement:
 
-- hardcoded arena constants are deeply embedded in tests and helper constructors
-- server world/physics code may need dependency injection for selected map state
-- client scene bootstrap currently assumes arena size before any network event arrives
-- generated schema artifacts can drift from TypeBox source changes
-- obstacle collision can expand scope quickly if introduced in too many systems at once
+- use one `gpt-5.4` subagent
 
-## Working Rules
+Focus areas:
 
-- keep specs as source of truth; if implementation exposes a spec gap, update specs before continuing
-- prefer pure helpers for geometry and validation so tests stay narrow
-- do not rewrite room/world/scene architecture unless TDD proves the current seams cannot support the contract
-- keep each red/green slice shippable and easy to review
+- movement feel regressions despite passing tests
+- hidden client/server drift in sprint or reconciliation
+- HUD overlap or corner ownership regressions at different viewport/camera states
+- pickup readability failures against floor/background contrast
+- map-schema additions that are present but not actually consumed by any QA path
+- stale tests still encoding old spec assumptions
+
+Expected output:
+
+- a concise risk list ordered by severity
+- concrete likely failure modes
+- suggested mitigation or additional test for each serious risk
+
+## Definition Of Done
+
+The work is done when all of the following are true:
+
+- movement behavior is updated and covered by passing red/green tests on both client and server
+- gameplay HUD layout matches the new corner-ownership spec
+- pickup rendering matches the new weapon-specific readability requirements
+- the map contract includes canonical visual acceptance viewpoints for the office map
+- repo verification passes, or any skipped verification is explicitly documented
+- three `gpt-5.4` unit-test quality reviews have been completed and acted on
+- one `gpt-5.4` pre-mortem review has been completed and acted on
