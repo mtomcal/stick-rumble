@@ -6,11 +6,14 @@
     "id",
     "position",
     "velocity",
+    "aimAngle",
     "health",
-    "maxHealth",
-    "rotation",
-    "isDead",
-    "isSprinting",
+    "isInvulnerable",
+    "invulnerabilityEnd",
+    "kills",
+    "deaths",
+    "xp",
+    "isRegenerating",
     "isRolling"
   ],
   "properties": {
@@ -55,26 +58,44 @@
         }
       }
     },
+    "aimAngle": {
+      "description": "Player aim angle in radians",
+      "type": "number"
+    },
     "health": {
       "description": "Current health",
       "minimum": 0,
       "type": "number"
     },
-    "maxHealth": {
-      "description": "Maximum health",
-      "minimum": 0,
-      "type": "number"
-    },
-    "rotation": {
-      "description": "Player rotation in radians",
-      "type": "number"
-    },
-    "isDead": {
-      "description": "Whether the player is dead",
+    "isInvulnerable": {
+      "description": "Whether spawn invulnerability is active",
       "type": "boolean"
     },
-    "isSprinting": {
-      "description": "Whether the player is currently sprinting",
+    "invulnerabilityEnd": {
+      "description": "RFC3339 timestamp when invulnerability ends",
+      "type": "string"
+    },
+    "deathTime": {
+      "description": "RFC3339 timestamp when the player died",
+      "type": "string"
+    },
+    "kills": {
+      "description": "Current kill count",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "deaths": {
+      "description": "Current death count",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "xp": {
+      "description": "Current XP total",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "isRegenerating": {
+      "description": "Whether the player is currently regenerating health",
       "type": "boolean"
     },
     "isRolling": {

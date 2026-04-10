@@ -1,7 +1,7 @@
 # Messages
 
-> **Spec Version**: 1.1.0
-> **Last Updated**: 2026-02-15
+> **Spec Version**: 1.2.1
+> **Last Updated**: 2026-04-10
 > **Depends On**: [constants.md](constants.md), [player.md](player.md)
 > **Depended By**: [networking.md](networking.md), [rooms.md](rooms.md), [weapons.md](weapons.md), [shooting.md](shooting.md), [melee.md](melee.md), [hit-detection.md](hit-detection.md), [match.md](match.md), [client-architecture.md](client-architecture.md), [server-architecture.md](server-architecture.md)
 
@@ -552,11 +552,8 @@ interface PlayerState {
   id: string;
   position: Position;
   velocity: Velocity;
+  aimAngle: number;              // Aim angle in radians
   health: number;
-  maxHealth: number;
-  rotation: number;              // Aim angle in radians
-  isDead: boolean;
-  isSprinting: boolean;
   isRolling: boolean;
   isInvulnerable: boolean;       // Spawn protection active
   invulnerabilityEndTime: number; // Timestamp (ms) when invulnerability expires
@@ -589,19 +586,11 @@ type PlayerStateSnapshot struct {
 }
 ```
 
-> **Field Name Mapping (Go → TypeScript):**
-> The Go `PlayerStateSnapshot` struct serializes different JSON field names than the TypeBox `PlayerStateSchema` expects. The client-side handler maps between them:
->
-> | Go JSON field | TypeScript field | Notes |
-> |---------------|-----------------|-------|
-> | `aimAngle` | `rotation` | Client reads `aimAngle` from payload, maps to `rotation` |
-> | `deathTime` | `isDead` | Client considers player dead when `deathTime !== null`. `deathTime` is a nullable ISO timestamp; `isDead` is derived as `deathTime != null` |
-> | (omitted) | `maxHealth` | Always 100; client uses hardcoded default |
-> | (omitted) | `isSprinting` | Not broadcast; client uses local input state |
-> | `isInvulnerable` | `isInvulnerable` | Direct mapping (added for spawn ring rendering) |
-> | `invulnerabilityEnd` | `invulnerabilityEndTime` | Timestamp when invulnerability expires |
->
-> **Canonical rule:** The Go server field names are authoritative for the wire format. The TypeScript `PlayerState` interface represents the client-side model after mapping.
+**Canonical wire contract:**
+- `aimAngle` is transmitted on the wire as `aimAngle`
+- `aimAngle` is authoritative for remote facing, held-weapon orientation, melee swing direction, and any projectile visuals derived from the player's aim
+- accepting a new `input:state` updates the player's authoritative `aimAngle` immediately, even if the player is stationary
+- client-only convenience fields may be derived locally, but they must not replace the wire-level `aimAngle`
 
 **Example:**
 ```json
@@ -614,22 +603,20 @@ type PlayerStateSnapshot struct {
         "id": "550e8400-e29b-41d4-a716-446655440000",
         "position": { "x": 100.5, "y": 200.3 },
         "velocity": { "x": 5.0, "y": -2.5 },
+        "aimAngle": 0.785,
         "health": 85,
-        "maxHealth": 100,
-        "rotation": 0.785,
-        "isDead": false,
-        "isSprinting": true,
+        "isInvulnerable": false,
+        "invulnerabilityEndTime": 1704067201200,
         "isRolling": false
       },
       {
         "id": "660e8400-e29b-41d4-a716-446655440111",
         "position": { "x": 500.0, "y": 300.0 },
         "velocity": { "x": 0.0, "y": 0.0 },
+        "aimAngle": 3.14,
         "health": 100,
-        "maxHealth": 100,
-        "rotation": 3.14,
-        "isDead": false,
-        "isSprinting": false,
+        "isInvulnerable": false,
+        "invulnerabilityEndTime": 1704067201200,
         "isRolling": false
       }
     ]
@@ -641,7 +628,8 @@ type PlayerStateSnapshot struct {
 1. Wait for `room:joined` before processing
 2. For each player in array:
    - Create sprite if new player
-   - Update position, rotation, health
+   - Update position, `aimAngle`, health
+   - Update remote body pose and held weapon using `aimAngle`
    - Update local health bar if local player
 3. Remove sprites for players no longer in array
 4. Ignored after `match:ended`

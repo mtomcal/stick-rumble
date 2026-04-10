@@ -111,6 +111,36 @@ func TestGameServerUpdatePlayerInput(t *testing.T) {
 	}
 }
 
+func TestGameServerUpdatePlayerInputWithSequenceUpdatesAimAngle(t *testing.T) {
+	gs := NewGameServer(nil)
+	playerID := "test-player-1"
+
+	gs.AddPlayer(playerID)
+
+	input := InputState{
+		AimAngle:    1.234,
+		IsSprinting: false,
+	}
+
+	success := gs.UpdatePlayerInputWithSequence(playerID, input, 7)
+	if !success {
+		t.Fatal("UpdatePlayerInputWithSequence() should return true for existing player")
+	}
+
+	player, exists := gs.world.GetPlayer(playerID)
+	if !exists {
+		t.Fatal("player should exist after AddPlayer")
+	}
+
+	if got := player.GetAimAngle(); got != input.AimAngle {
+		t.Fatalf("player aim angle = %v, want %v", got, input.AimAngle)
+	}
+
+	if got := player.GetInputSequence(); got != 7 {
+		t.Fatalf("player input sequence = %v, want 7", got)
+	}
+}
+
 func TestGameServerGetWeaponState(t *testing.T) {
 	gs := NewGameServer(nil)
 	playerID := "test-player-1"

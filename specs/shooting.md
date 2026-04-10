@@ -1,7 +1,7 @@
 # Shooting
 
-> **Spec Version**: 1.2.0
-> **Last Updated**: 2026-02-16
+> **Spec Version**: 1.2.1
+> **Last Updated**: 2026-04-10
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [messages.md](messages.md)
 > **Depended By**: [hit-detection.md](hit-detection.md), [client-architecture.md](client-architecture.md), [server-architecture.md](server-architecture.md)
 
@@ -272,10 +272,10 @@ func (gs *GameServer) PlayerShoot(playerID string, aimAngle float64, clientTimes
         return gs.processHitscanShot(playerID, player, ws.Weapon, aimAngle, clientTimestamp)
     }
 
-    // Projectile weapon: create projectile (CreateProjectile creates + adds in one call)
-    pos := player.GetPosition()
+    // Projectile weapon: create projectile from the authoritative barrel tip
+    origin := getWeaponBarrelOrigin(player.position, aimAngle, weapon.name)
     proj := gs.projectileManager.CreateProjectile(
-        playerID, ws.Weapon.Name, pos, aimAngle, ws.Weapon.ProjectileSpeed,
+        playerID, ws.Weapon.Name, origin, aimAngle, ws.Weapon.ProjectileSpeed,
     )
 
     return ShootResult{Success: true, Projectile: proj}
@@ -355,6 +355,17 @@ func (ws *WeaponState) CanShoot() bool {
 | AK47 | 6.0/s | 167ms | 10 ticks |
 | Shotgun | 1.0/s | 1000ms | 60 ticks |
 
+### Shot Origin Contract
+
+All ranged shots originate from the authoritative weapon barrel tip, not the player body center.
+
+- projectile weapons spawn their projectile at the barrel tip
+- hitscan weapons cast their ray from the barrel tip
+- the same origin contract must be used for server hit logic, remote muzzle flashes, and any client-side hit trail or tracer representation
+- an opponent standing still must still produce visually coherent fire because `aimAngle` and barrel origin are coupled
+
+**Why this matters:** If the server fires from body center while the client renders from barrel tip, remote kills appear to come from the wrong place and players lose trust in hit registration.
+
 ### Projectile Creation
 
 Creating a new projectile with correct velocity.
@@ -363,16 +374,16 @@ Creating a new projectile with correct velocity.
 
 **Pseudocode:**
 ```
-function createProjectile(ownerID, position, aimAngle, speed):
+function createProjectile(ownerID, origin, aimAngle, speed):
     velocity.x = cos(aimAngle) * speed
     velocity.y = sin(aimAngle) * speed
 
     return Projectile{
         id: generateUUID(),
         ownerID: ownerID,
-        position: position,
+        position: origin,
         velocity: velocity,
-        spawnPosition: position,
+        spawnPosition: origin,
         createdAt: now(),
         active: true
     }

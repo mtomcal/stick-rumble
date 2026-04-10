@@ -153,6 +153,34 @@ func TestProjectileWeapon_NoLagCompensation(t *testing.T) {
 	}
 }
 
+func TestProjectileWeapon_SpawnsFromBarrelOrigin(t *testing.T) {
+	clock := NewManualClock(time.Now())
+	gs := NewGameServerWithClock(nil, clock)
+
+	shooterID := "shooter"
+	gs.AddPlayer(shooterID)
+
+	uzi := NewUzi()
+	gs.SetWeaponState(shooterID, NewWeaponState(uzi))
+
+	shooter, _ := gs.world.GetPlayer(shooterID)
+	shooter.SetPosition(Vector2{X: 100, Y: 100})
+
+	result := gs.PlayerShoot(shooterID, 0, clock.Now().UnixMilli())
+	if !result.Success {
+		t.Fatalf("Projectile shot should succeed, got: %v", result.Reason)
+	}
+
+	if result.Projectile == nil {
+		t.Fatal("Projectile weapon should create a projectile")
+	}
+
+	expectedOrigin := Vector2{X: 146, Y: 100} // player center + 10 grip offset + 36 Uzi barrel length
+	if result.Projectile.Position != expectedOrigin {
+		t.Fatalf("projectile origin = %+v, want %+v", result.Projectile.Position, expectedOrigin)
+	}
+}
+
 // TestRaycastHit_DirectHit tests raycast hitting target dead center
 func TestRaycastHit_DirectHit(t *testing.T) {
 	gs := NewGameServer(nil)
@@ -285,6 +313,38 @@ func TestHitscanShoot_SkipsShooter(t *testing.T) {
 
 	if shooter.Health != initialHealth {
 		t.Error("Hitscan should not damage the shooter")
+	}
+}
+
+func TestHitscanWeapon_UsesBarrelOrigin(t *testing.T) {
+	clock := NewManualClock(time.Now())
+	gs := NewGameServerWithClock(nil, clock)
+
+	shooterID := "shooter"
+	victimID := "victim"
+
+	gs.AddPlayer(shooterID)
+	gs.AddPlayer(victimID)
+
+	pistol := NewPistol()
+	pistol.IsHitscan = true
+	gs.SetWeaponState(shooterID, NewWeaponState(pistol))
+
+	shooter, _ := gs.world.GetPlayer(shooterID)
+	shooter.SetPosition(Vector2{X: 100, Y: 100})
+
+	victim, _ := gs.world.GetPlayer(victimID)
+	victim.SetPosition(Vector2{X: 120, Y: 100}) // Between player center and muzzle tip
+
+	gs.recordPositionSnapshots(clock.Now())
+
+	result := gs.PlayerShoot(shooterID, 0, clock.Now().UnixMilli())
+	if !result.Success {
+		t.Fatalf("Hitscan shot should succeed, got: %v", result.Reason)
+	}
+
+	if victim.Health != 100 {
+		t.Fatalf("victim health = %d, want 100 because target is behind the muzzle origin", victim.Health)
 	}
 }
 

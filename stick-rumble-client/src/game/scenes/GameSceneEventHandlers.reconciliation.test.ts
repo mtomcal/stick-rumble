@@ -27,6 +27,20 @@ describe('GameSceneEventHandlers - Client-Side Reconciliation', () => {
   let eventHandlers: GameSceneEventHandlers;
   let predictionEngine: PredictionEngine;
   let playerMoveHandler: (data: unknown) => void;
+  const basePlayerState: PlayerMoveData['players'][number] = {
+    id: 'player-1',
+    position: { x: 500, y: 500 },
+    velocity: { x: 0, y: 0 },
+    aimAngle: 0,
+    health: 100,
+    isInvulnerable: false,
+    invulnerabilityEnd: '2026-04-10T16:00:00Z',
+    kills: 0,
+    deaths: 0,
+    xp: 0,
+    isRegenerating: false,
+    isRolling: false,
+  };
 
   beforeEach(() => {
     // Track registered handlers
@@ -148,19 +162,7 @@ describe('GameSceneEventHandlers - Client-Side Reconciliation', () => {
 
   it('should process correctedPlayers field when local player is corrected', () => {
     const messageData: PlayerMoveData = {
-      players: [
-        {
-          id: 'player-1',
-          position: { x: 500, y: 500 },
-          velocity: { x: 0, y: 0 },
-          health: 100,
-          maxHealth: 100,
-          rotation: 0,
-          isDead: false,
-          isSprinting: false,
-          isRolling: false,
-        },
-      ],
+      players: [basePlayerState],
       lastProcessedSequence: { 'player-1': 3 },
       correctedPlayers: ['player-1'],
     };
@@ -196,15 +198,8 @@ describe('GameSceneEventHandlers - Client-Side Reconciliation', () => {
     const messageData: PlayerMoveData = {
       players: [
         {
-          id: 'player-1',
+          ...basePlayerState,
           position: { x: 500, y: 500 }, // Server says we're at 500,500
-          velocity: { x: 0, y: 0 },
-          health: 100,
-          maxHealth: 100,
-          rotation: 0,
-          isDead: false,
-          isSprinting: false,
-          isRolling: false,
         },
       ],
       lastProcessedSequence: { 'player-1': 3 },
@@ -226,19 +221,7 @@ describe('GameSceneEventHandlers - Client-Side Reconciliation', () => {
 
   it('should always reconcile local player even if not in correctedPlayers list (Story stick-rumble-nki)', () => {
     const messageData: PlayerMoveData = {
-      players: [
-        {
-          id: 'player-1',
-          position: { x: 500, y: 500 },
-          velocity: { x: 0, y: 0 },
-          health: 100,
-          maxHealth: 100,
-          rotation: 0,
-          isDead: false,
-          isSprinting: false,
-          isRolling: false,
-        },
-      ],
+      players: [basePlayerState],
       lastProcessedSequence: { 'player-1': 3 },
       correctedPlayers: ['player-2'], // Different player corrected
     };
@@ -254,19 +237,7 @@ describe('GameSceneEventHandlers - Client-Side Reconciliation', () => {
 
   it('should always reconcile local player even with missing correctedPlayers field (Story stick-rumble-nki)', () => {
     const messageData: PlayerMoveData = {
-      players: [
-        {
-          id: 'player-1',
-          position: { x: 500, y: 500 },
-          velocity: { x: 0, y: 0 },
-          health: 100,
-          maxHealth: 100,
-          rotation: 0,
-          isDead: false,
-          isSprinting: false,
-          isRolling: false,
-        },
-      ],
+      players: [basePlayerState],
       lastProcessedSequence: { 'player-1': 3 },
       // correctedPlayers is optional, may be undefined
     };
@@ -279,19 +250,7 @@ describe('GameSceneEventHandlers - Client-Side Reconciliation', () => {
 
   it('should clear input history even without correction', () => {
     const messageData: PlayerMoveData = {
-      players: [
-        {
-          id: 'player-1',
-          position: { x: 500, y: 500 },
-          velocity: { x: 0, y: 0 },
-          health: 100,
-          maxHealth: 100,
-          rotation: 0,
-          isDead: false,
-          isSprinting: false,
-          isRolling: false,
-        },
-      ],
+      players: [basePlayerState],
       lastProcessedSequence: { 'player-1': 3 },
       // No correctedPlayers
     };
@@ -304,19 +263,7 @@ describe('GameSceneEventHandlers - Client-Side Reconciliation', () => {
 
   it('should handle missing lastProcessedSequence gracefully', () => {
     const messageData: PlayerMoveData = {
-      players: [
-        {
-          id: 'player-1',
-          position: { x: 500, y: 500 },
-          velocity: { x: 0, y: 0 },
-          health: 100,
-          maxHealth: 100,
-          rotation: 0,
-          isDead: false,
-          isSprinting: false,
-          isRolling: false,
-        },
-      ],
+      players: [basePlayerState],
       // lastProcessedSequence is optional
       correctedPlayers: ['player-1'],
     };
@@ -334,19 +281,7 @@ describe('GameSceneEventHandlers - Client-Side Reconciliation', () => {
     eventHandlers.setupEventHandlers();
 
     const messageData: PlayerMoveData = {
-      players: [
-        {
-          id: 'player-1',
-          position: { x: 500, y: 500 },
-          velocity: { x: 0, y: 0 },
-          health: 100,
-          maxHealth: 100,
-          rotation: 0,
-          isDead: false,
-          isSprinting: false,
-          isRolling: false,
-        },
-      ],
+      players: [basePlayerState],
       lastProcessedSequence: { 'player-1': 3 },
       correctedPlayers: ['player-1'],
     };
@@ -364,19 +299,7 @@ describe('GameSceneEventHandlers - Client-Side Reconciliation', () => {
     eventHandlers.setupEventHandlers();
 
     const messageData: PlayerMoveData = {
-      players: [
-        {
-          id: 'player-1',
-          position: { x: 500, y: 500 },
-          velocity: { x: 0, y: 0 },
-          health: 100,
-          maxHealth: 100,
-          rotation: 0,
-          isDead: false,
-          isSprinting: false,
-          isRolling: false,
-        },
-      ],
+      players: [basePlayerState],
       lastProcessedSequence: { 'player-1': 3 },
       correctedPlayers: ['player-1'],
     };
@@ -392,15 +315,8 @@ describe('GameSceneEventHandlers - Client-Side Reconciliation', () => {
     const messageData: PlayerMoveData = {
       players: [
         {
+          ...basePlayerState,
           id: 'player-2', // Different player
-          position: { x: 500, y: 500 },
-          velocity: { x: 0, y: 0 },
-          health: 100,
-          maxHealth: 100,
-          rotation: 0,
-          isDead: false,
-          isSprinting: false,
-          isRolling: false,
         },
       ],
       lastProcessedSequence: { 'player-1': 3 },

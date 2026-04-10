@@ -52,6 +52,21 @@ import {
 } from './server-to-client.js';
 
 describe('Server-to-Client Schemas', () => {
+  const basePlayerState = {
+    id: 'player-1',
+    position: { x: 100, y: 200 },
+    velocity: { x: 5, y: -3 },
+    aimAngle: 1.57,
+    health: 100,
+    isInvulnerable: false,
+    invulnerabilityEnd: '2026-04-10T16:00:00Z',
+    kills: 0,
+    deaths: 0,
+    xp: 0,
+    isRegenerating: false,
+    isRolling: false,
+  };
+
   describe('RoomJoinedDataSchema', () => {
     it('should validate valid room joined data', () => {
       const data = {
@@ -110,26 +125,19 @@ describe('Server-to-Client Schemas', () => {
     it('should validate valid player move data with multiple players', () => {
       const data = {
         players: [
-          {
-            id: 'player-1',
-            position: { x: 100, y: 200 },
-            velocity: { x: 5, y: -3 },
-            health: 100,
-            maxHealth: 100,
-            rotation: 1.57,
-            isDead: false,
-            isSprinting: true,
-            isRolling: false,
-          },
+          basePlayerState,
           {
             id: 'player-2',
             position: { x: 300, y: 400 },
             velocity: { x: 0, y: 0 },
+            aimAngle: 0,
             health: 75,
-            maxHealth: 100,
-            rotation: 0,
-            isDead: false,
-            isSprinting: false,
+            isInvulnerable: false,
+            invulnerabilityEnd: '2026-04-10T16:00:00Z',
+            kills: 2,
+            deaths: 1,
+            xp: 200,
+            isRegenerating: false,
             isRolling: false,
           },
         ],
@@ -139,19 +147,7 @@ describe('Server-to-Client Schemas', () => {
 
     it('should validate player move data with lastProcessedSequence', () => {
       const data = {
-        players: [
-          {
-            id: 'player-1',
-            position: { x: 100, y: 200 },
-            velocity: { x: 5, y: -3 },
-            health: 100,
-            maxHealth: 100,
-            rotation: 1.57,
-            isDead: false,
-            isSprinting: true,
-            isRolling: false,
-          },
-        ],
+        players: [basePlayerState],
         lastProcessedSequence: {
           'player-1': 42,
           'player-2': 17,
@@ -162,19 +158,7 @@ describe('Server-to-Client Schemas', () => {
 
     it('should reject negative sequence numbers in lastProcessedSequence', () => {
       const data = {
-        players: [
-          {
-            id: 'player-1',
-            position: { x: 100, y: 200 },
-            velocity: { x: 5, y: -3 },
-            health: 100,
-            maxHealth: 100,
-            rotation: 1.57,
-            isDead: false,
-            isSprinting: true,
-            isRolling: false,
-          },
-        ],
+        players: [basePlayerState],
         lastProcessedSequence: {
           'player-1': -1,
         },
@@ -184,19 +168,7 @@ describe('Server-to-Client Schemas', () => {
 
     it('should validate player move data with correctedPlayers array', () => {
       const data = {
-        players: [
-          {
-            id: 'player-1',
-            position: { x: 100, y: 200 },
-            velocity: { x: 5, y: -3 },
-            health: 100,
-            maxHealth: 100,
-            rotation: 1.57,
-            isDead: false,
-            isSprinting: true,
-            isRolling: false,
-          },
-        ],
+        players: [basePlayerState],
         correctedPlayers: ['player-1'],
       };
       expect(Value.Check(PlayerMoveDataSchema, data)).toBe(true);
@@ -204,19 +176,7 @@ describe('Server-to-Client Schemas', () => {
 
     it('should validate player move data with empty correctedPlayers array', () => {
       const data = {
-        players: [
-          {
-            id: 'player-1',
-            position: { x: 100, y: 200 },
-            velocity: { x: 5, y: -3 },
-            health: 100,
-            maxHealth: 100,
-            rotation: 1.57,
-            isDead: false,
-            isSprinting: true,
-            isRolling: false,
-          },
-        ],
+        players: [basePlayerState],
         correctedPlayers: [],
       };
       expect(Value.Check(PlayerMoveDataSchema, data)).toBe(true);
@@ -224,19 +184,7 @@ describe('Server-to-Client Schemas', () => {
 
     it('should reject correctedPlayers with empty string', () => {
       const data = {
-        players: [
-          {
-            id: 'player-1',
-            position: { x: 100, y: 200 },
-            velocity: { x: 5, y: -3 },
-            health: 100,
-            maxHealth: 100,
-            rotation: 1.57,
-            isDead: false,
-            isSprinting: true,
-            isRolling: false,
-          },
-        ],
+        players: [basePlayerState],
         correctedPlayers: [''],
       };
       expect(Value.Check(PlayerMoveDataSchema, data)).toBe(false);
@@ -244,19 +192,7 @@ describe('Server-to-Client Schemas', () => {
 
     it('should accept lastProcessedSequence with sequence 0', () => {
       const data = {
-        players: [
-          {
-            id: 'player-1',
-            position: { x: 100, y: 200 },
-            velocity: { x: 5, y: -3 },
-            health: 100,
-            maxHealth: 100,
-            rotation: 1.57,
-            isDead: false,
-            isSprinting: true,
-            isRolling: false,
-          },
-        ],
+        players: [basePlayerState],
         lastProcessedSequence: {
           'player-1': 0,
         },
@@ -268,14 +204,8 @@ describe('Server-to-Client Schemas', () => {
       const data = {
         players: [
           {
-            id: 'player-1',
-            position: { x: 100, y: 200 },
-            velocity: { x: 5, y: -3 },
+            ...basePlayerState,
             health: -10,
-            maxHealth: 100,
-            rotation: 1.57,
-            isDead: false,
-            isSprinting: false,
           },
         ],
       };
@@ -1121,15 +1051,10 @@ describe('Server-to-Client Schemas', () => {
       const data = {
         players: [
           {
+            ...basePlayerState,
             id: 'player1',
-            position: { x: 100, y: 200 },
             velocity: { x: 10, y: 5 },
             health: 80,
-            maxHealth: 100,
-            rotation: 1.57,
-            isDead: false,
-            isSprinting: false,
-            isRolling: false,
           },
         ],
         projectiles: [
@@ -1172,15 +1097,10 @@ describe('Server-to-Client Schemas', () => {
         data: {
           players: [
             {
+              ...basePlayerState,
               id: 'player1',
-              position: { x: 100, y: 200 },
               velocity: { x: 10, y: 5 },
               health: 80,
-              maxHealth: 100,
-              rotation: 1.57,
-              isDead: false,
-              isSprinting: false,
-              isRolling: false,
             },
           ],
           projectiles: [],
@@ -1197,15 +1117,12 @@ describe('Server-to-Client Schemas', () => {
       const data = {
         players: [
           {
+            ...basePlayerState,
             id: 'player1',
             position: { x: 105, y: 205 },
             velocity: { x: 10, y: 5 },
             health: 80,
-            maxHealth: 100,
-            rotation: 1.6,
-            isDead: false,
-            isSprinting: true,
-            isRolling: false,
+            aimAngle: 1.6,
           },
         ],
       };
@@ -1244,15 +1161,12 @@ describe('Server-to-Client Schemas', () => {
         data: {
           players: [
             {
+              ...basePlayerState,
               id: 'player1',
               position: { x: 105, y: 205 },
               velocity: { x: 10, y: 5 },
               health: 80,
-              maxHealth: 100,
-              rotation: 1.6,
-              isDead: false,
-              isSprinting: true,
-              isRolling: false,
+              aimAngle: 1.6,
             },
           ],
           projectilesAdded: [],

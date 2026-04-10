@@ -1,7 +1,7 @@
 # Networking
 
-> **Spec Version**: 1.1.0
-> **Last Updated**: 2026-02-15
+> **Spec Version**: 1.1.1
+> **Last Updated**: 2026-04-10
 > **Depends On**: [messages.md](messages.md), [constants.md](constants.md)
 > **Depended By**: [rooms.md](rooms.md), [client-architecture.md](client-architecture.md), [server-architecture.md](server-architecture.md)
 
@@ -726,6 +726,11 @@ type ClientState struct {
   "correctedPlayers": []
 }
 ```
+
+**Aim synchronization rule:**
+- accepting `input:state.aimAngle` updates the player's authoritative facing immediately, not only after positional movement
+- an aim-only change from a stationary player is still a meaningful delta and must be eligible for broadcast
+- remote clients must be able to determine an opponent's current aim direction from the latest authoritative snapshot or delta without waiting for that opponent to walk
 
 ---
 

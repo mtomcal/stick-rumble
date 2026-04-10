@@ -280,6 +280,7 @@ func (gs *GameServer) UpdatePlayerInputWithSequence(playerID string, input Input
 
 	// Update input state
 	player.SetInput(input)
+	player.SetAimAngle(input.AimAngle)
 
 	// Update sequence number
 	player.SetInputSequence(sequence)
@@ -381,7 +382,7 @@ func (gs *GameServer) PlayerShoot(playerID string, aimAngle float64, clientTimes
 	}
 
 	// Projectile weapon: create projectile (no lag compensation)
-	pos := player.GetPosition()
+	pos := getWeaponFireOrigin(player.GetPosition(), aimAngle, ws.Weapon.Name)
 	proj := gs.projectileManager.CreateProjectile(
 		playerID,
 		ws.Weapon.Name,
@@ -740,8 +741,8 @@ func (gs *GameServer) processHitscanShot(shooterID string, shooter *PlayerState,
 	rewindDuration := time.Duration(rewindMs) * time.Millisecond
 	queryTime := gs.clock.Now().Add(-rewindDuration)
 
-	// Get shooter position
-	shooterPos := shooter.GetPosition()
+	// Get shooter muzzle origin
+	shooterPos := getWeaponFireOrigin(shooter.GetPosition(), aimAngle, weapon.Name)
 
 	// Perform raycast hit detection at rewound positions
 	gs.world.mu.RLock()
