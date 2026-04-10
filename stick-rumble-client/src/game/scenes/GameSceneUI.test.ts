@@ -181,6 +181,12 @@ describe('GameSceneUI', () => {
       expect(createdTexts[0].setOrigin).toHaveBeenCalledWith(0.5, 0);
       expect(createdTexts[0].setScrollFactor).toHaveBeenCalledWith(0);
     });
+
+    it('should render match timer on the base HUD layer above world geometry', () => {
+      ui.createMatchTimer(960, 10);
+
+      expect(createdTexts[0].setDepth).toHaveBeenCalledWith(1000);
+    });
   });
 
   describe('createDamageFlashOverlay', () => {

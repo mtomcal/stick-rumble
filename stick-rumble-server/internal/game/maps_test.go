@@ -23,6 +23,32 @@ func TestLoadMapRegistryFromDir_LoadsDefaultOffice(t *testing.T) {
 	}
 }
 
+func TestDefaultOffice_CentralVerticalWallTouchesTopBoundary(t *testing.T) {
+	registry, err := LoadMapRegistryFromDir("../../../maps")
+	if err != nil {
+		t.Fatalf("LoadMapRegistryFromDir returned error: %v", err)
+	}
+
+	mapConfig, ok := registry.Get(DefaultMapID)
+	if !ok {
+		t.Fatalf("expected %q to exist in registry", DefaultMapID)
+	}
+
+	topBoundary := findObstacleByID(t, mapConfig, "wall_top_boundary")
+	centralWall := findObstacleByID(t, mapConfig, "wall_left_vertical")
+
+	expectedTop := topBoundary.Y + topBoundary.Height
+	if centralWall.Y != expectedTop {
+		t.Fatalf(
+			"expected obstacle %q to start at y=%v so it closes against %q, got y=%v",
+			centralWall.ID,
+			expectedTop,
+			topBoundary.ID,
+			centralWall.Y,
+		)
+	}
+}
+
 func TestLoadMapRegistryFromDir_FailsWhenRequiredMapMissing(t *testing.T) {
 	dir := t.TempDir()
 	writeMapFixture(t, dir, "side_map.json", `{
@@ -174,6 +200,19 @@ func writeMapFixture(t *testing.T, dir string, name string, content string) {
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("write fixture %s: %v", path, err)
 	}
+}
+
+func findObstacleByID(t *testing.T, mapConfig MapConfig, id string) MapObstacle {
+	t.Helper()
+
+	for _, obstacle := range mapConfig.Obstacles {
+		if obstacle.ID == id {
+			return obstacle
+		}
+	}
+
+	t.Fatalf("expected obstacle %q to exist", id)
+	return MapObstacle{}
 }
 
 func containsAny(values []string, target string) bool {

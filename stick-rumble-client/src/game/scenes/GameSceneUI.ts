@@ -103,6 +103,7 @@ export class GameSceneUI {
     });
     this.matchTimerText.setOrigin(0.5, 0);
     this.matchTimerText.setScrollFactor(0);
+    this.matchTimerText.setDepth(1000);
   }
 
   private damageFlashOverlay: Phaser.GameObjects.Rectangle | null = null;

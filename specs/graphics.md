@@ -822,16 +822,18 @@ scene.tweens.add({
 
 **Constants**: See [constants.md § Death Corpse Constants](constants.md#death-corpse-constants).
 
-### Enemy Weapon Visibility
+### Held Weapon Visibility
 
-Enemy weapons must render at the **same scale** as local player weapons. They must be full-sized and visually identifiable — not tiny nubs or stubs.
+Held weapons must render at the **same scale** for both the local player and remote players. They must be full-sized and visually identifiable during moment-to-moment combat, not tiny nubs, invisible silhouettes, or floor-colored stubs.
 
 **Requirements:**
-- Enemy weapon containers use the same `ProceduralWeaponGraphics` rendering as the local player
-- Weapon scale must be 1:1 with local player weapon scale
-- All weapon types (pistol, uzi, ak47, shotgun, bat, katana) must be clearly recognizable on enemies
+- Local and remote weapon containers use the same `ProceduralWeaponGraphics` rendering rules
+- Weapon scale must be 1:1 between local and remote players
+- All weapon types (pistol, uzi, ak47, shotgun, bat, katana) must be clearly recognizable while held
+- The bat must read as a brown wooden bat in-hand; it must not visually blend into the gray arena floor or disappear against the player body
+- Melee weapons must remain readable in both left-facing and right-facing aim states
 
-> **Bug (to fix)**: Current build renders enemy weapons as nearly invisible tiny nub/stub shapes. Enemy weapons must match the scale and visibility of the player's own weapon. See visual spec lines 152-154.
+> **Bug (to fix)**: Current build can render held melee weapons, especially the bat, with too little contrast against the arena. Held weapons must stay readable during combat.
 
 ### Blood Particles
 
@@ -1587,6 +1589,7 @@ test "player renders all body parts":
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.3.2 | 2026-04-10 | Renamed enemy weapon visibility to held weapon visibility. Clarified that local and remote held weapons share the same readability contract, and explicitly required the bat to remain visibly brown and recognizable in-hand. |
 | 2.3.1 | 2026-04-09 | Clarified pickup rendering contract: normal gameplay pickups must be weapon-specific floor silhouettes with a secondary zone affordance; generic marker-only presentation is explicitly out of spec. Updated TS-GFX-008 and TS-GFX-009 wording accordingly. |
 | 2.3.0 | 2026-03-02 | Crosshair changed from `⊕` (circle+cross) to simple `+` (cross only, no circle). Hands/arms now grip weapon and follow aim rotation. Hit trail must originate from actual gun barrel tip. Added bugs: remove green aim indicator line, remove orange dot artifact, fix hit trail barrel attachment. |
 | 2.2.0 | 2026-02-23 | Renamed "Aim Indicator" → "Hit Confirmation Trail" (triggered by hit:confirmed, not continuously visible). Rewrote crosshair section: fixed ~20-25px reticle, no bloom. Updated weapon crate icon to yellow `⊕` symbol. Added yellow circle outline to death corpse rendering. Added "Enemy Weapon Visibility" section with bug note. Updated tests TS-GFX-005, TS-GFX-023, TS-GFX-008. |

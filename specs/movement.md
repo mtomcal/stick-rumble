@@ -587,9 +587,16 @@ predictPosition(position, velocity, input, deltaTime):
     if magnitude(newVel) > maxSpeed:
         newVel = normalize(newVel) * maxSpeed
 
-    newPos = position + newVel * dt
-    return { position: newPos, velocity: newVel }
+    candidatePos = position + newVel * dt
+    resolvedPos = resolveArenaBoundsAndBlockingObstacles(position, candidatePos)
+    return { position: resolvedPos, velocity: newVel }
 ```
+
+**Required prediction parity rules:**
+- local prediction uses the active match map's width and height, not hardcoded arena dimensions
+- local prediction resolves movement-blocking obstacles using the same hitbox width/height semantics as the server
+- sliding along walls or desks during ordinary traversal must stay locally stable instead of letting the player body enter blocked space and later snap back
+- prediction may leave velocity unchanged when contact occurs, but the rendered local position must not visibly penetrate blocking geometry during normal movement
 
 ### Server Reconciliation
 
@@ -951,6 +958,7 @@ func TestDiagonalNormalization(t *testing.T) {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.2.2 | 2026-04-10 | Clarified that client prediction must resolve active-map bounds and blocking obstacles locally, so normal wall contact does not create visible snap-back. |
 | 1.2.1 | 2026-04-09 | Added executable movement-feel thresholds (start/stop/reversal/sprint) so red/green tests can enforce the perceptual contract directly. |
 | 1.2.0 | 2026-04-09 | Reframed movement around prototype-faithful perceptual outcomes: immediate-feeling start/stop/reversal, sprint retained as a distinct state, visible rubberbanding treated as a defect, prediction/reconciliation updated to match sprint and obstacle semantics, and tests rewritten away from endorsing a 4-second acceleration ramp. |
 | 1.0.0 | 2026-02-02 | Initial specification extracted from codebase |

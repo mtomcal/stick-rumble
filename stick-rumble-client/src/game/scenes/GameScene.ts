@@ -205,6 +205,7 @@ export class GameScene extends Phaser.Scene {
 
           // Initialize prediction engine for client-side reconciliation (Story 4.2)
           this.predictionEngine = new PredictionEngine();
+          this.predictionEngine.setMapContext(this.matchMapContext);
 
           // Pass managers to event handlers
           this.eventHandlers.setInputManager(this.inputManager);
@@ -504,6 +505,9 @@ export class GameScene extends Phaser.Scene {
 
     if (this.ui) {
       this.ui.setMinimapWorldSize(mapContext.width, mapContext.height);
+    }
+    if (this.predictionEngine) {
+      this.predictionEngine.setMapContext(mapContext);
     }
     if (this.projectileManager) {
       this.projectileManager.setWorldBounds(mapContext.width, mapContext.height);

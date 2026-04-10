@@ -1,5 +1,6 @@
-import { MOVEMENT } from '../../shared/constants';
+import { ARENA, MOVEMENT, PLAYER } from '../../shared/constants';
 import type { InputState, InputHistoryEntry } from '../input/InputManager';
+import type { MapObstacle } from '../../shared/maps';
 
 /**
  * Position in 2D space
@@ -25,6 +26,12 @@ export interface PredictionResult {
   velocity: Velocity;
 }
 
+interface PredictionMapContext {
+  width: number;
+  height: number;
+  obstacles: readonly MapObstacle[];
+}
+
 // Threshold for instant correction vs smooth lerp (in pixels)
 const INSTANT_CORRECTION_THRESHOLD = 100;
 
@@ -44,6 +51,16 @@ const INSTANT_CORRECTION_THRESHOLD = 100;
  * - Smooth corrections for small errors, instant teleport for large errors
  */
 export class PredictionEngine {
+  private mapContext: PredictionMapContext = {
+    width: ARENA.WIDTH,
+    height: ARENA.HEIGHT,
+    obstacles: [],
+  };
+
+  setMapContext(mapContext: PredictionMapContext): void {
+    this.mapContext = mapContext;
+  }
+
   /**
    * Accelerate current velocity toward target velocity.
    * This matches the server's accelerateToward() function in physics.go.
@@ -159,13 +176,92 @@ export class PredictionEngine {
     }
 
     // Update position based on velocity
-    const newPositionX = currentPosition.x + newVelocityX * deltaTime;
-    const newPositionY = currentPosition.y + newVelocityY * deltaTime;
+    const candidatePosition = {
+      x: currentPosition.x + newVelocityX * deltaTime,
+      y: currentPosition.y + newVelocityY * deltaTime,
+    };
+    const resolvedPosition = this.resolveMovement(currentPosition, candidatePosition);
 
     return {
-      position: { x: newPositionX, y: newPositionY },
+      position: resolvedPosition,
       velocity: { x: newVelocityX, y: newVelocityY },
     };
+  }
+
+  private clampToArena(position: Position): Position {
+    const halfWidth = PLAYER.WIDTH / 2;
+    const halfHeight = PLAYER.HEIGHT / 2;
+
+    return {
+      x: Math.max(halfWidth, Math.min(position.x, this.mapContext.width - halfWidth)),
+      y: Math.max(halfHeight, Math.min(position.y, this.mapContext.height - halfHeight)),
+    };
+  }
+
+  private resolveMovement(currentPosition: Position, desiredPosition: Position): Position {
+    const resolvedXBase = this.clampToArena({ x: desiredPosition.x, y: currentPosition.y });
+    const resolvedX = this.resolveAxisCollisions(currentPosition.x, resolvedXBase.x, currentPosition.y, true);
+
+    const resolvedYBase = this.clampToArena({ x: resolvedX, y: desiredPosition.y });
+    const resolvedY = this.resolveAxisCollisions(currentPosition.y, resolvedYBase.y, resolvedX, false);
+
+    return { x: resolvedX, y: resolvedY };
+  }
+
+  private resolveAxisCollisions(oldAxis: number, newAxis: number, fixedAxis: number, horizontal: boolean): number {
+    let resolved = newAxis;
+
+    for (const obstacle of this.getMovementBlockingObstacles()) {
+      if (!this.playerIntersectsObstacle(resolved, fixedAxis, obstacle, horizontal)) {
+        continue;
+      }
+
+      if (horizontal) {
+        if (resolved > oldAxis) {
+          resolved = obstacle.x - PLAYER.WIDTH / 2;
+        } else if (resolved < oldAxis) {
+          resolved = obstacle.x + obstacle.width + PLAYER.WIDTH / 2;
+        }
+      } else {
+        if (resolved > oldAxis) {
+          resolved = obstacle.y - PLAYER.HEIGHT / 2;
+        } else if (resolved < oldAxis) {
+          resolved = obstacle.y + obstacle.height + PLAYER.HEIGHT / 2;
+        }
+      }
+    }
+
+    return resolved;
+  }
+
+  private playerIntersectsObstacle(
+    axis: number,
+    fixedAxis: number,
+    obstacle: MapObstacle,
+    horizontal: boolean
+  ): boolean {
+    let playerLeft = axis - PLAYER.WIDTH / 2;
+    let playerRight = axis + PLAYER.WIDTH / 2;
+    let playerTop = fixedAxis - PLAYER.HEIGHT / 2;
+    let playerBottom = fixedAxis + PLAYER.HEIGHT / 2;
+
+    if (!horizontal) {
+      playerLeft = fixedAxis - PLAYER.WIDTH / 2;
+      playerRight = fixedAxis + PLAYER.WIDTH / 2;
+      playerTop = axis - PLAYER.HEIGHT / 2;
+      playerBottom = axis + PLAYER.HEIGHT / 2;
+    }
+
+    return (
+      playerRight > obstacle.x &&
+      playerLeft < obstacle.x + obstacle.width &&
+      playerBottom > obstacle.y &&
+      playerTop < obstacle.y + obstacle.height
+    );
+  }
+
+  private getMovementBlockingObstacles(): readonly MapObstacle[] {
+    return this.mapContext.obstacles.filter((obstacle) => obstacle.blocksMovement);
   }
 
   /**

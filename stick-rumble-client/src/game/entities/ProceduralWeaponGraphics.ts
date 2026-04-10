@@ -68,12 +68,12 @@ export class ProceduralWeaponGraphics {
   }
 
   /**
-   * Build Bat weapon (Aluminum bat - silver)
+   * Build Bat weapon with readable wood tones so it stays visible in-hand.
    */
   private buildBat(): void {
-    const batHandle = this.scene.add.rectangle(10, 0, 15, 4, 0x000000); // Grip
-    const batBody = this.scene.add.rectangle(30, 0, 35, 6, 0xcccccc); // Metal part
-    const batTip = this.scene.add.rectangle(48, 0, 5, 7, 0xcccccc); // End cap
+    const batHandle = this.scene.add.rectangle(10, 0, 15, 4, 0x5c3a21); // Grip tape
+    const batBody = this.scene.add.rectangle(30, 0, 35, 6, 0x8b5a2b); // Wood body
+    const batTip = this.scene.add.rectangle(48, 0, 5, 7, 0xa06a3a); // Barrel tip
     this.container.add([batHandle, batBody, batTip]);
   }
 

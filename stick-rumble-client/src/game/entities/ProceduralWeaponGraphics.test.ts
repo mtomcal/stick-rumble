@@ -48,11 +48,11 @@ describe('ProceduralWeaponGraphics', () => {
     it('should create Bat with correct geometry', () => {
       new ProceduralWeaponGraphics(scene, 100, 100, 'Bat');
 
-      // Bat: handle (black), body (silver), tip (silver)
+      // Bat: dark grip + readable brown wooden body
       expect(scene.add.rectangle).toHaveBeenCalledTimes(3);
-      expect(scene.add.rectangle).toHaveBeenCalledWith(10, 0, 15, 4, 0x000000); // Handle
-      expect(scene.add.rectangle).toHaveBeenCalledWith(30, 0, 35, 6, 0xcccccc); // Body
-      expect(scene.add.rectangle).toHaveBeenCalledWith(48, 0, 5, 7, 0xcccccc); // Tip
+      expect(scene.add.rectangle).toHaveBeenCalledWith(10, 0, 15, 4, 0x5c3a21); // Grip
+      expect(scene.add.rectangle).toHaveBeenCalledWith(30, 0, 35, 6, 0x8b5a2b); // Body
+      expect(scene.add.rectangle).toHaveBeenCalledWith(48, 0, 5, 7, 0xa06a3a); // Tip
     });
 
     it('should create Katana with correct geometry', () => {

@@ -57,9 +57,9 @@
       "type": "wall",
       "shape": "rectangle",
       "x": 560,
-      "y": 96,
+      "y": 48,
       "width": 72,
-      "height": 528,
+      "height": 576,
       "blocksMovement": true,
       "blocksProjectiles": true,
       "blocksLineOfSight": true

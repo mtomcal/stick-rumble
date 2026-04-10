@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { PredictionEngine } from './PredictionEngine';
 import type { InputState } from '../input/InputManager';
+import { PLAYER } from '../../shared/constants';
 
 describe('PredictionEngine', () => {
   describe('prototype-feel thresholds', () => {
@@ -210,6 +211,90 @@ describe('PredictionEngine', () => {
   });
 
   describe('predictPosition', () => {
+    it('should stop local prediction at blocking obstacles instead of entering wall space', () => {
+      const engine = new PredictionEngine();
+      engine.setMapContext({
+        width: 1920,
+        height: 1080,
+        obstacles: [
+          {
+            id: 'wall_left_vertical',
+            type: 'wall',
+            shape: 'rectangle',
+            x: 560,
+            y: 96,
+            width: 72,
+            height: 528,
+            blocksMovement: true,
+            blocksProjectiles: true,
+            blocksLineOfSight: true,
+          },
+        ],
+      });
+
+      const input: InputState = {
+        up: false,
+        down: false,
+        left: false,
+        right: true,
+        aimAngle: 0,
+        isSprinting: false,
+        sequence: 0,
+      };
+
+      const result = engine.predictPosition(
+        { x: 543, y: 200 },
+        { x: 200, y: 0 },
+        input,
+        1 / 60
+      );
+
+      expect(result.position.x).toBe(560 - PLAYER.WIDTH / 2);
+      expect(result.position.y).toBe(200);
+    });
+
+    it('should preserve tangential motion while sliding along a blocking wall', () => {
+      const engine = new PredictionEngine();
+      engine.setMapContext({
+        width: 1920,
+        height: 1080,
+        obstacles: [
+          {
+            id: 'wall_left_vertical',
+            type: 'wall',
+            shape: 'rectangle',
+            x: 560,
+            y: 96,
+            width: 72,
+            height: 528,
+            blocksMovement: true,
+            blocksProjectiles: true,
+            blocksLineOfSight: true,
+          },
+        ],
+      });
+
+      const input: InputState = {
+        up: false,
+        down: true,
+        left: false,
+        right: true,
+        aimAngle: 0,
+        isSprinting: false,
+        sequence: 0,
+      };
+
+      const result = engine.predictPosition(
+        { x: 543, y: 200 },
+        { x: 200, y: 100 },
+        input,
+        1 / 60
+      );
+
+      expect(result.position.x).toBe(560 - PLAYER.WIDTH / 2);
+      expect(result.position.y).toBeGreaterThan(200);
+    });
+
     it('should not move when no input', () => {
       const engine = new PredictionEngine();
       const input: InputState = {
