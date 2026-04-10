@@ -80,11 +80,11 @@ export const MOVEMENT = {
   /** Maximum sprint speed in pixels per second (1.5x normal speed) */
   SPRINT_SPEED: 300,
 
-  /** Acceleration rate in pixels per second squared */
-  ACCELERATION: 50,
+  /** Acceleration rate in pixels per second squared (immediate-feeling response) */
+  ACCELERATION: 6000,
 
-  /** Deceleration rate when no input (quick stop in ~100-150ms) */
-  DECELERATION: 1500,
+  /** Deceleration rate when no input (near-instant stop) */
+  DECELERATION: 6000,
 } as const;
 
 /**

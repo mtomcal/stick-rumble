@@ -250,5 +250,31 @@
     { "id": "weapon_shotgun_east_lane", "x": 1560, "y": 540, "weaponType": "shotgun" },
     { "id": "weapon_katana_south_center", "x": 960, "y": 820, "weaponType": "katana" },
     { "id": "weapon_bat_south_west", "x": 320, "y": 660, "weaponType": "bat" }
+  ],
+  "visualAcceptanceViewpoints": [
+    {
+      "id": "vp_false_gap_west_wall",
+      "playerPosition": { "x": 500, "y": 520 },
+      "aimDirection": { "x": 1, "y": 0 },
+      "expectedOutcome": "reads_blocked"
+    },
+    {
+      "id": "vp_traversable_mid_lane",
+      "playerPosition": { "x": 960, "y": 520 },
+      "aimDirection": { "x": 1, "y": 0 },
+      "expectedOutcome": "reads_open"
+    },
+    {
+      "id": "vp_pickup_readability_south_west",
+      "playerPosition": { "x": 280, "y": 700 },
+      "aimDirection": { "x": 1, "y": -0.3 },
+      "expectedOutcome": "pickup_clearly_visible"
+    },
+    {
+      "id": "vp_hud_overlap_corner_case",
+      "playerPosition": { "x": 1810, "y": 120 },
+      "aimDirection": { "x": -1, "y": 0.2 },
+      "expectedOutcome": "hud_unobscured"
+    }
   ]
 }

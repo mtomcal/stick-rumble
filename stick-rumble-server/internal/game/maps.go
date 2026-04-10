@@ -39,14 +39,27 @@ type MapWeaponSpawn struct {
 	WeaponType string  `json:"weaponType"`
 }
 
+type MapVector2 struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+}
+
+type MapVisualAcceptanceViewpoint struct {
+	ID              string     `json:"id"`
+	PlayerPosition  MapVector2 `json:"playerPosition"`
+	AimDirection    MapVector2 `json:"aimDirection"`
+	ExpectedOutcome string     `json:"expectedOutcome"`
+}
+
 type MapConfig struct {
-	ID           string           `json:"id"`
-	Name         string           `json:"name"`
-	Width        float64          `json:"width"`
-	Height       float64          `json:"height"`
-	Obstacles    []MapObstacle    `json:"obstacles"`
-	SpawnPoints  []MapSpawnPoint  `json:"spawnPoints"`
-	WeaponSpawns []MapWeaponSpawn `json:"weaponSpawns"`
+	ID                         string                         `json:"id"`
+	Name                       string                         `json:"name"`
+	Width                      float64                        `json:"width"`
+	Height                     float64                        `json:"height"`
+	Obstacles                  []MapObstacle                  `json:"obstacles"`
+	SpawnPoints                []MapSpawnPoint                `json:"spawnPoints"`
+	WeaponSpawns               []MapWeaponSpawn               `json:"weaponSpawns"`
+	VisualAcceptanceViewpoints []MapVisualAcceptanceViewpoint `json:"visualAcceptanceViewpoints"`
 }
 
 type MapRegistry struct {
@@ -204,10 +217,14 @@ func ValidateMapConfig(mapConfig MapConfig) []string {
 	if len(mapConfig.SpawnPoints) == 0 {
 		errors = append(errors, "map must declare at least one spawn point")
 	}
+	if len(mapConfig.VisualAcceptanceViewpoints) == 0 {
+		errors = append(errors, "map must declare at least one visual acceptance viewpoint")
+	}
 
 	errors = append(errors, collectDuplicateIDs(mapConfig.Obstacles, "obstacle")...)
 	errors = append(errors, collectDuplicateIDs(mapConfig.SpawnPoints, "spawn point")...)
 	errors = append(errors, collectDuplicateIDs(mapConfig.WeaponSpawns, "weapon spawn")...)
+	errors = append(errors, collectDuplicateIDs(mapConfig.VisualAcceptanceViewpoints, "visual acceptance viewpoint")...)
 
 	for _, obstacle := range mapConfig.Obstacles {
 		if strings.TrimSpace(obstacle.ID) == "" {
@@ -275,6 +292,36 @@ func ValidateMapConfig(mapConfig MapConfig) []string {
 		}
 	}
 
+	outcomes := map[string]int{}
+	for _, viewpoint := range mapConfig.VisualAcceptanceViewpoints {
+		if strings.TrimSpace(viewpoint.ID) == "" {
+			errors = append(errors, "visual acceptance viewpoint id is required")
+		}
+		if !pointWithinBounds(viewpoint.PlayerPosition.X, viewpoint.PlayerPosition.Y, mapConfig) {
+			errors = append(errors, fmt.Sprintf("visual acceptance viewpoint %q has out-of-bounds playerPosition", viewpoint.ID))
+		}
+		if viewpoint.AimDirection.X*viewpoint.AimDirection.X+viewpoint.AimDirection.Y*viewpoint.AimDirection.Y < 0.000001 {
+			errors = append(errors, fmt.Sprintf("visual acceptance viewpoint %q has zero aimDirection", viewpoint.ID))
+		}
+		if !isSupportedViewpointOutcome(viewpoint.ExpectedOutcome) {
+			errors = append(errors, fmt.Sprintf("visual acceptance viewpoint %q has invalid expectedOutcome %q", viewpoint.ID, viewpoint.ExpectedOutcome))
+			continue
+		}
+		outcomes[viewpoint.ExpectedOutcome]++
+	}
+
+	requiredOutcomes := []string{
+		"reads_blocked",
+		"reads_open",
+		"pickup_clearly_visible",
+		"hud_unobscured",
+	}
+	for _, outcome := range requiredOutcomes {
+		if outcomes[outcome] == 0 {
+			errors = append(errors, fmt.Sprintf("visual acceptance viewpoints must include expectedOutcome %q", outcome))
+		}
+	}
+
 	return errors
 }
 
@@ -308,6 +355,10 @@ func (s MapSpawnPoint) GetID() string {
 
 func (s MapWeaponSpawn) GetID() string {
 	return s.ID
+}
+
+func (v MapVisualAcceptanceViewpoint) GetID() string {
+	return v.ID
 }
 
 type rect struct {
@@ -358,6 +409,15 @@ func projectileBlockingObstacles(mapConfig MapConfig) []MapObstacle {
 func isSupportedMapWeaponType(weaponType string) bool {
 	switch weaponType {
 	case "uzi", "ak47", "shotgun", "katana", "bat":
+		return true
+	default:
+		return false
+	}
+}
+
+func isSupportedViewpointOutcome(outcome string) bool {
+	switch outcome {
+	case "reads_blocked", "reads_open", "pickup_clearly_visible", "hud_unobscured":
 		return true
 	default:
 		return false

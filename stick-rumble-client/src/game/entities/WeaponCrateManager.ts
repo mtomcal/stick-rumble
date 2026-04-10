@@ -1,5 +1,4 @@
 import Phaser from 'phaser';
-import { COLORS } from '../../shared/constants';
 import type { MapWeaponSpawn } from '../../shared/maps';
 
 export interface WeaponCrateData {
@@ -18,7 +17,6 @@ interface CrateVisual {
   weaponType: string;
 }
 
-const CRATE_RADIUS = 20;
 const GLOW_RADIUS = 32;
 const GLOW_COLOR = 0xffff00;
 const GLOW_ALPHA = 0;
@@ -29,6 +27,15 @@ const BOB_DURATION = 1000;
 const UNAVAILABLE_ALPHA = 0.3;
 const AVAILABLE_ALPHA = 1.0;
 const PICKUP_RADIUS = 32;
+
+const PICKUP_COLORS = {
+  UZI: 0x6f6f6f,
+  AK47: 0x4b4b4b,
+  SHOTGUN: 0x6a4b2d,
+  KATANA_BLADE: 0xd9d9d9,
+  KATANA_HANDLE: 0x2a2a2a,
+  BAT: 0x8b5a2b,
+} as const;
 
 export class WeaponCrateManager {
   private scene: Phaser.Scene;
@@ -46,6 +53,7 @@ export class WeaponCrateManager {
       existingCrate.glow.setPosition(data.position.x, data.position.y);
       existingCrate.position = data.position;
       existingCrate.weaponType = data.weaponType;
+      this.drawWeaponPickup(existingCrate.sprite, data.weaponType);
 
       if (data.isAvailable) {
         this.markAvailable(data.id);
@@ -55,22 +63,10 @@ export class WeaponCrateManager {
       return;
     }
 
-    // Create weapon crate graphics: yellow circle outline with dark cross icon
+    // Render the pickup as a literal floor weapon silhouette.
     const sprite = this.scene.add.graphics();
     sprite.setPosition(data.position.x, data.position.y);
-
-    // Draw yellow circle outline (~40px diameter)
-    sprite.lineStyle(3, COLORS.WEAPON_CRATE, 1);
-    sprite.strokeCircle(0, 0, CRATE_RADIUS);
-
-    // Draw yellow ⊕ cross icon inside (matching COLORS.WEAPON_CRATE)
-    sprite.lineStyle(2, COLORS.WEAPON_CRATE, 1);
-    sprite.beginPath();
-    sprite.moveTo(0, -8);
-    sprite.lineTo(0, 8);
-    sprite.moveTo(-8, 0);
-    sprite.lineTo(8, 0);
-    sprite.strokePath();
+    this.drawWeaponPickup(sprite, data.weaponType);
 
     // Add glow effect for visibility
     const glow = this.scene.add.arc(
@@ -144,8 +140,55 @@ export class WeaponCrateManager {
     }
 
     crate.sprite.setAlpha(AVAILABLE_ALPHA);
+    crate.glow.setAlpha(AVAILABLE_ALPHA);
     crate.glow.setVisible(true);
     crate.isAvailable = true;
+  }
+
+  private drawWeaponPickup(sprite: Phaser.GameObjects.Graphics, weaponType: string): void {
+    sprite.clear();
+
+    switch (weaponType) {
+      case 'uzi':
+        sprite.fillStyle(PICKUP_COLORS.UZI, 1);
+        sprite.fillRect(-10, -4, 14, 8);
+        sprite.fillRect(4, -2, 8, 4);
+        sprite.fillRect(-2, 4, 4, 6);
+        break;
+      case 'ak47':
+        sprite.fillStyle(PICKUP_COLORS.AK47, 1);
+        sprite.fillRect(-14, -3, 20, 6);
+        sprite.fillRect(6, -2, 10, 4);
+        sprite.fillRect(-18, -2, 4, 8);
+        sprite.fillRect(-2, 3, 4, 6);
+        break;
+      case 'shotgun':
+        sprite.fillStyle(PICKUP_COLORS.SHOTGUN, 1);
+        sprite.fillRect(-16, -2, 28, 4);
+        sprite.fillRect(-4, 3, 8, 4);
+        sprite.fillRect(-20, -3, 4, 8);
+        break;
+      case 'katana':
+        sprite.lineStyle(2, PICKUP_COLORS.KATANA_BLADE, 1);
+        sprite.beginPath();
+        sprite.moveTo(-16, -1);
+        sprite.lineTo(12, -1);
+        sprite.strokePath();
+        sprite.fillStyle(PICKUP_COLORS.KATANA_HANDLE, 1);
+        sprite.fillRect(-19, -3, 5, 4);
+        break;
+      case 'bat':
+        sprite.lineStyle(4, PICKUP_COLORS.BAT, 1);
+        sprite.beginPath();
+        sprite.moveTo(-14, 4);
+        sprite.lineTo(10, -4);
+        sprite.strokePath();
+        break;
+      default:
+        sprite.fillStyle(PICKUP_COLORS.UZI, 1);
+        sprite.fillRect(-8, -3, 16, 6);
+        break;
+    }
   }
 
   getCrate(crateId: string): { isAvailable: boolean } | undefined {

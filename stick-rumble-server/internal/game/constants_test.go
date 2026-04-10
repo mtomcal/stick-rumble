@@ -11,8 +11,10 @@ func TestConstants(t *testing.T) {
 		expected float64
 	}{
 		{"MovementSpeed", MovementSpeed, 200.0},
-		{"Acceleration", Acceleration, 50.0},
-		{"Deceleration", Deceleration, 1500.0},
+		{"SprintSpeed", SprintSpeed, 300.0},
+		{"SprintSpreadMultiplier", SprintSpreadMultiplier, 1.5},
+		{"Acceleration", Acceleration, 6000.0},
+		{"Deceleration", Deceleration, 6000.0},
 		{"ArenaWidth", ArenaWidth, 1920.0},
 		{"ArenaHeight", ArenaHeight, 1080.0},
 		{"PlayerWidth", PlayerWidth, 32.0},

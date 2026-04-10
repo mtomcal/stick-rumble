@@ -44,6 +44,33 @@ export const MapWeaponSpawnSchema = Type.Object(
   { $id: 'MapWeaponSpawn', additionalProperties: false }
 );
 
+export const MapVisualAcceptanceViewpointSchema = Type.Object(
+  {
+    id: Type.String({ minLength: 1 }),
+    playerPosition: Type.Object(
+      {
+        x: Type.Number(),
+        y: Type.Number(),
+      },
+      { additionalProperties: false }
+    ),
+    aimDirection: Type.Object(
+      {
+        x: Type.Number(),
+        y: Type.Number(),
+      },
+      { additionalProperties: false }
+    ),
+    expectedOutcome: Type.Union([
+      Type.Literal('reads_blocked'),
+      Type.Literal('reads_open'),
+      Type.Literal('pickup_clearly_visible'),
+      Type.Literal('hud_unobscured'),
+    ]),
+  },
+  { $id: 'MapVisualAcceptanceViewpoint', additionalProperties: false }
+);
+
 export const MapConfigSchema = Type.Object(
   {
     id: Type.String({ minLength: 1 }),
@@ -53,6 +80,7 @@ export const MapConfigSchema = Type.Object(
     obstacles: Type.Array(MapObstacleSchema),
     spawnPoints: Type.Array(MapSpawnPointSchema, { minItems: 1 }),
     weaponSpawns: Type.Array(MapWeaponSpawnSchema),
+    visualAcceptanceViewpoints: Type.Array(MapVisualAcceptanceViewpointSchema, { minItems: 1 }),
   },
   { $id: 'MapConfig', additionalProperties: false }
 );
@@ -60,6 +88,7 @@ export const MapConfigSchema = Type.Object(
 export type MapObstacle = Static<typeof MapObstacleSchema>;
 export type MapSpawnPoint = Static<typeof MapSpawnPointSchema>;
 export type MapWeaponSpawn = Static<typeof MapWeaponSpawnSchema>;
+export type MapVisualAcceptanceViewpoint = Static<typeof MapVisualAcceptanceViewpointSchema>;
 export type MapConfig = Static<typeof MapConfigSchema>;
 
 type Rectangle = {
@@ -121,6 +150,7 @@ export function validateMapConfig(mapConfig: unknown): string[] {
   errors.push(...collectDuplicateIDs(map.obstacles, 'obstacle'));
   errors.push(...collectDuplicateIDs(map.spawnPoints, 'spawn point'));
   errors.push(...collectDuplicateIDs(map.weaponSpawns, 'weapon spawn'));
+  errors.push(...collectDuplicateIDs(map.visualAcceptanceViewpoints, 'visual acceptance viewpoint'));
 
   for (const obstacle of map.obstacles) {
     if (!withinBounds(obstacle.x, obstacle.y, map.width, map.height) ||
@@ -165,6 +195,38 @@ export function validateMapConfig(mapConfig: unknown): string[] {
       if (pointInsideRect(weaponSpawn.x, weaponSpawn.y, obstacleRect(obstacle))) {
         errors.push(`weapon spawn "${weaponSpawn.id}" overlaps blocking obstacle "${obstacle.id}"`);
       }
+    }
+  }
+
+  const expectedOutcomeCounts = new Map<string, number>();
+  for (const viewpoint of map.visualAcceptanceViewpoints) {
+    if (!withinBounds(viewpoint.playerPosition.x, viewpoint.playerPosition.y, map.width, map.height)) {
+      errors.push(`visual acceptance viewpoint "${viewpoint.id}" has out-of-bounds playerPosition`);
+    }
+
+    const magnitude = Math.sqrt(
+      viewpoint.aimDirection.x * viewpoint.aimDirection.x +
+      viewpoint.aimDirection.y * viewpoint.aimDirection.y
+    );
+    if (magnitude < 0.001) {
+      errors.push(`visual acceptance viewpoint "${viewpoint.id}" has zero aimDirection`);
+    }
+
+    expectedOutcomeCounts.set(
+      viewpoint.expectedOutcome,
+      (expectedOutcomeCounts.get(viewpoint.expectedOutcome) ?? 0) + 1
+    );
+  }
+
+  const requiredOutcomes = [
+    'reads_blocked',
+    'reads_open',
+    'pickup_clearly_visible',
+    'hud_unobscured',
+  ];
+  for (const outcome of requiredOutcomes) {
+    if (!expectedOutcomeCounts.has(outcome)) {
+      errors.push(`visual acceptance viewpoints must include expectedOutcome "${outcome}"`);
     }
   }
 

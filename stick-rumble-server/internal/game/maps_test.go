@@ -32,7 +32,13 @@ func TestLoadMapRegistryFromDir_FailsWhenRequiredMapMissing(t *testing.T) {
   "height": 600,
   "obstacles": [],
   "spawnPoints": [{"id": "spawn_a", "x": 100, "y": 100}],
-  "weaponSpawns": []
+  "weaponSpawns": [],
+  "visualAcceptanceViewpoints": [
+    {"id": "vp_blocked", "playerPosition": {"x": 100, "y": 100}, "aimDirection": {"x": 1, "y": 0}, "expectedOutcome": "reads_blocked"},
+    {"id": "vp_open", "playerPosition": {"x": 120, "y": 120}, "aimDirection": {"x": 0, "y": 1}, "expectedOutcome": "reads_open"},
+    {"id": "vp_pickup", "playerPosition": {"x": 140, "y": 140}, "aimDirection": {"x": -1, "y": 0}, "expectedOutcome": "pickup_clearly_visible"},
+    {"id": "vp_hud", "playerPosition": {"x": 160, "y": 160}, "aimDirection": {"x": 0, "y": -1}, "expectedOutcome": "hud_unobscured"}
+  ]
 }`)
 
 	_, err := LoadMapRegistryFromDir(dir)
@@ -63,7 +69,13 @@ func TestLoadMapRegistryFromDir_FailsWhenMapInvalid(t *testing.T) {
     }
   ],
   "spawnPoints": [{"id": "spawn_inside", "x": 120, "y": 120}],
-  "weaponSpawns": []
+  "weaponSpawns": [],
+  "visualAcceptanceViewpoints": [
+    {"id": "vp_blocked", "playerPosition": {"x": 100, "y": 100}, "aimDirection": {"x": 1, "y": 0}, "expectedOutcome": "reads_blocked"},
+    {"id": "vp_open", "playerPosition": {"x": 120, "y": 120}, "aimDirection": {"x": 0, "y": 1}, "expectedOutcome": "reads_open"},
+    {"id": "vp_pickup", "playerPosition": {"x": 140, "y": 140}, "aimDirection": {"x": -1, "y": 0}, "expectedOutcome": "pickup_clearly_visible"},
+    {"id": "vp_hud", "playerPosition": {"x": 160, "y": 160}, "aimDirection": {"x": 0, "y": -1}, "expectedOutcome": "hud_unobscured"}
+  ]
 }`)
 
 	_, err := LoadMapRegistryFromDir(dir)
@@ -98,6 +110,12 @@ func TestValidateMapConfig_DetectsOutOfBoundsGeometry(t *testing.T) {
 		WeaponSpawns: []MapWeaponSpawn{
 			{ID: "weapon_oob", X: 200, Y: 320, WeaponType: "uzi"},
 		},
+		VisualAcceptanceViewpoints: []MapVisualAcceptanceViewpoint{
+			{ID: "vp_blocked", PlayerPosition: MapVector2{X: 100, Y: 100}, AimDirection: MapVector2{X: 1, Y: 0}, ExpectedOutcome: "reads_blocked"},
+			{ID: "vp_open", PlayerPosition: MapVector2{X: 120, Y: 120}, AimDirection: MapVector2{X: 0, Y: 1}, ExpectedOutcome: "reads_open"},
+			{ID: "vp_pickup", PlayerPosition: MapVector2{X: 140, Y: 140}, AimDirection: MapVector2{X: -1, Y: 0}, ExpectedOutcome: "pickup_clearly_visible"},
+			{ID: "vp_hud", PlayerPosition: MapVector2{X: 160, Y: 160}, AimDirection: MapVector2{X: 0, Y: -1}, ExpectedOutcome: "hud_unobscured"},
+		},
 	}
 
 	errors := ValidateMapConfig(mapConfig)
@@ -105,6 +123,41 @@ func TestValidateMapConfig_DetectsOutOfBoundsGeometry(t *testing.T) {
 		`obstacle "wall_oob" lies outside map bounds`,
 		`spawn point "spawn_oob" lies outside map bounds`,
 		`weapon spawn "weapon_oob" lies outside map bounds`,
+	}
+
+	for _, want := range expected {
+		if !containsAny(errors, want) {
+			t.Fatalf("expected %q in errors: %v", want, errors)
+		}
+	}
+}
+
+func TestValidateMapConfig_DetectsInvalidVisualAcceptanceViewpoints(t *testing.T) {
+	mapConfig := MapConfig{
+		ID:     "broken_viewpoints",
+		Name:   "Broken Viewpoints",
+		Width:  400,
+		Height: 300,
+		SpawnPoints: []MapSpawnPoint{
+			{ID: "spawn_ok", X: 100, Y: 100},
+		},
+		WeaponSpawns: []MapWeaponSpawn{
+			{ID: "weapon_ok", X: 200, Y: 200, WeaponType: "uzi"},
+		},
+		VisualAcceptanceViewpoints: []MapVisualAcceptanceViewpoint{
+			{ID: "vp1", PlayerPosition: MapVector2{X: 10, Y: 10}, AimDirection: MapVector2{X: 1, Y: 0}, ExpectedOutcome: "reads_blocked"},
+			{ID: "vp2", PlayerPosition: MapVector2{X: 500, Y: 10}, AimDirection: MapVector2{X: 0, Y: 1}, ExpectedOutcome: "reads_open"},
+			{ID: "vp3", PlayerPosition: MapVector2{X: 20, Y: 20}, AimDirection: MapVector2{X: 0, Y: 0}, ExpectedOutcome: "pickup_clearly_visible"},
+			{ID: "vp4", PlayerPosition: MapVector2{X: 30, Y: 30}, AimDirection: MapVector2{X: -1, Y: 0}, ExpectedOutcome: "invalid_outcome"},
+		},
+	}
+
+	errors := ValidateMapConfig(mapConfig)
+	expected := []string{
+		`visual acceptance viewpoint "vp2" has out-of-bounds playerPosition`,
+		`visual acceptance viewpoint "vp3" has zero aimDirection`,
+		`visual acceptance viewpoint "vp4" has invalid expectedOutcome "invalid_outcome"`,
+		`visual acceptance viewpoints must include expectedOutcome "hud_unobscured"`,
 	}
 
 	for _, want := range expected {

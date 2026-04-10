@@ -3,10 +3,15 @@ import {
   buildMapRegistry,
   type MapConfig,
   type MapObstacle,
+  type MapVisualAcceptanceViewpoint,
   type MapWeaponSpawn,
 } from '../../../maps-schema/src/index.js';
 
-export type { MapObstacle, MapWeaponSpawn } from '../../../maps-schema/src/index.js';
+export type {
+  MapObstacle,
+  MapVisualAcceptanceViewpoint,
+  MapWeaponSpawn,
+} from '../../../maps-schema/src/index.js';
 
 export const DEFAULT_MAP_ID = 'default_office';
 
@@ -16,6 +21,7 @@ export interface MatchMapContext {
   height: number;
   obstacles: MapObstacle[];
   weaponSpawns: MapWeaponSpawn[];
+  visualAcceptanceViewpoints: MapVisualAcceptanceViewpoint[];
 }
 
 const mapRegistry = buildMapRegistry([defaultOfficeMap]);
@@ -27,6 +33,7 @@ function toMatchMapContext(mapConfig: MapConfig): MatchMapContext {
     height: mapConfig.height,
     obstacles: [...mapConfig.obstacles],
     weaponSpawns: [...mapConfig.weaponSpawns],
+    visualAcceptanceViewpoints: [...mapConfig.visualAcceptanceViewpoints],
   };
 }
 

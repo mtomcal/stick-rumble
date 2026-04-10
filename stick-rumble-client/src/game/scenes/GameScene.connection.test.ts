@@ -204,19 +204,16 @@ describe('GameScene - Connection & Initialization', () => {
       });
     });
 
-    it('should add title text', () => {
+    it('should not add title banner text to gameplay HUD', () => {
       const mockSceneContext = createMockScene();
       Object.assign(scene, mockSceneContext);
 
       scene.create();
 
-      expect(mockSceneContext.add.text).toHaveBeenCalledWith(
-        10, 10, 'Stick Rumble - WASD to move',
-        expect.objectContaining({
-          fontSize: '18px',
-          color: '#ffffff',
-        })
+      const topLeftBannerCall = mockSceneContext.add.text.mock.calls.find(
+        (call: unknown[]) => call[0] === 10 && call[1] === 10
       );
+      expect(topLeftBannerCall).toBeUndefined();
     });
 
     it('should create WebSocket client with correct URL from env', () => {
@@ -409,7 +406,7 @@ describe('GameScene - Connection & Initialization', () => {
   });
 
   describe('connection status display', () => {
-    it('should display connection status text after successful connection', async () => {
+    it('should not display connection status text after successful connection', async () => {
       const mockSceneContext = createMockScene();
       mockSceneContext.input = {
         ...mockSceneContext.input,
@@ -439,16 +436,11 @@ describe('GameScene - Connection & Initialization', () => {
 
       await new Promise(resolve => setTimeout(resolve, 10));
 
-      // Check for green connection status text
-      const textCalls = mockSceneContext.add.text.mock.calls;
-      const connectionStatusCall = textCalls.find(
-        (call: unknown[]) => {
-          const text = call[2] as string | undefined;
-          const style = call[3] as { color?: string } | undefined;
-          return text?.includes('Connected') && style?.color === '#00ff00';
-        }
+      // Connection hint/status text is excluded from normal gameplay HUD.
+      const topLeftStatusCall = mockSceneContext.add.text.mock.calls.find(
+        (call: unknown[]) => call[0] === 10 && call[1] === 30
       );
-      expect(connectionStatusCall).toBeDefined();
+      expect(topLeftStatusCall).toBeUndefined();
     });
 
     it('should display error text after connection failure', async () => {

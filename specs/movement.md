@@ -1,6 +1,6 @@
 # Movement
 
-> **Spec Version**: 1.2.0
+> **Spec Version**: 1.2.1
 > **Last Updated**: 2026-04-09
 > **Depends On**: [constants.md](constants.md), [arena.md](arena.md), [player.md](player.md)
 > **Depended By**: [dodge-roll.md](dodge-roll.md), [shooting.md](shooting.md), [hit-detection.md](hit-detection.md)
@@ -669,6 +669,17 @@ The movement system is correct when all of the following are true in live play:
 - ordinary wall contact produces sliding, not sticky snagging
 - local corrections during normal movement are effectively invisible
 
+### Executable Feel Thresholds
+
+Use these thresholds for automated acceptance tests:
+
+- from rest, the first 60 Hz movement frame produces non-zero displacement
+- from rest, normal movement reaches at least 180 px/s within 50 ms
+- from rest, sprint movement reaches at least 260 px/s within 50 ms
+- releasing movement from 200 px/s reduces speed to at most 20 px/s within 34 ms
+- reversing from +200 px/s with opposite-direction input produces negative velocity within 67 ms
+- ordinary obstacle contact remains in small-correction smoothing; routine hard snaps are out of spec
+
 ---
 
 ## Error Handling
@@ -940,6 +951,7 @@ func TestDiagonalNormalization(t *testing.T) {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.2.1 | 2026-04-09 | Added executable movement-feel thresholds (start/stop/reversal/sprint) so red/green tests can enforce the perceptual contract directly. |
 | 1.2.0 | 2026-04-09 | Reframed movement around prototype-faithful perceptual outcomes: immediate-feeling start/stop/reversal, sprint retained as a distinct state, visible rubberbanding treated as a defect, prediction/reconciliation updated to match sprint and obstacle semantics, and tests rewritten away from endorsing a 4-second acceleration ramp. |
 | 1.0.0 | 2026-02-02 | Initial specification extracted from codebase |
 | 1.1.0 | 2026-02-15 | Updated DECELERATION from 50→1500 px/s². Rewrote Client-Side Prediction section to document PredictionEngine, server reconciliation (with input sequence replay), and InterpolationEngine. Updated deceleration test scenario timing. Added file location table for new physics modules. |

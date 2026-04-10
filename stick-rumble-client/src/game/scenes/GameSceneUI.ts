@@ -11,11 +11,8 @@ import { getDefaultMatchMapContext } from '../../shared/maps';
  */
 export class GameSceneUI {
   static readonly HUD_LAYOUT = {
-    AMMO_Y: 50,
-    AMMO_HEIGHT: 16,
-    HEALTH_BAR_Y: 70,
-    HEALTH_BAR_HEIGHT: 34,
-    MINIMAP_PADDING: 10,
+    MINIMAP_X: 20,
+    MINIMAP_MARGIN_BOTTOM: 20,
   } as const;
 
   private scene: Phaser.Scene;
@@ -37,27 +34,24 @@ export class GameSceneUI {
   private crosshair: Crosshair | null = null;
   private minimapStaticGraphics: Phaser.GameObjects.Graphics | null = null;
   private minimapDynamicGraphics: Phaser.GameObjects.Graphics | null = null;
-  private minimapX: number = 20;
-  private minimapY: number = GameSceneUI.getDefaultMinimapY();
+  private minimapX: number = GameSceneUI.HUD_LAYOUT.MINIMAP_X;
+  private minimapY: number = 0;
   private minimapWorldWidth: number = getDefaultMatchMapContext().width;
   private minimapWorldHeight: number = getDefaultMatchMapContext().height;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
+    this.minimapY = GameSceneUI.getDefaultMinimapY(this.scene.cameras.main.height);
     this.generateHitMarkerTexture();
     this.generateHitIndicatorTexture();
   }
 
-  static getDefaultMinimapY(): number {
-    const { AMMO_Y, AMMO_HEIGHT, HEALTH_BAR_Y, HEALTH_BAR_HEIGHT, MINIMAP_PADDING } = GameSceneUI.HUD_LAYOUT;
-    return Math.max(
-      AMMO_Y + AMMO_HEIGHT + MINIMAP_PADDING,
-      HEALTH_BAR_Y + HEALTH_BAR_HEIGHT + MINIMAP_PADDING
-    );
+  static getDefaultMinimapY(viewportHeight: number = 1080): number {
+    return viewportHeight - MINIMAP.SIZE - GameSceneUI.HUD_LAYOUT.MINIMAP_MARGIN_BOTTOM;
   }
 
-  static getDefaultDebugOverlayY(): number {
-    return GameSceneUI.getDefaultMinimapY() + MINIMAP.SIZE + 10;
+  static getDefaultDebugOverlayY(viewportHeight: number = 1080): number {
+    return GameSceneUI.getDefaultMinimapY(viewportHeight) + MINIMAP.SIZE + 10;
   }
 
   setMinimapWorldSize(width: number, height: number): void {

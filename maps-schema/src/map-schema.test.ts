@@ -29,6 +29,32 @@ function createValidMap(overrides: Partial<MapConfig> = {}): MapConfig {
     weaponSpawns: [
       { id: 'weapon_a', x: 300, y: 300, weaponType: 'uzi' },
     ],
+    visualAcceptanceViewpoints: [
+      {
+        id: 'view_blocked',
+        playerPosition: { x: 200, y: 200 },
+        aimDirection: { x: 1, y: 0 },
+        expectedOutcome: 'reads_blocked',
+      },
+      {
+        id: 'view_open',
+        playerPosition: { x: 260, y: 260 },
+        aimDirection: { x: 0, y: 1 },
+        expectedOutcome: 'reads_open',
+      },
+      {
+        id: 'view_pickup',
+        playerPosition: { x: 320, y: 320 },
+        aimDirection: { x: -1, y: 0 },
+        expectedOutcome: 'pickup_clearly_visible',
+      },
+      {
+        id: 'view_hud',
+        playerPosition: { x: 380, y: 380 },
+        aimDirection: { x: 0, y: -1 },
+        expectedOutcome: 'hud_unobscured',
+      },
+    ],
     ...overrides,
   };
 }
@@ -135,5 +161,97 @@ describe('map schema validation', () => {
         'weapon spawn "weapon_oob" lies outside map bounds',
       ])
     );
+  });
+
+  it('rejects missing canonical viewpoint coverage', () => {
+    const map = createValidMap({
+      visualAcceptanceViewpoints: [
+        {
+          id: 'only_blocked',
+          playerPosition: { x: 120, y: 120 },
+          aimDirection: { x: 1, y: 0 },
+          expectedOutcome: 'reads_blocked',
+        },
+      ],
+    });
+
+    expect(validateMapConfig(map)).toEqual(
+      expect.arrayContaining([
+        'visual acceptance viewpoints must include expectedOutcome "reads_open"',
+        'visual acceptance viewpoints must include expectedOutcome "pickup_clearly_visible"',
+        'visual acceptance viewpoints must include expectedOutcome "hud_unobscured"',
+      ])
+    );
+  });
+
+  it('rejects invalid viewpoint direction and bounds', () => {
+    const map = createValidMap({
+      visualAcceptanceViewpoints: [
+        {
+          id: 'view_blocked',
+          playerPosition: { x: 900, y: 900 },
+          aimDirection: { x: 1, y: 0 },
+          expectedOutcome: 'reads_blocked',
+        },
+        {
+          id: 'view_open',
+          playerPosition: { x: 260, y: 260 },
+          aimDirection: { x: 0, y: 1 },
+          expectedOutcome: 'reads_open',
+        },
+        {
+          id: 'view_pickup',
+          playerPosition: { x: 320, y: 320 },
+          aimDirection: { x: -1, y: 0 },
+          expectedOutcome: 'pickup_clearly_visible',
+        },
+        {
+          id: 'view_hud',
+          playerPosition: { x: 380, y: 380 },
+          aimDirection: { x: 0, y: 0 },
+          expectedOutcome: 'hud_unobscured',
+        },
+      ],
+    });
+
+    expect(validateMapConfig(map)).toEqual(
+      expect.arrayContaining([
+        'visual acceptance viewpoint "view_blocked" has out-of-bounds playerPosition',
+        'visual acceptance viewpoint "view_hud" has zero aimDirection',
+      ])
+    );
+  });
+
+  it('rejects invalid viewpoint expectedOutcome values', () => {
+    const map = createValidMap({
+      visualAcceptanceViewpoints: [
+        {
+          id: 'view_blocked',
+          playerPosition: { x: 200, y: 200 },
+          aimDirection: { x: 1, y: 0 },
+          expectedOutcome: 'reads_blocked',
+        },
+        {
+          id: 'view_open',
+          playerPosition: { x: 260, y: 260 },
+          aimDirection: { x: 0, y: 1 },
+          expectedOutcome: 'reads_open',
+        },
+        {
+          id: 'view_pickup',
+          playerPosition: { x: 320, y: 320 },
+          aimDirection: { x: -1, y: 0 },
+          expectedOutcome: 'pickup_clearly_visible',
+        },
+        {
+          id: 'view_bad',
+          playerPosition: { x: 380, y: 380 },
+          aimDirection: { x: 0, y: -1 },
+          expectedOutcome: 'invalid_outcome',
+        },
+      ] as unknown as MapConfig['visualAcceptanceViewpoints'],
+    });
+
+    expect(validateMapConfig(map).some((error) => error.includes('/expectedOutcome'))).toBe(true);
   });
 });

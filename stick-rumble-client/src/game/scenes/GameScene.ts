@@ -23,8 +23,6 @@ import { AudioManager } from '../audio/AudioManager';
 import { AimLine } from '../entities/AimLine';
 import { ScoreDisplayUI } from '../ui/ScoreDisplayUI';
 import { KillCounterUI } from '../ui/KillCounterUI';
-import { DebugOverlayUI } from '../ui/DebugOverlayUI';
-import { ChatLogUI } from '../ui/ChatLogUI';
 import { PickupNotificationUI } from '../ui/PickupNotificationUI';
 import { COLORS } from '../../shared/constants';
 import {
@@ -63,8 +61,6 @@ export class GameScene extends Phaser.Scene {
   private aimLine!: AimLine;
   private scoreDisplayUI!: ScoreDisplayUI;
   private killCounterUI!: KillCounterUI;
-  private debugOverlayUI!: DebugOverlayUI;
-  private chatLogUI!: ChatLogUI;
   private pickupNotificationUI!: PickupNotificationUI;
   private matchMapContext: MatchMapContext = getDefaultMatchMapContext();
   private arenaBackground: Phaser.GameObjects.Rectangle | null = null;
@@ -88,13 +84,6 @@ export class GameScene extends Phaser.Scene {
     this.events.once('shutdown', () => {
       this.cleanup();
     });
-
-    // Add title (fixed to screen)
-    const titleText = this.add.text(10, 10, 'Stick Rumble - WASD to move', {
-      fontSize: '18px',
-      color: '#ffffff'
-    });
-    titleText.setScrollFactor(0);
 
     // Initialize aim line (local player only, depth 40)
     this.aimLine = new AimLine(this);
@@ -136,8 +125,6 @@ export class GameScene extends Phaser.Scene {
     // Initialize new UI components
     this.scoreDisplayUI = new ScoreDisplayUI(this, camera.width - 10, 10);
     this.killCounterUI = new KillCounterUI(this, camera.width - 10, 42);
-    this.debugOverlayUI = new DebugOverlayUI(this, 10, GameSceneUI.getDefaultDebugOverlayY());
-    this.chatLogUI = new ChatLogUI(this, 10, camera.height - 140);
     this.pickupNotificationUI = new PickupNotificationUI(this, camera.width / 2, camera.height / 2);
 
     this.applyMatchMapContext(this.matchMapContext);
@@ -188,7 +175,6 @@ export class GameScene extends Phaser.Scene {
     // Inject new UI components into event handlers
     this.eventHandlers.setScoreDisplayUI(this.scoreDisplayUI);
     this.eventHandlers.setKillCounterUI(this.killCounterUI);
-    this.eventHandlers.setChatLogUI(this.chatLogUI);
     this.eventHandlers.setPickupNotificationUI(this.pickupNotificationUI);
     this.eventHandlers.setAimLine(this.aimLine);
 
@@ -329,13 +315,6 @@ export class GameScene extends Phaser.Scene {
             });
           }
 
-          // Add connection status (fixed to screen)
-          const connectionText = this.add.text(10, 30, 'Connected! WASD=move, Click=shoot, R=reload, E=pickup, SPACE=dodge', {
-            fontSize: '14px',
-            color: '#00ff00'
-          });
-          connectionText.setScrollFactor(0);
-
           // Create ammo display
           this.ui.createAmmoDisplay(10, 50);
           this.ui.updateAmmoDisplay(this.shootingManager);
@@ -465,12 +444,6 @@ export class GameScene extends Phaser.Scene {
     // Update minimap
     if (this.ui && this.playerManager) {
       this.ui.updateMinimap(this.playerManager);
-    }
-
-    // Update debug overlay (if enabled)
-    if (this.debugOverlayUI && this.game?.loop) {
-      const fps = Math.round(this.game.loop.actualFps);
-      this.debugOverlayUI.update(fps, Math.round(this.lastDeltaTime * 1000), 0, 0, 0);
     }
 
     // Update spectator mode
@@ -715,12 +688,6 @@ export class GameScene extends Phaser.Scene {
     }
     if (this.killCounterUI) {
       this.killCounterUI.destroy();
-    }
-    if (this.debugOverlayUI) {
-      this.debugOverlayUI.destroy();
-    }
-    if (this.chatLogUI) {
-      this.chatLogUI.destroy();
     }
     if (this.pickupNotificationUI) {
       this.pickupNotificationUI.destroy();

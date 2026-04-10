@@ -127,9 +127,8 @@ func TestUpdatePlayerWithInput(t *testing.T) {
 	vel := player.GetVelocity()
 	pos := player.GetPosition()
 
-	// Velocity should be accelerating toward MovementSpeed (200)
-	// Acceleration * deltaTime = 50 * 0.1 = 5
-	expectedVel := Vector2{X: 5, Y: 0}
+	// Velocity should accelerate toward MovementSpeed and clamp to target speed.
+	expectedVel := Vector2{X: MovementSpeed, Y: 0}
 	if !vectorsAlmostEqual(vel, expectedVel, 0.001) {
 		t.Errorf("After right input, velocity = %+v, want ~%+v", vel, expectedVel)
 	}
@@ -155,8 +154,8 @@ func TestUpdatePlayerDiagonalInput(t *testing.T) {
 	// Diagonal input should be normalized, so velocity magnitude should be same as single direction
 	velMagnitude := math.Sqrt(vel.X*vel.X + vel.Y*vel.Y)
 
-	// Should accelerate by 5 (Acceleration * deltaTime = 50 * 0.1)
-	expected := 5.0
+	// With immediate-feel tuning, one 100ms step reaches full speed.
+	expected := MovementSpeed
 
 	if math.Abs(velMagnitude-expected) > 0.001 {
 		t.Errorf("Diagonal velocity magnitude = %v, want ~%v", velMagnitude, expected)
@@ -217,6 +216,59 @@ func TestUpdatePlayerMultipleFrames(t *testing.T) {
 	if pos.X <= initialPos.X {
 		t.Errorf("After holding right, position should move right")
 	}
+}
+
+func TestPrototypeFeelThresholds(t *testing.T) {
+	physics := NewPhysics()
+
+	t.Run("normal speed reaches combat-usable range within 50ms", func(t *testing.T) {
+		player := NewPlayerState("test-normal")
+		player.SetInput(InputState{Right: true})
+
+		for i := 0; i < 3; i++ { // 3 frames at 60Hz ~= 50ms
+			physics.UpdatePlayer(player, 1.0/60.0)
+		}
+
+		vel := player.GetVelocity()
+		if vel.X < 180 {
+			t.Fatalf("expected >= 180 px/s after 50ms, got %v", vel.X)
+		}
+		if vel.X > MovementSpeed {
+			t.Fatalf("expected <= %v px/s after 50ms, got %v", MovementSpeed, vel.X)
+		}
+	})
+
+	t.Run("sprint speed reaches combat-usable range within 50ms", func(t *testing.T) {
+		player := NewPlayerState("test-sprint")
+		player.SetInput(InputState{Right: true, IsSprinting: true})
+
+		for i := 0; i < 3; i++ { // 3 frames at 60Hz ~= 50ms
+			physics.UpdatePlayer(player, 1.0/60.0)
+		}
+
+		vel := player.GetVelocity()
+		if vel.X < 260 {
+			t.Fatalf("expected >= 260 px/s after 50ms sprint, got %v", vel.X)
+		}
+		if vel.X > SprintSpeed {
+			t.Fatalf("expected <= %v px/s after 50ms sprint, got %v", SprintSpeed, vel.X)
+		}
+	})
+
+	t.Run("reversal crosses to negative velocity within 67ms", func(t *testing.T) {
+		player := NewPlayerState("test-reverse")
+		player.SetVelocity(Vector2{X: 200, Y: 0})
+		player.SetInput(InputState{Left: true})
+
+		for i := 0; i < 4; i++ { // 4 frames at 60Hz ~= 67ms
+			physics.UpdatePlayer(player, 1.0/60.0)
+		}
+
+		vel := player.GetVelocity()
+		if vel.X >= 0 {
+			t.Fatalf("expected negative X velocity after reversal, got %v", vel.X)
+		}
+	})
 }
 
 // NaN validation tests for movement functions

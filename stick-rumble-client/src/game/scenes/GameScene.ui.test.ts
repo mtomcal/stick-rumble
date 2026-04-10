@@ -217,12 +217,9 @@ describe('GameScene - UI', () => {
         destroy: vi.fn(),
       };
 
-      // Track text creation to identify match timer text (created during scene setup)
-      let textCallCount = 0;
-      mockSceneContext.add.text = vi.fn().mockImplementation(() => {
-        textCallCount++;
-        // Fourth text call is the match timer (after title text, pickup prompt text, and health bar text)
-        if (textCallCount === 4) {
+      mockSceneContext.add.text = vi.fn().mockImplementation((...args: unknown[]) => {
+        const [x, y, text] = args as [number, number, string];
+        if (x === 960 && y === 10 && text === '7:00') {
           return mockTimerText;
         }
         return { setOrigin: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), setVisible: vi.fn().mockReturnThis(), visible: false, destroy: vi.fn() };
@@ -272,10 +269,9 @@ describe('GameScene - UI', () => {
         destroy: vi.fn(),
       };
 
-      let textCallCount = 0;
-      mockSceneContext.add.text = vi.fn().mockImplementation(() => {
-        textCallCount++;
-        if (textCallCount === 4) {
+      mockSceneContext.add.text = vi.fn().mockImplementation((...args: unknown[]) => {
+        const [x, y, text] = args as [number, number, string];
+        if (x === 960 && y === 10 && text === '7:00') {
           return mockTimerText;
         }
         return { setOrigin: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), setVisible: vi.fn().mockReturnThis(), visible: false, destroy: vi.fn() };
@@ -321,10 +317,9 @@ describe('GameScene - UI', () => {
         destroy: vi.fn(),
       };
 
-      let textCallCount = 0;
-      mockSceneContext.add.text = vi.fn().mockImplementation(() => {
-        textCallCount++;
-        if (textCallCount === 4) {
+      mockSceneContext.add.text = vi.fn().mockImplementation((...args: unknown[]) => {
+        const [x, y, text] = args as [number, number, string];
+        if (x === 960 && y === 10 && text === '7:00') {
           return mockTimerText;
         }
         return { setOrigin: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), setVisible: vi.fn().mockReturnThis(), visible: false, destroy: vi.fn() };
@@ -370,10 +365,9 @@ describe('GameScene - UI', () => {
         destroy: vi.fn(),
       };
 
-      let textCallCount = 0;
-      mockSceneContext.add.text = vi.fn().mockImplementation(() => {
-        textCallCount++;
-        if (textCallCount === 4) {
+      mockSceneContext.add.text = vi.fn().mockImplementation((...args: unknown[]) => {
+        const [x, y, text] = args as [number, number, string];
+        if (x === 960 && y === 10 && text === '7:00') {
           return mockTimerText;
         }
         return { setOrigin: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), setVisible: vi.fn().mockReturnThis(), visible: false, destroy: vi.fn() };

@@ -12,10 +12,10 @@ const (
 	SprintSpreadMultiplier = 1.5
 
 	// Acceleration is the rate at which players accelerate in pixels per second squared
-	Acceleration = 50.0
+	Acceleration = 6000.0
 
 	// Deceleration is the rate at which players decelerate when no input
-	Deceleration = 1500.0
+	Deceleration = 6000.0
 )
 
 // Arena bounds - must match client-side values in src/shared/constants.ts

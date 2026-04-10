@@ -20,7 +20,7 @@ vi.mock('phaser', () => ({
 }));
 
 describe('GameSceneUI', () => {
-  const minimapY = 114;
+  const minimapY = 890;
   const minimapScale = 170 / 1920;
   let ui: GameSceneUI;
   let mockScene: Phaser.Scene;

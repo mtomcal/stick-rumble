@@ -104,19 +104,19 @@ const (
 | MOVEMENT_SPEED | 200 | px/s | Player crosses arena (~1920px) in ~10 seconds. Fast enough for responsive controls, slow enough for aiming. |
 | SPRINT_SPEED | 300 | px/s | 1.5x normal speed. Meaningful advantage for positioning, but with accuracy penalty. |
 | SPRINT_MULTIPLIER | 1.5 | ratio | Applied to weapon spread while sprinting. Encourages stop-and-shoot gameplay. |
-| ACCELERATION | 50 | px/s² | Reaches full speed in 4 seconds (200/50). Smooth start without feeling sluggish. |
-| DECELERATION | 1500 | px/s² | Near-instant stop (~0.13s from full speed). Prevents "ice physics" sliding; inputs feel crisp and responsive. |
+| ACCELERATION | 6000 | px/s² | Immediate-feeling start and reversal. Reaches combat-usable speed in the first few frames. |
+| DECELERATION | 6000 | px/s² | Near-instant stop on release. Eliminates perceptible coast while preserving deterministic physics. |
 
 **Why 200 px/s**: At 60 FPS, player moves 3.33 px/frame. This is smooth pixel movement without subpixel jitter issues.
 
-**Why asymmetric accel/decel**: Acceleration is gradual (50 px/s²) for smooth ramp-up, but deceleration is near-instant (1500 px/s²) so players stop within ~0.13 seconds when releasing input. This prevents "sliding on ice" and makes directional changes feel crisp — critical for client-side prediction accuracy.
+**Why high-response accel/decel**: Movement is tuned for prototype-faithful immediacy, not momentum ramping. High acceleration and deceleration keep start/stop/reversal responsive while still using shared deterministic velocity math for server authority and prediction parity.
 
 **TypeScript:**
 ```typescript
 export const MOVEMENT = {
   SPEED: 200,
-  ACCELERATION: 50,
-  DECELERATION: 1500,
+  ACCELERATION: 6000,
+  DECELERATION: 6000,
 } as const;
 ```
 
@@ -126,8 +126,8 @@ const (
     MovementSpeed          = 200.0
     SprintSpeed            = 300.0
     SprintSpreadMultiplier = 1.5
-    Acceleration           = 50.0
-    Deceleration           = 1500.0
+    Acceleration           = 6000.0
+    Deceleration           = 6000.0
 )
 ```
 
@@ -667,8 +667,8 @@ aimSway = (sin(time * swaySpeed) + sin(time * swaySpeed * 0.7)) * swayMagnitude
 
 | Constant | Value | Unit | Why |
 |----------|-------|------|-----|
-| MINIMAP_X | 20 | px | Top-left corner X offset. |
-| MINIMAP_Y | 20 | px | Top-left corner Y offset. |
+| MINIMAP_X | 20 | px | Fixed left offset for bottom-left minimap anchoring. |
+| MINIMAP_Y | viewportHeight - MINIMAP_SIZE - 20 | px | Derived bottom-left Y offset (1080p example: 890). |
 | MINIMAP_SCALE | 0.106 | ratio | World-to-minimap scale factor. 1600px world → 170px minimap. |
 | MINIMAP_SIZE | 170 | px | Derived: 1600 × 0.106 ≈ 170. Larger for better readability. |
 | MINIMAP_RADAR_RANGE | 600 | px | Enemies beyond 600px not shown. Encourages map awareness. |
@@ -848,6 +848,7 @@ if (distance > maxRange * 0.5):
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.1.1 | 2026-04-09 | Updated movement tuning constants to ACCELERATION=6000 and DECELERATION=6000 for prototype-faithful immediate response. Corrected minimap Y constant to bottom-left derived positioning (`viewportHeight - MINIMAP_SIZE - 20`). |
 | 2.1.0 | 2026-02-23 | Removed reticle center dot and tick constants (reticle is now fixed ~20px, no bloom). Added Hit Confirmation Trail constants (HIT_TRAIL_*). Added Reload Arc constants (RELOAD_ARC_*). Added MINIMAP_BORDER_COLOR and MINIMAP_BORDER_STROKE. Updated minimap shape language from circular to square. Added COLORS.HIT_TRAIL, COLORS.MINIMAP_BORDER, COLORS.RELOAD_ARC. |
 | 1.4.0 | 2026-02-18 | Added COLORS constant group (22 visual color constants). Renamed HEALTH_BAR_WIDTH to PLAYER_HEALTH_BAR_WIDTH, added HUD_HEALTH_BAR_WIDTH=200. Updated MINIMAP_SIZE to 170 and MINIMAP_SCALE to 0.106. Updated BLOOD_COLOR to 0xCC3333. Updated FLOOR_GRID_COLOR to 0xD8DCD8. |
 | 1.3.0 | 2026-02-17 | Expanded Camera Effects Constants into four subsections: Hit Feedback Shake (renamed from generic CAMERA_SHAKE), Per-Weapon Recoil Shake (Uzi=0.005, AK47=0.007, Shotgun=0.012, 100ms duration), Bat Melee Hit Shake (150ms/0.008), Camera Flash. |

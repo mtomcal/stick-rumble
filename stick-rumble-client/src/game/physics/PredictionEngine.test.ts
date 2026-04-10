@@ -3,6 +3,79 @@ import { PredictionEngine } from './PredictionEngine';
 import type { InputState } from '../input/InputManager';
 
 describe('PredictionEngine', () => {
+  describe('prototype-feel thresholds', () => {
+    it('reaches normal combat-usable speed within 50ms from rest', () => {
+      const engine = new PredictionEngine();
+      const input: InputState = {
+        up: false,
+        down: false,
+        left: false,
+        right: true,
+        aimAngle: 0,
+        isSprinting: false,
+        sequence: 0,
+      };
+
+      let position = { x: 0, y: 0 };
+      let velocity = { x: 0, y: 0 };
+      for (let i = 0; i < 3; i += 1) {
+        const result = engine.predictPosition(position, velocity, input, 1 / 60);
+        position = result.position;
+        velocity = result.velocity;
+      }
+
+      expect(velocity.x).toBeGreaterThanOrEqual(180);
+      expect(velocity.x).toBeLessThanOrEqual(200);
+    });
+
+    it('reaches sprint combat-usable speed within 50ms from rest', () => {
+      const engine = new PredictionEngine();
+      const input: InputState = {
+        up: false,
+        down: false,
+        left: false,
+        right: true,
+        aimAngle: 0,
+        isSprinting: true,
+        sequence: 0,
+      };
+
+      let position = { x: 0, y: 0 };
+      let velocity = { x: 0, y: 0 };
+      for (let i = 0; i < 3; i += 1) {
+        const result = engine.predictPosition(position, velocity, input, 1 / 60);
+        position = result.position;
+        velocity = result.velocity;
+      }
+
+      expect(velocity.x).toBeGreaterThanOrEqual(260);
+      expect(velocity.x).toBeLessThanOrEqual(300);
+    });
+
+    it('reverses direction to negative velocity within 67ms', () => {
+      const engine = new PredictionEngine();
+      const leftInput: InputState = {
+        up: false,
+        down: false,
+        left: true,
+        right: false,
+        aimAngle: 0,
+        isSprinting: false,
+        sequence: 0,
+      };
+
+      let position = { x: 0, y: 0 };
+      let velocity = { x: 200, y: 0 };
+      for (let i = 0; i < 4; i += 1) {
+        const result = engine.predictPosition(position, velocity, leftInput, 1 / 60);
+        position = result.position;
+        velocity = result.velocity;
+      }
+
+      expect(velocity.x).toBeLessThan(0);
+    });
+  });
+
   describe('accelerateToward (internal helper)', () => {
     it('should accelerate from zero toward target', () => {
       const engine = new PredictionEngine();
@@ -23,14 +96,12 @@ describe('PredictionEngine', () => {
         { x: 100, y: 100 },
         { x: 0, y: 0 },
         input,
-        0.1 // 100ms delta
+        0.01 // 10ms delta
       );
 
-      // Should accelerate by accel * deltaTime in direction of target
-      // Target is 200 px/s right, accel is 50 px/s², dt is 0.1s
-      // But with acceleration-toward formula: min(maxChange, distance)
-      // maxChange = 50 * 0.1 = 5 px/s
-      expect(result.velocity.x).toBeCloseTo(5, 1);
+      // Should accelerate by accel * deltaTime while below target speed.
+      // With accel=6000 and dt=0.01, maxChange is 60 px/s.
+      expect(result.velocity.x).toBeCloseTo(60, 1);
     });
 
     it('should snap to target when close enough', () => {

@@ -1,6 +1,6 @@
 # UI System
 
-> **Spec Version**: 2.3.0
+> **Spec Version**: 2.3.1
 > **Last Updated**: 2026-04-09
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [match.md](match.md), [client-architecture.md](client-architecture.md), [graphics.md](graphics.md)
 > **Depended By**: [test-index.md](test-index.md)
@@ -377,7 +377,7 @@ export class KillCounterUI {
 
 **Position**: (10, 50)
 
-**Why this location?** Below title, above health bar. Groups weapon info together.
+**Why this location?** In the top-left survival/combat cluster, directly above the health bar.
 
 **Visual Specification:**
 - Icon (left of text): Yellow/orange target/crosshair icon (#E0A030 / COLORS.AMMO_READY) when ready; red rotating spinner icon when reloading
@@ -1123,7 +1123,7 @@ export function MatchEndScreen({ matchData, localPlayerId, onClose, onPlayAgain 
 
 ### Connection Status (Top Left)
 
-**Position**: (10, 30), below title
+**Position**: Out-of-band diagnostic surface (not fixed gameplay HUD space)
 
 **Visual Specification:**
 - Connection state may be logged or exposed outside the main gameplay HUD
@@ -1662,7 +1662,10 @@ it('should sort scoreboard by kills descending, deaths ascending', () => {
 - Game scene loaded
 
 **Expected Output:**
-- Minimap at (20, 20), 170×170px (MINIMAP_SIZE=170)
+- Minimap anchored to bottom-left with fixed screen padding:
+  - `x = 20`
+  - `y = viewportHeight - 20 - 170` (for 1080p, `y = 890`)
+- Minimap size is 170×170px (MINIMAP_SIZE=170)
 - Dark gray (#3A3A3A) background at 50% alpha with teal/green square border
 - Wall positions rendered at 0.106 scale (MINIMAP_SCALE)
 - Static layer at depth 1999
@@ -1687,6 +1690,7 @@ it('should sort scoreboard by kills descending, deaths ascending', () => {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.3.1 | 2026-04-09 | Corrected stale TS-UI-018 expectations to the bottom-left minimap contract and clarified ammo-display rationale to remove references to title text in the normal gameplay HUD. |
 | 2.3.0 | 2026-04-09 | Re-zoned the HUD into stable corner ownership: top-left survival, bottom-left minimap, top-right match status, bottom-right action state. Removed chat/debug/title/connection text from the normal gameplay HUD contract and made HUD non-occlusion by world entities an explicit outcome requirement. |
 | 2.2.0 | 2026-03-02 | Minimap repositioned below health bar + ammo (was overlapping). Crosshair changed from `⊕` (circle+cross) to simple `+` (cross only, no circle). Updated HUD layout diagram to reflect new minimap position. |
 | 2.1.0 | 2026-02-23 | Rewrote minimap: circular → square shape, added dot clamping, teal border. Renamed "Reload Circle" → "Reload Arc (Player-Centered)", world-space green arc. Rewrote crosshair: fixed ~20-25px reticle, removed bloom. Added score bug note (7 digits → must be 6). Added chat log bug note (opaque → semi-transparent). Added debug overlay positioning rule and overlap bug note. Verified death screen overlay against visual spec. |

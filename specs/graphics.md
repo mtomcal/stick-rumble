@@ -1,7 +1,7 @@
 # Graphics
 
-> **Spec Version**: 2.3.0
-> **Last Updated**: 2026-03-02
+> **Spec Version**: 2.3.1
+> **Last Updated**: 2026-04-09
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [arena.md](arena.md)
 > **Depended By**: [client-architecture.md](client-architecture.md), [test-index.md](test-index.md)
 
@@ -598,6 +598,8 @@ gfx.generateTexture('reticle', 32, 32);
 
 **Why this design?**
 Players should know what they are walking toward before they enter prompt range. Pickup readability comes primarily from the weapon itself, not from a generic marker.
+
+Generic pickup markers (for example a standalone yellow circle or `⊕` icon without a weapon silhouette) are out of spec for normal gameplay.
 
 **Available State:**
 - the floor pickup renders as the actual weapon silhouette for its weapon type
@@ -1321,24 +1323,25 @@ test "player renders all body parts":
 
 ---
 
-### TS-GFX-008: Weapon Crate Renders With Glow
+### TS-GFX-008: Available Pickup Renders Weapon-Specific Silhouette
 
 **Category**: Visual
 **Priority**: Medium
 
 **Preconditions:**
-- Weapon crate is available
+- Weapon pickup is available
 
 **Input:**
-- Crate at position (500, 500)
+- Pickup at position (500, 500)
 
 **Expected Output:**
-- Yellow circle outline (~40px diameter, `COLORS.WEAPON_CRATE` / 0xCCCC00) with yellow `⊕` symbol inside
+- Pickup renders as weapon-specific floor silhouette (not generic marker-only iconography)
+- Subtle pickup-zone affordance remains visible as a secondary cue
 - Bobbing animation active
 
 ---
 
-### TS-GFX-009: Unavailable Crate Is Faded
+### TS-GFX-009: Unavailable Pickup Is Faded But Still Type-Readable
 
 **Category**: Visual
 **Priority**: Medium
@@ -1584,6 +1587,7 @@ test "player renders all body parts":
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.3.1 | 2026-04-09 | Clarified pickup rendering contract: normal gameplay pickups must be weapon-specific floor silhouettes with a secondary zone affordance; generic marker-only presentation is explicitly out of spec. Updated TS-GFX-008 and TS-GFX-009 wording accordingly. |
 | 2.3.0 | 2026-03-02 | Crosshair changed from `⊕` (circle+cross) to simple `+` (cross only, no circle). Hands/arms now grip weapon and follow aim rotation. Hit trail must originate from actual gun barrel tip. Added bugs: remove green aim indicator line, remove orange dot artifact, fix hit trail barrel attachment. |
 | 2.2.0 | 2026-02-23 | Renamed "Aim Indicator" → "Hit Confirmation Trail" (triggered by hit:confirmed, not continuously visible). Rewrote crosshair section: fixed ~20-25px reticle, no bloom. Updated weapon crate icon to yellow `⊕` symbol. Added yellow circle outline to death corpse rendering. Added "Enemy Weapon Visibility" section with bug note. Updated tests TS-GFX-005, TS-GFX-023, TS-GFX-008. |
 | 2.1.0 | 2026-02-18 | Art style alignment: Head-only player color distinction (body/limbs always black). Crosshair changed to white "+" in circle with bloom on firing. Weapon crate changed to yellow circle outline. Added spawn invulnerability ring, "YOU" label, enemy name labels, damage screen flash sections. Aim line changed to white, extends to crosshair. Health bar updated to 2-tier thresholds (green ≥20%, red <20%), "N%" text format, EKG icon, dark depleted background. Blood/hit indicator colors updated to 0xCC3333. Muzzle flash color updated to 0xFFD700. Unavailable weapon crate glow remains visible. Updated tests TS-GFX-003, TS-GFX-004, TS-GFX-008, TS-GFX-009, TS-GFX-015, TS-GFX-022, TS-GFX-023. |
