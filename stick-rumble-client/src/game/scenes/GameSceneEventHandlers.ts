@@ -1,5 +1,5 @@
 import type { WebSocketClient } from '../network/WebSocketClient';
-import type { PlayerManager } from '../entities/PlayerManager';
+import type { PlayerManager, PlayerState as RenderPlayerState } from '../entities/PlayerManager';
 import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { WeaponCrateManager } from '../entities/WeaponCrateManager';
 import type { MeleeWeaponManager } from '../entities/MeleeWeaponManager';
@@ -252,7 +252,10 @@ export class GameSceneEventHandlers {
         // sprites for players that are simply unchanged (not disconnected).
         // When isFullSnapshot is true or undefined (legacy player:move), use snapshot mode.
         const isDelta = messageData.isFullSnapshot === false;
-        this.playerManager.updatePlayers(messageData.players, { isDelta });
+        const renderPlayerStates = messageData.players.map(player =>
+          this.toRenderPlayerState(player)
+        );
+        this.playerManager.updatePlayers(renderPlayerStates, { isDelta });
 
         // Update melee weapon positions to follow players
         for (const player of messageData.players) {
@@ -778,6 +781,38 @@ export class GameSceneEventHandlers {
     };
     this.handlerRefs.set('roll:end', rollEndHandler);
     this.wsClient.on('roll:end', rollEndHandler);
+  }
+
+  private toRenderPlayerState(player: PlayerMoveData['players'][number]): RenderPlayerState {
+    const renderPlayerState: RenderPlayerState = {
+      id: player.id,
+      position: player.position,
+      velocity: player.velocity,
+    };
+
+    if (player.aimAngle !== undefined) {
+      renderPlayerState.aimAngle = player.aimAngle;
+    }
+    if (player.deathTime !== undefined) {
+      renderPlayerState.deathTime = Date.parse(player.deathTime);
+    }
+    if (player.health !== undefined) {
+      renderPlayerState.health = player.health;
+    }
+    if (player.isRegenerating !== undefined) {
+      renderPlayerState.isRegenerating = player.isRegenerating;
+    }
+    if (player.isRolling !== undefined) {
+      renderPlayerState.isRolling = player.isRolling;
+    }
+    if (player.isInvulnerable !== undefined) {
+      renderPlayerState.isInvulnerable = player.isInvulnerable;
+    }
+    if (player.invulnerabilityEnd !== undefined) {
+      renderPlayerState.invulnerabilityEndTime = Date.parse(player.invulnerabilityEnd);
+    }
+
+    return renderPlayerState;
   }
 
   /**
