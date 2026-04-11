@@ -1,7 +1,7 @@
 # Stick Rumble Specification Suite
 
-> **Version**: 1.3.0
-> **Last Updated**: 2026-04-07
+> **Version**: 1.4.0
+> **Last Updated**: 2026-04-11
 > **Purpose**: Complete specification for recreating Stick Rumble from scratch
 
 ---
@@ -77,6 +77,10 @@ For an AI agent recreating Stick Rumble from scratch, read specs in this order:
 ### Phase 8: Verification
 
 20. **[test-index.md](test-index.md)** - All test scenarios cross-reference
+
+### Phase 9: Deployment
+
+21. **[deployment.md](deployment.md)** - MVP AWS deployment (EC2 + Caddy for the game server, S3 + CloudFront for the static client)
 
 ---
 
@@ -181,6 +185,7 @@ For an AI agent recreating Stick Rumble from scratch, read specs in this order:
 | [audio.md](audio.md) | Positional audio, weapon sounds, UI feedback | ~910 | 1.1.0 |
 | [overview.md](overview.md) | Architecture philosophy, prediction/reconciliation patterns | ~710 | 1.1.0 |
 | [test-index.md](test-index.md) | Cross-reference of all test scenarios across specs | ~650 | 1.2.0 |
+| [deployment.md](deployment.md) | MVP AWS deployment: EC2 + Caddy, S3 + CloudFront, default domains, exam-relevance map | ~420 | 1.0.0 |
 
 ---
 
@@ -369,6 +374,7 @@ Test scenarios use the format `TS-{SPEC}-{NUMBER}`:
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.4.0 | 2026-04-11 | Friends-MVP: bumped player.md to 1.4.0, rooms.md to 1.3.0, messages.md to 1.3.0 (display names, named rooms, `player:hello`, error messages). Added deployment.md 1.0.0 to the Quick Reference Table and a new "Phase 9: Deployment" in the reading order. |
 | 1.2.0 | 2026-02-16 | Updated spec versions for pre-BMM visual port. Added 16 new visual system checklist items. Updated 9 spec version references. |
 | 1.1.6 | 2026-02-16 | Fixed broken markdown bold formatting on line 3 of "Start Here" section |
 | 1.1.5 | 2026-02-16 | Updated all approximate line counts in Quick Reference Table to match actual |

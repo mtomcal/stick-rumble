@@ -1,7 +1,7 @@
 # Messages
 
-> **Spec Version**: 1.2.1
-> **Last Updated**: 2026-04-10
+> **Spec Version**: 1.3.0
+> **Last Updated**: 2026-04-11
 > **Depends On**: [constants.md](constants.md), [player.md](player.md)
 > **Depended By**: [networking.md](networking.md), [rooms.md](rooms.md), [weapons.md](weapons.md), [shooting.md](shooting.md), [melee.md](melee.md), [hit-detection.md](hit-detection.md), [match.md](match.md), [client-architecture.md](client-architecture.md), [server-architecture.md](server-architecture.md)
 
@@ -84,10 +84,11 @@ type Message struct {
 
 ## Message Summary
 
-### Client → Server (7 types)
+### Client → Server (8 types)
 
 | Type | Description | Frequency |
 |------|-------------|-----------|
+| `player:hello` | Join intent (display name + room assignment) | Exactly once per connection, before any gameplay message |
 | `input:state` | WASD movement and aim | Every input change (~60 Hz max) |
 | `player:shoot` | Fire weapon request | On-demand (player clicks) |
 | `player:reload` | Reload weapon request | On-demand (player presses R) |
@@ -96,11 +97,14 @@ type Message struct {
 | `player:dodge_roll` | Initiate dodge roll | On-demand (player presses Space) |
 | `test` | Echo test message | Testing only |
 
-### Server → Client (22 types)
+### Server → Client (25 types)
 
 | Type | Description | Recipients |
 |------|-------------|------------|
 | `room:joined` | Player assigned to room | Joining player |
+| `error:no_hello` | Gameplay message received before `player:hello` | Offending player |
+| `error:bad_room_code` | `player:hello` room code failed normalization | Offending player |
+| `error:room_full` | Named-room join rejected because room has 8 players | Offending player |
 | `player:left` | Player disconnected | Room broadcast |
 | `player:move` | Position updates | Room broadcast (20 Hz) |
 | `projectile:spawn` | Projectile created | Room broadcast |
@@ -407,6 +411,75 @@ Request to perform a dodge roll.
 
 ---
 
+### `player:hello`
+
+Join intent. Declares the player's display name and whether they want public matchmaking or a named room. Must be the **first** message the client sends after the WebSocket upgrade; any other client-to-server message received first is rejected with `error:no_hello`.
+
+**Why a dedicated hello instead of reusing an existing message?**
+At upgrade time the server has no idea whether the player wants to play with strangers or friends, and no label to render above their head. A one-shot hello is the narrowest possible place to carry that information without complicating the high-frequency gameplay messages.
+
+**When Sent:** Exactly once per WebSocket connection, before any gameplay input.
+
+**Rate Limit:** Only the first valid hello per connection has an effect. Subsequent `player:hello` messages are ignored (do **not** rename the player mid-match or move them to a different room — reconnect to change rooms).
+
+**Data Schema:**
+
+**TypeScript:**
+```typescript
+type PlayerHelloData =
+  | {
+      displayName?: string;       // up to 16 chars after sanitization; optional, falls back to "Guest"
+      mode: "public";             // join the public auto-matchmaking queue
+    }
+  | {
+      displayName?: string;
+      mode: "code";
+      code: string;               // raw room code, normalized server-side to [A-Z0-9]{3..12}
+    };
+```
+
+**Go:**
+```go
+type PlayerHelloData struct {
+    DisplayName string `json:"displayName,omitempty"`
+    Mode        string `json:"mode"`              // "public" | "code"
+    Code        string `json:"code,omitempty"`    // required when Mode == "code"
+}
+```
+
+**Examples:**
+```json
+{
+  "type": "player:hello",
+  "timestamp": 1704067200000,
+  "data": {
+    "displayName": "Alice",
+    "mode": "public"
+  }
+}
+```
+
+```json
+{
+  "type": "player:hello",
+  "timestamp": 1704067200000,
+  "data": {
+    "displayName": "Bob",
+    "mode": "code",
+    "code": "pizza"
+  }
+}
+```
+
+**Server Processing:**
+1. Validate message against schema
+2. Sanitize `displayName` per [rooms.md → Display Name Sanitization](rooms.md#display-name-sanitization); store on `Player.DisplayName`
+3. If `mode == "public"`: route to public auto-matchmaking (`AddPublicPlayer`)
+4. If `mode == "code"`: normalize code per [rooms.md → Room Code Normalization](rooms.md#room-code-normalization) and route to `JoinCodedRoom`. On normalization failure, send `error:bad_room_code` and leave the player unrouted
+5. On successful room assignment, set `Player.HelloSeen = true` and send `room:joined`
+
+---
+
 ### `test`
 
 Echo test message for connection verification.
@@ -450,22 +523,26 @@ Confirms player successfully joined a room and provides the authoritative room a
 **TypeScript:**
 ```typescript
 interface RoomJoinedData {
-  roomId: string;   // UUID of the assigned room
-  playerId: string; // UUID assigned to this player
-  mapId: string;    // ID of the selected authoritative map config
+  roomId: string;        // UUID of the assigned room (opaque)
+  playerId: string;      // UUID assigned to this player
+  mapId: string;         // ID of the selected authoritative map config
+  displayName: string;   // Server-sanitized name the player will be shown under
+  code?: string;         // Present iff the room is a named room; normalized form
 }
 ```
 
 **Go:**
 ```go
 type RoomJoinedData struct {
-    RoomID   string `json:"roomId"`
-    PlayerID string `json:"playerId"`
-    MapID    string `json:"mapId"`
+    RoomID      string `json:"roomId"`
+    PlayerID    string `json:"playerId"`
+    MapID       string `json:"mapId"`
+    DisplayName string `json:"displayName"`
+    Code        string `json:"code,omitempty"` // omitted for public rooms
 }
 ```
 
-**Example:**
+**Example (public):**
 ```json
 {
   "type": "room:joined",
@@ -473,19 +550,134 @@ type RoomJoinedData struct {
   "data": {
     "roomId": "6d64957a-5330-4bca-a668-e2f9f8df7970",
     "mapId": "default_office",
-    "playerId": "550e8400-e29b-41d4-a716-446655440000"
+    "playerId": "550e8400-e29b-41d4-a716-446655440000",
+    "displayName": "Alice"
   }
 }
 ```
 
+**Example (named):**
+```json
+{
+  "type": "room:joined",
+  "timestamp": 1704067200100,
+  "data": {
+    "roomId": "6d64957a-5330-4bca-a668-e2f9f8df7970",
+    "mapId": "default_office",
+    "playerId": "550e8400-e29b-41d4-a716-446655440000",
+    "displayName": "Alice",
+    "code": "PIZZA"
+  }
+}
+```
+
+**Why echo `displayName` back?**
+Sanitization happens server-side and may change the name (trimming, truncation, fallback to "Guest"). The client needs to know the authoritative form so its local HUD matches what other players see.
+
 **Client Handling:**
-1. Store local room ID and player ID
+1. Store local room ID, player ID, and authoritative display name
 2. Resolve the local shared map config by `mapId`
 3. Initialize arena bounds and obstacle geometry from that map
 4. Clear any existing player sprites
 5. Process queued `weapon:spawned` messages
 6. Initialize health bar to 100%
 7. Begin listening for `player:move` updates
+
+---
+
+### `error:no_hello`
+
+Sent when a client issues a gameplay message (`input:state`, `player:shoot`, etc.) before the server has processed a valid `player:hello`.
+
+**When Sent:** Any client-to-server message arrives on a connection where `Player.HelloSeen == false` and the message is not itself a `player:hello`.
+
+**Recipients:** The offending player only.
+
+**Data Schema:**
+
+**TypeScript:**
+```typescript
+interface ErrorNoHelloData {
+  offendingType: string; // the type the client tried to send
+}
+```
+
+**Example:**
+```json
+{
+  "type": "error:no_hello",
+  "timestamp": 1704067200200,
+  "data": { "offendingType": "input:state" }
+}
+```
+
+**Server Behavior:** The offending message is dropped. The connection stays open; the client can still send a valid `player:hello`.
+
+**Client Handling:** If this fires unexpectedly it usually means a bug in the client's hello sequencing. Clients should log it, send a fresh `player:hello`, and retry the dropped intent.
+
+---
+
+### `error:bad_room_code`
+
+Sent when a `player:hello` with `mode: "code"` fails [room code normalization](rooms.md#room-code-normalization).
+
+**When Sent:** `normalizeRoomCode(raw).ok == false`.
+
+**Recipients:** The offending player only.
+
+**Data Schema:**
+
+**TypeScript:**
+```typescript
+interface ErrorBadRoomCodeData {
+  reason: "missing" | "too_short" | "too_long";
+}
+```
+
+**Example:**
+```json
+{
+  "type": "error:bad_room_code",
+  "timestamp": 1704067200200,
+  "data": { "reason": "too_short" }
+}
+```
+
+**Server Behavior:** The player is not assigned to any room; `HelloSeen` remains false; the connection stays open.
+
+**Client Handling:** Re-prompt the user for a code and send another `player:hello`.
+
+---
+
+### `error:room_full`
+
+Sent when a named-room join succeeds at the lookup step but the target room already has `MAX_PLAYERS_PER_ROOM` (8) players.
+
+**When Sent:** `codeIndex[normalizedCode]` exists and `room.PlayerCount() >= 8`.
+
+**Recipients:** The offending player only.
+
+**Data Schema:**
+
+**TypeScript:**
+```typescript
+interface ErrorRoomFullData {
+  code: string; // normalized code that was full
+}
+```
+
+**Example:**
+```json
+{
+  "type": "error:room_full",
+  "timestamp": 1704067200200,
+  "data": { "code": "PARTY" }
+}
+```
+
+**Server Behavior:** The player is not assigned; `HelloSeen` remains false; the connection stays open.
+
+**Client Handling:** Offer the user two choices: try a different code, or fall back to `mode: "public"`.
 
 ---
 
@@ -1823,6 +2015,7 @@ Client                          Server
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.3.0 | 2026-04-11 | Friends-MVP: added `player:hello` (required join intent), `error:no_hello`, `error:bad_room_code`, `error:room_full`. Extended `room:joined` with authoritative `displayName` and optional `code`. Client-to-server count: 7→8; server-to-client: 22→25. |
 | 1.2.0 | 2026-02-18 | Art style alignment: Added isInvulnerable and invulnerabilityEndTime to TypeScript PlayerState. Documented reload progress tracking (client-side timestamp approach). Documented score=XP mapping. Added Go-to-TypeScript field name mapping table for player:move. |
 | 1.1.4 | 2026-02-16 | Clarified `input:state` Go struct — `sequence` is not part of `InputState` struct, extracted separately in `message_processor.go` |
 | 1.1.3 | 2026-02-16 | Fixed `player:damaged` — melee path omits `projectileId` entirely; projectile path includes it. Made `projectileId` optional in TypeScript interface. |

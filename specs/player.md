@@ -1,7 +1,7 @@
 # Player
 
-> **Spec Version**: 1.2.0
-> **Last Updated**: 2026-02-16
+> **Spec Version**: 1.4.0
+> **Last Updated**: 2026-04-11
 > **Depends On**: [constants.md](constants.md), [arena.md](arena.md)
 > **Depended By**: [movement.md](movement.md), [dodge-roll.md](dodge-roll.md), [weapons.md](weapons.md), [shooting.md](shooting.md), [melee.md](melee.md), [hit-detection.md](hit-detection.md), [match.md](match.md), [graphics.md](graphics.md), [ui.md](ui.md)
 
@@ -58,17 +58,20 @@ All player-related constants are defined in [constants.md](constants.md). Key va
 The authoritative player state maintained by the server. All fields are synchronized to clients via WebSocket messages.
 
 **Why these specific fields?** Each field serves a distinct purpose:
-- **Identity**: `ID` uniquely identifies the player across all systems
+- **Identity**: `ID` uniquely identifies the player across all systems; `DisplayName` is the human-readable label shown to other players
 - **Physics**: `Position`, `Velocity`, `AimAngle` drive movement and combat
 - **Health**: `Health`, `IsInvulnerable`, `IsRegeneratingHealth` handle damage and recovery
 - **Lifecycle**: `DeathTime` tracks death state for respawn timing
 - **Statistics**: `Kills`, `Deaths`, `XP` track performance
 - **Actions**: `Rolling` tracks evasion state
 
+**Why separate `ID` and `DisplayName`?** The server-generated `ID` is the trust and routing identifier — stable, unique, never shown. `DisplayName` is a user-supplied label used only for rendering (nameplates, kill feed, scoreboard). Keeping them separate means a player can pick any name (including a duplicate or an empty string) without affecting room membership, message routing, or match state. See [rooms.md](rooms.md#display-names) for the join-time name contract.
+
 **Go:**
 ```go
 type PlayerState struct {
     ID                     string     `json:"id"`
+    DisplayName            string     `json:"displayName"`         // sanitized, 1-16 chars, non-unique
     Position               Vector2    `json:"position"`
     Velocity               Vector2    `json:"velocity"`
     AimAngle               float64    `json:"aimAngle"`            // radians
@@ -111,6 +114,7 @@ Client-side representation received from server broadcasts. Subset of server sta
 ```typescript
 interface PlayerState {
   id: string;
+  displayName: string;       // sanitized, 1-16 chars; rendered above player and in UI
   position: {
     x: number;
     y: number;
@@ -969,6 +973,7 @@ func TestOverkillDamage(t *testing.T) {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.4.0 | 2026-04-11 | Friends-MVP: added `DisplayName` to server and client `PlayerState` (sanitized, 1–16 chars, non-unique). See [rooms.md](rooms.md#display-name-sanitization) for the join-time contract. |
 | 1.0.0 | 2026-02-02 | Initial specification extracted from codebase |
 | 1.1.0 | 2026-02-15 | Added `inputSequence` field for prediction reconciliation. Added `CorrectionStats` struct for anti-cheat movement validation tracking. |
 | 1.3.0 | 2026-02-18 | Art style alignment: Specified yellow spawn invulnerability ring (#FFFF00, ~50px diameter). Updated damage screen flash to full-viewport overlay with 300ms fade-out, referencing graphics.md as authoritative. |
