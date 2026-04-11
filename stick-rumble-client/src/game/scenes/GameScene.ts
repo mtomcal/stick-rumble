@@ -107,7 +107,11 @@ export class GameScene extends Phaser.Scene {
     this.pickupPromptUI = new PickupPromptUI(this);
 
     // Initialize health bar UI (top-left corner)
-    this.healthBarUI = new HealthBarUI(this, 10, 70);
+    this.healthBarUI = new HealthBarUI(
+      this,
+      GameSceneUI.HUD_LAYOUT.HEALTH_CLUSTER_X,
+      GameSceneUI.HUD_LAYOUT.HEALTH_CLUSTER_Y
+    );
 
     const camera = this.cameras.main;
 
@@ -317,7 +321,10 @@ export class GameScene extends Phaser.Scene {
           }
 
           // Create ammo display
-          this.ui.createAmmoDisplay(10, 50);
+          this.ui.createAmmoDisplay(
+            GameSceneUI.HUD_LAYOUT.AMMO_TEXT_X,
+            GameSceneUI.HUD_LAYOUT.AMMO_TEXT_Y
+          );
           this.ui.updateAmmoDisplay(this.shootingManager);
 
           // Create reload UI elements

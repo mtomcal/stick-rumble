@@ -11,6 +11,12 @@ import { getDefaultMatchMapContext } from '../../shared/maps';
  */
 export class GameSceneUI {
   static readonly HUD_LAYOUT = {
+    TOP_LEFT_PADDING_X: 20,
+    TOP_LEFT_PADDING_Y: 20,
+    HEALTH_CLUSTER_X: 48,
+    HEALTH_CLUSTER_Y: 20,
+    AMMO_TEXT_X: 48,
+    AMMO_TEXT_Y: 58,
     MINIMAP_X: 20,
     MINIMAP_MARGIN_BOTTOM: 20,
   } as const;
@@ -125,6 +131,7 @@ export class GameSceneUI {
   createAmmoDisplay(x: number, y: number): void {
     // Ammo icon (small bullet/crosshair graphic)
     this.ammoIcon = this.scene.add.graphics();
+    this.ammoIcon.setPosition(x - 28, y + 8);
     this.ammoIcon.setScrollFactor(0);
     this.ammoIcon.setDepth(1000);
     this.drawAmmoIcon(COLORS.AMMO_READY);

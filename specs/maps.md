@@ -1,7 +1,7 @@
 # Maps
 
-> **Spec Version**: 1.1.1
-> **Last Updated**: 2026-04-09
+> **Spec Version**: 1.1.2
+> **Last Updated**: 2026-04-10
 > **Depends On**: [constants.md](constants.md)
 > **Depended By**: [arena.md](arena.md), [rooms.md](rooms.md), [messages.md](messages.md), [weapons.md](weapons.md), [client-architecture.md](client-architecture.md), [server-architecture.md](server-architecture.md)
 
@@ -185,6 +185,7 @@ Static schema checks alone cannot prove rendered readability for false openings 
 - rendered wall and desk edges must not suggest passability where collision forbids passage
 - any opening that is intended to be traversable must read as open at gameplay camera scale
 - authored visual composition must support clean wall sliding and corridor readability during combat movement
+- arena boundary pieces must meet as sealed corners; a visible seam at a border junction is invalid even if the raw blockers technically touch elsewhere
 
 **Why fail at load time?**
 - Spatial mistakes are content authoring errors, not runtime decisions
@@ -281,6 +282,7 @@ The initial viewpoint set must cover:
 - a corridor or wall edge where false openings previously appeared
 - a known invisible-collision location
 - a corner/camera extreme where world entities previously overlapped HUD
+- a map-border corner where separated boundary pieces previously created a false seam
 - a pickup spawn where low-contrast floor readability previously failed
 
 Each viewpoint must define:
@@ -374,12 +376,22 @@ Given a canonical pickup viewpoint
 When the scene is rendered with the pickup available  
 Then the pickup is visibly identifiable and its surrounding space reads as comfortably reachable
 
+### TS-MAP-010: arena border corners read as sealed boundaries
+
+**Category:** Unit  
+**Priority:** High
+
+Given the default office map boundary obstacles  
+When the map registry loads the authoritative geometry  
+Then each border corner is represented by boundary pieces that meet cleanly without a visible seam or missing corner
+
 ---
 
 ## Changelog
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.1.2 | 2026-04-10 | Added an explicit sealed-corner readability rule for arena borders, required a canonical border-corner viewpoint in the office map, and added TS-MAP-010 so boundary seams are caught from authoritative map data instead of surfacing only in visual QA. |
 | 1.1.1 | 2026-04-09 | Added explicit `visualAcceptanceViewpoints` data contract and clarified that static schema validation cannot replace viewpoint-driven visual readability acceptance. |
 | 1.1.0 | 2026-04-09 | Added player-facing readability rules: blocking geometry must visually align with collision, traversable openings require safety margin beyond hitbox width, interactable spaces must be clearly reachable, office recreation now defaults to exact prototype fidelity where known, and canonical visual acceptance viewpoints were added for false-gap, invisible-collision, HUD-overlap, and pickup-readability failures. |
 | 1.0.0 | 2026-04-07 | Initial map system specification. |

@@ -49,6 +49,63 @@ func TestDefaultOffice_CentralVerticalWallTouchesTopBoundary(t *testing.T) {
 	}
 }
 
+func TestDefaultOffice_BoundaryWallsSealOuterCorners(t *testing.T) {
+	registry, err := LoadMapRegistryFromDir("../../../maps")
+	if err != nil {
+		t.Fatalf("LoadMapRegistryFromDir returned error: %v", err)
+	}
+
+	mapConfig, ok := registry.Get(DefaultMapID)
+	if !ok {
+		t.Fatalf("expected %q to exist in registry", DefaultMapID)
+	}
+
+	topBoundary := findObstacleByID(t, mapConfig, "wall_top_boundary")
+	bottomBoundary := findObstacleByID(t, mapConfig, "wall_bottom_boundary")
+	leftBoundary := findObstacleByID(t, mapConfig, "wall_left_boundary")
+	rightBoundary := findObstacleByID(t, mapConfig, "wall_right_boundary")
+
+	if topBoundary.X != 0 || topBoundary.Width != mapConfig.Width {
+		t.Fatalf(
+			"expected %q to span the full map width at the top edge, got x=%v width=%v mapWidth=%v",
+			topBoundary.ID,
+			topBoundary.X,
+			topBoundary.Width,
+			mapConfig.Width,
+		)
+	}
+
+	if bottomBoundary.X != 0 || bottomBoundary.Width != mapConfig.Width {
+		t.Fatalf(
+			"expected %q to span the full map width at the bottom edge, got x=%v width=%v mapWidth=%v",
+			bottomBoundary.ID,
+			bottomBoundary.X,
+			bottomBoundary.Width,
+			mapConfig.Width,
+		)
+	}
+
+	expectedSideWallTop := topBoundary.Y + topBoundary.Height
+	if leftBoundary.Y != expectedSideWallTop || rightBoundary.Y != expectedSideWallTop {
+		t.Fatalf(
+			"expected side boundaries to start at y=%v directly below the top boundary, got left=%v right=%v",
+			expectedSideWallTop,
+			leftBoundary.Y,
+			rightBoundary.Y,
+		)
+	}
+
+	expectedSideWallBottom := bottomBoundary.Y
+	if leftBoundary.Y+leftBoundary.Height != expectedSideWallBottom || rightBoundary.Y+rightBoundary.Height != expectedSideWallBottom {
+		t.Fatalf(
+			"expected side boundaries to end at y=%v directly above the bottom boundary, got left=%v right=%v",
+			expectedSideWallBottom,
+			leftBoundary.Y+leftBoundary.Height,
+			rightBoundary.Y+rightBoundary.Height,
+		)
+	}
+}
+
 func TestLoadMapRegistryFromDir_FailsWhenRequiredMapMissing(t *testing.T) {
 	dir := t.TempDir()
 	writeMapFixture(t, dir, "side_map.json", `{

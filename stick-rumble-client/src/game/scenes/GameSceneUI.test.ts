@@ -122,6 +122,7 @@ describe('GameSceneUI', () => {
             fillStyle: vi.fn().mockReturnThis(),
             fillRect: vi.fn().mockReturnThis(),
             fillCircle: vi.fn().mockReturnThis(),
+            setPosition: vi.fn().mockReturnThis(),
             lineStyle: vi.fn().mockReturnThis(),
             strokeRect: vi.fn().mockReturnThis(),
             strokeCircle: vi.fn().mockReturnThis(),
@@ -217,22 +218,23 @@ describe('GameSceneUI', () => {
 
   describe('createAmmoDisplay', () => {
     it('should create ammo text display at specified position', () => {
-      ui.createAmmoDisplay(10, 50);
+      ui.createAmmoDisplay(48, 58);
 
-      expect(mockScene.add.text).toHaveBeenCalledWith(10, 50, '15/15', expect.any(Object));
+      expect(mockScene.add.text).toHaveBeenCalledWith(48, 58, '15/15', expect.any(Object));
       expect(createdTexts[0].setScrollFactor).toHaveBeenCalledWith(0);
     });
 
-    it('should create ammo icon graphics', () => {
-      ui.createAmmoDisplay(10, 50);
+    it('should anchor the ammo icon with the text row instead of the viewport origin', () => {
+      ui.createAmmoDisplay(48, 58);
 
       // ammoIcon is the first graphics object created
+      expect(createdGraphics[0].setPosition).toHaveBeenCalledWith(20, 66);
       expect(createdGraphics[0].setScrollFactor).toHaveBeenCalledWith(0);
       expect(createdGraphics[0].setDepth).toHaveBeenCalledWith(1000);
     });
 
     it('should create RELOADING text initially hidden', () => {
-      ui.createAmmoDisplay(10, 50);
+      ui.createAmmoDisplay(48, 58);
 
       // reloadingText is createdTexts[1]
       expect(createdTexts[1]).toBeDefined();

@@ -1,7 +1,7 @@
 # Weapons
 
-> **Spec Version**: 1.2.0
-> **Last Updated**: 2026-04-07
+> **Spec Version**: 2.1.1
+> **Last Updated**: 2026-04-10
 > **Depends On**: [constants.md](constants.md), [arena.md](arena.md), [maps.md](maps.md), [player.md](player.md)
 > **Depended By**: [shooting.md](shooting.md), [melee.md](melee.md), [hit-detection.md](hit-detection.md)
 
@@ -46,7 +46,7 @@ All weapon-related constants from [constants.md](constants.md):
 
 | Constant | Value | Unit | Description |
 |----------|-------|------|-------------|
-| `WeaponPickupRadius` | 32.0 | px | Detection distance for weapon pickup |
+| `WeaponPickupRadius` | 24.0 | px | Detection distance for weapon pickup |
 | `WeaponRespawnDelay` | 30.0 | s | Time before weapon crate respawns |
 | `SprintSpreadMultiplier` | 1.5 | ratio | Accuracy penalty while sprinting |
 | `ProjectileMaxLifetime` | 1000 | ms | Maximum projectile existence time |
@@ -570,15 +570,15 @@ In v1:
 
 ### Pickup Mechanics
 
-**Why 32px radius?**
-- Large enough to be forgiving (don't need pixel-perfect positioning)
-- Small enough that you must deliberately approach the crate
-- Matches player width (32px) for intuitive "overlap" feeling
+**Why 24px radius?**
+- Small enough to prevent accidental weapon swaps while moving past a crate in combat
+- Large enough to stay forgiving once the player has clearly committed to the pickup space
+- Keeps the pickup prompt and successful pickup aligned to the same visibly close approach
 
 **Pickup Flow:**
 ```
 1. Player approaches crate
-2. Client detects proximity (distance < 32px)
+2. Client detects proximity (distance <= 24px)
 3. Client displays "Press E to pickup" prompt
 4. Player presses E → client sends weapon:pickup_attempt { crateId }
 5. Server validates:
@@ -612,7 +612,7 @@ Weapon crates are visually represented as outlined circles with a weapon icon in
 **Proximity Prompt:**
 - Text: `"Press E to pick up [WEAPON NAME]"` — weapon name displayed in uppercase
 - Style: Dark tooltip background, bottom-center of screen, ~14px font size
-- Appears when player is within pickup radius (32px)
+- Appears when player is within pickup radius (24px)
 
 **Pickup Confirmation:**
 - Text: `"Picked up [WEAPON NAME]"` — weapon name displayed in uppercase
@@ -723,7 +723,7 @@ All weapon stats are stored in `weapon-configs.json` at the project root.
 **Trigger**: Player attempts pickup when:
 - Crate doesn't exist
 - Crate is unavailable (on cooldown)
-- Player not within 32px radius
+- Player not within 24px radius
 
 **Detection**: Server-side validation
 **Response**: Ignore request silently
@@ -1090,6 +1090,7 @@ func TestKnockbackBoundaryClamping(t *testing.T) {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.1.1 | 2026-04-10 | Reduced `WeaponPickupRadius` from 32px to 24px so pickup prompting and confirmation require a clearly intentional approach and no longer feel oversized around crates. |
 | 2.1.0 | 2026-02-23 | Added "Weapon Crate Visual Appearance" section with visual details, proximity prompt, and pickup confirmation specs. |
 | 1.2.0 | 2026-02-18 | Art style alignment: Added shape ("chevron"/"circle") and tracerLength to ProjectileVisuals. Added muzzleFlashShape to WeaponVisuals. Updated Pistol tracerColor to 0xffaa00. Reduced Pistol muzzleFlashDuration to 33ms. |
 | 1.1.0 | 2026-02-16 | Updated Bat range (64→90px) and Katana range (80→110px), melee arc (90°→80°). Added cross-references to gun recoil and aim sway visual systems from pre-BMM port. |

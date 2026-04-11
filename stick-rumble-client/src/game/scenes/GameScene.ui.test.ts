@@ -54,6 +54,15 @@ describe('GameScene - UI', () => {
   });
 
   describe('ammo display', () => {
+    it('should anchor the health bar cluster to the top-left survival HUD padding', () => {
+      const mockSceneContext = createMockScene();
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      expect(mockSceneContext.add.container).toHaveBeenCalledWith(48, 20);
+    });
+
     it('should create ammo text display after connection', async () => {
       const mockSceneContext = createMockScene();
       mockSceneContext.input = {
@@ -85,8 +94,8 @@ describe('GameScene - UI', () => {
       const textCalls = mockSceneContext.add.text.mock.calls;
       expect(textCalls.length).toBeGreaterThanOrEqual(3);
 
-      // Check ammo text specifically (at position 10, 50)
-      const ammoTextCall = textCalls.find((call: unknown[]) => call[0] === 10 && call[1] === 50);
+      // Check ammo text specifically (anchored underneath the health bar)
+      const ammoTextCall = textCalls.find((call: unknown[]) => call[0] === 48 && call[1] === 58);
       expect(ammoTextCall).toBeDefined();
     });
 

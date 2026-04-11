@@ -87,7 +87,7 @@ const (
 	WeaponRespawnDelay = 30.0
 
 	// WeaponPickupRadius is the distance in pixels for weapon pickup detection
-	WeaponPickupRadius = 32.0
+	WeaponPickupRadius = 24.0
 )
 
 // Dodge roll system

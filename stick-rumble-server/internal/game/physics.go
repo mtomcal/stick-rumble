@@ -300,7 +300,7 @@ func sanitizeVector2(v Vector2, context string) Vector2 {
 }
 
 // CheckPlayerCrateProximity checks if a player is within pickup range of a weapon crate
-// Pickup range is defined by WeaponPickupRadius constant (32px from Story 3.1)
+// Pickup range is defined by WeaponPickupRadius constant
 // Returns false if crate is unavailable or player is dead
 func (p *Physics) CheckPlayerCrateProximity(player *PlayerState, crate *WeaponCrate) bool {
 	// Don't allow pickup if crate is unavailable

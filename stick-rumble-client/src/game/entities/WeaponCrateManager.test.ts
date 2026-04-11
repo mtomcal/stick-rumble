@@ -96,7 +96,7 @@ describe('WeaponCrateManager', () => {
       });
 
       expect(mockScene.add.graphics).toHaveBeenCalledTimes(1);
-      expect(mockScene.add.arc).toHaveBeenCalledWith(500, 600, 32, 0, 360, false, 0xffff00, 0);
+      expect(mockScene.add.arc).toHaveBeenCalledWith(500, 600, 24, 0, 360, false, 0xffff00, 0);
       expect(glowInstances[0].setStrokeStyle).toHaveBeenCalledWith(2, 0xffff00, 0.5);
       expect(graphicsInstances[0].setPosition).toHaveBeenCalledWith(500, 600);
     });
@@ -228,8 +228,8 @@ describe('WeaponCrateManager', () => {
     });
 
     it('honors pickup radius boundary checks', () => {
-      expect(manager.checkProximity({ x: 132, y: 100 })?.id).toBe('near');
-      expect(manager.checkProximity({ x: 133, y: 100 })).toBeNull();
+      expect(manager.checkProximity({ x: 124, y: 100 })?.id).toBe('near');
+      expect(manager.checkProximity({ x: 125, y: 100 })).toBeNull();
     });
 
     it('returns null when player position is undefined', () => {

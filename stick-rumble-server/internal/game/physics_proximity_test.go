@@ -11,10 +11,10 @@ func TestCheckPlayerCrateProximity_WithinRange(t *testing.T) {
 	player := NewPlayerState("player1")
 	player.SetPosition(Vector2{X: 500, Y: 500})
 
-	// Create crate at position (520, 520) - distance = ~28.28px (within 32px)
+	// Create crate at position (516, 516) - distance = ~22.63px (within 24px)
 	crate := &WeaponCrate{
 		ID:          "crate1",
-		Position:    Vector2{X: 520, Y: 520},
+		Position:    Vector2{X: 516, Y: 516},
 		WeaponType:  "uzi",
 		IsAvailable: true,
 	}
@@ -32,17 +32,17 @@ func TestCheckPlayerCrateProximity_ExactlyAtRange(t *testing.T) {
 	player := NewPlayerState("player1")
 	player.SetPosition(Vector2{X: 500, Y: 500})
 
-	// Create crate exactly 32px away (500 + 32 = 532 on X axis)
+	// Create crate exactly 24px away (500 + 24 = 524 on X axis)
 	crate := &WeaponCrate{
 		ID:          "crate1",
-		Position:    Vector2{X: 532, Y: 500},
+		Position:    Vector2{X: 524, Y: 500},
 		WeaponType:  "uzi",
 		IsAvailable: true,
 	}
 
 	inRange := physics.CheckPlayerCrateProximity(player, crate)
 	if !inRange {
-		t.Error("Player should be within pickup range at exactly 32px")
+		t.Error("Player should be within pickup range at exactly 24px")
 	}
 }
 
@@ -53,7 +53,7 @@ func TestCheckPlayerCrateProximity_BeyondRange(t *testing.T) {
 	player := NewPlayerState("player1")
 	player.SetPosition(Vector2{X: 500, Y: 500})
 
-	// Create crate at position (600, 600) - distance = ~141px (beyond 32px)
+	// Create crate at position (600, 600) - distance = ~141px (beyond 24px)
 	crate := &WeaponCrate{
 		ID:          "crate1",
 		Position:    Vector2{X: 600, Y: 600},
@@ -74,17 +74,17 @@ func TestCheckPlayerCrateProximity_JustBeyondRange(t *testing.T) {
 	player := NewPlayerState("player1")
 	player.SetPosition(Vector2{X: 500, Y: 500})
 
-	// Create crate at 33px away (just beyond the 32px threshold)
+	// Create crate at 25px away (just beyond the 24px threshold)
 	crate := &WeaponCrate{
 		ID:          "crate1",
-		Position:    Vector2{X: 533, Y: 500},
+		Position:    Vector2{X: 525, Y: 500},
 		WeaponType:  "uzi",
 		IsAvailable: true,
 	}
 
 	inRange := physics.CheckPlayerCrateProximity(player, crate)
 	if inRange {
-		t.Error("Player should NOT be within pickup range at 33px (beyond 32px threshold)")
+		t.Error("Player should NOT be within pickup range at 25px (beyond 24px threshold)")
 	}
 }
 
@@ -164,13 +164,13 @@ func TestCheckPlayerCrateProximity_DiagonalDistance(t *testing.T) {
 		{
 			name:            "diagonal within range",
 			playerPos:       Vector2{X: 500, Y: 500},
-			cratePos:        Vector2{X: 520, Y: 520}, // ~28.28px diagonal
+			cratePos:        Vector2{X: 516, Y: 516}, // ~22.63px diagonal
 			shouldBeInRange: true,
 		},
 		{
 			name:            "diagonal at edge of range",
 			playerPos:       Vector2{X: 500, Y: 500},
-			cratePos:        Vector2{X: 522.6, Y: 522.6}, // ~32px diagonal
+			cratePos:        Vector2{X: 516.97, Y: 516.97}, // ~24px diagonal
 			shouldBeInRange: true,
 		},
 		{

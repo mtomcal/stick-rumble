@@ -1,7 +1,7 @@
 # UI System
 
-> **Spec Version**: 2.3.1
-> **Last Updated**: 2026-04-09
+> **Spec Version**: 2.3.2
+> **Last Updated**: 2026-04-10
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [match.md](match.md), [client-architecture.md](client-architecture.md), [graphics.md](graphics.md)
 > **Depended By**: [test-index.md](test-index.md)
 
@@ -143,15 +143,26 @@ The HUD must remain spatially stable during gameplay. It may be redesigned, but 
 
 The title banner, connection hint text, gameplay chat log, and Phaser debug overlay are not part of the normal in-match HUD contract.
 
+The top-left survival/combat cluster is anchored with fixed viewport padding:
+- no element in the cluster may render above `20px` from the top edge
+- no element in the cluster may render left of `20px` from the left edge
+- health occupies the first row
+- ammo occupies the second row, directly underneath health with a stable gap
+
 ---
 
 ## Behavior
 
 ### Health Bar UI (Top Left)
 
-**Position**: (10, 70)
+**Position**: Top-left survival cluster, anchored to 20px viewport padding
 
 **Why this location?** Top-left is reserved for immediate survival/combat state and must remain a clean first-glance zone.
+
+**Anchoring Rule:**
+- the full health cluster, including the EKG icon, must stay within a `20px` top-left padding box
+- the health row is the top row of the cluster
+- no part of the health cluster may be inset farther than necessary just to preserve historical spacing
 
 **Visual Specification:**
 - Dimensions: 200×30 px
@@ -375,9 +386,9 @@ export class KillCounterUI {
 
 ### Ammo Display (Top Left)
 
-**Position**: (10, 50)
+**Position**: Directly underneath the Health Bar UI in the same top-left cluster
 
-**Why this location?** In the top-left survival/combat cluster, directly above the health bar.
+**Why this location?** In the top-left survival/combat cluster, directly underneath the health bar so the player reads survival state top-to-bottom in one glance.
 
 **Visual Specification:**
 - Icon (left of text): Yellow/orange target/crosshair icon (#E0A030 / COLORS.AMMO_READY) when ready; red rotating spinner icon when reloading
@@ -388,6 +399,11 @@ export class KillCounterUI {
 - Fist/infinite-ammo weapons: Display "INF" instead of ammo count (no max shown)
 - Visibility: Hidden for melee weapons (Bat, Katana)
 - Depth: 1000
+
+**Anchoring Rule:**
+- the ammo row must remain below the health row at a fixed vertical offset
+- the icon and text are one anchored unit; the icon may not drift to the viewport origin or any unrelated corner
+- the ammo row shares the same top-left cluster padding contract as the health row
 
 **Why hide for melee?** Melee weapons have unlimited attacks (magazineSize = 0). Showing "0/0" is confusing.
 
@@ -1690,6 +1706,7 @@ it('should sort scoreboard by kills descending, deaths ascending', () => {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.3.2 | 2026-04-10 | Re-anchored the top-left survival HUD contract: the health cluster now owns the first row at 20px viewport padding, ammo is explicitly stacked underneath it, and the ammo icon/text are required to stay anchored as one unit instead of drifting independently. |
 | 2.3.1 | 2026-04-09 | Corrected stale TS-UI-018 expectations to the bottom-left minimap contract and clarified ammo-display rationale to remove references to title text in the normal gameplay HUD. |
 | 2.3.0 | 2026-04-09 | Re-zoned the HUD into stable corner ownership: top-left survival, bottom-left minimap, top-right match status, bottom-right action state. Removed chat/debug/title/connection text from the normal gameplay HUD contract and made HUD non-occlusion by world entities an explicit outcome requirement. |
 | 2.2.0 | 2026-03-02 | Minimap repositioned below health bar + ammo (was overlapping). Crosshair changed from `⊕` (circle+cross) to simple `+` (cross only, no circle). Updated HUD layout diagram to reflect new minimap position. |

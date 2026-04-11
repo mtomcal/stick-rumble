@@ -17,7 +17,7 @@ interface CrateVisual {
   weaponType: string;
 }
 
-const GLOW_RADIUS = 32;
+const GLOW_RADIUS = 24;
 const GLOW_COLOR = 0xffff00;
 const GLOW_ALPHA = 0;
 const GLOW_STROKE_WIDTH = 2;
@@ -26,7 +26,7 @@ const BOB_DISTANCE = 5;
 const BOB_DURATION = 1000;
 const UNAVAILABLE_ALPHA = 0.3;
 const AVAILABLE_ALPHA = 1.0;
-const PICKUP_RADIUS = 32;
+const PICKUP_RADIUS = 24;
 
 const PICKUP_COLORS = {
   UZI: 0x6f6f6f,
