@@ -1,7 +1,7 @@
 # Networking
 
-> **Spec Version**: 1.1.1
-> **Last Updated**: 2026-04-10
+> **Spec Version**: 1.2.0
+> **Last Updated**: 2026-04-11
 > **Depends On**: [messages.md](messages.md), [constants.md](constants.md)
 > **Depended By**: [rooms.md](rooms.md), [client-architecture.md](client-architecture.md), [server-architecture.md](server-architecture.md)
 
@@ -407,6 +407,8 @@ default:
 **Why exponential backoff?** Exponential backoff (1s, 2s, 4s) prevents reconnection storms that could overwhelm the server during transient outages while still providing fast recovery for single-connection issues.
 
 **Why stop after 3 attempts?** If the server is down for more than ~7 seconds (1+2+4), it's likely a serious outage. Continuing to retry wastes resources and provides poor UX. Better to show an error and let the user manually retry.
+
+**Re-handshake contract.** Per [messages.md § player:hello](messages.md#player-hello), every new WebSocket connection — including the ones opened by this reconnect loop — MUST begin with a fresh `player:hello` before any gameplay message is sent. The server discards all per-connection state on close (including `HelloSeen`), so the reconnecting client cannot resume directly into gameplay. Clients that cache the user's last-chosen display name and room code may replay the same hello payload automatically; otherwise they should re-prompt. Resuming an in-progress match on the same server is out of scope for the MVP — a reconnect may or may not land the player back in their prior room depending on capacity and match state (see [rooms.md § Named Room Join](rooms.md#named-room-join)).
 
 **Pseudocode:**
 ```
@@ -1147,6 +1149,7 @@ func TestGracefulShutdown(t *testing.T) {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.2.0 | 2026-04-11 | Friends-MVP alignment: documented the re-handshake contract for reconnecting clients (every new connection must begin with a fresh `player:hello`), and the explicit MVP scope decision that in-progress matches do not resume across reconnects. Cross-references [messages.md](messages.md#player-hello) and [rooms.md](rooms.md#named-room-join). |
 | 1.0.0 | 2026-02-02 | Initial specification |
 | 1.1.1 | 2026-02-16 | Fixed TypeBox version from 0.32.x to 0.34.x to match source |
 | 1.1.0 | 2026-02-15 | Added Delta Compression section (state:snapshot/state:delta, per-client tracking, change thresholds). Added Ping Tracking section (ping/pong RTT, circular buffer). Added Network Simulator section (server + client, env vars). Added Input Sequence Numbers section. Added File Locations table with new files (delta_tracker.go, ping_tracker.go, position_history.go, network_simulator.go, NetworkSimulator.ts, message_processor.go, broadcast_helper.go). |

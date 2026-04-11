@@ -1,6 +1,6 @@
 # Messages
 
-> **Spec Version**: 1.3.0
+> **Spec Version**: 1.3.1
 > **Last Updated**: 2026-04-11
 > **Depends On**: [constants.md](constants.md), [player.md](player.md)
 > **Depended By**: [networking.md](networking.md), [rooms.md](rooms.md), [weapons.md](weapons.md), [shooting.md](shooting.md), [melee.md](melee.md), [hit-detection.md](hit-detection.md), [match.md](match.md), [client-architecture.md](client-architecture.md), [server-architecture.md](server-architecture.md)
@@ -418,9 +418,13 @@ Join intent. Declares the player's display name and whether they want public mat
 **Why a dedicated hello instead of reusing an existing message?**
 At upgrade time the server has no idea whether the player wants to play with strangers or friends, and no label to render above their head. A one-shot hello is the narrowest possible place to carry that information without complicating the high-frequency gameplay messages.
 
-**When Sent:** Exactly once per WebSocket connection, before any gameplay input.
+**When Sent:** Exactly once **per successful hello** per WebSocket connection, before any gameplay input. On every new connection (including reconnects triggered by the client's backoff logic in [networking.md § Reconnection Logic](networking.md#reconnection-logic)), the client MUST re-send `player:hello` as its first message — the server discards all per-connection state, including `HelloSeen`, when a socket closes.
 
-**Rate Limit:** Only the first valid hello per connection has an effect. Subsequent `player:hello` messages are ignored (do **not** rename the player mid-match or move them to a different room — reconnect to change rooms).
+**Rate Limit and Latching:**
+- A **failed** hello (schema invalid, `error:bad_room_code`, `error:room_full`) does **not** latch. `HelloSeen` stays false and the connection stays open so the client can send another hello — e.g. after re-prompting the user for a different room code or falling back to `mode: "public"`.
+- A **successful** hello latches immediately: `HelloSeen := true` and `Player.DisplayName` / room assignment become authoritative for the remainder of the connection. Subsequent `player:hello` messages on the same connection are silently dropped (no error emitted) — they do **not** rename the player mid-match, re-route them to a different room, or reset their stats. To change rooms or display name, disconnect and reconnect.
+
+**Reconnection and match resume (MVP scope):** Reconnecting to the *same* in-progress match is explicitly out of scope for Friends-MVP. A reconnect starts a brand-new `player:hello` handshake and the client is free to rejoin a public queue or re-submit a code. If the code-room's match is still running with capacity, the player will land back in it; if it has ended, the code releases per [rooms.md § Named Room Join](rooms.md#named-room-join). There is no server-side session stickiness — this is a regression relative to pre-MVP tab-reload behavior for public rooms, and is accepted for MVP because the alternative requires a persistent session identifier the server does not currently keep.
 
 **Data Schema:**
 
@@ -574,6 +578,14 @@ type RoomJoinedData struct {
 **Why echo `displayName` back?**
 Sanitization happens server-side and may change the name (trimming, truncation, fallback to "Guest"). The client needs to know the authoritative form so its local HUD matches what other players see.
 
+**Compatibility posture (Friends-MVP).**
+The addition of `displayName` (required) and `code` (optional) to `room:joined` is a **breaking wire change**. Friends-MVP ships client and server together; there is **no** backward-compatibility path for pre-MVP clients that never send a `player:hello`:
+- The server will never emit `room:joined` for a connection that has not produced a valid hello (it cannot — there is no display name to put in the payload), so legacy clients connecting to a new server hang at `error:no_hello`.
+- New clients connecting to a pre-MVP server never see `displayName` in `room:joined` and must treat that as a fatal version mismatch.
+- Strict schema validation (`ENABLE_SCHEMA_VALIDATION=true` in [server-architecture.md](server-architecture.md)) MUST accept `displayName` as a required string and `code` as optional, as defined in [events-schema](./../events-schema/src/schemas/server-to-client.ts). No compatibility shim.
+
+The client and server components of Friends-MVP are expected to be deployed atomically. Mixed-version deployments are not supported.
+
 **Client Handling:**
 1. Store local room ID, player ID, and authoritative display name
 2. Resolve the local shared map config by `mapId`
@@ -611,9 +623,9 @@ interface ErrorNoHelloData {
 }
 ```
 
-**Server Behavior:** The offending message is dropped. The connection stays open; the client can still send a valid `player:hello`.
+**Server Behavior:** The offending message is dropped. `HelloSeen` is unchanged (still `false`). The connection stays open; the client can still send a valid `player:hello`.
 
-**Client Handling:** If this fires unexpectedly it usually means a bug in the client's hello sequencing. Clients should log it, send a fresh `player:hello`, and retry the dropped intent.
+**Client Handling:** If this fires unexpectedly it usually means a bug in the client's hello sequencing — most commonly, gameplay input racing the hello after a reconnect. Clients should log it, send a fresh `player:hello`, and retry the dropped intent.
 
 ---
 
@@ -643,9 +655,9 @@ interface ErrorBadRoomCodeData {
 }
 ```
 
-**Server Behavior:** The player is not assigned to any room; `HelloSeen` remains false; the connection stays open.
+**Server Behavior:** The player is not assigned to any room. `HelloSeen` remains `false` — this is a **failed** hello and does not latch, so the client is free to send another `player:hello` on the same connection. The connection stays open.
 
-**Client Handling:** Re-prompt the user for a code and send another `player:hello`.
+**Client Handling:** Re-prompt the user for a code and send another `player:hello`. The client may also offer "play public instead" and send `{ mode: "public" }`.
 
 ---
 
@@ -675,9 +687,9 @@ interface ErrorRoomFullData {
 }
 ```
 
-**Server Behavior:** The player is not assigned; `HelloSeen` remains false; the connection stays open.
+**Server Behavior:** The player is not assigned. `HelloSeen` remains `false` (failed hellos never latch), so the client is free to send another `player:hello` on the same connection. The connection stays open.
 
-**Client Handling:** Offer the user two choices: try a different code, or fall back to `mode: "public"`.
+**Client Handling:** Offer the user two choices: try a different code, or fall back to `mode: "public"`. Either resolution is a fresh `player:hello` on the same socket.
 
 ---
 
@@ -2015,6 +2027,7 @@ Client                          Server
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.3.1 | 2026-04-11 | Friends-MVP pre-mortem fixes: (1) `player:hello` latching tightened — only **successful** hellos set `HelloSeen`; failed hellos (`error:bad_room_code`, `error:room_full`) leave the connection free to send another hello; (2) reconnection contract made explicit — every new connection must begin with a fresh `player:hello`, in-progress match resume is out of scope for MVP; (3) `room:joined` compatibility posture documented as breaking (no pre-MVP client support, atomic client+server deploy required); (4) `error:no_hello` / `error:bad_room_code` / `error:room_full` server-behavior blocks updated to explicitly state `HelloSeen` stays `false`. |
 | 1.3.0 | 2026-04-11 | Friends-MVP: added `player:hello` (required join intent), `error:no_hello`, `error:bad_room_code`, `error:room_full`. Extended `room:joined` with authoritative `displayName` and optional `code`. Client-to-server count: 7→8; server-to-client: 22→25. |
 | 1.2.0 | 2026-02-18 | Art style alignment: Added isInvulnerable and invulnerabilityEndTime to TypeScript PlayerState. Documented reload progress tracking (client-side timestamp approach). Documented score=XP mapping. Added Go-to-TypeScript field name mapping table for player:move. |
 | 1.1.4 | 2026-02-16 | Clarified `input:state` Go struct — `sequence` is not part of `InputState` struct, extracted separately in `message_processor.go` |

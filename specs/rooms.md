@@ -1,6 +1,6 @@
 # Rooms
 
-> **Spec Version**: 1.3.0
+> **Spec Version**: 1.3.1
 > **Last Updated**: 2026-04-11
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [networking.md](networking.md), [messages.md](messages.md), [maps.md](maps.md)
 > **Depended By**: [match.md](match.md), [server-architecture.md](server-architecture.md)
@@ -188,8 +188,13 @@ A player's room assignment is driven by a **join intent** supplied by the client
 
 The server must **not** assign a player to a room until it has received and processed a `player:hello`. Messages other than `player:hello` received before the hello are rejected with a `error:no_hello` message; the connection stays open and the client can still send a valid hello afterward.
 
+**Failed-hello semantics.** A hello that fails validation (`error:bad_room_code`, `error:room_full`, schema-invalid) does **not** latch `HelloSeen`. The client may send another `player:hello` on the same connection after re-prompting the user. Only a **successful** hello sets `HelloSeen := true`; once set, all subsequent `player:hello` messages on that connection are silently dropped.
+
 **Why require an explicit hello instead of auto-joining on upgrade?**
 The WebSocket upgrade gives the server a player ID, but at that instant the server has no idea whether the player wants to play with friends or strangers, and no display name to put on the nameplate. A single dedicated hello message is the simplest way to carry that intent without overloading existing gameplay messages.
+
+**Regression notice — public tab-reload fast-path.**
+Pre-MVP, a browser tab reload would transparently re-join the player to an existing 1-player public room without any re-handshake. Under Friends-MVP, the reconnecting client MUST re-send `player:hello` first because `HelloSeen` is per-connection and does not survive a socket close. The tab-reload fast-path in [`AddPublicPlayer`](rooms.md#room-creation-auto-matchmaking) still works — it re-finds a 1-player public room by the same `Player.ID` handling rules — but only **after** a fresh hello has been processed on the new connection. This is the documented MVP trade-off for having a clean join-intent contract; server-side session stickiness would need a persistent session token the server does not currently keep.
 
 ### Display Name Sanitization
 
@@ -249,6 +254,23 @@ function normalizeRoomCode(raw):
 
 **Why strict `[A-Z0-9]` instead of a looser alphabet?**
 Every extra character class (emoji, punctuation, accents) is another place two users can fail to coordinate because one of them can't type it. The MVP optimizes for "works over a voice call."
+
+### Accepted Risk: Code Collisions Between Unrelated Groups
+
+Friends-MVP intentionally ships **no collision mitigation**. Two unrelated friend groups who both pick the normalized code `GAME`, `PARTY`, `TEST`, `PIZZA`, or any other common word will silently land in the same room. The losing group has no way to tell they merged into someone else's match — they will just see strangers.
+
+**Why accept this risk?**
+- The target population for MVP is a small, trusted group of friends coordinating out of band.
+- Every mitigation (salted codes, host-only creation tokens, server-chosen suffixes, first-creator-wins-until-empty) either adds coordination friction ("okay now the code is `PIZZA-7F3K`, spell it back to me") or adds a stateful server component that Friends-MVP deliberately does not have.
+- At friend-group scale, the probability of two groups simultaneously picking the same short common word for a same-minute play session is low, and recovery is trivial: pick a different code and send a fresh `player:hello`.
+
+**How collisions surface to users:**
+- The joining player receives `room:joined` with the expected `code`. They cannot distinguish "I joined my friend's room" from "I joined a stranger's room with the same code."
+- If the stranger's room is already full, the joiner gets `error:room_full` and can retry with a different code.
+- There is no server log alert for code collisions; they are invisible to operators as well as players.
+
+**When this stops being acceptable:**
+The moment the game is exposed to strangers picking codes (e.g. a public lobby browser or a discoverable-codes UI), this design must change. That is scope for a post-MVP iteration — see [deployment.md § Smoke Test](deployment.md#smoke-test) for the MVP-acceptance caveat.
 
 ### Room Creation (Auto-Matchmaking)
 
@@ -391,6 +413,12 @@ function joinCodedRoom(player, rawCode):
         room.match.registerPlayer(player)
         playerToRoom[player.id] = room.id
 
+        // Start the match the moment the join brings the room up to threshold.
+        // Unlike the fresh-room path, this is where the transition actually
+        // happens for code rooms — the host sat alone until now.
+        if room.playerCount >= MIN_PLAYERS_TO_START and not room.match.isStarted:
+            room.match.start()
+
         send room:joined { roomId: room.id, playerId: player.id, mapId: room.mapId, code: code } to player
         return room
 
@@ -406,10 +434,9 @@ function createFreshCodedRoom(player, normalizedCode):
     codeIndex[normalizedCode] = room.id
     playerToRoom[player.id] = room.id
 
-    // Note: match does NOT auto-start with 1 player.
-    // Match starts when the 2nd player submits the same code and joins.
-    if room.playerCount >= MIN_PLAYERS_TO_START and not room.match.isStarted:
-        room.match.start()
+    // Match does NOT auto-start with 1 player. The host waits here until a
+    // second player submits the same code; the joining branch above is the
+    // one that flips match state to started.
 
     send room:joined { roomId, playerId, mapId, code: normalizedCode } to player
     return room
@@ -455,8 +482,13 @@ function removePlayer(playerID):
 
     // Destroy empty room
     if room.isEmpty:
+        // Only release the code if the index still points at THIS room.
+        // A rematch in progress may have already overwritten codeIndex[code]
+        // with a fresh room that shares the same code — deleting unconditionally
+        // would unindex the new room and leave it unreachable.
         if room.kind == "code" and room.code != "":
-            delete(codeIndex, room.code)
+            if codeIndex[room.code] == room.id:
+                delete(codeIndex, room.code)
         delete(rooms, roomID)
 ```
 
@@ -504,7 +536,11 @@ func (rm *RoomManager) RemovePlayer(playerID string) {
     // Destroy empty room
     if room.IsEmpty() {
         if room.Kind == RoomKindCode && room.Code != "" {
-            delete(rm.codeIndex, room.Code)
+            // Only release the code if the index still points at THIS room.
+            // A rematch-in-progress may already have replaced the entry.
+            if indexedID, ok := rm.codeIndex[room.Code]; ok && indexedID == room.ID {
+                delete(rm.codeIndex, room.Code)
+            }
         }
         delete(rm.rooms, roomID)
     }
@@ -1063,8 +1099,8 @@ test "broadcast reaches all room members":
 
 **Expected Output:**
 - Normalized code for both is `"PIZZA"`
-- A enters a newly created `RoomKindCode` room, match not yet started
-- B joins the same room, match starts
+- After A's hello: a new `RoomKindCode` room exists, `room.match.isStarted == false`
+- After B's hello: `room.match.isStarted == true` (the join, not the creation, is what starts the match)
 - Both receive `room:joined` with the same `roomId` and `code: "PIZZA"`
 - `codeIndex["PIZZA"]` points to that room
 
@@ -1137,6 +1173,36 @@ test "broadcast reaches all room members":
 - `player.DisplayName == "Guest"`
 - No error emitted; player joins the public queue normally
 
+### TS-ROOM-018: Named Room — Rematch Does Not Unindex During Teardown
+
+**Category**: Unit
+**Priority**: High
+
+**Preconditions:**
+- `codeIndex["REMATCH"]` points to roomA whose match has ended; roomA still has
+  players attached who have not yet disconnected
+- roomA is about to be destroyed once those players leave
+
+**Input:**
+1. Player X sends `player:hello { mode: "code", code: "rematch" }`
+   → server sees `roomA.match.isEnded`, creates roomB, sets `codeIndex["REMATCH"] = roomB.ID`
+2. The last player leaves roomA, triggering room destruction
+
+**Expected Output:**
+- roomA is removed from `rooms`
+- `codeIndex["REMATCH"]` still points at `roomB.ID` (NOT deleted)
+- A subsequent player submitting `"rematch"` joins roomB, not a third fresh room
+- roomB's players never become unreachable
+
+**Why this test:**
+This guards against the bug where room destruction deletes `codeIndex[code]`
+unconditionally — which would silently unindex the fresh rematch room and
+strand its occupants the moment the last straggler from the previous match
+disconnects. The destruction path MUST only delete the code entry if the
+index still points at the room being destroyed.
+
+---
+
 ### TS-ROOM-017: Gameplay Message Before Hello Is Rejected
 
 **Category**: Unit
@@ -1198,6 +1264,7 @@ test "tab reload joins existing room":
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.3.1 | 2026-04-11 | Friends-MVP pre-mortem fixes: (1) code-room join path now explicitly calls `match.start()` when the joiner crosses `MIN_PLAYERS_TO_START`; (2) room destruction now only deletes `codeIndex[code]` if the index still points at the room being destroyed, preventing a rematch-in-progress room from being unindexed when the old room's stragglers disconnect (new TS-ROOM-018); (3) failed-hello semantics clarified — `error:bad_room_code` / `error:room_full` do not latch `HelloSeen`; (4) added "Accepted Risk: Code Collisions Between Unrelated Groups" section making the collision trade-off explicit; (5) added regression notice for the public tab-reload fast-path now requiring a fresh `player:hello`. |
 | 1.3.0 | 2026-04-11 | Friends-MVP: introduced named rooms (`RoomKindCode`), room-code normalization, join-intent via `player:hello`, display-name sanitization and `PlayerState.DisplayName`, error modes `error:no_hello` / `error:bad_room_code` / `error:room_full { code }`. Added TS-ROOM-011..017. |
 | 1.0.0 | 2026-02-02 | Initial specification |
 | 1.1.0 | 2026-02-15 | Added `PingTracker` field to Player struct for per-player RTT measurement. See [networking.md](networking.md#ping-tracking) for implementation details. |

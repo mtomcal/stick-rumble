@@ -1,6 +1,6 @@
 # Stick Rumble Specification Suite
 
-> **Version**: 1.4.0
+> **Version**: 1.4.1
 > **Last Updated**: 2026-04-11
 > **Purpose**: Complete specification for recreating Stick Rumble from scratch
 
@@ -169,9 +169,9 @@ For an AI agent recreating Stick Rumble from scratch, read specs in this order:
 | [arena.md](arena.md) | Match-selected world bounds, collision, and spatial rules | ~220 | 2.0.0 |
 | [player.md](player.md) | 100 HP, 5s regen delay, 3s respawn, 2s invuln | ~960 | 1.2.0 |
 | [movement.md](movement.md) | 200/300 px/s walk/sprint, 50/1500 px/s² accel/decel | ~950 | 1.1.0 |
-| [messages.md](messages.md) | 6 client→server, 22 server→client message types | ~1810 | 1.1.0 |
-| [networking.md](networking.md) | WebSocket lifecycle, reconnect, graceful shutdown | ~1150 | 1.1.0 |
-| [rooms.md](rooms.md) | 2-8 players, auto-matchmaking, broadcast patterns | ~870 | 1.1.0 |
+| [messages.md](messages.md) | 8 client→server, 25 server→client message types | ~1830 | 1.3.1 |
+| [networking.md](networking.md) | WebSocket lifecycle, reconnect, graceful shutdown | ~1160 | 1.2.0 |
+| [rooms.md](rooms.md) | 2-8 players, auto-matchmaking, named rooms, broadcast patterns | ~920 | 1.3.1 |
 | [weapons.md](weapons.md) | Pistol, Uzi, AK47, Shotgun, Bat, Katana stats | ~1070 | 1.1.0 |
 | [shooting.md](shooting.md) | Fire rate, ammo, reload, recoil, spread | ~1100 | 1.2.0 |
 | [hit-detection.md](hit-detection.md) | AABB collision, damage, death, expiration | ~1200 | 1.1.0 |
@@ -185,7 +185,7 @@ For an AI agent recreating Stick Rumble from scratch, read specs in this order:
 | [audio.md](audio.md) | Positional audio, weapon sounds, UI feedback | ~910 | 1.1.0 |
 | [overview.md](overview.md) | Architecture philosophy, prediction/reconciliation patterns | ~710 | 1.1.0 |
 | [test-index.md](test-index.md) | Cross-reference of all test scenarios across specs | ~650 | 1.2.0 |
-| [deployment.md](deployment.md) | MVP AWS deployment: EC2 + Caddy, S3 + CloudFront, default domains, exam-relevance map | ~420 | 1.0.0 |
+| [deployment.md](deployment.md) | MVP AWS deployment: EC2 + Caddy + EIP, S3 + CloudFront, TLS pre-flight, strict CheckOrigin | ~440 | 1.0.1 |
 
 ---
 
@@ -374,6 +374,7 @@ Test scenarios use the format `TS-{SPEC}-{NUMBER}`:
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.4.1 | 2026-04-11 | Friends-MVP pre-mortem pass: patched rooms.md → 1.3.1 (codeIndex destruction race, code-room match.start, collision-risk section), messages.md → 1.3.1 (failed-hello latching, reconnect contract, breaking-change posture), networking.md → 1.2.0 (re-handshake contract on reconnect), deployment.md → 1.0.1 (Elastic IP mandatory, CheckOrigin semantics fully specified, TLS pre-flight, exam-relevance quarantined as non-normative appendix). |
 | 1.4.0 | 2026-04-11 | Friends-MVP: bumped player.md to 1.4.0, rooms.md to 1.3.0, messages.md to 1.3.0 (display names, named rooms, `player:hello`, error messages). Added deployment.md 1.0.0 to the Quick Reference Table and a new "Phase 9: Deployment" in the reading order. |
 | 1.2.0 | 2026-02-16 | Updated spec versions for pre-BMM visual port. Added 16 new visual system checklist items. Updated 9 spec version references. |
 | 1.1.6 | 2026-02-16 | Fixed broken markdown bold formatting on line 3 of "Start Here" section |

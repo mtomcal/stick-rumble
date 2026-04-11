@@ -1,6 +1,6 @@
 # Deployment (AWS MVP)
 
-> **Spec Version**: 1.0.0
+> **Spec Version**: 1.0.1
 > **Last Updated**: 2026-04-11
 > **Depends On**: [networking.md](networking.md), [rooms.md](rooms.md), [messages.md](messages.md)
 > **Depended By**: —
@@ -92,7 +92,8 @@ CloudFront supports WebSockets, but doing so introduces an extra origin configur
 - **Instance type**: `t4g.small` (Graviton, ARM64) if cost is the priority; `t3.micro` if 12-month free tier is the priority. The Go server cross-compiles to both.
 - **OS**: Amazon Linux 2023, updated at provision time.
 - **Disk**: default 8 GiB gp3 root volume. Nothing persistent runs here — if the instance dies, recreate it.
-- **Public IP**: enabled. Elastic IP is optional but recommended so the public DNS does not change across stop/start cycles (matters because `VITE_WS_URL` is baked into the client bundle at build time).
+- **Public IP**: enabled.
+- **Elastic IP**: **required** for MVP. Attach an Elastic IP to the instance so the public DNS is stable across stop/start cycles and AWS maintenance events. This is non-negotiable because `VITE_WS_URL` is baked into the client bundle at build time (see the **Static Client** section below) — if the EC2 public DNS changes, every bundle in every friend's browser cache points at a dead host until the client is rebuilt, re-uploaded, and CloudFront is invalidated. The cost of a leaving-EIP-attached setup is $0; detached EIPs cost ~$0.005/hr but that condition only applies if the instance is stopped, which the MVP explicitly permits between play sessions. If the owner chooses to turn the instance off between sessions, the EIP stays attached to the stopped instance and continues to point at it on restart — no rebuild needed.
 
 ### Security Group
 
@@ -124,24 +125,50 @@ Built into Amazon Linux, restarts the service on crash, starts it on boot, and w
 
 ### TLS Story
 
-Caddy manages Let's Encrypt certificates automatically for whatever hostname it is configured to serve. For MVP, that hostname is the EC2 instance's public DNS (e.g. `ec2-1-2-3-4.us-west-2.compute.amazonaws.com`). Let's Encrypt issues certs for AWS default DNS names without any domain ownership paperwork beyond the ACME HTTP-01 challenge, which Caddy handles on port 80.
+Caddy manages Let's Encrypt certificates automatically for whatever hostname it is configured to serve. For MVP, that hostname is the EC2 instance's public DNS (e.g. `ec2-1-2-3-4.us-west-2.compute.amazonaws.com`). Caddy handles the ACME HTTP-01 challenge on port 80.
+
+**Pre-flight validation (run before committing to this path).**
+Let's Encrypt has historically rate-limited or blocked certificate issuance for AWS default hostnames in some regions because they have been used for abuse, and the behavior has shifted over time without announcement. Before building the rest of the deployment on top of an EC2-default-hostname cert, **validate issuance actually works in your chosen region** with this minimal smoke sequence:
+
+1. Launch a throwaway `t3.micro` in the target region with ports 80 and 443 open and an EIP attached.
+2. Install Caddy and start it with a Caddyfile that serves `<ec2-public-dns>` with an empty static response.
+3. From a different machine, run `curl -v https://<ec2-public-dns>/` within 5 minutes of Caddy startup.
+4. **Pass condition**: the curl output shows a valid Let's Encrypt certificate for the EC2 hostname, handshake succeeds, status 200.
+5. **Fail condition**: `journalctl -u caddy` shows ACME errors mentioning `policy`, `blacklist`, `rate limit`, or `unauthorized`.
+
+If the pre-flight fails, **do not try to brute-force through the rate limit.** Let's Encrypt staging/production rate limits are measured in weeks, and repeat attempts make the problem worse. Fall back to one of:
+- Register a cheap custom domain (e.g. from a registrar of your choice for ~$3–12/year), point a DNS `A` record at the EIP, and configure Caddy for that hostname instead. This is the most-recommended path if the pre-flight fails — custom domains have no such restrictions and the incremental setup cost is 10 minutes.
+- Use a free subdomain service that issues names Let's Encrypt doesn't treat as infrastructure (DuckDNS, etc.). Acceptable but operationally slightly less boring.
+
+Do not proceed to the full deployment until the pre-flight passes on a throwaway instance in the exact region you intend to use.
 
 **Why not AWS ACM on the EC2 side?**
-ACM-issued certs can only be used by AWS services that ACM integrates with (ELB, CloudFront, API Gateway). They cannot be exported to a raw EC2 instance. Let's Encrypt is the correct tool here.
+ACM-issued certs can only be used by AWS services that ACM integrates with (ELB, CloudFront, API Gateway). They cannot be exported to a raw EC2 instance. Let's Encrypt is the correct tool here (and if Let's Encrypt refuses to issue for the EC2 hostname, switching to a custom domain is strictly simpler than fronting the EC2 instance with an ALB just for ACM).
 
 **Why not skip TLS entirely?**
 Browsers block `ws://` connections initiated from an `https://` page, and the static client will be served over HTTPS. Therefore the server side must be `wss://`, which requires a cert.
 
 ### `CheckOrigin` Hardening
 
-The current Go server uses `CheckOrigin: return true` on the WebSocket upgrader, which accepts connections from any origin. For the deployed environment this MUST be tightened to allow only the CloudFront distribution's default domain (and optionally `http://localhost:*` for development builds). Add the allowlist to the server config via environment variable:
+The current Go server uses `CheckOrigin: return true` on the WebSocket upgrader (`stick-rumble-server/internal/network/websocket_handler.go`), which accepts connections from any origin. For the deployed environment this MUST be replaced with an allowlist driven by `ALLOWED_ORIGINS`:
 
 ```
 ALLOWED_ORIGINS=https://<distribution-id>.cloudfront.net,http://localhost:5173
 ```
 
+**Semantics (normative — TS-DEPLOY-003 asserts this):**
+
+- `ALLOWED_ORIGINS` is a comma-separated list of **exact** origin strings in the form `<scheme>://<host>[:<port>]`. No path, no trailing slash, no wildcard, no port expansion.
+- The upgrader reads the `Origin` request header and returns `true` if and only if the header's value appears in the allowlist as a case-sensitive byte-for-byte match (after normalization: strip trailing slash; schemes and hosts are compared case-insensitively per RFC 6454, ports are compared numerically).
+- Port is **significant**. `http://localhost:5173` does not match `http://localhost:5174` or `http://localhost`.
+- **Missing or empty `Origin` header**: the upgrader returns `false`. This rejects raw `curl` / `websocat` / non-browser clients by default. Operators who need to connect a headless client must add its origin to the allowlist explicitly; there is no implicit "empty origin allowed" mode.
+- **Rejection surface**: on `CheckOrigin → false`, `gorilla/websocket` responds with HTTP 403 and closes the connection without completing the upgrade. This is what TS-DEPLOY-003 checks for.
+- **Misconfiguration posture**: an unset or empty `ALLOWED_ORIGINS` on a production build is a hard-fail — the server must refuse to start rather than default to open. Development builds (`GO_ENV=development`) may default to `http://localhost:5173` only.
+
+**Implementation note:** This is a code change relative to the current codebase, not a config change. TS-DEPLOY-003 cannot pass against the current `CheckOrigin: return true` upgrader without editing `websocket_handler.go` to read and enforce the allowlist.
+
 **Why restrict origins?**
-A permissive origin check lets any other website open a WebSocket to the server using a user's browser session, which would be a trust boundary violation even in the absence of cookies.
+A permissive origin check lets any other website open a WebSocket to the server using a visiting user's browser session. Even absent cookies, that's a cross-site trust boundary violation — the attacker could, for example, impersonate the player inside their own match by opening a second socket from `evil.com` while the player is logged in on the real client. `CheckOrigin` is the cheapest and bluntest defense.
 
 ### Environment Variables
 
@@ -212,7 +239,7 @@ These steps are manual on purpose. Automating them with Terraform / CDK / GitHub
 2. Create the CloudFront distribution with S3 origin + OAC, default root object `index.html`, viewer policy redirect-to-HTTPS.
 3. Apply the bucket policy that grants read access to the CloudFront distribution (CloudFront generates this for you; copy and attach it).
 4. Launch the EC2 instance with the chosen AMI, instance type, security group, and SSM instance role.
-5. (Optional) Attach an Elastic IP to the instance so its public DNS is stable across stop/start.
+5. **Allocate and attach an Elastic IP to the instance.** This is required, not optional — the client bundle bakes in the public DNS at build time, and an EIP is the only way to keep that DNS stable across stop/start, reboot, and AWS maintenance events without forcing a full client rebuild.
 6. SSH (or SSM) into the instance. Install Caddy via Amazon Linux's package manager. Install Go only if you plan to build on the instance; otherwise cross-compile locally and upload the binary.
 
 ### Server deploy
@@ -238,16 +265,22 @@ These steps are manual on purpose. Automating them with Terraform / CDK / GitHub
 4. Refresh, switch to `mode: "code"` with an agreed code (e.g. `TEST`), confirm both land in the same named room.
 5. Fill the room to 8 and try a 9th connect with the same code — confirm `error:room_full`.
 
+> **Accepted risk — code collisions.** On the public internet, two unrelated groups that happen to pick the same common room code (`TEST`, `GAME`, `PARTY`, `PIZZA`, …) will silently merge into the same room and see each other as strangers. Friends-MVP ships no mitigation for this on purpose; see [rooms.md § Accepted Risk: Code Collisions Between Unrelated Groups](rooms.md#accepted-risk-code-collisions-between-unrelated-groups) for the rationale. When running the smoke test, pick a code your friend group would not accidentally share with anyone else (`MTFRIENDS42` beats `TEST`). If the game is ever exposed beyond the trusted friend group, this design has to change before that exposure happens — not after.
+
 ---
 
 ## Error Handling and Failure Modes
 
 ### TLS Provisioning Fails
 
-**Trigger**: Caddy cannot reach Let's Encrypt or ACME HTTP-01 challenge fails
-**Detection**: `journalctl -u caddy` shows ACME errors; `https://` on the EC2 host returns a cert error
-**Response**: Ensure port 80 is open in the security group (ACME HTTP-01 uses it), confirm the public DNS name resolves correctly, retry. Rate-limited by Let's Encrypt — avoid flailing.
-**Recovery**: Caddy retries automatically on its own schedule.
+**Trigger**: Caddy cannot reach Let's Encrypt, the ACME HTTP-01 challenge fails, or Let's Encrypt refuses to issue for the EC2 default hostname
+**Detection**: `journalctl -u caddy` shows ACME errors; `https://` on the EC2 host returns a cert error or no cert at all
+**Response**:
+1. Confirm port 80 is open in the security group (ACME HTTP-01 uses it).
+2. Confirm the instance's public DNS actually resolves to the instance from the public internet.
+3. Read the ACME error class carefully: `connection`, `timeout`, `rate limit`, `unauthorized`, `policy`. A rate-limit or policy-refusal is NOT a retry loop — it is the signal to fall back to a custom domain per the **TLS Story § Pre-flight validation** section. Hammering Let's Encrypt while rate-limited extends the rate-limit window.
+4. Only retry if the root cause is a transient network or firewall error.
+**Recovery**: For transient errors Caddy retries automatically on its own schedule. For rate-limit / policy errors, the correct recovery is to switch the Caddyfile hostname to a custom domain pointed at the EIP and let Caddy re-provision against that name.
 
 ### S3 Upload Succeeds but CloudFront Serves Old Content
 
@@ -266,9 +299,10 @@ These steps are manual on purpose. Automating them with Terraform / CDK / GitHub
 ### Instance Reboot
 
 **Trigger**: AWS maintenance event, accidental stop/start, or crash
-**Detection**: Public DNS changes if no Elastic IP attached
-**Response**: If the public DNS changed, the client bundle's baked `VITE_WS_URL` is stale. Either reattach an Elastic IP (preferred) or rebuild + re-upload the client with the new DNS.
-**Recovery**: `systemctl` restarts both services automatically on boot.
+**Detection**: `systemd-journald` logs a clean boot; Caddy and the Go server restart automatically
+**Response**: With the mandatory Elastic IP attached, the public DNS does **not** change across reboots, so the client bundle's baked `VITE_WS_URL` stays valid. Clients should reconnect automatically via the [networking.md reconnection loop](networking.md#reconnection-logic) and re-send `player:hello` as the first message on the new socket — the server has lost all in-flight match state.
+**Recovery**: `systemctl` restarts both services automatically on boot. In-flight matches are lost (see Implementation Notes — no persistent matches).
+**Regression if EIP is missing**: If the owner accidentally detaches or never attached the Elastic IP, the public DNS will change on stop/start and every cached client bundle becomes unusable. Recovery then requires a full client rebuild with the new `VITE_WS_URL`, re-upload to S3, and a CloudFront `/index.html` invalidation. Treat a missing EIP as a deployment defect, not a runtime failure mode.
 
 ---
 
@@ -289,9 +323,11 @@ On `t3.micro` with the 12-month free tier, this drops to effectively $0 for the 
 
 ---
 
-## Exam-Relevance Map (Cloud Practitioner CLF-C02)
+## Appendix: Personal Motivation — Cloud Practitioner Study Value (non-normative)
 
-Every service used by this deployment appears on the exam blueprint. Rough mapping:
+> **This section is a personal note, not a system requirement.** Nothing below is load-bearing for the deployment working correctly. A future engineer reading `specs/` should treat this section as context on *why* AWS was chosen at all, not as a list of constraints to preserve. If a better architectural choice later disagrees with the exam-mapping here, the better architectural choice wins.
+
+The project owner is preparing for the AWS Certified Cloud Practitioner (CLF-C02) exam and wanted a real deployment to be the study vehicle. Every service the MVP uses happens to appear on the CLF-C02 blueprint, which is the main reason AWS was chosen over alternatives like Fly.io, Render, or a single Hetzner box:
 
 | Service used here | Exam domain |
 |-------------------|-------------|
@@ -304,7 +340,7 @@ Every service used by this deployment appears on the exam blueprint. Rough mappi
 | SSM Session Manager | Domain 3 |
 | CloudWatch journaling (via EC2 metrics defaults) | Domain 3 |
 
-Going through the deployment by hand exercises each of these in a way flashcards do not.
+Going through the deployment by hand exercises each of these in a way flashcards do not. That is the **only** reason this section exists in the spec — not because the topology must keep using these specific services forever.
 
 ---
 
@@ -384,4 +420,5 @@ Going through the deployment by hand exercises each of these in a way flashcards
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.0.1 | 2026-04-11 | Pre-mortem fixes: (1) Elastic IP promoted from optional to **required** — prevents `VITE_WS_URL` bundle staleness on stop/start; (2) `CheckOrigin` semantics fully specified (exact-match allowlist, port-sensitive, empty-origin rejected, unset `ALLOWED_ORIGINS` is hard-fail in production); (3) TLS pre-flight validation step added — confirm Let's Encrypt issues for the EC2 default hostname in your region on a throwaway instance before committing, with an explicit custom-domain fallback; (4) "Instance Reboot" failure mode rewritten around mandatory EIP; (5) code-collision accepted-risk note added to the smoke test; (6) exam-relevance section moved to a clearly non-normative appendix so a future engineer does not mistake it for a constraint. |
 | 1.0.0 | 2026-04-11 | Initial MVP AWS deployment spec: EC2 + Caddy + loopback Go server, S3 + CloudFront + OAC for static client, default AWS hostnames, `ALLOWED_ORIGINS` hardening, manual deploy steps, cost envelope, Cloud Practitioner exam mapping. |
