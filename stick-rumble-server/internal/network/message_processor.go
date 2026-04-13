@@ -333,6 +333,11 @@ func (h *WebSocketHandler) onRespawn(playerID string, position game.Vector2) {
 	if room != nil {
 		room.Broadcast(msgBytes, "")
 	}
+
+	// The respawning player's weapon state is reset server-side to the default pistol.
+	// Resend the authoritative weapon state immediately so local firing rules and visuals
+	// do not lag behind the respawn broadcast.
+	h.sendWeaponState(playerID)
 }
 
 // handleWeaponPickup processes weapon pickup attempts from players

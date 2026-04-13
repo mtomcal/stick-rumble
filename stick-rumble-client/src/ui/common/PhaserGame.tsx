@@ -9,16 +9,26 @@ export interface PhaserGameProps {
 
 export function PhaserGame({ onMatchEnd }: PhaserGameProps) {
   const gameRef = useRef<Phaser.Game | null>(null);
+  const onMatchEndRef = useRef(onMatchEnd);
+
+  useEffect(() => {
+    onMatchEndRef.current = onMatchEnd;
+
+    if (onMatchEnd) {
+      window.onMatchEnd = (data, playerId) => onMatchEndRef.current?.(data, playerId);
+      return () => {
+        delete window.onMatchEnd;
+      };
+    }
+
+    delete window.onMatchEnd;
+    return undefined;
+  }, [onMatchEnd]);
 
   useEffect(() => {
     // Initialize Phaser game
     if (!gameRef.current) {
       gameRef.current = new Phaser.Game(GameConfig);
-
-      // Expose onMatchEnd callback to Phaser game
-      if (onMatchEnd) {
-        window.onMatchEnd = onMatchEnd;
-      }
 
       // Expose restartGame function to allow React to trigger scene restart
       window.restartGame = () => {
@@ -43,12 +53,9 @@ export function PhaserGame({ onMatchEnd }: PhaserGameProps) {
       }
 
       // Cleanup global callbacks
-      if (onMatchEnd) {
-        delete window.onMatchEnd;
-      }
       delete window.restartGame;
     };
-  }, [onMatchEnd]);
+  }, []);
 
   return <div id="game-container" />;
 }

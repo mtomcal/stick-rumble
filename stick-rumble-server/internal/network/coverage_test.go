@@ -188,6 +188,16 @@ func TestOnRespawn(t *testing.T) {
 	position := data["position"].(map[string]interface{})
 	assert.Equal(t, float64(400), position["x"])
 	assert.Equal(t, float64(300), position["y"])
+
+	weaponMsg, err := readMessageOfType(t, conn1, "weapon:state", 2*time.Second)
+	require.NoError(t, err, "Should receive weapon:state after respawn")
+
+	weaponData, ok := weaponMsg.Data.(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "Pistol", weaponData["weaponType"])
+	assert.Equal(t, float64(game.PistolMagazineSize), weaponData["currentAmmo"])
+	assert.Equal(t, float64(game.PistolMagazineSize), weaponData["maxAmmo"])
+	assert.Equal(t, false, weaponData["isReloading"])
 }
 
 // TestHandleWeaponPickup tests the handleWeaponPickup function (partial coverage)

@@ -36,6 +36,15 @@ describe('GameSceneEventHandlers', () => {
       destroy: vi.fn(),
       removePlayer: vi.fn(),
       setLocalPlayerId: vi.fn(),
+      getPlayerState: vi.fn((playerId: string) => {
+        if (playerId === 'killer-player-id') {
+          return { id: playerId, displayName: 'Alice' };
+        }
+        if (playerId === 'victim-player-id') {
+          return { id: playerId, displayName: 'Bob' };
+        }
+        return undefined;
+      }),
       getLocalPlayerId: vi.fn().mockReturnValue('player-1'),
       getPlayerPosition: vi.fn().mockReturnValue({ x: 100, y: 200 }),
       getLocalPlayerPosition: vi.fn().mockReturnValue({ x: 100, y: 200 }),
@@ -1010,8 +1019,8 @@ describe('GameSceneEventHandlers', () => {
         'Kill credit: killer-player-id killed victim-player-id (Kills: 5, XP: 150)'
       );
 
-      // Verify kill feed was updated (with shortened IDs)
-      expect(mockKillFeedUI.addKill).toHaveBeenCalledWith('killer-p', 'victim-p');
+      // Verify kill feed was updated with authoritative display names
+      expect(mockKillFeedUI.addKill).toHaveBeenCalledWith('Alice', 'Bob');
 
       consoleSpy.mockRestore();
     });
@@ -1418,6 +1427,38 @@ describe('GameSceneEventHandlers', () => {
 
       // Verify setWeaponType was NOT called for non-melee weapon
       expect(mockShootingManager.setWeaponType).not.toHaveBeenCalled();
+    });
+
+    it('should reconcile local weapon presentation from authoritative weapon:state', () => {
+      const mockShootingManager = {
+        updateWeaponState: vi.fn(),
+        setWeaponType: vi.fn(),
+        isReloading: vi.fn().mockReturnValue(false),
+        isMeleeWeapon: vi.fn().mockReturnValue(false),
+      };
+
+      eventHandlers.setShootingManager(mockShootingManager as any);
+      eventHandlers.setupEventHandlers();
+      (eventHandlers as any).currentWeaponType = 'Uzi';
+
+      const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
+      const weaponStateHandler = handlerRefs.get('weapon:state');
+
+      const data = {
+        weaponType: 'Pistol',
+        currentAmmo: 15,
+        maxAmmo: 15,
+        isReloading: false,
+        canShoot: true,
+        isMelee: false,
+      };
+
+      weaponStateHandler?.(data);
+
+      expect(mockShootingManager.updateWeaponState).toHaveBeenCalledWith(data);
+      expect(mockPlayerManager.updatePlayerWeapon).toHaveBeenCalledWith('player-1', 'Pistol');
+      expect(mockMeleeWeaponManager.createWeapon).toHaveBeenCalledWith('player-1', 'Pistol', { x: 100, y: 200 });
+      expect(eventHandlers.getCurrentWeaponType()).toBe('Pistol');
     });
 
     it('should handle weapon:spawned with no crates', () => {

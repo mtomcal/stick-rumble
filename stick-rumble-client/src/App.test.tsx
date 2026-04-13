@@ -43,9 +43,13 @@ vi.mock('./ui/debug/DebugNetworkPanel', () => ({
 
 describe('App', () => {
   afterEach(() => {
-    localStorage.clear();
+    window.localStorage.clear();
     window.history.replaceState({}, '', '/');
     delete window.submitJoinIntent;
+    delete window.onJoinSuccess;
+    delete window.onJoinError;
+    delete window.onRosterSizeChanged;
+    delete window.onReconnectReplayFailed;
   });
 
   it('should render the main app container', () => {
@@ -109,7 +113,7 @@ describe('App', () => {
   });
 
   it('should auto-join an invite after the join bridge becomes ready', () => {
-    localStorage.setItem('stick-rumble.display-name', 'Saved Player');
+    window.localStorage.setItem('stick-rumble.display-name', 'Saved Player');
     window.history.replaceState({}, '', '/?invite=PIZZA');
 
     const submitJoinIntent = vi.fn();
@@ -129,6 +133,77 @@ describe('App', () => {
 
     expect(submitJoinIntent).toHaveBeenCalledWith({
       displayName: 'Saved Player',
+      mode: 'code',
+      code: 'PIZZA',
+    });
+
+    rafSpy.mockRestore();
+    cancelSpy.mockRestore();
+  });
+
+  it('should keep join actions disabled until the Phaser join bridge is ready', () => {
+    window.history.replaceState({}, '', '/?invite=PIZZA');
+
+    render(<App />);
+
+    expect(screen.getByRole('button', { name: 'Play Public' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Join Code' })).toBeDisabled();
+    expect(screen.getByText('Connecting to game...')).toBeInTheDocument();
+  });
+
+  it('should show a joining state after submit until Phaser resolves the attempt', () => {
+    window.history.replaceState({}, '', '/?invite=PIZZA');
+    const submitJoinIntent = vi.fn();
+
+    render(<App />);
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Display Name' }), {
+      target: { value: 'Tom' },
+    });
+
+    window.submitJoinIntent = submitJoinIntent;
+    act(() => {
+      window.dispatchEvent(new Event('stick-rumble:submit-join-intent-ready'));
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Join Code' }));
+
+    expect(submitJoinIntent).toHaveBeenCalledWith({
+      displayName: 'Tom',
+      mode: 'code',
+      code: 'PIZZA',
+    });
+    expect(screen.getByText('Joining...', { selector: 'p' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Play Public' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Joining...' })).toBeDisabled();
+  });
+
+  it('should not auto-join an invite while the user is typing a new display name', () => {
+    window.history.replaceState({}, '', '/?invite=PIZZA');
+    const submitJoinIntent = vi.fn();
+    const rafSpy = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    });
+    const cancelSpy = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
+
+    render(<App />);
+
+    window.submitJoinIntent = submitJoinIntent;
+    act(() => {
+      window.dispatchEvent(new Event('stick-rumble:submit-join-intent-ready'));
+    });
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Display Name' }), {
+      target: { value: 'T' },
+    });
+
+    expect(submitJoinIntent).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Join Code' }));
+
+    expect(submitJoinIntent).toHaveBeenCalledWith({
+      displayName: 'T',
       mode: 'code',
       code: 'PIZZA',
     });

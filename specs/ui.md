@@ -268,6 +268,7 @@ export class HealthBarUI {
 2. If > 5 entries → remove oldest (FIFO)
 3. After 5 seconds → fade out over 1 second
 4. On fade complete → remove and reposition remaining entries
+5. Names shown are the authoritative display names currently known to the client for the killer and victim. Internal player IDs are not shown in the visible kill feed except as an emergency fallback when no display name has ever been observed for that player.
 
 **Pseudocode:**
 ```
@@ -1706,6 +1707,7 @@ it('should sort scoreboard by kills descending, deaths ascending', () => {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.3.3 | 2026-04-13 | Kill feed now requires authoritative display names for killer and victim; internal player IDs remain UI-internal and are only an emergency fallback if no display name is known locally. |
 | 2.3.2 | 2026-04-10 | Re-anchored the top-left survival HUD contract: the health cluster now owns the first row at 20px viewport padding, ammo is explicitly stacked underneath it, and the ammo icon/text are required to stay anchored as one unit instead of drifting independently. |
 | 2.3.1 | 2026-04-09 | Corrected stale TS-UI-018 expectations to the bottom-left minimap contract and clarified ammo-display rationale to remove references to title text in the normal gameplay HUD. |
 | 2.3.0 | 2026-04-09 | Re-zoned the HUD into stable corner ownership: top-left survival, bottom-left minimap, top-right match status, bottom-right action state. Removed chat/debug/title/connection text from the normal gameplay HUD contract and made HUD non-occlusion by world entities an explicit outcome requirement. |

@@ -20,14 +20,38 @@ const DUPLICATE_TAB_HEARTBEAT_MS = 2000
 type OverlayMode = 'join' | 'duplicate'
 const JOIN_BRIDGE_READY_EVENT = 'stick-rumble:submit-join-intent-ready'
 
+function getBrowserStorage(): Storage | null {
+  if (typeof window === 'undefined') {
+    return null
+  }
+
+  const storage = window.localStorage as Partial<Storage> | undefined
+  if (
+    storage &&
+    typeof storage.getItem === 'function' &&
+    typeof storage.setItem === 'function' &&
+    typeof storage.removeItem === 'function' &&
+    typeof storage.clear === 'function'
+  ) {
+    return window.localStorage
+  }
+
+  return null
+}
+
 function App() {
   const inviteCode = useMemo(() => getInviteCodeFromLocation(), [])
+  const initialSavedDisplayName = useMemo(
+    () => getBrowserStorage()?.getItem(DISPLAY_NAME_STORAGE_KEY) ?? '',
+    []
+  )
   const [tabId] = useState(() => `tab-${globalThis.crypto?.randomUUID?.() ?? Date.now().toString(36)}`)
   const claimIntervalRef = useRef<number | null>(null)
   const claimedInviteKeyRef = useRef<string | null>(null)
   const autoJoinAttemptedRef = useRef(false)
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null)
   const duplicateBlockedKeyRef = useRef<string | null>(null)
+  const displayNameDirtyRef = useRef(false)
 
   const [matchEndData, setMatchEndData] = useState<MatchEndData | null>(null)
   const [localPlayerId, setLocalPlayerId] = useState<string>('')
@@ -38,11 +62,12 @@ function App() {
   const [rosterSize, setRosterSize] = useState(0)
   const [reconnectIntent, setReconnectIntent] = useState<JoinIntent | null>(null)
   const [overlayMode, setOverlayMode] = useState<OverlayMode>('join')
+  const [isJoinBridgeReady, setIsJoinBridgeReady] = useState(() => typeof window.submitJoinIntent === 'function')
+  const [isJoinPending, setIsJoinPending] = useState(false)
   const [joinBridgeReadyTick, setJoinBridgeReadyTick] = useState(0)
   const [joinForm, setJoinForm] = useState(() => {
-    const savedDisplayName = localStorage.getItem(DISPLAY_NAME_STORAGE_KEY) ?? ''
     return {
-      displayName: savedDisplayName,
+      displayName: initialSavedDisplayName,
       code: inviteCode ?? '',
     }
   })
@@ -62,7 +87,7 @@ function App() {
       claimIntervalRef.current = null
     }
     if (claimedInviteKeyRef.current) {
-      localStorage.removeItem(claimedInviteKeyRef.current)
+      getBrowserStorage()?.removeItem(claimedInviteKeyRef.current)
       try {
         broadcastChannelRef.current?.postMessage({ type: 'release', key: claimedInviteKeyRef.current })
       } catch {
@@ -84,7 +109,8 @@ function App() {
     const key = `stick-rumble.active-invite.${normalizedCode}.${normalizedDisplayName}`
     duplicateBlockedKeyRef.current = key
     const now = Date.now()
-    const current = localStorage.getItem(key)
+    const storage = getBrowserStorage()
+    const current = storage?.getItem(key)
     if (current) {
       try {
         const parsed = JSON.parse(current) as { owner: string; updatedAt: number }
@@ -98,7 +124,7 @@ function App() {
     }
 
     const writeClaim = () => {
-      localStorage.setItem(key, JSON.stringify({ owner: tabId, updatedAt: Date.now() }))
+      storage?.setItem(key, JSON.stringify({ owner: tabId, updatedAt: Date.now() }))
     }
 
     writeClaim()
@@ -111,6 +137,7 @@ function App() {
 
   const submitJoinIntent = useCallback((intent: JoinIntent) => {
     if (!window.submitJoinIntent) {
+      setIsJoinBridgeReady(false)
       return
     }
 
@@ -123,6 +150,7 @@ function App() {
     setReconnectIntent(null)
     setJoinedRoom(null)
     setRosterSize(0)
+    setIsJoinPending(true)
     window.submitJoinIntent(intent)
   }, [claimInviteSlot])
 
@@ -136,15 +164,17 @@ function App() {
     }
 
     window.onJoinSuccess = (payload) => {
+      setIsJoinPending(false)
       setJoinError(null)
       setOverlayMode('join')
       setReconnectIntent(null)
       setJoinedRoom(payload)
       setJoinForm((prev) => ({ ...prev, displayName: payload.displayName, code: payload.code ?? prev.code }))
-      localStorage.setItem(DISPLAY_NAME_STORAGE_KEY, payload.displayName)
+      getBrowserStorage()?.setItem(DISPLAY_NAME_STORAGE_KEY, payload.displayName)
     }
 
     window.onJoinError = (payload) => {
+      setIsJoinPending(false)
       setJoinError(payload)
       setJoinedRoom(null)
       setRosterSize(0)
@@ -155,6 +185,7 @@ function App() {
     }
 
     window.onReconnectReplayFailed = (intent) => {
+      setIsJoinPending(false)
       setReconnectIntent(intent)
     }
 
@@ -169,6 +200,7 @@ function App() {
 
   useEffect(() => {
     const onJoinBridgeReady = () => {
+      setIsJoinBridgeReady(true)
       setJoinBridgeReadyTick((prev) => prev + 1)
     }
 
@@ -223,14 +255,21 @@ function App() {
   }, [releaseInviteClaim, tabId])
 
   useEffect(() => {
-    if (!inviteCode || !joinForm.displayName || autoJoinAttemptedRef.current || !window.submitJoinIntent) {
+    const hasPrefilledDisplayName = initialSavedDisplayName.trim().length > 0
+    if (
+      !inviteCode ||
+      !hasPrefilledDisplayName ||
+      displayNameDirtyRef.current ||
+      autoJoinAttemptedRef.current ||
+      !window.submitJoinIntent
+    ) {
       return
     }
 
     autoJoinAttemptedRef.current = true
     const frameId = window.requestAnimationFrame(() => {
       submitJoinIntent({
-        displayName: joinForm.displayName,
+        displayName: initialSavedDisplayName,
         mode: 'code',
         code: inviteCode,
       })
@@ -239,12 +278,12 @@ function App() {
     return () => {
       window.cancelAnimationFrame(frameId)
     }
-  }, [inviteCode, joinForm.displayName, joinBridgeReadyTick, submitJoinIntent])
+  }, [initialSavedDisplayName, inviteCode, joinBridgeReadyTick, submitJoinIntent])
 
-  const handleMatchEnd = (data: MatchEndData, playerId: string) => {
+  const handleMatchEnd = useCallback((data: MatchEndData, playerId: string) => {
     setMatchEndData(data)
     setLocalPlayerId(playerId)
-  }
+  }, [])
 
   const handleCloseMatchEnd = () => {
     setMatchEndData(null)
@@ -289,6 +328,8 @@ function App() {
     await navigator.clipboard?.writeText(link)
   }
 
+  const joinActionsDisabled = !isJoinBridgeReady || isJoinPending
+
   return (
     <div className="app-shell">
       <div className="app-container">
@@ -311,7 +352,10 @@ function App() {
               Display Name
               <input
                 value={joinForm.displayName}
-                onChange={(event) => setJoinForm((prev) => ({ ...prev, displayName: event.target.value }))}
+                onChange={(event) => {
+                  displayNameDirtyRef.current = true
+                  setJoinForm((prev) => ({ ...prev, displayName: event.target.value }))
+                }}
                 placeholder="Guest"
               />
             </label>
@@ -330,12 +374,20 @@ function App() {
                 {joinError.type === 'error:no_hello' && `Server rejected ${joinError.offendingType ?? 'message'} before hello.`}
               </p>
             )}
+            {!isJoinBridgeReady && <p className="overlay-status">Connecting to game...</p>}
+            {isJoinPending && <p className="overlay-status">Joining...</p>}
             <div className="overlay-actions">
-              <button onClick={() => submitJoinIntent({ displayName: joinForm.displayName, mode: 'public' })}>
+              <button
+                disabled={joinActionsDisabled}
+                onClick={() => submitJoinIntent({ displayName: joinForm.displayName, mode: 'public' })}
+              >
                 Play Public
               </button>
-              <button onClick={() => submitJoinIntent({ displayName: joinForm.displayName, mode: 'code', code: joinForm.code })}>
-                Join Code
+              <button
+                disabled={joinActionsDisabled}
+                onClick={() => submitJoinIntent({ displayName: joinForm.displayName, mode: 'code', code: joinForm.code })}
+              >
+                {isJoinPending ? 'Joining...' : 'Join Code'}
               </button>
             </div>
           </div>

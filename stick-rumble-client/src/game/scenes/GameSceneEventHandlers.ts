@@ -84,6 +84,12 @@ export class GameSceneEventHandlers {
   private onJoinError: ((payload: JoinErrorPayload) => void) | null = null;
   private onRosterSizeChanged: ((count: number) => void) | null = null;
 
+  private resolvePlayerDisplayName(playerId: string): string {
+    const playerState = this.playerManager.getPlayerState(playerId);
+    const displayName = playerState?.displayName?.trim();
+    return displayName && displayName.length > 0 ? displayName : playerId.substring(0, 8);
+  }
+
   constructor(
     wsClient: WebSocketClient,
     playerManager: PlayerManager,
@@ -328,6 +334,7 @@ export class GameSceneEventHandlers {
 
       // Reset match ended flag for new match
       this.matchEnded = false;
+      this.currentWeaponType = 'pistol';
 
       // Clear existing players to prevent duplication if room:joined fires multiple times
       // This handles reconnect scenarios and future match restart functionality
@@ -487,6 +494,25 @@ export class GameSceneEventHandlers {
     // Store and register weapon:state handler
     const weaponStateHandler = (data: unknown) => {
       const messageData = data as WeaponStateData;
+      const authoritativeWeaponType =
+        typeof messageData.weaponType === 'string' && messageData.weaponType.length > 0
+          ? messageData.weaponType
+          : this.currentWeaponType;
+      const previousWeaponType = this.currentWeaponType;
+      this.currentWeaponType = authoritativeWeaponType;
+
+      const localPlayerId = this.playerManager.getLocalPlayerId();
+      const weaponTypeChanged = previousWeaponType.toLowerCase() !== authoritativeWeaponType.toLowerCase();
+
+      if (localPlayerId && weaponTypeChanged) {
+        this.playerManager.updatePlayerWeapon(localPlayerId, authoritativeWeaponType);
+
+        const playerPosition = this.playerManager.getPlayerPosition(localPlayerId);
+        if (playerPosition) {
+          this.meleeWeaponManager.createWeapon(localPlayerId, authoritativeWeaponType, playerPosition);
+        }
+      }
+
       if (this.shootingManager) {
         // Detect reload start transition (before updateWeaponState changes internal state)
         const wasReloading = this.shootingManager.isReloading();
@@ -630,8 +656,10 @@ export class GameSceneEventHandlers {
         this.ui.showHitIndicator(killLocalPos.x, killLocalPos.y, killVictimPos.x, killVictimPos.y, 'outgoing', true);
       }
 
-      // Add kill to feed (using player IDs for now - will be replaced with names later)
-      this.killFeedUI.addKill(messageData.killerId.substring(0, 8), messageData.victimId.substring(0, 8));
+      this.killFeedUI.addKill(
+        this.resolvePlayerDisplayName(messageData.killerId),
+        this.resolvePlayerDisplayName(messageData.victimId)
+      );
 
       // Update score display with XP from kill credit
       if (this.scoreDisplayUI) {

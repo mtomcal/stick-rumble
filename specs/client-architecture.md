@@ -1447,17 +1447,27 @@ See [networking.md](networking.md#network-simulator) for server-side counterpart
 
 **Purpose:** Mount Phaser game instance, enable React ↔ Phaser communication.
 
+**Lifecycle contract (Friends-MVP join flow):**
+- React-owned overlay state such as join errors, waiting-for-friend, reconnect prompts, and match-end UI MUST NOT destroy and recreate the Phaser game instance or its active WebSocket connection.
+- The Phaser instance is long-lived for the lifetime of the mounted `PhaserGame` component. React may refresh bridge callbacks, but callback refreshes must not be coupled to `new Phaser.Game(...)`.
+- Join submission is a bridge operation. Until Phaser installs `window.submitJoinIntent`, React treats the join controls as "connecting" rather than silently dropping input.
+- After React hands off a join intent, the overlay enters a pending "joining" state and remains there until `room:joined`, `error:*`, or a connection failure resolves the attempt.
+- Invite-link auto-submit is allowed only when a complete cached display name already exists before the user interacts. Typing into an initially empty display-name field MUST NOT trigger an automatic join on the first character; in that case the user confirms manually with `Join Code`.
+
 **Pseudocode:**
 ```
 function PhaserGame({ onMatchEnd }):
     gameRef = useRef(null)
+    onMatchEndRef = useRef(onMatchEnd)
+
+    useEffect(() => {
+        onMatchEndRef.current = onMatchEnd
+        window.onMatchEnd = (...args) => onMatchEndRef.current?.(...args)
+    }, [onMatchEnd])
 
     useEffect(() => {
         if gameRef.current is null:
             gameRef.current = new Phaser.Game(GameConfig)
-
-            // Phaser → React: match end callback
-            window.onMatchEnd = onMatchEnd
 
             // React → Phaser: restart game
             window.restartGame = () => {
@@ -1470,7 +1480,7 @@ function PhaserGame({ onMatchEnd }):
             delete window.onMatchEnd
             delete window.restartGame
         }
-    }, [onMatchEnd])
+    }, [])
 
     return <div id="game-container" />
 ```
@@ -1479,12 +1489,17 @@ function PhaserGame({ onMatchEnd }):
 ```typescript
 const PhaserGame: React.FC<{ onMatchEnd: (data: MatchEndData, playerId: string) => void }> = ({ onMatchEnd }) => {
   const gameRef = useRef<Phaser.Game | null>(null);
+  const onMatchEndRef = useRef(onMatchEnd);
+
+  useEffect(() => {
+    onMatchEndRef.current = onMatchEnd;
+    (window as any).onMatchEnd = (data, playerId) => onMatchEndRef.current?.(data, playerId);
+  }, [onMatchEnd]);
 
   useEffect(() => {
     if (!gameRef.current) {
       gameRef.current = new Phaser.Game(GameConfig);
 
-      (window as any).onMatchEnd = onMatchEnd;
       (window as any).restartGame = () => {
         const scene = gameRef.current!.scene.getScene('GameScene') as GameScene;
         scene.scene.restart();
@@ -1496,14 +1511,16 @@ const PhaserGame: React.FC<{ onMatchEnd: (data: MatchEndData, playerId: string) 
       delete (window as any).onMatchEnd;
       delete (window as any).restartGame;
     };
-  }, [onMatchEnd]);
+  }, []);
 
   return <div id="game-container" />;
 };
 ```
 
 **Why:**
-- useRef prevents Phaser recreation on React re-renders
+- React state changes are frequent during Friends-MVP join handling: bridge-ready, invite autofill, duplicate-tab claims, join pending, join success, join error, and reconnect prompts.
+- If those state changes recreate Phaser, the client tears down the in-flight socket during the hello handshake and the user sees a stuck join overlay with no authoritative success or error.
+- Separating "update bridge callback" from "create/destroy game instance" keeps the join flow deterministic under React Strict Mode and normal re-renders.
 - Global window functions avoid tight coupling
 - Cleanup prevents memory leaks and stale callbacks
 - "game-container" div matches GameConfig.parent
@@ -2008,6 +2025,8 @@ it('should follow local player with camera', () => {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.3.2 | 2026-04-13 | Friends-MVP invite polish: invite auto-submit now only fires when a cached display name already exists before user interaction; typing into an empty display-name field no longer submits on the first character. |
+| 1.3.1 | 2026-04-13 | Friends-MVP join-flow bridge hardening: specified that React overlay state must not remount Phaser or disconnect the active WebSocket, and that join controls expose explicit bridge-ready / joining states instead of silently dropping input before `window.submitJoinIntent` is installed. |
 | 1.3.0 | 2026-02-23 | Updated MinimapUI: circular → square minimap shape. |
 | 1.2.0 | 2026-02-18 | Art style alignment: Updated GameConfig background to #C8CCC8. Added 5 visual effect managers (DamageNumberManager, HitIndicatorManager, BloodEffectManager, DamageFlashOverlay, PickupNotificationUI). Added 5 HUD components (MinimapUI, ScoreDisplayUI, KillCounterUI, DebugOverlayUI, ChatLogUI). Documented ProceduralPlayerGraphics class. Added spawn ring and death ragdoll rendering specs. Documented renderArena() with grid spec. Added depth layers 40 (aim line) and 999 (damage flash). Documented GameSceneSpectator.ts. |
 | 1.1.5 | 2026-02-16 | Fixed update() pseudocode — `dodgeRollManager.update()` and `meleeWeaponManager.update()` take no params |

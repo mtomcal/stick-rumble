@@ -115,12 +115,37 @@ describe('PhaserGame', () => {
   });
 
   describe('onMatchEnd callback', () => {
+    it('should not recreate the Phaser game when the onMatchEnd callback identity changes', () => {
+      const firstHandler = vi.fn();
+      const secondHandler = vi.fn();
+
+      const { rerender } = render(<PhaserGame onMatchEnd={firstHandler} />);
+
+      expect(mockGameInstances).toHaveLength(1);
+
+      rerender(<PhaserGame onMatchEnd={secondHandler} />);
+
+      expect(mockGameInstances).toHaveLength(1);
+      expect(mockDestroy).not.toHaveBeenCalled();
+      expect(window.onMatchEnd).toBeDefined();
+
+      window.onMatchEnd?.({ winners: [], finalScores: [], reason: 'test' }, 'player-1');
+
+      expect(firstHandler).not.toHaveBeenCalled();
+      expect(secondHandler).toHaveBeenCalledTimes(1);
+    });
+
     it('should set window.onMatchEnd when callback is provided', () => {
       const mockOnMatchEnd = vi.fn();
 
       render(<PhaserGame onMatchEnd={mockOnMatchEnd} />);
 
-      expect(window.onMatchEnd).toBe(mockOnMatchEnd);
+      expect(window.onMatchEnd).toBeDefined();
+
+      window.onMatchEnd?.({ winners: [], finalScores: [], reason: 'test' }, 'player-1');
+
+      expect(mockOnMatchEnd).toHaveBeenCalledTimes(1);
+      expect(mockOnMatchEnd).toHaveBeenCalledWith({ winners: [], finalScores: [], reason: 'test' }, 'player-1');
     });
 
     it('should not set window.onMatchEnd when callback is not provided', () => {
@@ -136,7 +161,7 @@ describe('PhaserGame', () => {
 
       const { unmount } = render(<PhaserGame onMatchEnd={mockOnMatchEnd} />);
 
-      expect(window.onMatchEnd).toBe(mockOnMatchEnd);
+      expect(window.onMatchEnd).toBeDefined();
 
       unmount();
 

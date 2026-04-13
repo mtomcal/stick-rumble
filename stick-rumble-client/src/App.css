@@ -115,6 +115,10 @@
   color: #ff9074;
 }
 
+.overlay-status {
+  color: #c6bca4;
+}
+
 @media (max-width: 720px) {
   .app-shell {
     padding: 1rem;
