@@ -4,6 +4,7 @@ import {
   waitForServer,
   createClient,
   connectClientsToRoom,
+  connectClientToCodeRoom,
   aggressiveCleanup
 } from './WebSocketClient.integration.helpers';
 
@@ -58,7 +59,7 @@ describe.sequential('WebSocket Player Movement Integration Tests', () => {
       it('should send input:state messages with WASD key states', async () => {
         const client = createClient();
 
-        await client.connect();
+        await connectClientToCodeRoom(client);
 
         // Send input:state message with WASD keys pressed
         const inputMessage: Message = {
@@ -81,7 +82,7 @@ describe.sequential('WebSocket Player Movement Integration Tests', () => {
       it('should accept input:state with all keys released', async () => {
         const client = createClient();
 
-        await client.connect();
+        await connectClientToCodeRoom(client);
 
         // Send input:state with no keys pressed
         const inputMessage: Message = {
@@ -171,7 +172,7 @@ describe.sequential('WebSocket Player Movement Integration Tests', () => {
           });
         });
 
-        await client.connect();
+        await connectClientToCodeRoom(client);
 
         // Send input to trigger movement
         const inputMessage: Message = {
@@ -330,7 +331,7 @@ describe.sequential('WebSocket Player Movement Integration Tests', () => {
           });
         });
 
-        await client.connect();
+        await connectClientToCodeRoom(client);
 
         // Send input - player should stay within bounds
         const inputMessage: Message = {

@@ -167,6 +167,13 @@ func (m *Match) IsEnded() bool {
 	return m.State == MatchStateEnded
 }
 
+func (m *Match) IsStarted() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	return m.State == MatchStateActive
+}
+
 // DetermineWinners analyzes PlayerKills and returns player IDs with the highest kill count
 // Returns multiple IDs in case of a tie
 func (m *Match) DetermineWinners() []string {

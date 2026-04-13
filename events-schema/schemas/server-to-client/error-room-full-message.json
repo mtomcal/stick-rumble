@@ -1,0 +1,37 @@
+{
+  "$id": "error_room_fullMessage",
+  "description": "error:room_full WebSocket message",
+  "type": "object",
+  "required": [
+    "type",
+    "timestamp",
+    "data"
+  ],
+  "properties": {
+    "type": {
+      "description": "Message type identifier",
+      "const": "error:room_full",
+      "type": "string"
+    },
+    "timestamp": {
+      "description": "Unix timestamp in milliseconds",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "data": {
+      "$id": "ErrorRoomFullData",
+      "description": "Room full rejection payload",
+      "type": "object",
+      "required": [
+        "code"
+      ],
+      "properties": {
+        "code": {
+          "description": "Normalized room code that is already full",
+          "minLength": 1,
+          "type": "string"
+        }
+      }
+    }
+  }
+}

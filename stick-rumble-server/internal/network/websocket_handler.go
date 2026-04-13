@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/mtomcal/stick-rumble-server/internal/config"
 	"github.com/mtomcal/stick-rumble-server/internal/game"
 )
 
@@ -20,9 +20,7 @@ var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
-		// MVP: Allow all origins (for localhost development)
-		// Production: Restrict to your domain
-		return true
+		return config.Load().AllowsOrigin(r.Header.Get("Origin"))
 	},
 }
 
@@ -43,6 +41,13 @@ type WebSocketHandler struct {
 	networkSimulator  *NetworkSimulator // For artificial latency testing (Story 4.6)
 	deltaTracker      *DeltaTracker     // For delta compression (Story 4.4)
 }
+
+const (
+	pingInterval   = 2 * time.Second
+	pongWait       = 6 * time.Second
+	staleRoomTTL   = 15 * time.Minute
+	staleSweepTick = 1 * time.Minute
+)
 
 // NewWebSocketHandler creates a new WebSocket handler with room management
 func NewWebSocketHandler() *WebSocketHandler {
@@ -133,6 +138,7 @@ func resetGlobalHandler() {
 func (h *WebSocketHandler) Start(ctx context.Context) {
 	h.gameServer.Start(ctx)
 	go h.matchTimerLoop(ctx)
+	go h.staleRoomSweepLoop(ctx)
 }
 
 // Stop stops the game server
@@ -155,7 +161,7 @@ func StopGlobalHandler() {
 // Returns nil if validation passes or is disabled, error if validation fails
 func (h *WebSocketHandler) validateOutgoingMessage(messageType string, data interface{}) (err error) {
 	// Check if schema validation is enabled (development mode only)
-	if os.Getenv("ENABLE_SCHEMA_VALIDATION") != "true" {
+	if !config.Load().EnableSchemaValidation {
 		return nil // Skip validation in production
 	}
 
@@ -202,20 +208,7 @@ func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Reques
 	player := game.NewPlayer(playerID, sendChan)
 
 	log.Printf("Client connected: %s", playerID)
-
-	// Add player to room manager
-	room := h.roomManager.AddPlayer(player)
-
-	// Add player to game server
-	h.gameServer.AddPlayer(playerID)
-
-	// If player joined a room, send initial weapon spawn state to all players
-	if room != nil {
-		// Send weapon spawns to all players in the newly created room
-		for _, p := range room.GetPlayers() {
-			h.sendWeaponSpawns(p.ID)
-		}
-	}
+	_ = conn.SetReadDeadline(time.Now().Add(pongWait))
 
 	// Setup ping/pong for RTT measurement (Story 4.5: Lag compensation)
 	var pingMu sync.Mutex
@@ -231,13 +224,14 @@ func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Reques
 			player.PingTracker.RecordRTT(rtt)
 			log.Printf("Player %s RTT: %dms (avg: %dms)", playerID, rtt.Milliseconds(), player.PingTracker.GetRTT())
 		}
+		_ = conn.SetReadDeadline(time.Now().Add(pongWait))
 		return nil
 	})
 
 	// Start goroutine to send periodic pings for RTT measurement
 	pingDone := make(chan struct{})
 	go func() {
-		ticker := time.NewTicker(2 * time.Second)
+		ticker := time.NewTicker(pingInterval)
 		defer ticker.Stop()
 
 		for {
@@ -301,6 +295,16 @@ func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Reques
 
 		log.Printf("Received from %s: type=%s, timestamp=%d", playerID, msg.Type, msg.Timestamp)
 
+		if msg.Type == "player:hello" {
+			h.handlePlayerHello(player, msg.Data)
+			continue
+		}
+
+		if !player.HelloSeen {
+			h.sendNoHelloError(player, msg.Type)
+			continue
+		}
+
 		// Handle different message types
 		switch msg.Type {
 		case "input:state":
@@ -339,7 +343,9 @@ func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Reques
 	// Clean up on disconnect
 	close(pingDone) // Stop ping goroutine
 	h.roomManager.RemovePlayer(playerID)
-	h.gameServer.RemovePlayer(playerID)
+	if player.HelloSeen {
+		h.gameServer.RemovePlayer(playerID)
+	}
 	h.deltaTracker.RemoveClient(playerID) // Clean up delta compression state
 	close(sendChan)
 	<-done // Wait for send goroutine to finish
@@ -351,4 +357,86 @@ func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Reques
 // It uses a shared global handler to ensure all connections share the same room state
 func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	getGlobalHandler().HandleWebSocket(w, r)
+}
+
+func (h *WebSocketHandler) handlePlayerHello(player *game.Player, data any) {
+	if player.HelloSeen {
+		return
+	}
+
+	dataMap, ok := data.(map[string]any)
+	if !ok {
+		log.Printf("Invalid player:hello payload for %s", player.ID)
+		return
+	}
+
+	player.DisplayName = game.FallbackDisplayName
+	if rawDisplayName, exists := dataMap["displayName"]; exists {
+		player.DisplayName = game.SanitizeDisplayName(rawDisplayName)
+	}
+
+	mode, _ := dataMap["mode"].(string)
+	var room *game.Room
+	switch mode {
+	case "public":
+		room = h.roomManager.AddPublicPlayer(player)
+	case "code":
+		code, reason, normalized := game.NormalizeRoomCode(dataMap["code"])
+		if !normalized {
+			h.sendBadRoomCodeError(player, string(reason))
+			return
+		}
+		var joined bool
+		room, joined = h.roomManager.AddCodePlayer(player, code)
+		if !joined {
+			h.sendRoomFullError(player, code)
+			return
+		}
+	default:
+		log.Printf("Invalid player:hello mode for %s: %v", player.ID, mode)
+		return
+	}
+
+	player.HelloSeen = true
+
+	if room == nil {
+		return
+	}
+
+	for _, p := range room.GetPlayers() {
+		if _, exists := h.gameServer.GetPlayerState(p.ID); !exists {
+			h.gameServer.AddPlayer(p.ID)
+		}
+		h.gameServer.SetPlayerDisplayName(p.ID, p.DisplayName)
+	}
+	for _, p := range room.GetPlayers() {
+		h.sendWeaponSpawns(p.ID)
+	}
+}
+
+func (h *WebSocketHandler) staleRoomSweepLoop(ctx context.Context) {
+	ticker := time.NewTicker(staleSweepTick)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			h.reapStaleRooms()
+		}
+	}
+}
+
+func (h *WebSocketHandler) reapStaleRooms() {
+	now := time.Now()
+	for _, room := range h.roomManager.GetAllRooms() {
+		if room.Kind != game.RoomKindCode || room.Match.IsStarted() || !room.IsEmpty() || room.EmptySince == nil {
+			continue
+		}
+		if now.Sub(*room.EmptySince) < staleRoomTTL {
+			continue
+		}
+		h.roomManager.RemoveRoomIfIdle(room.ID)
+	}
 }

@@ -1,0 +1,15 @@
+{
+  "$id": "ErrorRoomFullData",
+  "description": "Room full rejection payload",
+  "type": "object",
+  "required": [
+    "code"
+  ],
+  "properties": {
+    "code": {
+      "description": "Normalized room code that is already full",
+      "minLength": 1,
+      "type": "string"
+    }
+  }
+}

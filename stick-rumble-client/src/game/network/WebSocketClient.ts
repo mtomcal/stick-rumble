@@ -1,13 +1,16 @@
 import Ajv, { type ValidateFunction } from 'ajv';
 import {
+  PlayerHelloDataSchema,
   InputStateDataSchema,
   PlayerShootDataSchema,
   WeaponPickupAttemptDataSchema,
+  type PlayerHelloData,
   type InputStateData,
   type PlayerShootData,
   type WeaponPickupAttemptData,
-} from '@stick-rumble/events-schema';
+} from '../../../../events-schema/src/index.js';
 import { NetworkSimulator } from './NetworkSimulator';
+import type { JoinIntent } from '../../shared/types';
 
 export interface Message {
   type: string;
@@ -30,6 +33,7 @@ export interface MatchEndedData {
 
 // Initialize AJV validators at module load (compiled once for performance)
 const ajv = new Ajv();
+const validatePlayerHello: ValidateFunction<PlayerHelloData> = ajv.compile(PlayerHelloDataSchema);
 const validateInputState: ValidateFunction<InputStateData> = ajv.compile(InputStateDataSchema);
 const validatePlayerShoot: ValidateFunction<PlayerShootData> = ajv.compile(PlayerShootDataSchema);
 const validateWeaponPickupAttempt: ValidateFunction<WeaponPickupAttemptData> = ajv.compile(
@@ -50,6 +54,10 @@ export class WebSocketClient {
   private frameNumber = 0;
   private inputLogCallback?: (tick: number, input: InputStateData) => void;
   private networkSimulator: NetworkSimulator;
+  private lastRequestedHello: JoinIntent | null = null;
+  private lastSuccessfulHello: JoinIntent | null = null;
+  private reconnectReplayPending = false;
+  private onReconnectReplayFailed?: (intent: JoinIntent) => void;
 
   constructor(url: string, debugMode = false, networkSimulator?: NetworkSimulator) {
     this.url = url;
@@ -125,6 +133,9 @@ export class WebSocketClient {
         this.ws.onopen = () => {
           console.log('WebSocket connected');
           this.reconnectAttempts = 0;
+          if (this.reconnectReplayPending && this.lastSuccessfulHello) {
+            this.sendHello(this.lastSuccessfulHello);
+          }
           resolve();
         };
 
@@ -168,6 +179,28 @@ export class WebSocketClient {
     }
   }
 
+  sendHello(intent: JoinIntent): void {
+    const payload: PlayerHelloData = intent.mode === 'code'
+      ? { displayName: intent.displayName, mode: 'code', code: intent.code ?? '' }
+      : { displayName: intent.displayName, mode: 'public' };
+
+    if (!validatePlayerHello(payload)) {
+      console.error('Validation failed for player:hello:', validatePlayerHello.errors);
+      return;
+    }
+
+    this.lastRequestedHello = { ...intent };
+    this.send({
+      type: 'player:hello',
+      timestamp: Date.now(),
+      data: payload,
+    });
+  }
+
+  setReconnectReplayFailedHandler(handler: (intent: JoinIntent) => void): void {
+    this.onReconnectReplayFailed = handler;
+  }
+
   on(messageType: string, handler: (data: unknown) => void): void {
     const handlers = this.messageHandlers.get(messageType) || new Set();
     const sizeBefore = handlers.size;
@@ -193,6 +226,18 @@ export class WebSocketClient {
   }
 
   private handleMessage(message: Message): void {
+    if (message.type === 'room:joined' && this.lastRequestedHello) {
+      this.lastSuccessfulHello = { ...this.lastRequestedHello };
+      this.reconnectReplayPending = false;
+    }
+
+    if ((message.type === 'error:bad_room_code' || message.type === 'error:room_full') && this.reconnectReplayPending) {
+      this.reconnectReplayPending = false;
+      if (this.lastSuccessfulHello && this.onReconnectReplayFailed) {
+        this.onReconnectReplayFailed({ ...this.lastSuccessfulHello });
+      }
+    }
+
     const handlers = this.messageHandlers.get(message.type);
     this.debug(`handleMessage('${message.type}') - ${handlers ? handlers.size : 0} handlers`, message.data);
     if (handlers) {
@@ -241,6 +286,7 @@ export class WebSocketClient {
     }
 
     this.reconnectAttempts++;
+    this.reconnectReplayPending = this.lastSuccessfulHello !== null;
     const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
     console.log(`Reconnecting in ${delay}ms... (attempt ${this.reconnectAttempts})`);
 

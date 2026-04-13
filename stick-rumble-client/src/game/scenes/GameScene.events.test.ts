@@ -71,6 +71,7 @@ describe('GameScene - Events', () => {
             playerId: 'my-player-id',
             roomId: 'room-1',
             mapId: 'default_office',
+            displayName: 'My Player',
           }
         })
       };

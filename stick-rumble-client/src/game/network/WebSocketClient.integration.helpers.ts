@@ -155,6 +155,33 @@ export function createClient(url: string = SERVER_URL, debugMode = true): WebSoc
   return client;
 }
 
+function createTestInviteCode(): string {
+  return `T${Math.random().toString(36).slice(2, 7)}`.toUpperCase();
+}
+
+function createTestDisplayName(index: number): string {
+  return `Test Player ${index}`;
+}
+
+export async function connectClientToCodeRoom(
+  client: WebSocketClient,
+  options: { code?: string; displayName?: string } = {}
+): Promise<WebSocketClient> {
+  const code = options.code ?? createTestInviteCode();
+  const displayName = options.displayName ?? createTestDisplayName(clients.indexOf(client) + 1);
+  const roomJoinedPromise = waitForEvent('room:joined', client);
+
+  await client.connect();
+  client.sendHello({
+    mode: 'code',
+    code,
+    displayName,
+  });
+  await roomJoinedPromise;
+
+  return client;
+}
+
 /**
  * Helper to wait for a specific delay
  * @deprecated Use waitForEvent or waitForCondition instead for better reliability
@@ -164,7 +191,7 @@ export function delay(ms: number): Promise<void> {
 }
 
 /**
- * Connect multiple clients and wait for them all to join a room
+ * Connect multiple clients and wait for them all to join the same code room
  *
  * This helper properly handles the race condition where room:joined events
  * are sent immediately upon connection. It sets up event handlers BEFORE
@@ -177,12 +204,13 @@ export function delay(ms: number): Promise<void> {
  * );
  *
  * @param clients - One or more WebSocketClient instances to connect
- * @returns Promise that resolves when all clients have joined a room
+ * @returns Promise that resolves when all clients have joined the same code room
  */
 export async function connectClientsToRoom(
   ...clientsToConnect: WebSocketClient[]
 ): Promise<WebSocketClient[]> {
   console.log(`[connectClientsToRoom] Connecting ${clientsToConnect.length} client(s)...`);
+  const code = createTestInviteCode();
 
   // Set up room:joined handlers BEFORE connecting (to avoid race condition)
   const roomJoinedPromises = clientsToConnect.map((client, index) => {
@@ -196,6 +224,14 @@ export async function connectClientsToRoom(
     console.log(`[connectClientsToRoom] Connecting client ${index + 1}...`);
     return client.connect();
   }));
+
+  clientsToConnect.forEach((client, index) => {
+    client.sendHello({
+      mode: 'code',
+      code,
+      displayName: createTestDisplayName(index + 1),
+    });
+  });
 
   // Wait for all room:joined events
   console.log(`[connectClientsToRoom] Waiting for all room:joined events...`);

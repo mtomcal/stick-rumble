@@ -1,0 +1,15 @@
+{
+  "$id": "ErrorNoHelloData",
+  "description": "No-hello rejection payload",
+  "type": "object",
+  "required": [
+    "offendingType"
+  ],
+  "properties": {
+    "offendingType": {
+      "description": "Gameplay message type that arrived before hello",
+      "minLength": 1,
+      "type": "string"
+    }
+  }
+}

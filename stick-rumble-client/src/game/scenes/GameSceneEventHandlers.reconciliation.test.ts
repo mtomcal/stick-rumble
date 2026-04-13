@@ -29,6 +29,7 @@ describe('GameSceneEventHandlers - Client-Side Reconciliation', () => {
   let playerMoveHandler: (data: unknown) => void;
   const basePlayerState: PlayerMoveData['players'][number] = {
     id: 'player-1',
+    displayName: 'Alice',
     position: { x: 500, y: 500 },
     velocity: { x: 0, y: 0 },
     aimAngle: 0,
@@ -161,6 +162,7 @@ describe('GameSceneEventHandlers - Client-Side Reconciliation', () => {
   });
 
   it('should process correctedPlayers field when local player is corrected', () => {
+    const reconcileSpy = vi.spyOn(predictionEngine, 'reconcile');
     const messageData: PlayerMoveData = {
       players: [basePlayerState],
       lastProcessedSequence: { 'player-1': 3 },
@@ -180,6 +182,18 @@ describe('GameSceneEventHandlers - Client-Side Reconciliation', () => {
 
     // Verify input history was cleared up to lastProcessedSequence
     expect(mockInputManager.clearInputHistoryUpTo).toHaveBeenCalledWith(3);
+    expect(reconcileSpy).toHaveBeenCalledWith(
+      basePlayerState.position,
+      basePlayerState.velocity,
+      3,
+      [
+        { sequence: 1, input: { up: true, down: false, left: false, right: false, aimAngle: 0, isSprinting: false, sequence: 1 }, timestamp: 1000 },
+        { sequence: 2, input: { up: true, down: false, left: false, right: false, aimAngle: 0, isSprinting: false, sequence: 2 }, timestamp: 1016 },
+        { sequence: 3, input: { up: true, down: false, left: false, right: false, aimAngle: 0, isSprinting: false, sequence: 3 }, timestamp: 1032 },
+        { sequence: 4, input: { up: true, down: false, left: false, right: false, aimAngle: 0, isSprinting: false, sequence: 4 }, timestamp: 1048 },
+        { sequence: 5, input: { up: false, down: false, left: false, right: false, aimAngle: 0, isSprinting: false, sequence: 5 }, timestamp: 1064 },
+      ]
+    );
 
     // Verify PlayerManager was called to apply reconciled position
     expect(mockPlayerManager.applyReconciledPosition).toHaveBeenCalled();
@@ -187,10 +201,7 @@ describe('GameSceneEventHandlers - Client-Side Reconciliation', () => {
     // Call should include player-1, reconciled position, and whether instant correction is needed
     const call = (mockPlayerManager.applyReconciledPosition as Mock).mock.calls[0];
     expect(call[0]).toBe('player-1');
-    expect(call[1]).toMatchObject({
-      position: expect.objectContaining({ x: expect.any(Number), y: expect.any(Number) }),
-      velocity: expect.objectContaining({ x: expect.any(Number), y: expect.any(Number) }),
-    });
+    expect(call[1]).toEqual((mockPlayerManager.setLocalPlayerPredictedPosition as Mock).mock.calls[0][0]);
     expect(call[2]).toBe(false); // Small correction, not instant
   });
 
@@ -273,6 +284,15 @@ describe('GameSceneEventHandlers - Client-Side Reconciliation', () => {
 
     // Should not attempt to clear history without lastProcessedSequence
     expect(mockInputManager.clearInputHistoryUpTo).not.toHaveBeenCalled();
+    expect(mockPlayerManager.setLocalPlayerPredictedPosition).toHaveBeenCalledWith({
+      position: basePlayerState.position,
+      velocity: basePlayerState.velocity,
+    });
+    expect(mockPlayerManager.applyReconciledPosition).toHaveBeenCalledWith(
+      'player-1',
+      { position: basePlayerState.position, velocity: basePlayerState.velocity },
+      false
+    );
   });
 
   it('should not reconcile if InputManager is null', () => {

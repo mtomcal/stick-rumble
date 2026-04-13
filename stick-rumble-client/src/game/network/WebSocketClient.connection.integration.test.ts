@@ -3,11 +3,16 @@ import { WebSocketClient, type Message } from './WebSocketClient';
 import {
   waitForServer,
   createClient,
+  connectClientToCodeRoom,
   waitForEvent,
   waitForCondition,
   connectClientsToRoom,
   aggressiveCleanup
 } from './WebSocketClient.integration.helpers';
+
+function makeInviteCode(prefix: string): string {
+  return `${prefix}${Math.random().toString(36).slice(2, 6)}`.toUpperCase();
+}
 
 // Use serial execution to prevent test interference
 describe.sequential('WebSocket Connection Integration Tests', () => {
@@ -318,6 +323,167 @@ describe.sequential('WebSocket Connection Integration Tests', () => {
       // Recreate the global spies for subsequent tests
       consoleErrorSpy = vi.spyOn(console, 'error');
       consoleWarnSpy = vi.spyOn(console, 'warn');
+    });
+  });
+
+  describe('Friends MVP Invite Flow Smoke Tests', () => {
+    it('rejects gameplay input before hello and keeps the same socket usable for a later join', async () => {
+      const client = createClient();
+
+      await client.connect();
+
+      const noHelloPromise = waitForEvent<{ offendingType?: string }>('error:no_hello', client);
+      const roomJoinedPromise = waitForEvent<{ code?: string; displayName: string }>('room:joined', client);
+
+      client.send({
+        type: 'input:state',
+        timestamp: Date.now(),
+        data: { up: true, down: false, left: false, right: false, aimAngle: 0 },
+      });
+
+      const noHello = await noHelloPromise;
+      expect(noHello.offendingType).toBe('input:state');
+
+      client.sendHello({
+        mode: 'code',
+        code: makeInviteCode('HELLO'),
+        displayName: 'No Hello Recovery',
+      });
+
+      const joined = await roomJoinedPromise;
+      expect(joined.displayName).toBe('No Hello Recover');
+      expect(joined.displayName.length).toBeLessThanOrEqual(16);
+    });
+
+    it('returns error:bad_room_code and allows a corrected hello on the same socket', async () => {
+      const client = createClient();
+
+      await client.connect();
+
+      const badCodePromise = waitForEvent<{ reason?: string }>('error:bad_room_code', client);
+      client.sendHello({
+        mode: 'code',
+        code: 'x',
+        displayName: 'Retry Name',
+      });
+
+      const badCode = await badCodePromise;
+      expect(badCode.reason).toBe('too_short');
+
+      const roomJoinedPromise = waitForEvent<{ code?: string; displayName: string }>('room:joined', client);
+      client.sendHello({
+        mode: 'code',
+        code: ' p.i z z a!!! ',
+        displayName: 'Retry Name',
+      });
+
+      const joined = await roomJoinedPromise;
+      expect(joined.code).toBe('PIZZA');
+      expect(joined.displayName).toBe('Retry Name');
+    });
+
+    it('normalizes invite variants and places both clients in the same authoritative code room', async () => {
+      const host = createClient();
+      const friend = createClient();
+      const hostCode = makeInviteCode('PIZZA');
+
+      await host.connect();
+      const hostJoinPromise = waitForEvent<{ roomId: string; code?: string; displayName: string }>('room:joined', host);
+      host.sendHello({
+        mode: 'code',
+        code: ` ${hostCode.toLowerCase()} `,
+        displayName: 'Host Player',
+      });
+      const hostJoin = await hostJoinPromise;
+
+      await friend.connect();
+      const friendJoinPromise = waitForEvent<{ roomId: string; code?: string; displayName: string }>('room:joined', friend);
+      friend.sendHello({
+        mode: 'code',
+        code: `${hostCode.slice(0, 2)}-${hostCode.slice(2)}!!!`,
+        displayName: 'Friend Player',
+      });
+      const friendJoin = await friendJoinPromise;
+
+      expect(hostJoin.code).toBe(hostCode);
+      expect(friendJoin.code).toBe(hostCode);
+      expect(friendJoin.roomId).toBe(hostJoin.roomId);
+    });
+
+    it('returns error:room_full and allows the same socket to recover into a different code room', async () => {
+      const fullCode = makeInviteCode('FULL');
+      const occupiedClients: WebSocketClient[] = [];
+
+      for (let i = 0; i < 8; i++) {
+        const client = createClient();
+        occupiedClients.push(client);
+        await connectClientToCodeRoom(client, {
+          code: fullCode,
+          displayName: `Full Room ${i + 1}`,
+        });
+      }
+
+      const recoveryClient = createClient();
+      await recoveryClient.connect();
+
+      const roomFullPromise = waitForEvent<{ code?: string }>('error:room_full', recoveryClient);
+      recoveryClient.sendHello({
+        mode: 'code',
+        code: fullCode.toLowerCase(),
+        displayName: 'Recovery Player',
+      });
+
+      const roomFull = await roomFullPromise;
+      expect(roomFull.code).toBe(fullCode);
+
+      const stillFullClient = createClient();
+      await stillFullClient.connect();
+      const stillFullPromise = waitForEvent<{ code?: string }>('error:room_full', stillFullClient);
+      stillFullClient.sendHello({
+        mode: 'code',
+        code: fullCode,
+        displayName: 'Still Full',
+      });
+      const stillFull = await stillFullPromise;
+      expect(stillFull.code).toBe(fullCode);
+
+      const recoveryJoinPromise = waitForEvent<{ code?: string; displayName: string }>('room:joined', recoveryClient);
+      const recoveryCode = makeInviteCode('SAFE');
+      recoveryClient.sendHello({
+        mode: 'code',
+        code: recoveryCode,
+        displayName: 'Recovery Player',
+      });
+
+      const joined = await recoveryJoinPromise;
+      expect(joined.code).toBe(recoveryCode);
+      expect(joined.displayName).toBe('Recovery Player');
+    });
+
+    it('replays the last successful hello once after reconnect and rejoins the same code room', async () => {
+      const client = createClient();
+      const inviteCode = makeInviteCode('RECO');
+      const joinedRooms: string[] = [];
+
+      client.on('room:joined', (data: any) => {
+        joinedRooms.push(data.roomId);
+      });
+
+      await client.connect();
+      client.sendHello({
+        mode: 'code',
+        code: inviteCode,
+        displayName: 'Reconnect Player',
+      });
+
+      await waitForCondition(() => joinedRooms.length === 1, { timeout: 5000, pollInterval: 50 });
+
+      (client as any).ws?.close(4001, 'integration reconnect');
+
+      await waitForCondition(() => joinedRooms.length === 2, { timeout: 5000, pollInterval: 50 });
+
+      expect(joinedRooms).toHaveLength(2);
+      expect(joinedRooms[1]).toBe(joinedRooms[0]);
     });
   });
 });

@@ -12,6 +12,7 @@ import { InterpolationEngine } from '../physics/InterpolationEngine';
  */
 export interface PlayerState {
   id: string;
+  displayName?: string;
   position: {
     x: number;
     y: number;
@@ -190,7 +191,7 @@ export class PlayerManager {
         const label = this.scene.add.text(
           state.position.x,
           state.position.y - PLAYER.HEIGHT / 2 - 10,
-          isLocal ? 'You' : 'Player',
+          state.displayName ?? (isLocal ? 'You' : 'Player'),
           {
             fontSize: '14px',
             color: '#ffffff',
@@ -218,6 +219,11 @@ export class PlayerManager {
         const healthBar = new HealthBar(this.scene, state.position.x, healthBarY);
         healthBar.setHealth(state.health ?? 100); // Default to 100 health if undefined
         this.healthBars.set(state.id, healthBar);
+      }
+
+      const label = this.playerLabels.get(state.id);
+      if (label && 'setText' in label) {
+        label.setText(state.displayName ?? (state.id === this.localPlayerId ? 'You' : 'Player'));
       }
 
       // DO NOT set position here - update() is the sole position writer

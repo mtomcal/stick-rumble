@@ -47,6 +47,7 @@ func (cs *CorrectionStats) GetCorrectionRate() float64 {
 // PlayerStateSnapshot represents a player's state for broadcasting (no mutex, safe to copy by value)
 type PlayerStateSnapshot struct {
 	ID                     string     `json:"id"`
+	DisplayName            string     `json:"displayName"`
 	Position               Vector2    `json:"position"`
 	Velocity               Vector2    `json:"velocity"`
 	AimAngle               float64    `json:"aimAngle"`            // Aim angle in radians
@@ -64,6 +65,7 @@ type PlayerStateSnapshot struct {
 // PlayerState represents a player's physics state in the game world
 type PlayerState struct {
 	ID                     string          `json:"id"`
+	DisplayName            string          `json:"displayName"`
 	Position               Vector2         `json:"position"`
 	Velocity               Vector2         `json:"velocity"`
 	AimAngle               float64         `json:"aimAngle"`            // Aim angle in radians
@@ -193,6 +195,7 @@ func (p *PlayerState) Snapshot() PlayerStateSnapshot {
 	defer p.mu.RUnlock()
 	return PlayerStateSnapshot{
 		ID:                     p.ID,
+		DisplayName:            p.DisplayName,
 		Position:               p.Position,
 		Velocity:               p.Velocity,
 		AimAngle:               p.AimAngle,
@@ -206,6 +209,12 @@ func (p *PlayerState) Snapshot() PlayerStateSnapshot {
 		IsRegeneratingHealth:   p.IsRegeneratingHealth,
 		Rolling:                p.Rolling,
 	}
+}
+
+func (p *PlayerState) SetDisplayName(displayName string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.DisplayName = displayName
 }
 
 // MarkDead marks the player as dead and records the death time (thread-safe)

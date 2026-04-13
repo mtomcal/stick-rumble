@@ -4,9 +4,48 @@ import (
 	"encoding/json"
 	"log"
 	"math"
+	"time"
 
 	"github.com/mtomcal/stick-rumble-server/internal/game"
 )
+
+func (h *WebSocketHandler) sendNoHelloError(player *game.Player, offendingType string) {
+	h.sendDirectMessage(player, "error:no_hello", map[string]any{
+		"offendingType": offendingType,
+	})
+}
+
+func (h *WebSocketHandler) sendBadRoomCodeError(player *game.Player, reason string) {
+	h.sendDirectMessage(player, "error:bad_room_code", map[string]any{
+		"reason": reason,
+	})
+}
+
+func (h *WebSocketHandler) sendRoomFullError(player *game.Player, code string) {
+	h.sendDirectMessage(player, "error:room_full", map[string]any{
+		"code": code,
+	})
+}
+
+func (h *WebSocketHandler) sendDirectMessage(player *game.Player, messageType string, data map[string]any) {
+	message := Message{
+		Type:      messageType,
+		Timestamp: time.Now().UnixMilli(),
+		Data:      data,
+	}
+
+	msgBytes, err := json.Marshal(message)
+	if err != nil {
+		log.Printf("Error marshaling %s message: %v", messageType, err)
+		return
+	}
+
+	select {
+	case player.SendChan <- msgBytes:
+	default:
+		log.Printf("Warning: Could not send message to player %s (channel full)", player.ID)
+	}
+}
 
 // handleInputState processes player input state updates
 func (h *WebSocketHandler) handleInputState(playerID string, data any) {

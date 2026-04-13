@@ -67,7 +67,7 @@ describe('GameScene - Camera Follow', () => {
         data: JSON.stringify({
           type: 'room:joined',
           timestamp: Date.now(),
-          data: { playerId: 'local-player' }
+          data: { playerId: 'local-player', roomId: 'room-1', mapId: 'default_office', displayName: 'Local Player' }
         })
       };
 
@@ -122,7 +122,7 @@ describe('GameScene - Camera Follow', () => {
         data: JSON.stringify({
           type: 'room:joined',
           timestamp: Date.now(),
-          data: { playerId: 'local-player' }
+          data: { playerId: 'local-player', roomId: 'room-1', mapId: 'default_office', displayName: 'Local Player' }
         })
       };
 
@@ -174,7 +174,7 @@ describe('GameScene - Camera Follow', () => {
         data: JSON.stringify({
           type: 'room:joined',
           timestamp: Date.now(),
-          data: { playerId: 'local-player' }
+          data: { playerId: 'local-player', roomId: 'room-1', mapId: 'default_office', displayName: 'Local Player' }
         })
       };
 
@@ -218,7 +218,7 @@ describe('GameScene - Camera Follow', () => {
         data: JSON.stringify({
           type: 'room:joined',
           timestamp: Date.now(),
-          data: { playerId: 'local-player' }
+          data: { playerId: 'local-player', roomId: 'room-1', mapId: 'default_office', displayName: 'Local Player' }
         })
       };
 
@@ -360,7 +360,7 @@ describe('GameScene - Camera Follow', () => {
         data: JSON.stringify({
           type: 'room:joined',
           timestamp: Date.now(),
-          data: { playerId: 'local-player' }
+          data: { playerId: 'local-player', roomId: 'room-1', mapId: 'default_office', displayName: 'Local Player' }
         })
       };
 

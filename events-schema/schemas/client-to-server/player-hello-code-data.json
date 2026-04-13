@@ -1,0 +1,24 @@
+{
+  "$id": "PlayerHelloCodeData",
+  "description": "Named-room hello payload",
+  "type": "object",
+  "required": [
+    "mode",
+    "code"
+  ],
+  "properties": {
+    "displayName": {
+      "description": "Requested display name before server sanitization",
+      "type": "string"
+    },
+    "mode": {
+      "const": "code",
+      "type": "string"
+    },
+    "code": {
+      "description": "Raw room code before server normalization",
+      "minLength": 1,
+      "type": "string"
+    }
+  }
+}

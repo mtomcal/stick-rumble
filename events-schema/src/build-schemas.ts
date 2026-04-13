@@ -10,6 +10,10 @@ import { fileURLToPath } from 'url';
 // Import schemas
 import { PositionSchema, VelocitySchema, MessageSchema } from './schemas/common.js';
 import {
+  PlayerHelloPublicDataSchema,
+  PlayerHelloCodeDataSchema,
+  PlayerHelloDataSchema,
+  PlayerHelloMessageSchema,
   InputStateDataSchema,
   InputStateMessageSchema,
   PlayerShootDataSchema,
@@ -24,6 +28,12 @@ import {
 import {
   RoomJoinedDataSchema,
   RoomJoinedMessageSchema,
+  ErrorNoHelloDataSchema,
+  ErrorNoHelloMessageSchema,
+  ErrorBadRoomCodeDataSchema,
+  ErrorBadRoomCodeMessageSchema,
+  ErrorRoomFullDataSchema,
+  ErrorRoomFullMessageSchema,
   PlayerLeftDataSchema,
   PlayerLeftMessageSchema,
   PlayerStateSchema,
@@ -99,6 +109,22 @@ const schemas: SchemaExport[] = [
   },
   // Client-to-server schemas
   {
+    schema: PlayerHelloPublicDataSchema,
+    outputPath: 'schemas/client-to-server/player-hello-public-data.json',
+  },
+  {
+    schema: PlayerHelloCodeDataSchema,
+    outputPath: 'schemas/client-to-server/player-hello-code-data.json',
+  },
+  {
+    schema: PlayerHelloDataSchema,
+    outputPath: 'schemas/client-to-server/player-hello-data.json',
+  },
+  {
+    schema: PlayerHelloMessageSchema,
+    outputPath: 'schemas/client-to-server/player-hello-message.json',
+  },
+  {
     schema: InputStateDataSchema,
     outputPath: 'schemas/client-to-server/input-state-data.json',
   },
@@ -146,6 +172,30 @@ const schemas: SchemaExport[] = [
   {
     schema: RoomJoinedMessageSchema,
     outputPath: 'schemas/server-to-client/room-joined-message.json',
+  },
+  {
+    schema: ErrorNoHelloDataSchema,
+    outputPath: 'schemas/server-to-client/error-no-hello-data.json',
+  },
+  {
+    schema: ErrorNoHelloMessageSchema,
+    outputPath: 'schemas/server-to-client/error-no-hello-message.json',
+  },
+  {
+    schema: ErrorBadRoomCodeDataSchema,
+    outputPath: 'schemas/server-to-client/error-bad-room-code-data.json',
+  },
+  {
+    schema: ErrorBadRoomCodeMessageSchema,
+    outputPath: 'schemas/server-to-client/error-bad-room-code-message.json',
+  },
+  {
+    schema: ErrorRoomFullDataSchema,
+    outputPath: 'schemas/server-to-client/error-room-full-data.json',
+  },
+  {
+    schema: ErrorRoomFullMessageSchema,
+    outputPath: 'schemas/server-to-client/error-room-full-message.json',
   },
   {
     schema: PlayerLeftDataSchema,

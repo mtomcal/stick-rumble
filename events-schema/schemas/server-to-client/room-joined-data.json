@@ -5,7 +5,8 @@
   "required": [
     "roomId",
     "playerId",
-    "mapId"
+    "mapId",
+    "displayName"
   ],
   "properties": {
     "roomId": {
@@ -20,6 +21,16 @@
     },
     "mapId": {
       "description": "Selected shared map identifier for the room",
+      "minLength": 1,
+      "type": "string"
+    },
+    "displayName": {
+      "description": "Server-sanitized display name for the local player",
+      "minLength": 1,
+      "type": "string"
+    },
+    "code": {
+      "description": "Normalized named-room code",
       "minLength": 1,
       "type": "string"
     }

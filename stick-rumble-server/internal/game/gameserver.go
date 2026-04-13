@@ -256,6 +256,15 @@ func (gs *GameServer) AddPlayer(playerID string) *PlayerState {
 	return player
 }
 
+func (gs *GameServer) SetPlayerDisplayName(playerID string, displayName string) bool {
+	player, exists := gs.world.GetPlayer(playerID)
+	if !exists {
+		return false
+	}
+	player.SetDisplayName(displayName)
+	return true
+}
+
 // RemovePlayer removes a player from the game world
 func (gs *GameServer) RemovePlayer(playerID string) {
 	gs.world.RemovePlayer(playerID)

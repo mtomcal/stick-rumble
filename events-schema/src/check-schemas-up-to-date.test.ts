@@ -40,11 +40,13 @@ describe('checkSchemasUpToDate', () => {
     expect(result).toBe(true);
   });
 
-  it('should verify all 44 schema files', () => {
-    // This test ensures the check validates the expected number of files
-    const result = checkSchemasUpToDate();
-    expect(result).toBe(true);
-    // If this passes, all 44 files were checked (3 common + 7 client-to-server + 34 server-to-client)
+  it('should verify all generated schema files', () => {
+    expect(existsSync(join(rootDir, 'schemas/client-to-server/player-hello-message.json'))).toBe(true);
+    expect(existsSync(join(rootDir, 'schemas/server-to-client/error-no-hello-message.json'))).toBe(true);
+    expect(existsSync(join(rootDir, 'schemas/server-to-client/error-bad-room-code-message.json'))).toBe(true);
+    expect(existsSync(join(rootDir, 'schemas/server-to-client/error-room-full-message.json'))).toBe(true);
+    expect(existsSync(join(rootDir, 'schemas/server-to-client/room-joined-message.json'))).toBe(true);
+    expect(checkSchemasUpToDate()).toBe(true);
   });
 });
 

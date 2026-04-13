@@ -257,7 +257,7 @@ describe('GameScene - Player Movement', () => {
         data: JSON.stringify({
           type: 'room:joined',
           timestamp: Date.now(),
-          data: { playerId: 'local-player', roomId: 'room-1' }
+          data: { playerId: 'local-player', roomId: 'room-1', mapId: 'default_office', displayName: 'Local Player' }
         })
       };
       if (mockWebSocketInstance.onmessage) {
@@ -388,7 +388,7 @@ describe('GameScene - Player Movement', () => {
         data: JSON.stringify({
           type: 'room:joined',
           timestamp: Date.now(),
-          data: { playerId: 'local-player', roomId: 'room-1' }
+          data: { playerId: 'local-player', roomId: 'room-1', mapId: 'default_office', displayName: 'Local Player' }
         })
       };
       if (mockWebSocketInstance.onmessage) {

@@ -59,6 +59,15 @@ Use the `PORT` environment variable to change the port:
 PORT=8081 go run cmd/server/main.go
 ```
 
+### Environment
+
+Copy values from `.env.example` only when you need to override local defaults.
+
+- `PORT`: HTTP/WebSocket port. Defaults to `8080`.
+- `ENABLE_SCHEMA_VALIDATION`: Enables outgoing schema validation when set to `true`.
+- `GO_ENV`: Future-facing environment flag for deployment wiring. Defaults to `development`.
+- `ALLOWED_ORIGINS`: Optional comma-separated origin allowlist. When unset, MVP development keeps permissive origin handling.
+
 ## Endpoints
 
 ### Health Check

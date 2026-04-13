@@ -37,6 +37,7 @@
             "type": "object",
             "required": [
               "id",
+              "displayName",
               "position",
               "velocity",
               "aimAngle",
@@ -52,6 +53,11 @@
             "properties": {
               "id": {
                 "description": "Player unique identifier",
+                "minLength": 1,
+                "type": "string"
+              },
+              "displayName": {
+                "description": "Authoritative display name for rendering",
                 "minLength": 1,
                 "type": "string"
               },

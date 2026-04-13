@@ -1,0 +1,37 @@
+{
+  "$id": "error_no_helloMessage",
+  "description": "error:no_hello WebSocket message",
+  "type": "object",
+  "required": [
+    "type",
+    "timestamp",
+    "data"
+  ],
+  "properties": {
+    "type": {
+      "description": "Message type identifier",
+      "const": "error:no_hello",
+      "type": "string"
+    },
+    "timestamp": {
+      "description": "Unix timestamp in milliseconds",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "data": {
+      "$id": "ErrorNoHelloData",
+      "description": "No-hello rejection payload",
+      "type": "object",
+      "required": [
+        "offendingType"
+      ],
+      "properties": {
+        "offendingType": {
+          "description": "Gameplay message type that arrived before hello",
+          "minLength": 1,
+          "type": "string"
+        }
+      }
+    }
+  }
+}

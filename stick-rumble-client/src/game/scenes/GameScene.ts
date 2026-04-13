@@ -25,6 +25,7 @@ import { ScoreDisplayUI } from '../ui/ScoreDisplayUI';
 import { KillCounterUI } from '../ui/KillCounterUI';
 import { PickupNotificationUI } from '../ui/PickupNotificationUI';
 import { COLORS } from '../../shared/constants';
+import { getWebSocketUrl } from '../config/runtimeConfig';
 import {
   getDefaultMatchMapContext,
   getMatchMapContext,
@@ -156,7 +157,7 @@ export class GameScene extends Phaser.Scene {
     this.setupF8KeyHandler();
 
     // Connect to WebSocket server
-    const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws';
+    const wsUrl = getWebSocketUrl();
     this.wsClient = new WebSocketClient(wsUrl, false, this.networkSimulator);
 
     // Initialize event handlers module
@@ -187,6 +188,21 @@ export class GameScene extends Phaser.Scene {
 
     // Inject audio manager into event handlers for weapon firing sounds (Story 3.3 Polish)
     this.eventHandlers.setAudioManager(this.audioManager);
+    this.eventHandlers.setJoinCallbacks(
+      (payload) => {
+        window.onJoinSuccess?.(payload);
+        this.initializeGameplaySystems();
+      },
+      (payload) => {
+        window.onJoinError?.(payload);
+      },
+      (count) => {
+        window.onRosterSizeChanged?.(count);
+      }
+    );
+    this.wsClient.setReconnectReplayFailedHandler((intent) => {
+      window.onReconnectReplayFailed?.(intent);
+    });
 
     // Setup message handlers before connecting
     this.eventHandlers.setupEventHandlers();
@@ -196,146 +212,11 @@ export class GameScene extends Phaser.Scene {
       this.wsClient.connect()
         .then(() => {
           console.log('Connected to server!');
-
-          // Initialize input manager after connection and scene is ready
-          this.inputManager = new InputManager(this, this.wsClient);
-          this.inputManager.init();
-
-          // Initialize shooting manager
-          this.shootingManager = new ShootingManager(this, this.wsClient);
-
-          // Initialize dodge roll manager
-          this.dodgeRollManager = new DodgeRollManager();
-
-          // Initialize prediction engine for client-side reconciliation (Story 4.2)
-          this.predictionEngine = new PredictionEngine();
-          this.predictionEngine.setMapContext(this.matchMapContext);
-
-          // Pass managers to event handlers
-          this.eventHandlers.setInputManager(this.inputManager);
-          this.eventHandlers.setShootingManager(this.shootingManager);
-          this.eventHandlers.setDodgeRollManager(this.dodgeRollManager);
-          this.eventHandlers.setPredictionEngine(this.predictionEngine);
-
-          // Setup mouse click for shooting/melee
-          this.input.on('pointerdown', () => {
-            if (this.shootingManager && this.inputManager) {
-              // Track pointer held state for automatic weapons
-              this.isPointerHeld = true;
-
-              // Update shooting manager with current aim angle
-              const aimAngle = this.inputManager.getAimAngle();
-              this.shootingManager.setAimAngle(aimAngle);
-
-              // Route to correct attack type based on current weapon
-              if (this.shootingManager.isMeleeWeapon()) {
-                const didAttack = this.shootingManager.meleeAttack();
-                // Trigger local swing animation immediately for visual feedback
-                if (didAttack) {
-                  const localPlayerId = this.playerManager.getLocalPlayerId();
-                  if (localPlayerId) {
-                    const localPos = this.playerManager.getPlayerPosition(localPlayerId);
-                    if (localPos) {
-                      this.meleeWeaponManager.updatePosition(localPlayerId, localPos);
-                      this.meleeWeaponManager.startSwing(localPlayerId, aimAngle);
-                    }
-                  }
-                }
-              } else {
-                const obstructed = this.getObstructedBarrelPosition(aimAngle);
-                if (obstructed) {
-                  this.ui.showWallSpark(obstructed.x, obstructed.y);
-                } else {
-                  this.shootingManager.shoot();
-                }
-              }
-            }
-          });
-
-          // Setup mouse release to stop automatic fire
-          this.input.on('pointerup', () => {
-            this.isPointerHeld = false;
-          });
-
-          // Setup R key for reload
-          const reloadKey = this.input.keyboard?.addKey('R');
-          if (reloadKey) {
-            reloadKey.on('down', () => {
-              if (this.shootingManager) {
-                this.shootingManager.reload();
-              }
-            });
-          }
-
-          // Setup E key for weapon pickup
-          const pickupKey = this.input.keyboard?.addKey('E');
-          if (pickupKey) {
-            pickupKey.on('down', () => {
-              if (this.nearbyWeaponCrate) {
-                this.wsClient.send({
-                  type: 'weapon:pickup_attempt',
-                  timestamp: Date.now(),
-                  data: { crateId: this.nearbyWeaponCrate.id }
-                });
-              }
-            });
-          }
-
-          // Setup SPACE key for dodge roll
-          const dodgeKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
-          if (dodgeKey) {
-            dodgeKey.on('down', () => {
-              if (this.dodgeRollManager && this.dodgeRollManager.canDodgeRoll()) {
-                // Calculate roll direction from WASD input or aim angle
-                const inputState = this.inputManager.getState();
-                const rollDirection = { x: 0, y: 0 };
-
-                // Use WASD input if any direction keys are pressed
-                if (inputState.up || inputState.down || inputState.left || inputState.right) {
-                  if (inputState.right) rollDirection.x += 1;
-                  if (inputState.left) rollDirection.x -= 1;
-                  if (inputState.down) rollDirection.y += 1;
-                  if (inputState.up) rollDirection.y -= 1;
-
-                  // Normalize direction vector
-                  const magnitude = Math.sqrt(rollDirection.x ** 2 + rollDirection.y ** 2);
-                  if (magnitude > 0) {
-                    rollDirection.x /= magnitude;
-                    rollDirection.y /= magnitude;
-                  }
-                } else {
-                  // Use aim angle if stationary
-                  const aimAngle = this.inputManager.getAimAngle();
-                  rollDirection.x = Math.cos(aimAngle);
-                  rollDirection.y = Math.sin(aimAngle);
-                }
-
-                // Send dodge roll request to server
-                this.wsClient.send({
-                  type: 'player:dodge_roll',
-                  timestamp: Date.now(),
-                  data: { direction: rollDirection }
-                });
-              }
-            });
-          }
-
-          // Create ammo display
-          this.ui.createAmmoDisplay(
-            GameSceneUI.HUD_LAYOUT.AMMO_TEXT_X,
-            GameSceneUI.HUD_LAYOUT.AMMO_TEXT_Y
-          );
-          this.ui.updateAmmoDisplay(this.shootingManager);
-
-          // Create reload UI elements
-          this.ui.createReloadProgressBar(10, 70, 200, 10);
-          this.ui.createReloadCircleIndicator();
-
-          // Create crosshair system
-          this.ui.createCrosshair();
-
-          // Setup minimap
-          this.ui.setupMinimap();
+          this.initializeGameplaySystems();
+          window.submitJoinIntent = (intent) => {
+            this.wsClient.sendHello(intent);
+          };
+          window.dispatchEvent(new Event('stick-rumble:submit-join-intent-ready'));
         })
         .catch(err => {
           console.error('Failed to connect:', err);
@@ -467,6 +348,120 @@ export class GameScene extends Phaser.Scene {
         this.ui.setCrosshairSpectating(false);
       }
     }
+  }
+
+  private initializeGameplaySystems(): void {
+    if (this.inputManager || this.shootingManager) {
+      return;
+    }
+
+    this.inputManager = new InputManager(this, this.wsClient);
+    this.inputManager.init();
+
+    this.shootingManager = new ShootingManager(this, this.wsClient);
+    this.dodgeRollManager = new DodgeRollManager();
+    this.predictionEngine = new PredictionEngine();
+    this.predictionEngine.setMapContext(this.matchMapContext);
+
+    this.eventHandlers.setInputManager(this.inputManager);
+    this.eventHandlers.setShootingManager(this.shootingManager);
+    this.eventHandlers.setDodgeRollManager(this.dodgeRollManager);
+    this.eventHandlers.setPredictionEngine(this.predictionEngine);
+
+    this.input.on('pointerdown', () => {
+      if (!this.shootingManager || !this.inputManager) {
+        return;
+      }
+
+      this.isPointerHeld = true;
+      const aimAngle = this.inputManager.getAimAngle();
+      this.shootingManager.setAimAngle(aimAngle);
+
+      if (this.shootingManager.isMeleeWeapon()) {
+        const didAttack = this.shootingManager.meleeAttack();
+        if (didAttack) {
+          const localPlayerId = this.playerManager.getLocalPlayerId();
+          if (localPlayerId) {
+            const localPos = this.playerManager.getPlayerPosition(localPlayerId);
+            if (localPos) {
+              this.meleeWeaponManager.updatePosition(localPlayerId, localPos);
+              this.meleeWeaponManager.startSwing(localPlayerId, aimAngle);
+            }
+          }
+        }
+        return;
+      }
+
+      const obstructed = this.getObstructedBarrelPosition(aimAngle);
+      if (obstructed) {
+        this.ui.showWallSpark(obstructed.x, obstructed.y);
+      } else {
+        this.shootingManager.shoot();
+      }
+    });
+
+    this.input.on('pointerup', () => {
+      this.isPointerHeld = false;
+    });
+
+    const reloadKey = this.input.keyboard?.addKey('R');
+    reloadKey?.on('down', () => {
+      this.shootingManager?.reload();
+    });
+
+    const pickupKey = this.input.keyboard?.addKey('E');
+    pickupKey?.on('down', () => {
+      if (this.nearbyWeaponCrate) {
+        this.wsClient.send({
+          type: 'weapon:pickup_attempt',
+          timestamp: Date.now(),
+          data: { crateId: this.nearbyWeaponCrate.id },
+        });
+      }
+    });
+
+    const dodgeKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+    dodgeKey?.on('down', () => {
+      if (!this.dodgeRollManager || !this.dodgeRollManager.canDodgeRoll() || !this.inputManager) {
+        return;
+      }
+
+      const inputState = this.inputManager.getState();
+      const rollDirection = { x: 0, y: 0 };
+
+      if (inputState.up || inputState.down || inputState.left || inputState.right) {
+        if (inputState.right) rollDirection.x += 1;
+        if (inputState.left) rollDirection.x -= 1;
+        if (inputState.down) rollDirection.y += 1;
+        if (inputState.up) rollDirection.y -= 1;
+
+        const magnitude = Math.sqrt(rollDirection.x ** 2 + rollDirection.y ** 2);
+        if (magnitude > 0) {
+          rollDirection.x /= magnitude;
+          rollDirection.y /= magnitude;
+        }
+      } else {
+        const aimAngle = this.inputManager.getAimAngle();
+        rollDirection.x = Math.cos(aimAngle);
+        rollDirection.y = Math.sin(aimAngle);
+      }
+
+      this.wsClient.send({
+        type: 'player:dodge_roll',
+        timestamp: Date.now(),
+        data: { direction: rollDirection },
+      });
+    });
+
+    this.ui.createAmmoDisplay(
+      GameSceneUI.HUD_LAYOUT.AMMO_TEXT_X,
+      GameSceneUI.HUD_LAYOUT.AMMO_TEXT_Y
+    );
+    this.ui.updateAmmoDisplay(this.shootingManager);
+    this.ui.createReloadProgressBar(10, 70, 200, 10);
+    this.ui.createReloadCircleIndicator();
+    this.ui.createCrosshair();
+    this.ui.setupMinimap();
   }
 
   /**
@@ -727,6 +722,8 @@ export class GameScene extends Phaser.Scene {
     if (this.wsClient) {
       this.wsClient.disconnect();
     }
+
+    delete window.submitJoinIntent;
 
     // Cleanup network simulator globals
     this.cleanupNetworkSimulatorGlobals();

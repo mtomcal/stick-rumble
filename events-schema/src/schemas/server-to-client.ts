@@ -38,6 +38,8 @@ export const RoomJoinedDataSchema = Type.Object(
     roomId: Type.String({ description: 'Unique identifier for the room', minLength: 1 }),
     playerId: Type.String({ description: 'Unique identifier for the player', minLength: 1 }),
     mapId: Type.String({ description: 'Selected shared map identifier for the room', minLength: 1 }),
+    displayName: Type.String({ description: 'Server-sanitized display name for the local player', minLength: 1 }),
+    code: Type.Optional(Type.String({ description: 'Normalized named-room code', minLength: 1 })),
   },
   { $id: 'RoomJoinedData', description: 'Room joined event payload' }
 );
@@ -78,6 +80,46 @@ export type PlayerLeftData = Static<typeof PlayerLeftDataSchema>;
 export const PlayerLeftMessageSchema = createTypedMessageSchema('player:left', PlayerLeftDataSchema);
 export type PlayerLeftMessage = Static<typeof PlayerLeftMessageSchema>;
 
+export const ErrorNoHelloDataSchema = Type.Object(
+  {
+    offendingType: Type.String({ description: 'Gameplay message type that arrived before hello', minLength: 1 }),
+  },
+  { $id: 'ErrorNoHelloData', description: 'No-hello rejection payload' }
+);
+
+export type ErrorNoHelloData = Static<typeof ErrorNoHelloDataSchema>;
+
+export const ErrorNoHelloMessageSchema = createTypedMessageSchema('error:no_hello', ErrorNoHelloDataSchema);
+export type ErrorNoHelloMessage = Static<typeof ErrorNoHelloMessageSchema>;
+
+export const ErrorBadRoomCodeDataSchema = Type.Object(
+  {
+    reason: Type.Union([
+      Type.Literal('missing'),
+      Type.Literal('too_short'),
+      Type.Literal('too_long'),
+    ], { description: 'Normalization failure reason' }),
+  },
+  { $id: 'ErrorBadRoomCodeData', description: 'Bad room code rejection payload' }
+);
+
+export type ErrorBadRoomCodeData = Static<typeof ErrorBadRoomCodeDataSchema>;
+
+export const ErrorBadRoomCodeMessageSchema = createTypedMessageSchema('error:bad_room_code', ErrorBadRoomCodeDataSchema);
+export type ErrorBadRoomCodeMessage = Static<typeof ErrorBadRoomCodeMessageSchema>;
+
+export const ErrorRoomFullDataSchema = Type.Object(
+  {
+    code: Type.String({ description: 'Normalized room code that is already full', minLength: 1 }),
+  },
+  { $id: 'ErrorRoomFullData', description: 'Room full rejection payload' }
+);
+
+export type ErrorRoomFullData = Static<typeof ErrorRoomFullDataSchema>;
+
+export const ErrorRoomFullMessageSchema = createTypedMessageSchema('error:room_full', ErrorRoomFullDataSchema);
+export type ErrorRoomFullMessage = Static<typeof ErrorRoomFullMessageSchema>;
+
 // ============================================================================
 // player:move
 // ============================================================================
@@ -88,6 +130,7 @@ export type PlayerLeftMessage = Static<typeof PlayerLeftMessageSchema>;
 export const PlayerStateSchema = Type.Object(
   {
     id: Type.String({ description: 'Player unique identifier', minLength: 1 }),
+    displayName: Type.String({ description: 'Authoritative display name for rendering', minLength: 1 }),
     position: PositionRef,
     velocity: VelocityRef,
     aimAngle: Type.Number({ description: 'Player aim angle in radians' }),

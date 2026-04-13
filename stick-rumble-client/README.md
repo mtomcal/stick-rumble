@@ -71,3 +71,10 @@ export default defineConfig([
   },
 ])
 ```
+
+## Environment
+
+Copy values from `.env.example` only when you need to override local defaults.
+
+- `VITE_WS_URL`: WebSocket endpoint for the game server. Defaults to `ws://localhost:8080/ws`.
+- `VITE_CLIENT_BASE_URL`: Base URL used to generate shareable invite links. Defaults to the current browser origin, with a local fallback.

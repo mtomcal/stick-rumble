@@ -9,7 +9,8 @@
     "height",
     "obstacles",
     "spawnPoints",
-    "weaponSpawns"
+    "weaponSpawns",
+    "visualAcceptanceViewpoints"
   ],
   "properties": {
     "id": {
@@ -169,6 +170,79 @@
               },
               {
                 "const": "bat",
+                "type": "string"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "visualAcceptanceViewpoints": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "$id": "MapVisualAcceptanceViewpoint",
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "playerPosition",
+          "aimDirection",
+          "expectedOutcome"
+        ],
+        "properties": {
+          "id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "playerPosition": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "x",
+              "y"
+            ],
+            "properties": {
+              "x": {
+                "type": "number"
+              },
+              "y": {
+                "type": "number"
+              }
+            }
+          },
+          "aimDirection": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "x",
+              "y"
+            ],
+            "properties": {
+              "x": {
+                "type": "number"
+              },
+              "y": {
+                "type": "number"
+              }
+            }
+          },
+          "expectedOutcome": {
+            "anyOf": [
+              {
+                "const": "reads_blocked",
+                "type": "string"
+              },
+              {
+                "const": "reads_open",
+                "type": "string"
+              },
+              {
+                "const": "pickup_clearly_visible",
+                "type": "string"
+              },
+              {
+                "const": "hud_unobscured",
                 "type": "string"
               }
             ]

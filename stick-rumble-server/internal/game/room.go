@@ -5,62 +5,110 @@ import (
 	"errors"
 	"log"
 	"os"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
 )
 
-// Player represents a connected player
+const (
+	MinPlayersToStart   = 2
+	MinRoomCodeLen      = 3
+	MaxRoomCodeLen      = 12
+	MaxDisplayNameLen   = 16
+	FallbackDisplayName = "Guest"
+)
+
+type RoomKind string
+
+const (
+	RoomKindPublic RoomKind = "public"
+	RoomKindCode   RoomKind = "code"
+)
+
+type RoomCodeErrorReason string
+
+const (
+	RoomCodeMissing  RoomCodeErrorReason = "missing"
+	RoomCodeTooShort RoomCodeErrorReason = "too_short"
+	RoomCodeTooLong  RoomCodeErrorReason = "too_long"
+)
+
+var (
+	controlCharsPattern  = regexp.MustCompile(`[\x00-\x1F\x7F]`)
+	internalSpacePattern = regexp.MustCompile(`\s+`)
+	roomCodeStripPattern = regexp.MustCompile(`[^A-Z0-9]`)
+)
+
+// Player represents a connected player.
 type Player struct {
 	ID          string
+	DisplayName string
+	HelloSeen   bool
 	SendChan    chan []byte
 	PingTracker *PingTracker // Tracks RTT for lag compensation
 }
 
-// NewPlayer creates a new player with initialized ping tracker
+// NewPlayer creates a new player with initialized ping tracker.
 func NewPlayer(id string, sendChan chan []byte) *Player {
 	return &Player{
 		ID:          id,
+		DisplayName: FallbackDisplayName,
 		SendChan:    sendChan,
 		PingTracker: NewPingTracker(),
 	}
 }
 
-// Room represents a game room with multiple players
+// Room represents a game room with multiple players.
 type Room struct {
 	ID         string
+	Kind       RoomKind
+	Code       string
 	Players    []*Player
 	MaxPlayers int
 	MapID      string
-	Match      *Match // Match state tracking
+	Match      *Match
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+	EmptySince *time.Time
 	mu         sync.RWMutex
 }
 
-// NewRoom creates a new room with a unique ID
 func NewRoom(mapIDs ...string) *Room {
+	return NewTypedRoom(RoomKindPublic, "", mapIDs...)
+}
+
+// NewTypedRoom creates a room with an explicit kind and optional named-room code.
+func NewTypedRoom(kind RoomKind, code string, mapIDs ...string) *Room {
 	match := NewMatch()
 	mapID := DefaultMapID
 	if len(mapIDs) > 0 && mapIDs[0] != "" {
 		mapID = mapIDs[0]
 	}
 
-	// Enable test mode if TEST_MODE environment variable is set
 	if os.Getenv("TEST_MODE") == "true" {
 		match.SetTestMode()
 		log.Println("Match created in TEST MODE (kill target: 2, time limit: 10s)")
 	}
 
+	now := time.Now()
+
 	return &Room{
 		ID:         uuid.New().String(),
+		Kind:       kind,
+		Code:       code,
 		Players:    make([]*Player, 0, 8),
 		MaxPlayers: 8,
 		MapID:      mapID,
 		Match:      match,
+		CreatedAt:  now,
+		UpdatedAt:  now,
 	}
 }
 
-// AddPlayer adds a player to the room
+// AddPlayer adds a player to the room.
 func (r *Room) AddPlayer(player *Player) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -70,65 +118,67 @@ func (r *Room) AddPlayer(player *Player) error {
 	}
 
 	r.Players = append(r.Players, player)
+	r.UpdatedAt = time.Now()
+	r.EmptySince = nil
 	return nil
 }
 
-// RemovePlayer removes a player from the room by ID
+// RemovePlayer removes a player from the room by ID.
 func (r *Room) RemovePlayer(playerID string) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	for i, player := range r.Players {
 		if player.ID == playerID {
-			// Remove player from slice
 			r.Players = append(r.Players[:i], r.Players[i+1:]...)
+			now := time.Now()
+			r.UpdatedAt = now
+			if len(r.Players) == 0 {
+				r.EmptySince = &now
+			}
 			return true
 		}
 	}
 	return false
 }
 
-// IsEmpty returns true if the room has no players (thread-safe)
 func (r *Room) IsEmpty() bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return len(r.Players) == 0
 }
 
-// PlayerCount returns the number of players in the room (thread-safe)
 func (r *Room) PlayerCount() int {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return len(r.Players)
 }
 
-// Broadcast sends a message to all players in the room, optionally excluding a sender
 func (r *Room) Broadcast(message []byte, excludePlayerID string) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	for _, player := range r.Players {
-		if player.ID != excludePlayerID {
-			// Use recover to handle closed channel panics gracefully
-			func() {
-				defer func() {
-					if rec := recover(); rec != nil {
-						log.Printf("Warning: Could not send message to player %s (channel closed)", player.ID)
-					}
-				}()
+		if player.ID == excludePlayerID {
+			continue
+		}
 
-				select {
-				case player.SendChan <- message:
-					// Message sent successfully
-				default:
-					log.Printf("Warning: Could not send message to player %s (channel full)", player.ID)
+		func() {
+			defer func() {
+				if rec := recover(); rec != nil {
+					log.Printf("Warning: Could not send message to player %s (channel closed)", player.ID)
 				}
 			}()
-		}
+
+			select {
+			case player.SendChan <- message:
+			default:
+				log.Printf("Warning: Could not send message to player %s (channel full)", player.ID)
+			}
+		}()
 	}
 }
 
-// GetPlayer returns a player by ID, or nil if not found
 func (r *Room) GetPlayer(playerID string) *Player {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -141,27 +191,24 @@ func (r *Room) GetPlayer(playerID string) *Player {
 	return nil
 }
 
-// GetPlayers returns a copy of all players in the room
 func (r *Room) GetPlayers() []*Player {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	// Return a copy to avoid race conditions
 	players := make([]*Player, len(r.Players))
 	copy(players, r.Players)
 	return players
 }
 
-// RoomManager manages all game rooms and player assignments
 type RoomManager struct {
 	rooms          map[string]*Room
 	waitingPlayers []*Player
-	playerToRoom   map[string]string // Maps player ID to room ID
+	playerToRoom   map[string]string
+	codeIndex      map[string]string
 	defaultMapID   string
 	mu             sync.RWMutex
 }
 
-// NewRoomManager creates a new room manager
 func NewRoomManager(defaultMapIDs ...string) *RoomManager {
 	defaultMapID := DefaultMapID
 	if len(defaultMapIDs) > 0 && defaultMapIDs[0] != "" {
@@ -172,93 +219,153 @@ func NewRoomManager(defaultMapIDs ...string) *RoomManager {
 		rooms:          make(map[string]*Room),
 		waitingPlayers: make([]*Player, 0),
 		playerToRoom:   make(map[string]string),
+		codeIndex:      make(map[string]string),
 		defaultMapID:   defaultMapID,
 	}
 }
 
-// AddPlayer adds a player and creates a room if we have 2 waiting players
-// If there's an active room that needs a second player (only 1 player), join that room directly
-// This handles the "tab reload" scenario where one player is waiting in a room
-func (rm *RoomManager) AddPlayer(player *Player) *Room {
+func SanitizeDisplayName(raw any) string {
+	name, ok := raw.(string)
+	if !ok {
+		return FallbackDisplayName
+	}
+
+	name = strings.TrimSpace(name)
+	name = controlCharsPattern.ReplaceAllString(name, "")
+	name = internalSpacePattern.ReplaceAllString(name, " ")
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return FallbackDisplayName
+	}
+
+	runes := []rune(name)
+	if len(runes) > MaxDisplayNameLen {
+		name = string(runes[:MaxDisplayNameLen])
+	}
+
+	return name
+}
+
+func NormalizeRoomCode(raw any) (string, RoomCodeErrorReason, bool) {
+	value, ok := raw.(string)
+	if !ok {
+		return "", RoomCodeMissing, false
+	}
+
+	code := strings.TrimSpace(strings.ToUpper(value))
+	code = roomCodeStripPattern.ReplaceAllString(code, "")
+	switch {
+	case len(code) < MinRoomCodeLen:
+		return "", RoomCodeTooShort, false
+	case len(code) > MaxRoomCodeLen:
+		return "", RoomCodeTooLong, false
+	default:
+		return code, "", true
+	}
+}
+
+// AddPublicPlayer processes a successful public-mode hello.
+func (rm *RoomManager) AddPublicPlayer(player *Player) *Room {
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
 
-	// First, check if there's an existing room with exactly 1 player waiting
-	// This handles the "tab reload" scenario where one player is already waiting
-	// We only join if room has 1 player (needs a second to start/continue match)
-	// Don't join rooms that already have 2+ players (that would create 3+ player games)
 	for _, room := range rm.rooms {
-		if room.PlayerCount() == 1 && !room.Match.IsEnded() {
-			// Join existing room that needs a second player
-			room.AddPlayer(player)
+		if room.Kind == RoomKindPublic && room.PlayerCount() == 1 && !room.Match.IsEnded() {
+			if err := room.AddPlayer(player); err != nil {
+				continue
+			}
 			rm.playerToRoom[player.ID] = room.ID
-
-			// Register player in the match
 			room.Match.RegisterPlayer(player.ID)
-
-			log.Printf("Player %s joined existing room %s (now %d players)", player.ID, room.ID, room.PlayerCount())
-
-			// Send room:joined message to the new player
+			if room.PlayerCount() >= MinPlayersToStart && !room.Match.IsStarted() {
+				room.Match.Start()
+			}
 			rm.sendRoomJoinedMessage(player, room)
-
 			return room
 		}
 	}
 
-	// No existing room with space - add to waiting list
 	rm.waitingPlayers = append(rm.waitingPlayers, player)
-
-	// If we have 2 players, create a room
-	if len(rm.waitingPlayers) >= 2 {
-		// Create new room
-		room := NewRoom(rm.defaultMapID)
-
-		// Add both waiting players to the room
-		player1 := rm.waitingPlayers[0]
-		player2 := rm.waitingPlayers[1]
-
-		room.AddPlayer(player1)
-		room.AddPlayer(player2)
-
-		// Register players in the match to ensure they appear in final scores
-		room.Match.RegisterPlayer(player1.ID)
-		room.Match.RegisterPlayer(player2.ID)
-
-		// Clear waiting list
-		rm.waitingPlayers = rm.waitingPlayers[2:]
-
-		// Register room
-		rm.rooms[room.ID] = room
-		rm.playerToRoom[player1.ID] = room.ID
-		rm.playerToRoom[player2.ID] = room.ID
-
-		// Start the match
-		room.Match.Start()
-
-		// Log room creation
-		log.Printf("Room created: %s with players: [%s, %s]", room.ID, player1.ID, player2.ID)
-
-		// Send room:joined messages to both players
-		rm.sendRoomJoinedMessage(player1, room)
-		rm.sendRoomJoinedMessage(player2, room)
-
-		return room
+	if len(rm.waitingPlayers) < MinPlayersToStart {
+		return nil
 	}
 
-	// Not enough players yet
-	return nil
+	room := NewTypedRoom(RoomKindPublic, "", rm.defaultMapID)
+	player1 := rm.waitingPlayers[0]
+	player2 := rm.waitingPlayers[1]
+	rm.waitingPlayers = rm.waitingPlayers[2:]
+
+	_ = room.AddPlayer(player1)
+	_ = room.AddPlayer(player2)
+	room.Match.RegisterPlayer(player1.ID)
+	room.Match.RegisterPlayer(player2.ID)
+	room.Match.Start()
+
+	rm.rooms[room.ID] = room
+	rm.playerToRoom[player1.ID] = room.ID
+	rm.playerToRoom[player2.ID] = room.ID
+
+	rm.sendRoomJoinedMessage(player1, room)
+	rm.sendRoomJoinedMessage(player2, room)
+
+	return room
 }
 
-// sendRoomJoinedMessage sends a room:joined message to a player
+// AddPlayer preserves the old public-room API for callers that still use it.
+func (rm *RoomManager) AddPlayer(player *Player) *Room {
+	return rm.AddPublicPlayer(player)
+}
+
+// AddCodePlayer processes a successful code-mode hello.
+func (rm *RoomManager) AddCodePlayer(player *Player, normalizedCode string) (*Room, bool) {
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+
+	if existingRoomID, ok := rm.codeIndex[normalizedCode]; ok {
+		if existingRoom, exists := rm.rooms[existingRoomID]; exists {
+			if existingRoom.Match.IsEnded() {
+				delete(rm.codeIndex, normalizedCode)
+			} else if existingRoom.PlayerCount() >= existingRoom.MaxPlayers {
+				return existingRoom, false
+			} else {
+				if err := existingRoom.AddPlayer(player); err != nil {
+					return existingRoom, false
+				}
+				rm.playerToRoom[player.ID] = existingRoom.ID
+				existingRoom.Match.RegisterPlayer(player.ID)
+				if existingRoom.PlayerCount() >= MinPlayersToStart && !existingRoom.Match.IsStarted() {
+					existingRoom.Match.Start()
+				}
+				rm.sendRoomJoinedMessage(player, existingRoom)
+				return existingRoom, true
+			}
+		}
+	}
+
+	room := NewTypedRoom(RoomKindCode, normalizedCode, rm.defaultMapID)
+	_ = room.AddPlayer(player)
+	room.Match.RegisterPlayer(player.ID)
+	rm.rooms[room.ID] = room
+	rm.playerToRoom[player.ID] = room.ID
+	rm.codeIndex[normalizedCode] = room.ID
+	rm.sendRoomJoinedMessage(player, room)
+	return room, true
+}
+
 func (rm *RoomManager) sendRoomJoinedMessage(player *Player, room *Room) {
-	message := map[string]interface{}{
+	data := map[string]any{
+		"roomId":      room.ID,
+		"playerId":    player.ID,
+		"mapId":       room.MapID,
+		"displayName": player.DisplayName,
+	}
+	if room.Kind == RoomKindCode && room.Code != "" {
+		data["code"] = room.Code
+	}
+
+	message := map[string]any{
 		"type":      "room:joined",
 		"timestamp": time.Now().UnixMilli(),
-		"data": map[string]interface{}{
-			"roomId":   room.ID,
-			"playerId": player.ID,
-			"mapId":    room.MapID,
-		},
+		"data":      data,
 	}
 
 	msgBytes, err := json.Marshal(message)
@@ -267,7 +374,6 @@ func (rm *RoomManager) sendRoomJoinedMessage(player *Player, room *Room) {
 		return
 	}
 
-	// Use recover to handle closed channel panics gracefully
 	func() {
 		defer func() {
 			if rec := recover(); rec != nil {
@@ -277,19 +383,16 @@ func (rm *RoomManager) sendRoomJoinedMessage(player *Player, room *Room) {
 
 		select {
 		case player.SendChan <- msgBytes:
-			// Message sent successfully
 		default:
 			log.Printf("Warning: Could not send room:joined message to player %s (channel full)", player.ID)
 		}
 	}()
 }
 
-// RemovePlayer removes a player from their room and notifies other players
 func (rm *RoomManager) RemovePlayer(playerID string) {
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
 
-	// Find and remove from waiting list if present
 	for i, player := range rm.waitingPlayers {
 		if player.ID == playerID {
 			rm.waitingPlayers = append(rm.waitingPlayers[:i], rm.waitingPlayers[i+1:]...)
@@ -297,7 +400,6 @@ func (rm *RoomManager) RemovePlayer(playerID string) {
 		}
 	}
 
-	// Find player's room
 	roomID, exists := rm.playerToRoom[playerID]
 	if !exists {
 		return
@@ -305,39 +407,46 @@ func (rm *RoomManager) RemovePlayer(playerID string) {
 
 	room, exists := rm.rooms[roomID]
 	if !exists {
+		delete(rm.playerToRoom, playerID)
 		return
 	}
 
-	// Remove player from room
 	room.RemovePlayer(playerID)
 
-	// Send player:left message to remaining players
-	message := map[string]interface{}{
+	message := map[string]any{
 		"type":      "player:left",
 		"timestamp": time.Now().UnixMilli(),
-		"data": map[string]interface{}{
+		"data": map[string]any{
 			"playerId": playerID,
 		},
 	}
 
-	msgBytes, err := json.Marshal(message)
-	if err != nil {
+	if msgBytes, err := json.Marshal(message); err != nil {
 		log.Printf("Error marshaling player:left message: %v", err)
 	} else {
 		room.Broadcast(msgBytes, "")
 	}
 
-	// Clean up player to room mapping
 	delete(rm.playerToRoom, playerID)
 
-	// If room is empty, remove it
-	if room.IsEmpty() {
-		delete(rm.rooms, roomID)
-		log.Printf("Room %s removed (no players remaining)", roomID)
+	if !room.IsEmpty() {
+		return
 	}
+
+	// Empty, unstarted code rooms are retained for TTL cleanup.
+	if room.Kind == RoomKindCode && !room.Match.IsStarted() {
+		return
+	}
+
+	delete(rm.rooms, roomID)
+	if room.Kind == RoomKindCode && room.Code != "" {
+		if indexedID, ok := rm.codeIndex[room.Code]; ok && indexedID == room.ID {
+			delete(rm.codeIndex, room.Code)
+		}
+	}
+	log.Printf("Room %s removed (no players remaining)", roomID)
 }
 
-// GetRoomByPlayerID finds a room by player ID
 func (rm *RoomManager) GetRoomByPlayerID(playerID string) *Room {
 	rm.mu.RLock()
 	defer rm.mu.RUnlock()
@@ -350,14 +459,12 @@ func (rm *RoomManager) GetRoomByPlayerID(playerID string) *Room {
 	return rm.rooms[roomID]
 }
 
-// SendToWaitingPlayer sends a message to a waiting player (not in a room yet)
 func (rm *RoomManager) SendToWaitingPlayer(playerID string, msgBytes []byte) {
 	rm.mu.RLock()
 	defer rm.mu.RUnlock()
 
 	for _, player := range rm.waitingPlayers {
 		if player.ID == playerID {
-			// Use recover to handle closed channel panics gracefully
 			func() {
 				defer func() {
 					if rec := recover(); rec != nil {
@@ -367,7 +474,6 @@ func (rm *RoomManager) SendToWaitingPlayer(playerID string, msgBytes []byte) {
 
 				select {
 				case player.SendChan <- msgBytes:
-					// Message sent successfully
 				default:
 					log.Printf("Warning: Could not send message to waiting player %s (channel full)", playerID)
 				}
@@ -377,20 +483,14 @@ func (rm *RoomManager) SendToWaitingPlayer(playerID string, msgBytes []byte) {
 	}
 }
 
-// SendToPlayer sends a message to any player (in room or waiting)
-// Returns true if player was found and message was queued, false otherwise
 func (rm *RoomManager) SendToPlayer(playerID string, msgBytes []byte) bool {
 	rm.mu.RLock()
 	defer rm.mu.RUnlock()
 
-	// First, check if player is in a room
 	roomID, inRoom := rm.playerToRoom[playerID]
 	if inRoom {
-		room, roomExists := rm.rooms[roomID]
-		if roomExists {
-			player := room.GetPlayer(playerID)
-			if player != nil {
-				// Use recover to handle closed channel panics gracefully
+		if room, roomExists := rm.rooms[roomID]; roomExists {
+			if player := room.GetPlayer(playerID); player != nil {
 				func() {
 					defer func() {
 						if rec := recover(); rec != nil {
@@ -400,7 +500,6 @@ func (rm *RoomManager) SendToPlayer(playerID string, msgBytes []byte) bool {
 
 					select {
 					case player.SendChan <- msgBytes:
-						// Message sent successfully
 					default:
 						log.Printf("Warning: Could not send message to player %s (channel full)", playerID)
 					}
@@ -410,10 +509,8 @@ func (rm *RoomManager) SendToPlayer(playerID string, msgBytes []byte) bool {
 		}
 	}
 
-	// Second, check waiting players
 	for _, player := range rm.waitingPlayers {
 		if player.ID == playerID {
-			// Use recover to handle closed channel panics gracefully
 			func() {
 				defer func() {
 					if rec := recover(); rec != nil {
@@ -423,7 +520,6 @@ func (rm *RoomManager) SendToPlayer(playerID string, msgBytes []byte) bool {
 
 				select {
 				case player.SendChan <- msgBytes:
-					// Message sent successfully
 				default:
 					log.Printf("Warning: Could not send message to waiting player %s (channel full)", playerID)
 				}
@@ -432,23 +528,18 @@ func (rm *RoomManager) SendToPlayer(playerID string, msgBytes []byte) bool {
 		}
 	}
 
-	// Player not found
 	return false
 }
 
-// BroadcastToAll sends a message to all players (in rooms and waiting)
 func (rm *RoomManager) BroadcastToAll(msgBytes []byte) {
 	rm.mu.RLock()
 	defer rm.mu.RUnlock()
 
-	// Broadcast to all rooms
 	for _, room := range rm.rooms {
 		room.Broadcast(msgBytes, "")
 	}
 
-	// Send to all waiting players
 	for _, player := range rm.waitingPlayers {
-		// Use recover to handle closed channel panics gracefully
 		func() {
 			defer func() {
 				if rec := recover(); rec != nil {
@@ -458,7 +549,6 @@ func (rm *RoomManager) BroadcastToAll(msgBytes []byte) {
 
 			select {
 			case player.SendChan <- msgBytes:
-				// Message sent successfully
 			default:
 				log.Printf("Warning: Could not send message to waiting player %s (channel full)", player.ID)
 			}
@@ -466,7 +556,6 @@ func (rm *RoomManager) BroadcastToAll(msgBytes []byte) {
 	}
 }
 
-// GetAllRooms returns a snapshot of all active rooms (thread-safe)
 func (rm *RoomManager) GetAllRooms() []*Room {
 	rm.mu.RLock()
 	defer rm.mu.RUnlock()
@@ -476,4 +565,24 @@ func (rm *RoomManager) GetAllRooms() []*Room {
 		rooms = append(rooms, room)
 	}
 	return rooms
+}
+
+func (rm *RoomManager) RemoveRoomIfIdle(roomID string) bool {
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+
+	room, exists := rm.rooms[roomID]
+	if !exists {
+		return false
+	}
+	if room.Kind != RoomKindCode || room.Match.IsStarted() || !room.IsEmpty() || room.EmptySince == nil {
+		return false
+	}
+	if room.Code != "" {
+		if indexedID, ok := rm.codeIndex[room.Code]; ok && indexedID == room.ID {
+			delete(rm.codeIndex, room.Code)
+		}
+	}
+	delete(rm.rooms, roomID)
+	return true
 }

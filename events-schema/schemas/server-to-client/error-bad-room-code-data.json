@@ -1,0 +1,27 @@
+{
+  "$id": "ErrorBadRoomCodeData",
+  "description": "Bad room code rejection payload",
+  "type": "object",
+  "required": [
+    "reason"
+  ],
+  "properties": {
+    "reason": {
+      "description": "Normalization failure reason",
+      "anyOf": [
+        {
+          "const": "missing",
+          "type": "string"
+        },
+        {
+          "const": "too_short",
+          "type": "string"
+        },
+        {
+          "const": "too_long",
+          "type": "string"
+        }
+      ]
+    }
+  }
+}

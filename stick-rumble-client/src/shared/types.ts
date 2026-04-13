@@ -21,6 +21,29 @@ export interface MatchEndData {
   reason: string;
 }
 
+export type JoinMode = 'public' | 'code';
+
+export interface JoinIntent {
+  displayName?: string;
+  mode: JoinMode;
+  code?: string;
+}
+
+export interface JoinSuccessPayload {
+  roomId: string;
+  playerId: string;
+  mapId: string;
+  displayName: string;
+  code?: string;
+}
+
+export interface JoinErrorPayload {
+  type: 'error:bad_room_code' | 'error:room_full' | 'error:no_hello';
+  reason?: string;
+  code?: string;
+  offendingType?: string;
+}
+
 import type { NetworkSimulatorStats } from '../game/network/NetworkSimulator';
 
 /**
@@ -36,5 +59,10 @@ declare global {
     setNetworkSimulatorLatency?: (latency: number) => void;
     setNetworkSimulatorPacketLoss?: (packetLoss: number) => void;
     setNetworkSimulatorEnabled?: (enabled: boolean) => void;
+    submitJoinIntent?: (intent: JoinIntent) => void;
+    onJoinSuccess?: (payload: JoinSuccessPayload) => void;
+    onJoinError?: (payload: JoinErrorPayload) => void;
+    onRosterSizeChanged?: (count: number) => void;
+    onReconnectReplayFailed?: (intent: JoinIntent) => void;
   }
 }

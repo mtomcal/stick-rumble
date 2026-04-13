@@ -9,17 +9,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mtomcal/stick-rumble-server/internal/config"
 	"github.com/mtomcal/stick-rumble-server/internal/network"
 )
 
 // startServer initializes and starts the HTTP server with health and WebSocket endpoints
 // Returns when context is cancelled or server encounters an error
 func startServer(ctx context.Context) error {
-	// Get port from environment or use default
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
+	runtimeConfig := config.Load()
 
 	// Create HTTP server with routes
 	mux := http.NewServeMux()
@@ -35,7 +32,7 @@ func startServer(ctx context.Context) error {
 
 	// Create server with configured timeouts
 	server := &http.Server{
-		Addr:         ":" + port,
+		Addr:         ":" + runtimeConfig.Port,
 		Handler:      mux,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
@@ -50,7 +47,7 @@ func startServer(ctx context.Context) error {
 
 	// Start HTTP server in goroutine
 	go func() {
-		log.Printf("Starting server on port %s", port)
+		log.Printf("Starting server on port %s", runtimeConfig.Port)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			serverErrors <- err
 		}

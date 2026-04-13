@@ -69,6 +69,12 @@ func (ts *testServer) wsURL() string {
 
 // connectClient establishes a WebSocket connection to the test server
 func (ts *testServer) connectClient(t *testing.T) *websocket.Conn {
+	conn := ts.connectRawClient(t)
+	sendHelloMessage(t, conn, "Test Player", "public", "")
+	return conn
+}
+
+func (ts *testServer) connectRawClient(t *testing.T) *websocket.Conn {
 	conn, _, err := websocket.DefaultDialer.Dial(ts.wsURL(), nil)
 	require.NoError(t, err, "Should connect to test server")
 	return conn
@@ -124,6 +130,22 @@ func sendMessage(t *testing.T, conn *websocket.Conn, msg Message) {
 	require.NoError(t, err, "Should marshal message")
 	err = conn.WriteMessage(websocket.TextMessage, msgBytes)
 	require.NoError(t, err, "Should send message")
+}
+
+func sendHelloMessage(t *testing.T, conn *websocket.Conn, displayName string, mode string, code string) {
+	data := map[string]interface{}{
+		"displayName": displayName,
+		"mode":        mode,
+	}
+	if mode == "code" {
+		data["code"] = code
+	}
+
+	sendMessage(t, conn, Message{
+		Type:      "player:hello",
+		Timestamp: time.Now().UnixMilli(),
+		Data:      data,
+	})
 }
 
 // sendInputState sends an input:state message
@@ -197,6 +219,107 @@ func TestWebSocketConnection(t *testing.T) {
 
 	// Verify connection is established
 	assert.NotNil(t, conn)
+}
+
+func TestGameplayMessageBeforeHelloReturnsError(t *testing.T) {
+	ts := newTestServer()
+	defer ts.Close()
+
+	conn := ts.connectRawClient(t)
+	defer conn.Close()
+
+	sendInputState(t, conn, true, false, false, false)
+
+	msg, err := readMessageOfType(t, conn, "error:no_hello", 2*time.Second)
+	require.NoError(t, err, "Should reject gameplay messages before hello")
+
+	data, ok := msg.Data.(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "input:state", data["offendingType"])
+}
+
+func TestCodeHelloReturnsNormalizedCodeAndSanitizedDisplayName(t *testing.T) {
+	ts := newTestServer()
+	defer ts.Close()
+
+	conn := ts.connectRawClient(t)
+	defer conn.Close()
+
+	sendHelloMessage(t, conn, "  Sanitized   Player Name  ", "code", " p.i z z a!!! ")
+
+	msg, err := readMessageOfType(t, conn, "room:joined", 2*time.Second)
+	require.NoError(t, err, "Should receive room:joined for valid code hello")
+
+	data, ok := msg.Data.(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "PIZZA", data["code"])
+	assert.Equal(t, "Sanitized Player", data["displayName"])
+}
+
+func TestBadCodeHelloCanRetryOnSameSocket(t *testing.T) {
+	ts := newTestServer()
+	defer ts.Close()
+
+	conn := ts.connectRawClient(t)
+	defer conn.Close()
+
+	sendHelloMessage(t, conn, "Retry Player", "code", "x")
+
+	badCodeMsg, err := readMessageOfType(t, conn, "error:bad_room_code", 2*time.Second)
+	require.NoError(t, err, "Should reject bad room code")
+
+	data, ok := badCodeMsg.Data.(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "too_short", data["reason"])
+
+	sendHelloMessage(t, conn, "Retry Player", "code", " PIZZA ")
+
+	roomJoinedMsg, err := readMessageOfType(t, conn, "room:joined", 2*time.Second)
+	require.NoError(t, err, "Should allow corrected hello on same socket")
+
+	joinedData, ok := roomJoinedMsg.Data.(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "PIZZA", joinedData["code"])
+}
+
+func TestFullCodeRoomReturnsRoomFullAndKeepsSocketOpen(t *testing.T) {
+	ts := newTestServer()
+	defer ts.Close()
+
+	fullCode := "PACKED"
+	conns := make([]*websocket.Conn, 0, 8)
+	for i := 0; i < 8; i++ {
+		conn := ts.connectRawClient(t)
+		conns = append(conns, conn)
+		sendHelloMessage(t, conn, "Packed Player", "code", fullCode)
+		_, err := readMessageOfType(t, conn, "room:joined", 2*time.Second)
+		require.NoError(t, err)
+	}
+	defer func() {
+		for _, conn := range conns {
+			conn.Close()
+		}
+	}()
+
+	recoveryConn := ts.connectRawClient(t)
+	defer recoveryConn.Close()
+
+	sendHelloMessage(t, recoveryConn, "Recovery Player", "code", fullCode)
+
+	roomFullMsg, err := readMessageOfType(t, recoveryConn, "error:room_full", 2*time.Second)
+	require.NoError(t, err, "Should reject join into full code room")
+
+	data, ok := roomFullMsg.Data.(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, fullCode, data["code"])
+
+	sendHelloMessage(t, recoveryConn, "Recovery Player", "code", "SAFE")
+	recoveryJoined, err := readMessageOfType(t, recoveryConn, "room:joined", 2*time.Second)
+	require.NoError(t, err, "Should allow a different code on the same socket after room_full")
+
+	joinedData, ok := recoveryJoined.Data.(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "SAFE", joinedData["code"])
 }
 
 func TestTwoClientRoomCreation(t *testing.T) {
@@ -392,6 +515,9 @@ func TestInputAfterMatchEnded(t *testing.T) {
 	room := ts.handler.roomManager.GetRoomByPlayerID(player1ID)
 	require.NotNil(t, room)
 	room.Match.EndMatch("test")
+	beforeState, exists := ts.handler.gameServer.GetPlayerState(player1ID)
+	require.True(t, exists)
+	beforePosition := beforeState.Position
 
 	// Drain any pending player:move messages from before match ended
 	for i := 0; i < 5; i++ {
@@ -416,7 +542,9 @@ func TestInputAfterMatchEnded(t *testing.T) {
 			// The key is that our NEW input shouldn't generate NEW movement
 		}
 	}
-	// Test passes if we timeout (no messages) or got non-player:move messages
+	afterState, exists := ts.handler.gameServer.GetPlayerState(player1ID)
+	require.True(t, exists)
+	assert.Equal(t, beforePosition, afterState.Position, "Input after match end should not move the player")
 }
 
 // ==========================

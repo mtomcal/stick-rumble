@@ -1,20 +1,47 @@
 #root {
   width: 100%;
-  height: 100vh;
+  min-height: 100vh;
   margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background-color: #1a1a1a;
+  background:
+    radial-gradient(circle at top, rgba(255, 196, 120, 0.18), transparent 28%),
+    linear-gradient(180deg, #16181c 0%, #0d0f12 100%);
+  color: #f3efe3;
 }
 
-.app-container {
+.app-shell {
   display: flex;
+  min-height: 100vh;
   flex-direction: column;
   align-items: center;
-  gap: 1rem;
+  gap: 1.5rem;
+  padding: 1.5rem;
+}
+
+.app-header {
+  text-align: center;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.app-header p {
+  margin: 0.5rem 0 0;
+  color: #c6bca4;
+}
+
+.game-frame {
+  position: relative;
+  width: min(100%, 1280px);
+}
+
+.overlay-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
 }
 
 #game-container {
@@ -24,6 +51,81 @@
 }
 
 #game-container canvas {
-  border-radius: 8px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+}
+
+.overlay-card {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: min(360px, calc(100% - 2rem));
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(255, 235, 188, 0.18);
+  border-radius: 16px;
+  background: rgba(13, 15, 18, 0.92);
+  backdrop-filter: blur(14px);
+  padding: 1rem;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+  pointer-events: auto;
+}
+
+.overlay-card--corner {
+  inset: 1rem 1rem auto auto;
+  transform: none;
+  width: 260px;
+}
+
+.overlay-card h2 {
+  margin-top: 0;
+}
+
+.overlay-card label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 0.8rem;
+  color: #c6bca4;
+}
+
+.overlay-card input {
+  border: 1px solid rgba(255, 235, 188, 0.16);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #f3efe3;
+  padding: 0.75rem 0.9rem;
+}
+
+.overlay-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.overlay-card button {
+  border: 0;
+  border-radius: 10px;
+  background: #e3a84e;
+  color: #141414;
+  cursor: pointer;
+  font-weight: 700;
+  padding: 0.75rem 0.9rem;
+}
+
+.overlay-error {
+  color: #ff9074;
+}
+
+@media (max-width: 720px) {
+  .app-shell {
+    padding: 1rem;
+  }
+
+  .overlay-card--corner {
+    inset: auto 0.75rem 0.75rem 0.75rem;
+    width: auto;
+  }
+
+  .overlay-actions {
+    flex-direction: column;
+  }
 }

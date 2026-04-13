@@ -20,6 +20,7 @@ import type { KillCounterUI } from '../ui/KillCounterUI';
 import type { ChatLogUI } from '../ui/ChatLogUI';
 import type { PickupNotificationUI } from '../ui/PickupNotificationUI';
 import type { AimLine } from '../entities/AimLine';
+import type { JoinErrorPayload, JoinSuccessPayload } from '../../shared/types';
 // Import generated schema types for server→client messages (replaces manual type assertions)
 import type {
   RoomJoinedData,
@@ -79,6 +80,9 @@ export class GameSceneEventHandlers {
   private pickupNotificationUI: PickupNotificationUI | null = null;
   private aimLine: AimLine | null = null;
   private onMatchMapChanged: (mapId: string) => void;
+  private onRoomJoined: ((payload: JoinSuccessPayload) => void) | null = null;
+  private onJoinError: ((payload: JoinErrorPayload) => void) | null = null;
+  private onRosterSizeChanged: ((count: number) => void) | null = null;
 
   constructor(
     wsClient: WebSocketClient,
@@ -187,6 +191,16 @@ export class GameSceneEventHandlers {
     this.aimLine = aimLine;
   }
 
+  setJoinCallbacks(
+    onRoomJoined: ((payload: JoinSuccessPayload) => void) | null,
+    onJoinError: ((payload: JoinErrorPayload) => void) | null,
+    onRosterSizeChanged: ((count: number) => void) | null
+  ): void {
+    this.onRoomJoined = onRoomJoined;
+    this.onJoinError = onJoinError;
+    this.onRosterSizeChanged = onRosterSizeChanged;
+  }
+
   /**
    * Get the current weapon type
    */
@@ -256,6 +270,7 @@ export class GameSceneEventHandlers {
           this.toRenderPlayerState(player)
         );
         this.playerManager.updatePlayers(renderPlayerStates, { isDelta });
+        this.onRosterSizeChanged?.(messageData.players.length);
 
         // Update melee weapon positions to follow players
         for (const player of messageData.players) {
@@ -324,6 +339,13 @@ export class GameSceneEventHandlers {
 
       // Set local player ID so we can highlight our player
       if (messageData.playerId) {
+        if (!messageData.displayName) {
+          this.onJoinError?.({
+            type: 'error:no_hello',
+            offendingType: 'room:joined:missing_display_name',
+          });
+          return;
+        }
         this.playerManager.setLocalPlayerId(messageData.playerId);
         // Initialize health bar to full health on join
         this.localPlayerHealth = 100;
@@ -337,6 +359,14 @@ export class GameSceneEventHandlers {
         if (this.chatLogUI) {
           this.chatLogUI.addSystemMessage('You joined the match');
         }
+
+        this.onRoomJoined?.({
+          roomId: messageData.roomId,
+          playerId: messageData.playerId,
+          mapId: messageData.mapId,
+          displayName: messageData.displayName,
+          code: messageData.code,
+        });
 
         // Process any queued weapon:spawned messages
         for (const pendingData of this.pendingWeaponSpawns) {
@@ -352,6 +382,38 @@ export class GameSceneEventHandlers {
     };
     this.handlerRefs.set('room:joined', roomJoinedHandler);
     this.wsClient.on('room:joined', roomJoinedHandler);
+
+    if (this.onJoinError) {
+      const badRoomCodeHandler = (data: unknown) => {
+        const messageData = data as { reason?: JoinErrorPayload['reason'] };
+        this.onJoinError?.({
+          type: 'error:bad_room_code',
+          reason: messageData.reason,
+        });
+      };
+      this.handlerRefs.set('error:bad_room_code', badRoomCodeHandler);
+      this.wsClient.on('error:bad_room_code', badRoomCodeHandler);
+
+      const roomFullHandler = (data: unknown) => {
+        const messageData = data as { code?: string };
+        this.onJoinError?.({
+          type: 'error:room_full',
+          code: messageData.code,
+        });
+      };
+      this.handlerRefs.set('error:room_full', roomFullHandler);
+      this.wsClient.on('error:room_full', roomFullHandler);
+
+      const noHelloHandler = (data: unknown) => {
+        const messageData = data as { offendingType?: string };
+        this.onJoinError?.({
+          type: 'error:no_hello',
+          offendingType: messageData.offendingType,
+        });
+      };
+      this.handlerRefs.set('error:no_hello', noHelloHandler);
+      this.wsClient.on('error:no_hello', noHelloHandler);
+    }
 
     const playerLeftHandler = (data: unknown) => {
       const messageData = data as PlayerLeftData;
@@ -786,6 +848,7 @@ export class GameSceneEventHandlers {
   private toRenderPlayerState(player: PlayerMoveData['players'][number]): RenderPlayerState {
     const renderPlayerState: RenderPlayerState = {
       id: player.id,
+      displayName: player.displayName,
       position: player.position,
       velocity: player.velocity,
     };

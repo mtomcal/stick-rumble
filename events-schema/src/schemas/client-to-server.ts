@@ -5,6 +5,40 @@
 import { Type, type Static } from '@sinclair/typebox';
 import { createTypedMessageSchema, createTypedMessageSchemaNoData } from './common.js';
 
+export const PlayerHelloPublicDataSchema = Type.Object(
+  {
+    displayName: Type.Optional(Type.String({ description: 'Requested display name before server sanitization' })),
+    mode: Type.Literal('public'),
+  },
+  { $id: 'PlayerHelloPublicData', description: 'Public matchmaking hello payload' }
+);
+
+export const PlayerHelloCodeDataSchema = Type.Object(
+  {
+    displayName: Type.Optional(Type.String({ description: 'Requested display name before server sanitization' })),
+    mode: Type.Literal('code'),
+    code: Type.String({ description: 'Raw room code before server normalization', minLength: 1 }),
+  },
+  { $id: 'PlayerHelloCodeData', description: 'Named-room hello payload' }
+);
+
+export const PlayerHelloDataSchema = Type.Union([PlayerHelloPublicDataSchema, PlayerHelloCodeDataSchema], {
+  $id: 'PlayerHelloData',
+  description: 'Join intent payload',
+});
+
+export type PlayerHelloData = Static<typeof PlayerHelloDataSchema>;
+
+export const PlayerHelloMessageSchema = Type.Object(
+  {
+    type: Type.Literal('player:hello'),
+    timestamp: Type.Number({ minimum: 0 }),
+    data: PlayerHelloDataSchema,
+  },
+  { $id: 'PlayerHelloMessage', description: 'Join intent message' }
+);
+export type PlayerHelloMessage = Static<typeof PlayerHelloMessageSchema>;
+
 /**
  * Input state data payload.
  * Represents keyboard input state for player movement and aim.

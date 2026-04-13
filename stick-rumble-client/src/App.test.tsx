@@ -42,6 +42,12 @@ vi.mock('./ui/debug/DebugNetworkPanel', () => ({
 }));
 
 describe('App', () => {
+  afterEach(() => {
+    localStorage.clear();
+    window.history.replaceState({}, '', '/');
+    delete window.submitJoinIntent;
+  });
+
   it('should render the main app container', () => {
     const { container } = render(<App />);
     const appContainer = container.querySelector('.app-container');
@@ -100,6 +106,35 @@ describe('App', () => {
 
     // Third child is the DebugNetworkPanel (mocked as div)
     expect(appContainer?.children[2].getAttribute('data-testid')).toBe('debug-panel-mock');
+  });
+
+  it('should auto-join an invite after the join bridge becomes ready', () => {
+    localStorage.setItem('stick-rumble.display-name', 'Saved Player');
+    window.history.replaceState({}, '', '/?invite=PIZZA');
+
+    const submitJoinIntent = vi.fn();
+    const rafSpy = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    });
+    const cancelSpy = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
+
+    render(<App />);
+    expect(submitJoinIntent).not.toHaveBeenCalled();
+
+    window.submitJoinIntent = submitJoinIntent;
+    act(() => {
+      window.dispatchEvent(new Event('stick-rumble:submit-join-intent-ready'));
+    });
+
+    expect(submitJoinIntent).toHaveBeenCalledWith({
+      displayName: 'Saved Player',
+      mode: 'code',
+      code: 'PIZZA',
+    });
+
+    rafSpy.mockRestore();
+    cancelSpy.mockRestore();
   });
 
   describe('Match End Integration', () => {

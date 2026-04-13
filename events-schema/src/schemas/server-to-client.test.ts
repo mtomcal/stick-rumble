@@ -6,6 +6,15 @@ import { Value } from '@sinclair/typebox/value';
 import {
   RoomJoinedDataSchema,
   RoomJoinedMessageSchema,
+  PlayerLeftDataSchema,
+  PlayerLeftMessageSchema,
+  ErrorNoHelloDataSchema,
+  ErrorNoHelloMessageSchema,
+  ErrorBadRoomCodeDataSchema,
+  ErrorBadRoomCodeMessageSchema,
+  ErrorRoomFullDataSchema,
+  ErrorRoomFullMessageSchema,
+  PlayerStateSchema,
   PlayerMoveDataSchema,
   PlayerMoveMessageSchema,
   ProjectileSpawnDataSchema,
@@ -54,6 +63,7 @@ import {
 describe('Server-to-Client Schemas', () => {
   const basePlayerState = {
     id: 'player-1',
+    displayName: 'Alice',
     position: { x: 100, y: 200 },
     velocity: { x: 5, y: -3 },
     aimAngle: 1.57,
@@ -73,6 +83,7 @@ describe('Server-to-Client Schemas', () => {
         roomId: 'room-123',
         playerId: 'player-123',
         mapId: 'default_office',
+        displayName: 'Alice',
       };
       expect(Value.Check(RoomJoinedDataSchema, data)).toBe(true);
     });
@@ -91,6 +102,33 @@ describe('Server-to-Client Schemas', () => {
       const data = { roomId: 'room-123', playerId: 'player-123', mapId: '' };
       expect(Value.Check(RoomJoinedDataSchema, data)).toBe(false);
     });
+
+    it('should reject data without displayName', () => {
+      const data = { roomId: 'room-123', playerId: 'player-123', mapId: 'default_office' };
+      expect(Value.Check(RoomJoinedDataSchema, data)).toBe(false);
+    });
+
+    it('should validate normalized code when present', () => {
+      const data = {
+        roomId: 'room-123',
+        playerId: 'player-123',
+        mapId: 'default_office',
+        displayName: 'Alice',
+        code: 'PIZZA',
+      };
+      expect(Value.Check(RoomJoinedDataSchema, data)).toBe(true);
+    });
+
+    it('should reject empty code when present', () => {
+      const data = {
+        roomId: 'room-123',
+        playerId: 'player-123',
+        mapId: 'default_office',
+        displayName: 'Alice',
+        code: '',
+      };
+      expect(Value.Check(RoomJoinedDataSchema, data)).toBe(false);
+    });
   });
 
   describe('RoomJoinedMessageSchema', () => {
@@ -102,6 +140,7 @@ describe('Server-to-Client Schemas', () => {
           roomId: 'room-123',
           playerId: 'player-123',
           mapId: 'default_office',
+          displayName: 'Alice',
         },
       };
       expect(Value.Check(RoomJoinedMessageSchema, message)).toBe(true);
@@ -115,6 +154,7 @@ describe('Server-to-Client Schemas', () => {
           roomId: 'room-123',
           playerId: 'player-123',
           mapId: 'default_office',
+          displayName: 'Alice',
         },
       };
       expect(Value.Check(RoomJoinedMessageSchema, message)).toBe(false);
@@ -128,6 +168,7 @@ describe('Server-to-Client Schemas', () => {
           basePlayerState,
           {
             id: 'player-2',
+            displayName: 'Bob',
             position: { x: 300, y: 400 },
             velocity: { x: 0, y: 0 },
             aimAngle: 0,
@@ -215,6 +256,51 @@ describe('Server-to-Client Schemas', () => {
     it('should accept empty players array', () => {
       const data = { players: [] };
       expect(Value.Check(PlayerMoveDataSchema, data)).toBe(true);
+    });
+
+    it('should reject player state without displayName', () => {
+      const invalidPlayerState = { ...basePlayerState } as Partial<typeof basePlayerState>;
+      delete invalidPlayerState.displayName;
+
+      expect(Value.Check(PlayerStateSchema, invalidPlayerState)).toBe(false);
+    });
+  });
+
+  describe('Handshake Support Schemas', () => {
+    it('should validate player:left payloads', () => {
+      expect(Value.Check(PlayerLeftDataSchema, { playerId: 'player-123' })).toBe(true);
+      expect(Value.Check(PlayerLeftMessageSchema, {
+        type: 'player:left',
+        timestamp: Date.now(),
+        data: { playerId: 'player-123' },
+      })).toBe(true);
+    });
+
+    it('should validate error:no_hello payloads', () => {
+      expect(Value.Check(ErrorNoHelloDataSchema, { offendingType: 'input:state' })).toBe(true);
+      expect(Value.Check(ErrorNoHelloMessageSchema, {
+        type: 'error:no_hello',
+        timestamp: Date.now(),
+        data: { offendingType: 'input:state' },
+      })).toBe(true);
+    });
+
+    it('should validate error:bad_room_code payloads', () => {
+      expect(Value.Check(ErrorBadRoomCodeDataSchema, { reason: 'too_short' })).toBe(true);
+      expect(Value.Check(ErrorBadRoomCodeMessageSchema, {
+        type: 'error:bad_room_code',
+        timestamp: Date.now(),
+        data: { reason: 'too_short' },
+      })).toBe(true);
+    });
+
+    it('should validate error:room_full payloads', () => {
+      expect(Value.Check(ErrorRoomFullDataSchema, { code: 'PIZZA' })).toBe(true);
+      expect(Value.Check(ErrorRoomFullMessageSchema, {
+        type: 'error:room_full',
+        timestamp: Date.now(),
+        data: { code: 'PIZZA' },
+      })).toBe(true);
     });
   });
 
@@ -823,6 +909,7 @@ describe('Server-to-Client Schemas', () => {
               roomId: 'room-1',
               playerId: 'p1',
               mapId: 'default_office',
+              displayName: 'Alice',
             },
           },
         },

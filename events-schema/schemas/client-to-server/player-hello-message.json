@@ -1,0 +1,68 @@
+{
+  "$id": "PlayerHelloMessage",
+  "description": "Join intent message",
+  "type": "object",
+  "required": [
+    "type",
+    "timestamp",
+    "data"
+  ],
+  "properties": {
+    "type": {
+      "const": "player:hello",
+      "type": "string"
+    },
+    "timestamp": {
+      "minimum": 0,
+      "type": "number"
+    },
+    "data": {
+      "$id": "PlayerHelloData",
+      "description": "Join intent payload",
+      "anyOf": [
+        {
+          "$id": "PlayerHelloPublicData",
+          "description": "Public matchmaking hello payload",
+          "type": "object",
+          "required": [
+            "mode"
+          ],
+          "properties": {
+            "displayName": {
+              "description": "Requested display name before server sanitization",
+              "type": "string"
+            },
+            "mode": {
+              "const": "public",
+              "type": "string"
+            }
+          }
+        },
+        {
+          "$id": "PlayerHelloCodeData",
+          "description": "Named-room hello payload",
+          "type": "object",
+          "required": [
+            "mode",
+            "code"
+          ],
+          "properties": {
+            "displayName": {
+              "description": "Requested display name before server sanitization",
+              "type": "string"
+            },
+            "mode": {
+              "const": "code",
+              "type": "string"
+            },
+            "code": {
+              "description": "Raw room code before server normalization",
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
