@@ -1,561 +1,343 @@
-# Friends-MVP Implementation Plan
+# Wall Barrier Implementation Plan
 
 ## Goal
 
-Implement the April 11, 2026 Friends-MVP spec changes as production code using strict red/green TDD.
+Implement the wall-barrier feature described by commit `d2e0f4a` (`fix: tighten wall barrier specs`) using red/green TDD.
 
-This plan covers the non-deployment behavior introduced by:
+The specs are already updated in:
 
-- `6a2fac0` `docs(specs): add friends-mvp join flow and aws mvp deployment`
-- `881e6a5` `docs(specs): pre-mortem fixes for friends-mvp and aws deployment`
+- `specs/arena.md`
+- `specs/hit-detection.md`
+- `specs/maps.md`
+- `specs/melee.md`
+- `specs/shooting.md`
 
-It also incorporates the product decisions confirmed during planning:
+Per the repo workflow, those specs are now the contract. This plan is for implementation only.
 
-- invite links use a query param, not a routed path
-- canonical share shape is `<configured-client-base-url>/?invite=PIZZA`
-- if there is no saved display name, invite flow blocks on name entry before join
-- if there is a saved display name, fresh invite opens auto-join immediately
-- failed hello attempts stay on the same socket and return to the same join UI
-- reconnect auto-replays the last successful hello once, then falls back to a reconnect card
-- reconnect failure card shows only `Retry <CODE>` and `Play Public`
-- duplicate same-browser invite tabs are hard-blocked client-side
-- host waits in the arena with a minimal overlay, not a separate lobby screen
-- primary share action is `Copy Invite Link`
-- display name persists indefinitely in local storage after successful join
-- mixed-version `room:joined` failures are fatal version mismatches
-- server-side liveness enforcement is part of this work
-- TTL is only a fallback for empty, unstarted code rooms
-- code collision risk between unrelated groups remains an explicit accepted MVP risk
+## Commit Summary
 
-## Scope
+The latest spec commit tightened one shared rule across combat systems:
 
-This plan covers five implementation areas:
+- first blocking contact wins
+- projectiles must use swept-path wall resolution, not endpoint-only samples
+- hitscan must stop at walls before target contact and respect partial cover on the 32x64 hitbox
+- near-wall shots cannot spawn from the far side of a barrier
+- blocked ranged shots still consume ammo and fire-rate cooldown
+- melee cannot damage through blocking geometry
+- bat knockback must stop at the first wall contact
+- client visuals must never show projectile travel beyond the authoritative wall contact
 
-- shared wire contract updates for `player:hello`, new error messages, and `room:joined`
-- server room assignment and connection lifecycle changes
-- client invite/join/reconnect UX and state management
-- display name propagation into gameplay rendering
-- config and environment cleanup needed to keep the feature aligned with upcoming deployment work
+## Current Code Gaps
+
+Based on the current implementation, these are the main mismatches with the new specs:
+
+- `stick-rumble-server/internal/game/projectile.go` removes projectiles on obstacle intersection but does not preserve the first contact point.
+- `stick-rumble-server/internal/game/physics.go` still does endpoint-style projectile-vs-player checks and does not gate hits by wall contact.
+- `stick-rumble-server/internal/game/gameserver.go` hitscan uses ray-vs-circle logic with no barrier test and no partial-cover AABB resolution.
+- `stick-rumble-server/internal/game/melee_attack.go` uses range+arc only and applies knockback by direct displacement plus arena clamp.
+- `stick-rumble-client/src/game/entities/ProjectileManager.ts` locally advances projectile visuals until destroy/out-of-bounds and has no wall-contact stop logic.
+- `stick-rumble-client/src/shared/maps.ts` has a point-in-obstacle helper, but not the segment/contact helpers needed for near-wall shot mirroring.
 
 ## Non-Goals
 
-This plan does not implement:
+This plan does not add:
 
-- CloudFront or S3 routing rules
-- strict production `CheckOrigin` hardening
-- Elastic IP, TLS, or systemd deployment work
-- account systems, friend lists, or discoverable invite objects
-- persistent session resume across reconnects
-- collision mitigation for human room codes
+- new obstacle shapes beyond authored rectangles
+- new map authoring rules beyond the already-merged spec changes
+- unrelated networking or room-flow changes
+- deployment work
 
-Those are deployment or post-MVP concerns. This plan leaves clean seams for them.
-
-## Product Flow To Implement
-
-### Host Flow
-
-1. Host opens the game.
-2. Host enters a display name if none is already stored.
-3. Host chooses friends mode and supplies a code, or lands through `?invite=<raw>`.
-4. Client opens the WebSocket.
-5. Client sends `player:hello` as the first gameplay-relevant message on that connection.
-6. Server sanitizes the display name, normalizes the code, creates or joins the named room, and returns `room:joined`.
-7. If the room is a code room with only one player, the host remains in the arena with a waiting overlay showing the normalized code and a `Copy Invite Link` action.
-
-### Friend Join Flow
-
-1. Friend opens `?invite=<raw>`.
-2. If the browser has no saved display name, client shows a minimal join card with the raw invite code prefilled and blocks on name entry.
-3. If the browser has a saved display name, client auto-joins immediately.
-4. Client sends `player:hello { displayName, mode: "code", code: <raw> }`.
-5. Server normalizes the code and either:
-   - joins the existing room and starts the match if the threshold is crossed
-   - creates a fresh code room if the old one ended
-   - returns `error:bad_room_code`
-   - returns `error:room_full`
-
-### Reconnect Flow
-
-1. Socket drops after a successful join.
-2. Client reconnects and auto-replays the last successful hello once.
-3. If replay succeeds, gameplay resumes on the new connection under MVP rules.
-4. If replay fails, client shows a reconnect card with only:
-   - `Retry <CODE>`
-   - `Play Public`
-
-### Duplicate Tab Flow
-
-1. A second tab in the same browser profile opens the same invite while the first tab is active.
-2. Client-side duplicate-tab guard detects the active claimant.
-3. Second tab is hard-blocked with a blocking screen that directs the user to the existing tab.
-
-## Implementation Principles
-
-- `player:hello` is the only room-assignment entry point
-- a successful hello latches, a failed hello does not
-- the server remains authoritative for room-code normalization and display-name sanitization
-- query-param invite parsing is convenience only, not a second room contract
-- client reconnect behavior replays only the last successful hello, never failed drafts
-- all environment access should be funneled through small config modules rather than scattered direct reads
-- `.env.example` files are documentation, not required runtime dependencies
-- invite-link generation must not assume ownership of any specific production domain
+Avoid wire-contract churn unless implementation proves it is required for authoritative blocked-impact feedback.
 
 ## Delivery Strategy
 
-Work in thin red/green slices. Do not batch schema, server, client, and UX changes into one large commit-sized step.
+Work in thin red/green slices. Each slice should add tests first, make the smallest implementation change that satisfies them, then rerun the narrow suite before moving on.
 
 Recommended order:
 
-1. acceptance contract freeze
-2. schema red/green
-3. server room + hello contract red/green
-4. client handshake and invite state red/green
-5. waiting/reconnect/duplicate-tab UX red/green
-6. rendering and display-name propagation red/green
-7. stale-room pruning and socket liveness red/green
-8. config/env cleanup
-9. verification
-10. subagent test-quality pass x3
-11. subagent pre-mortem pass x1
+1. shared server-side barrier geometry primitives
+2. projectile swept travel and wall contact resolution
+3. hitscan barrier gating and partial-cover targeting
+4. melee reachability and knockback hard-stop behavior
+5. client projectile presentation and near-wall feedback mirroring
+6. integrated verification
+7. subagent review pass
 
-## Phase 0: Acceptance Contract Freeze
+## Phase 0: Freeze Acceptance Cases
 
-Before code changes, ensure the plan treats the current specs as fixed for this MVP:
+Before writing code, treat these spec scenarios as the executable target:
 
-- `specs/player.md`
-- `specs/rooms.md`
-- `specs/messages.md`
-- `specs/networking.md`
+- `TS-ARENA-006`
+- `TS-HIT-015`
+- `TS-HIT-016`
+- `TS-HIT-017`
+- `TS-MELEE-016`
+- `TS-MELEE-017`
+- `TS-MELEE-018`
+- `TS-SHOOT-014`
+- `TS-SHOOT-015`
 
-Translate those specs plus the planning decisions above into executable expectations:
+Definition of done for this phase:
 
-- invite links use `?invite=<raw>`
-- code room join is always driven by `player:hello`
-- failed hellos do not latch `HelloSeen`
-- `room:joined` now requires `displayName` and may include `code`
-- reconnect requires a fresh hello every time
-- invite flow requires a saved display name or explicit name entry
-- duplicate same-browser invite tabs are blocked client-side
-- only empty, unstarted code rooms are eligible for TTL reap
-- invite links are generated from configuration, not a hardcoded public hostname
+- every scenario above maps to at least one planned test file
+- no implementation work starts before that mapping is clear
 
-Definition of done:
+## Phase 1: Shared Barrier Geometry Red/Green
 
-- each product branch in this document maps to a concrete test or implementation slice
+Create one shared server-side geometry layer for “first blocking contact wins” so projectile, hitscan, melee, and knockback do not each invent slightly different wall rules.
 
-## Phase 1: Shared Schema Red
+Likely files:
 
-Target files:
+- `stick-rumble-server/internal/game/maps.go`
+- new helper file such as `stick-rumble-server/internal/game/barrier_geometry.go`
+- new tests such as `stick-rumble-server/internal/game/barrier_geometry_test.go`
 
-- `events-schema/src/schemas/client-to-server.ts`
-- `events-schema/src/schemas/server-to-client.ts`
-- `events-schema/src/index.ts`
-- `events-schema/src/validate-schemas.ts`
-- existing schema tests in `events-schema`
-- `stick-rumble-server/internal/network/schema_test.go`
-- client schema-validation tests that import generated types
+Red tests:
 
-Add failing tests for:
+- segment intersects rectangle and returns the nearest contact point
+- segment fully misses rectangle
+- segment starting inside a blocking rectangle is treated as blocked at origin
+- first contact is selected when multiple obstacles lie on the same path
+- ray/segment against player AABB can distinguish exposed contact from barrier-first contact
 
-- `player:hello` schema for public and code modes
-- `room:joined` requiring `displayName`
-- `room:joined.code` being optional
-- `PlayerState.displayName` being present where required by broadcasts
-- `error:no_hello`
-- `error:bad_room_code`
-- `error:room_full`
+Green implementation:
+
+- add reusable helpers for segment-vs-rect and segment-vs-player-hitbox contact queries
+- return contact distance and point, not just boolean intersection
+- keep obstacle filtering explicit by blocker type
 
 Exit criteria:
 
-- schemas and generated types precisely match the Friends-MVP wire contract
+- projectile, hitscan, melee, and knockback can all call the same first-contact geometry functions
 
-## Phase 2: Shared Schema Green
+## Phase 2: Projectile Path Red/Green
 
-Implement the schema changes and regenerate artifacts.
+Bring projectile motion and projectile hit detection in line with the swept-path contract.
 
-Required outcomes:
+Primary files:
 
-- server and client compile against the new types
-- development schema validation can validate the new message family
-- old `room:joined` payload shape is no longer accepted in Friends-MVP codepaths
+- `stick-rumble-server/internal/game/projectile.go`
+- `stick-rumble-server/internal/game/physics.go`
+- `stick-rumble-server/internal/game/projectile_test.go`
+- `stick-rumble-server/internal/game/physics_collision_test.go`
+- `stick-rumble-server/internal/game/gameserver_shooting_test.go`
 
-## Phase 3: Server Hello And Room Contract Red
+Red tests:
 
-Target files:
+- projectile update stops at the first wall contact instead of moving through and then disappearing
+- projectile snapshot position for the final frame is at the contact point
+- projectile path blocked by a wall before target does not damage target
+- fast projectile cannot tunnel through a thin wall between ticks
+- projectile exactly reaching exposed hitbox before wall still damages
 
-- `stick-rumble-server/internal/game/room.go`
-- `stick-rumble-server/internal/game/room_lifecycle_test.go`
-- `stick-rumble-server/internal/network/websocket_handler.go`
-- `stick-rumble-server/internal/network/websocket_handler_test.go`
-- `stick-rumble-server/internal/network/message_processor.go`
-- any new focused tests for hello handling
+Green implementation:
 
-Add failing tests for:
-
-- new sockets do not auto-join rooms on connect
-- gameplay messages before hello receive `error:no_hello`
-- valid public hello routes to public queue
-- valid code hello creates a `RoomKindCode` room
-- second joiner on a code room starts the match
-- failed bad-code hello keeps the connection open and `HelloSeen == false`
-- failed room-full hello keeps the connection open and `HelloSeen == false`
-- successful hello latches and later hellos are ignored
-- display-name sanitization falls back to `Guest`
-- room-code normalization is server-authoritative
-- ended code room releases to a fresh rematch room
-- room destruction only deletes `codeIndex[code]` if the index still points at that room
+- add previous-position or equivalent swept-path state to `Projectile`
+- change projectile update to resolve candidate movement against the nearest projectile-blocking contact
+- keep projectile removal authoritative, but preserve the final stop point first
+- change projectile-player collision to use swept contact against the player hitbox and reject barrier-first paths
 
 Exit criteria:
 
-- tests clearly reject the current pre-MVP auto-join behavior
+- the server never resolves projectile travel or projectile damage beyond the first blocking contact
 
-## Phase 4: Server Hello And Room Contract Green
+## Phase 3: Hitscan And Near-Origin Gating Red/Green
 
-Implement the server-side contract.
+Replace the current ray-vs-circle approximation with first-contact barrier-aware target resolution.
 
-Expected implementation work:
+Primary files:
 
-- extend `game.Player` with `DisplayName` and `HelloSeen`
-- extend `Room` with `Kind`, `Code`, and timestamps needed for later pruning
-- extend `RoomManager` with `codeIndex`
-- replace `AddPlayer` as the connect-time room assignment path with explicit hello-driven public/code assignment
-- implement `sanitizeDisplayName`
-- implement `normalizeRoomCode`
-- update `sendRoomJoinedMessage` to include authoritative `displayName` and optional `code`
-- ensure code-room join path triggers `match.start()` when crossing the threshold
-- preserve the rematch-safe `codeIndex` teardown guard
+- `stick-rumble-server/internal/game/gameserver.go`
+- `stick-rumble-server/internal/game/physics.go`
+- `stick-rumble-server/internal/game/gameserver_shooting_test.go`
+- `stick-rumble-server/internal/network/integration_test.go`
 
-Refactor goals:
+Red tests:
 
-- keep public and code-room flows explicit
-- avoid hiding hello gating inside unrelated gameplay handlers
+- hitscan cannot damage a target fully behind blocking geometry
+- partially exposed target remains hittable on the exposed portion only
+- covered center point but exposed shoulder/edge still counts as a valid hit
+- near-wall shot with obstructed barrel segment is blocked immediately
+- blocked near-wall shot still consumes ammo and cooldown
+- blocked hitscan does not emit player-hit side effects
 
-## Phase 5: Client Hello State And Invite Boot Red
+Green implementation:
 
-Target files:
+- use the authoritative barrel origin contract, but gate the short muzzle segment against nearby walls
+- resolve hitscan against player AABB exposure, not a circle around center mass
+- compare nearest wall contact distance to nearest valid target contact distance
+- keep ammo/cooldown accounting unchanged for blocked shots
 
-- `stick-rumble-client/src/App.tsx`
-- `stick-rumble-client/src/App.test.tsx`
-- `stick-rumble-client/src/game/network/WebSocketClient.ts`
+Exit criteria:
+
+- hitscan behavior matches the partial-cover and near-wall contracts without introducing a separate special-case path per weapon
+
+## Phase 4: Melee Reachability And Knockback Red/Green
+
+Make melee obey the same barrier contract as shooting.
+
+Primary files:
+
+- `stick-rumble-server/internal/game/melee_attack.go`
+- `stick-rumble-server/internal/game/melee_attack_test.go`
+- `stick-rumble-server/internal/game/gameserver.go`
+- `stick-rumble-server/internal/network/melee_dodge_test.go`
+
+Red tests:
+
+- melee target in range and arc but behind wall is not damaged
+- partially exposed melee target remains hittable if an exposed portion is reachable first
+- bat knockback stops at the first wall contact
+- knockback still respects outer arena bounds
+- blocked melee swing still consumes cooldown
+
+Green implementation:
+
+- change melee reachability from “range+arc only” to “range+arc plus unobstructed reachable target volume”
+- route bat knockback through the same first-contact barrier helper used elsewhere
+- preserve current weapon identity and cooldown behavior
+
+Exit criteria:
+
+- melee damage and knockback cannot tunnel through authored blockers
+
+## Phase 5: Client Presentation Red/Green
+
+Bring client visuals in line with the authoritative barrier outcome.
+
+Primary files:
+
+- `stick-rumble-client/src/game/entities/ProjectileManager.ts`
+- `stick-rumble-client/src/game/entities/ProjectileManager.test.ts`
+- `stick-rumble-client/src/game/input/ShootingManager.ts`
+- `stick-rumble-client/src/game/input/ShootingManager.test.ts`
+- `stick-rumble-client/src/shared/maps.ts`
+- `stick-rumble-client/src/game/scenes/GameScene.combat.test.ts`
 - `stick-rumble-client/src/game/network/WebSocketClient.test.ts`
-- `stick-rumble-client/src/game/network/WebSocketClient.connection.integration.test.ts`
-- `stick-rumble-client/src/game/network/WebSocketClient.integration.helpers.ts`
-- `stick-rumble-client/src/game/scenes/GameScene.ts`
-- `stick-rumble-client/src/game/scenes/GameSceneEventHandlers.ts`
-- any new join/invite UI component tests
 
-Add failing tests for:
+Red tests:
 
-- app parses `?invite=<raw>` on boot
-- no saved display name shows a join card and blocks join
-- saved display name with invite auto-joins immediately
-- gameplay systems do not start merely because the socket opened
-- hello is sent before gameplay messages on successful join
-- failed hello keeps the join card active on the same socket
-- `error:bad_room_code` preserves name and raw code entry
-- `error:room_full` preserves name and shows equal-weight actions
-- invite auto-join does not start gameplay input before a successful `room:joined`
+- projectile visual does not continue past the authoritative wall contact
+- local projectile cleanup does not overshoot the last known authoritative position
+- near-wall blocked shot can produce immediate local blocked feedback using map obstacle checks
+- local blocked feedback does not fake a player hit
+
+Green implementation:
+
+- add client-side segment/contact helpers that mirror the authoritative rectangle rules
+- clamp local projectile visual progression to the authoritative final stop point when available
+- if immediate blocked-shot feedback is added, keep it presentation-only and barrier-themed
+- avoid inventing a second gameplay authority on the client
 
 Exit criteria:
 
-- client tests clearly express the desired invite and hello sequencing behavior
+- visible bullets do not appear to pass through walls, even under latency
 
-## Phase 6: Client Hello State And Invite Boot Green
+## Phase 6: Integrated Verification
 
-Implement the client invite and hello state machine.
+Run targeted suites during each phase, then run the repo-standard verification at the end.
 
-Expected implementation work:
+Per-phase examples:
 
-- parse the invite query param in app boot logic
-- create a minimal join card state for:
-  - invite code present with no saved name
-  - invite code present with saved name
-  - room-full retry
-  - bad-code retry
-- add local storage persistence for the last successful display name
-- teach `WebSocketClient` or a thin wrapper to send hello as the first meaningful message
-- ensure game input managers are not initialized until a successful room join path is established
-- keep raw invite code in UI state until the server returns the authoritative normalized code
-- source the share-link base URL from config with a safe local/dev fallback rather than a hardcoded domain
+- `make test-server`
+- `make test-client`
+- focused Go tests for projectile, physics, melee, and shooting files
+- focused client tests for projectile manager, shooting manager, and combat scene handling
 
-Refactor goals:
+Final pass:
 
-- keep transport concerns in the network layer
-- keep invite/join UI state out of Phaser scene internals as much as practical
+- `make lint`
+- `make typecheck`
+- `make test`
 
-## Phase 7: Waiting Overlay, Reconnect, And Duplicate Tab Red
+If the full pass is too slow or flakes, record the exact failing command and keep the smallest reproducible targeted command in the work log.
 
-Target files:
+## Endgame Subagents
 
-- `stick-rumble-client/src/App.tsx`
-- `stick-rumble-client/src/ui/common/`
-- `stick-rumble-client/src/game/scenes/GameScene.ts`
-- `stick-rumble-client/src/game/scenes/GameSceneEventHandlers.ts`
-- network tests and any new UI component tests
+After local green and before final sign-off, run four subagents. Use `gpt-5.4` with `high` reasoning for all of them.
 
-Add failing tests for:
+### Subagent 1: Server Test Verification
 
-- host alone in a code room sees a waiting overlay in the arena
-- waiting overlay uses the authoritative normalized code from `room:joined.code`
-- primary action is `Copy Invite Link`
-- reconnect replays the last successful hello once
-- failed reconnect replay shows a reconnect card with only `Retry <CODE>` and `Play Public`
-- second same-browser invite tab is blocked while the first tab heartbeat is active
-- stale duplicate-tab claims clear after the owner tab is gone
-- waiting overlay copies an invite link built from configured client base URL and authoritative normalized code
+Purpose:
 
-Exit criteria:
+- audit server-side combat tests for missing edge cases and false confidence
 
-- tests reject silent reconnect loops, duplicate joins, and missing host feedback
+Suggested focus:
 
-## Phase 8: Waiting Overlay, Reconnect, And Duplicate Tab Green
+- `stick-rumble-server/internal/game/projectile_test.go`
+- `stick-rumble-server/internal/game/physics_collision_test.go`
+- `stick-rumble-server/internal/game/gameserver_shooting_test.go`
+- `stick-rumble-server/internal/game/melee_attack_test.go`
+- `stick-rumble-server/internal/network/integration_test.go`
+- `stick-rumble-server/internal/network/melee_dodge_test.go`
 
-Implement the user-facing invite lifecycle.
+Suggested prompt:
 
-Expected implementation work:
+```text
+Review the recent wall-barrier combat test changes in /home/mtomcal/code/stick-rumble-wall-bugs. Focus on these files: stick-rumble-server/internal/game/projectile_test.go, stick-rumble-server/internal/game/physics_collision_test.go, stick-rumble-server/internal/game/gameserver_shooting_test.go, stick-rumble-server/internal/game/melee_attack_test.go, stick-rumble-server/internal/network/integration_test.go, stick-rumble-server/internal/network/melee_dodge_test.go. Identify meaningful missing cases, false positives, or places where the tests would still pass if wall resolution were wrong.
+```
 
-- add a minimal in-arena waiting overlay for solo hosts in code rooms
-- build canonical share link from the authoritative normalized code
-- implement one automatic reconnect replay using the last successful hello
-- on replay failure, show the reconnect card described above
-- implement same-browser duplicate-tab guard using `BroadcastChannel` with a `localStorage` fallback heartbeat
-- hard-block second tabs in the same browser/profile for the same invite + display name combination
-- generate invite links from a configurable client base URL instead of any baked-in production hostname
+### Subagent 2: Client Test Verification
 
-Important constraints:
+Purpose:
 
-- fresh invite loads with a saved name auto-join immediately
-- reconnect behavior may auto-replay once without confirmation
-- duplicate-tab hard block is client-only and same-browser only
+- audit client-side visual and input tests for latency and presentation regressions
 
-## Phase 9: Display Name Propagation Red
+Suggested focus:
 
-Target files:
+- `stick-rumble-client/src/game/entities/ProjectileManager.test.ts`
+- `stick-rumble-client/src/game/input/ShootingManager.test.ts`
+- `stick-rumble-client/src/game/scenes/GameScene.combat.test.ts`
+- `stick-rumble-client/src/game/network/WebSocketClient.test.ts`
 
-- `stick-rumble-client/src/game/entities/PlayerManager.ts`
-- `stick-rumble-client/src/game/entities/PlayerManager.test.ts`
-- `stick-rumble-client/src/game/scenes/GameSceneEventHandlers.test.ts`
-- any server tests covering player-state serialization
+Suggested prompt:
 
-Add failing tests for:
+```text
+Review the recent client wall-barrier test changes in /home/mtomcal/code/stick-rumble-wall-bugs. Focus on these files: stick-rumble-client/src/game/entities/ProjectileManager.test.ts, stick-rumble-client/src/game/input/ShootingManager.test.ts, stick-rumble-client/src/game/scenes/GameScene.combat.test.ts, stick-rumble-client/src/game/network/WebSocketClient.test.ts. Identify missing assertions, untested latency-sensitive behavior, and cases where projectile or blocked-shot visuals could still regress without the tests catching it.
+```
 
-- local player stores the authoritative `displayName`
-- remote players render their server-authoritative display names
-- fallback `Guest` renders correctly
-- client treats missing `room:joined.displayName` as a fatal version mismatch
-- mixed-version `room:joined` does not silently degrade
+### Subagent 3: Assertion Vagueness And Coverage Audit
 
-Exit criteria:
+Purpose:
 
-- tests make the breaking wire posture explicit
+- specifically look for weak assertions, over-mocking, and spec scenarios that were never encoded
 
-## Phase 10: Display Name Propagation Green
+Suggested prompt:
 
-Implement display-name flow from server join to gameplay rendering.
+```text
+Review the recent wall-barrier test changes in /home/mtomcal/code/stick-rumble-wall-bugs for vague assertions, weak checks, over-mocked behavior, and spec gaps. Focus only on meaningful issues. Pay special attention to TS-ARENA-006, TS-HIT-015/016/017, TS-MELEE-016/017/018, and TS-SHOOT-014/015 coverage.
+```
 
-Expected implementation work:
+### Subagent 4: Pre-Mortem Analysis
 
-- extend client-side player state types with `displayName`
-- thread authoritative display names through `room:joined` and player state updates
-- replace placeholder labels in rendering with authoritative values
-- add blocking version-mismatch handling when required Friends-MVP fields are missing
+Purpose:
 
-## Phase 11: Socket Liveness And Stale Room Reaping Red
+- assume the change shipped and failed; identify the likeliest regression paths before merge
 
-Target files:
+Suggested prompt:
 
-- `stick-rumble-server/internal/network/websocket_handler.go`
-- `stick-rumble-server/internal/network/websocket_handler_test.go`
-- `stick-rumble-server/internal/game/room.go`
-- room lifecycle tests
+```text
+Run a pre-mortem on the wall-barrier implementation work in /home/mtomcal/code/stick-rumble-wall-bugs. Assume the feature shipped and players still reported wall bugs or new regressions. Identify the highest-risk failure modes, likely blind spots in the implementation/tests, performance risks from new geometry checks, and client/server desync risks. Be concrete and prioritize the top issues only.
+```
 
-Add failing tests for:
+## Recommended Commit Shape
 
-- pong activity extends connection liveness
-- dead sockets time out and run disconnect cleanup
-- timed-out disconnects remove players from rooms
-- empty, unstarted code rooms become eligible for TTL cleanup
-- started rooms are never reaped by the TTL sweeper
-- live 1-player connected code rooms are never reaped by TTL
+Keep commits small and TDD-aligned:
 
-Exit criteria:
+1. shared geometry helpers plus tests
+2. projectile sweep changes plus tests
+3. hitscan barrier gating plus tests
+4. melee and knockback barrier changes plus tests
+5. client visual/presentation fixes plus tests
+6. final cleanup after subagent feedback
 
-- tests capture the intended division of responsibility:
-  - liveness handles dead sockets
-  - TTL only cleans empty, unstarted leftovers
-
-## Phase 12: Socket Liveness And Stale Room Reaping Green
-
-Implement the cleanup hardening.
-
-Expected implementation work:
-
-- add read-deadline based liveness enforcement
-- extend pong handling to refresh read deadlines
-- keep periodic ping behavior
-- add room timestamps needed for fallback stale-room cleanup
-- add a background sweep that reaps only:
-  - `RoomKindCode`
-  - unstarted match
-  - empty room
-  - idle past configured TTL
-
-Initial recommended values:
-
-- ping interval: keep current periodic behavior unless tests force change
-- stale-room sweep interval: 1 minute
-- stale-room TTL: 15 minutes
-
-## Phase 13: Config And Env Cleanup
-
-Target files:
-
-- `stick-rumble-client/.env.example`
-- `stick-rumble-server/.env.example`
-- client config helper module
-- server config helper module
-- `Makefile`
-- docs or README sections that describe local setup
-
-Required outcomes:
-
-- no real `.env` files committed
-- client environment access is centralized around:
-  - `VITE_WS_URL`
-  - invite/share client base URL
-- server environment access is centralized around:
-  - `PORT`
-  - `ENABLE_SCHEMA_VALIDATION`
-  - future-facing `GO_ENV`
-  - future-facing `ALLOWED_ORIGINS`
-- Friends-MVP code does not hardcode deployment hostnames
-- invite-link generation uses a configurable base URL with a safe local fallback
-
-## Phase 14: Invite Join Integration And Smoke Coverage
-
-Because this feature is networking-heavy, unit coverage is not sufficient. Add explicit integration and smoke coverage for common invite flows.
-
-Target files:
-
-- `stick-rumble-client/src/game/network/WebSocketClient.connection.integration.test.ts`
-- `stick-rumble-client/src/game/network/WebSocketClient.integration.helpers.ts`
-- new or updated invite-focused integration tests
-- any server-side websocket integration tests needed for hello gating and reconnect behavior
-
-Add failing integration or smoke tests for:
-
-- host creates a code room and receives `room:joined` with authoritative normalized `code`
-- second client joins the same invite code and lands in the same room
-- second client using a case/whitespace/punctuation variant of the code still joins the same room
-- bad invite code returns `error:bad_room_code` and the same connection remains usable for a corrected hello
-- full code room returns `error:room_full` and the same connection remains usable for `mode: "public"` or a different code
-- reconnect replays the last successful hello once and can rejoin if the room is still eligible
-- gameplay input sent before hello is rejected with `error:no_hello`
-- a fresh socket created by reconnect still requires a new hello
-
-Smoke-test expectations:
-
-- these tests should exercise real websocket connect/read/write paths, not only mocked handlers
-- at least one smoke path should cover the common happy path:
-  - client A joins by code
-  - client B joins by invite code
-  - both receive compatible room assignment
-  - match starts when B joins
-
-Exit criteria:
-
-- the common invite join paths are covered by real integration traffic, not only unit tests
-
-Why this phase exists:
-
-- it prevents deployment assumptions from leaking into game logic
-- it keeps the upcoming deployment plan additive instead of corrective
-
-## Verification Sequence
-
-Use narrow targets during red/green loops, then finish with repo-level checks.
-
-Recommended final sequence:
-
-1. `make schema-generate`
-2. `make test-server`
-3. `make test-client`
-4. `make test-integration`
-5. `make lint`
-6. `make typecheck`
-7. `make test`
-
-Skipped verification is unacceptable for this work. The feature is not done unless every required gate above runs and passes.
-
-## Subagent Test-Quality Pass
-
-Run after the full suite is green.
-
-Requirements:
-
-- use `gpt-5.4`
-- run three separate subagent reviews
-- focus only on recently changed tests
-
-Suggested split:
-
-1. schema + server hello/room tests
-2. client invite/join/reconnect/duplicate-tab tests
-3. display-name + cleanup/liveness tests
-
-Review prompt shape:
-
-`Review the recent test changes in /Users/mtomcal/Code/alpha/stick-rumble for vague assertions, false positives, weak coverage, or meaningful missing cases. Focus only on these files: <file list>. Be specific: identify bad assertions or meaningful missing coverage only.`
-
-Gate:
-
-- address high-signal findings before final sign-off
-
-## Subagent Pre-Mortem Pass
-
-Run after the code is green and after the test-quality passes are addressed.
-
-Requirements:
-
-- use one `gpt-5.4` subagent
-
-Focus areas:
-
-- invite query param boot flow failing on edge cases
-- client/server hello sequencing races
-- same-socket retry handling for failed hellos
-- reconnect replay causing silent loops or stale-state bugs
-- duplicate-tab hard block leaving stale locks
-- code-room cleanup failing after dirty disconnects
-- TTL sweep accidentally deleting reachable rooms
-- mixed-version detection missing a partial failure path
-- config seams that will conflict with the deployment phase later
-
-Expected output:
-
-- concise risk list ordered by severity
-- concrete likely failure mode for each risk
-- one mitigation or additional test for every serious risk
-
-## Definition Of Done
-
-The work is done when all of the following are true:
-
-- `player:hello`, the new room errors, and the new `room:joined` shape are implemented end to end
-- server no longer auto-assigns rooms on raw socket connect
-- public and code-room join flows behave per spec
-- invite query param flow works from fresh open through successful join
-- no-saved-name invite opens block on name entry
-- saved-name invite opens auto-join
-- failed hello flows recover on the same socket
-- reconnect auto-replays once and then falls back to the reconnect card
-- duplicate same-browser invite tabs are hard-blocked
-- host waiting overlay is present for solo code-room hosts
-- authoritative display names render correctly
-- dead sockets are cleaned up deterministically
-- empty, unstarted code rooms are eligible for TTL cleanup and no broader rooms are reaped
-- invite happy paths and recovery paths are covered by real websocket integration or smoke tests
-- config and env access are centralized and deployment-friendly
-- all required verification gates run and pass; skipped tests are unacceptable
-- three `gpt-5.4` subagent unit-test reviews have been completed and acted on
-- one `gpt-5.4` subagent pre-mortem review has been completed and acted on
+## Done Criteria
+
+This work is done when all of the following are true:
+
+- wall resolution is shared across projectile, hitscan, melee, and knockback paths
+- blocked near-wall shots consume ammo and cooldown
+- exposed target portions remain hittable while covered portions remain protected
+- client projectile visuals do not pass through walls
+- `make lint`, `make typecheck`, and `make test` pass
+- the three verification subagents and one pre-mortem subagent have been run and any real findings addressed
