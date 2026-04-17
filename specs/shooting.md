@@ -1,7 +1,7 @@
 # Shooting
 
-> **Spec Version**: 1.2.1
-> **Last Updated**: 2026-04-10
+> **Spec Version**: 2.2.0
+> **Last Updated**: 2026-04-17
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [messages.md](messages.md)
 > **Depended By**: [hit-detection.md](hit-detection.md), [client-architecture.md](client-architecture.md), [server-architecture.md](server-architecture.md)
 
@@ -366,6 +366,16 @@ All ranged shots originate from the authoritative weapon barrel tip, not the pla
 
 **Why this matters:** If the server fires from body center while the client renders from barrel tip, remote kills appear to come from the wrong place and players lose trust in hit registration.
 
+### Barrier Gating At Fire Origin
+
+The barrel tip remains the canonical fire origin, but it is not allowed to bypass nearby blocking geometry.
+
+- the short segment from the player/weapon mount to the barrel tip must be unobstructed by authoritative blocking geometry
+- if the barrel tip is inside blocking geometry, or if that short near-origin segment crosses blocking geometry, the shot is immediately blocked at the near-side barrier contact instead of spawning on the far side
+- the server decides whether the shot is blocked; the client may mirror the same check locally for immediate feedback
+- a blocked shot still counts as a real shot for ammo consumption and fire-rate timing
+- blocked-shot feedback must read as "barrier stopped this shot", not as a player hit
+
 ### Projectile Creation
 
 Creating a new projectile with correct velocity.
@@ -421,7 +431,18 @@ Updating projectile positions each server tick.
 **Pseudocode:**
 ```
 function updateProjectile(projectile, deltaTime):
-    projectile.position += projectile.velocity * deltaTime
+    previousPosition = projectile.position
+    candidatePosition = projectile.position + projectile.velocity * deltaTime
+
+    firstBarrierContact = findNearestBlockingIntersection(previousPosition, candidatePosition)
+    if firstBarrierContact exists:
+        projectile.position = firstBarrierContact.point
+        projectile.active = false
+        notifyBlockedImpact(firstBarrierContact.point)
+        notify("projectile:destroy", projectile.id)
+        return
+
+    projectile.position = candidatePosition
 
     if isExpired(projectile) or isOutOfBounds(projectile):
         projectile.active = false
@@ -447,8 +468,9 @@ func (p *Projectile) IsOutOfBounds() bool {
 
 **Why?**
 
-- **Position integration**: Simple Euler method is sufficient at 60 Hz
-- **Dual expiration checks**: Both time (1000ms) and space (arena bounds) for completeness
+- **Continuous first contact**: Fast projectiles must not step through thin walls between ticks
+- **Barrier trust**: The first blocking surface must visibly and authoritatively stop the shot
+- **Dual expiration checks**: Both time (1000ms) and space (arena bounds) still matter after barrier checks
 - **No gravity**: Projectiles travel in straight lines for arcade-style gameplay
 
 ### Ammo & Reload
@@ -789,6 +811,19 @@ func CalculateShotgunPelletAngles(aimAngle, spreadDegrees float64) []float64 {
 **Client Notification**: None (client should prevent this locally)
 **Recovery**: Wait for reload to complete
 
+### Barrier-Blocked Shot
+
+**Trigger**: The muzzle origin is obstructed by nearby blocking geometry, or the shot path reaches a blocking barrier before any valid hit target
+**Detection**: The authoritative origin segment or swept shot path intersects blocking geometry at an earlier distance than any valid target contact
+**Response**:
+  1. Consume the shot normally (ammo and cooldown still apply)
+  2. Resolve the shot at the first blocking contact point
+  3. Produce barrier feedback at that contact point
+  4. Do not send hit confirmation, victim damage, or victim effects
+  5. Ensure clients never render projectile travel beyond that blocking contact
+**Client Notification**: Immediate local blocked feedback may be shown using mirrored barrier rules; the server remains authoritative
+**Recovery**: Reposition and fire again
+
 ### Projectile Expiration
 
 **Trigger**: Projectile lifetime exceeds 1000ms or exits arena bounds
@@ -808,11 +843,13 @@ func CalculateShotgunPelletAngles(aimAngle, spreadDegrees float64) []float64 {
 - Sends shoot requests immediately (no client-side prediction of projectiles)
 - Updates local state from `weapon:state` messages (server is source of truth)
 - Tracks `lastShotTime` locally but defers to server response
+- Mirrors authoritative barrier checks locally for immediate blocked-shot feedback so visible walls feel immediate rather than RTT-delayed
 
 **Projectile Rendering:**
 - Create visual on `projectile:spawn` message (not on local shoot)
 - Interpolate position using received velocity
-- Destroy visual on `projectile:destroy` message
+- Destroy visual as soon as the projectile is authoritatively removed, whether removal arrives via explicit `projectile:destroy` messaging or authoritative state disappearance in snapshot/delta flows
+- Never render projectile travel beyond the authoritative first barrier contact point
 - Use object pooling for performance (projectiles are frequent)
 
 **Cooldown UI:**
@@ -1235,12 +1272,49 @@ test "aim sway affects projectile trajectory":
         abs(player.aimSway) <= 0.03  // Idle magnitude
 ```
 
+### TS-SHOOT-014: blocked near-wall shot still consumes ammo and cooldown
+
+**Category**: Integration
+**Priority**: Critical
+
+**Preconditions:**
+- Shooter is pressed against visible blocking geometry
+- The barrel-tip origin segment is obstructed
+- Weapon has ammo and is off cooldown
+
+**Input:**
+- `player:shoot` into the nearby barrier
+
+**Expected Output:**
+- Ammo is consumed
+- Fire-rate cooldown is consumed
+- No target damage or hit confirmation occurs
+- Barrier feedback appears at the near-side blocking contact
+
+### TS-SHOOT-015: projectile visual terminates at first wall contact
+
+**Category**: Integration
+**Priority**: Critical
+
+**Preconditions:**
+- Projectile weapon fired toward a visible blocking wall
+- Projectile path intersects the wall before leaving the map
+
+**Input:**
+- Fire the weapon toward the wall
+
+**Expected Output:**
+- Authoritative projectile travel terminates at the first wall contact point
+- Client projectile visual does not continue past the wall
+- Players never observe a projectile visually traveling through the barrier even when no player is hit
+
 ---
 
 ## Changelog
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.2.0 | 2026-04-17 | Added the barrier-gating contract for ranged attacks: barrel-origin segments must be unobstructed, blocked shots still consume ammo/cooldown, projectile movement now resolves using continuous first-contact barrier checks, client feedback must mirror blocked shots immediately, and new acceptance scenarios cover near-wall blocked fire plus projectile visuals terminating exactly at the wall. |
 | 2.1.0 | 2026-02-23 | Renamed "Aim Line Visual" → "Hit Confirmation Trail" (triggered by hit:confirmed, not continuously visible). Renamed "Crosshair Bloom" → "Crosshair / Reticle" (fixed ~20-25px, no bloom). |
 | 1.3.0 | 2026-02-18 | Art style alignment: Added Aim Line Visual section (white #FFFFFF, barrel to crosshair). Added Crosshair Bloom section (40px base, 60-80px expanded). Added shotgun client-side rendering note (8 chevron+trail entities). |
 | 1.2.0 | 2026-02-16 | Added Aim Sway subsection with composite sine formula, moving/idle magnitudes, and effect on projectile trajectory. Added TS-SHOOT-013. Ported from pre-BMM prototype. |
