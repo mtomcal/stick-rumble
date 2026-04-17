@@ -1,7 +1,7 @@
 # UI System
 
-> **Spec Version**: 2.3.2
-> **Last Updated**: 2026-04-10
+> **Spec Version**: 2.4.0
+> **Last Updated**: 2026-04-17
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [match.md](match.md), [client-architecture.md](client-architecture.md), [graphics.md](graphics.md)
 > **Depended By**: [test-index.md](test-index.md)
 
@@ -336,7 +336,8 @@ export class KillFeedUI {
 - Format: 6-digit zero-padded (e.g., `String(score).padStart(6, '0')` → "000000", "001250")
 - Font: Monospaced, ~28px, white (#FFFFFF / COLORS.SCORE)
 - Position: Top-right corner, right-aligned
-- Updated by: `player:kill_credit` event (when local player is killer). Score = killerXP from the event data
+- Updated by: authoritative local stats only. Immediate update may come from `player:kill_credit` when the local player is the killer; later authoritative player-state broadcasts may reconcile the display back to server truth if needed
+- Frozen immediately after `match:ended`
 - Depth: 1000
 
 **TypeScript:**
@@ -345,8 +346,8 @@ export class ScoreDisplayUI {
   private scoreText: Phaser.GameObjects.Text;
   private score = 0;
 
-  updateScore(killerXP: number): void {
-    this.score = killerXP;
+  setScore(serverXP: number): void {
+    this.score = serverXP;
     this.scoreText.setText(String(this.score).padStart(6, '0'));
   }
 }
@@ -367,7 +368,9 @@ export class ScoreDisplayUI {
 - Color: #FF6666 (COLORS.KILL_COUNTER)
 - Font: ~16px, right-aligned
 - Position: Below score display, top-right
-- Incremented on `player:kill_credit` for local player
+- Updated from authoritative local stats only
+- Immediate update may come from `player:kill_credit` when the local player is the killer, but the rendered value must be set from server totals rather than blindly incremented
+- Frozen immediately after `match:ended`
 - Depth: 1000
 
 **TypeScript:**
@@ -376,12 +379,17 @@ export class KillCounterUI {
   private killText: Phaser.GameObjects.Text;
   private kills = 0;
 
-  incrementKills(): void {
-    this.kills++;
+  setKills(serverKills: number): void {
+    this.kills = serverKills;
     this.killText.setText(`KILLS: ${this.kills}`);
   }
 }
 ```
+
+**Authority Rule:**
+- `player:kill_credit` may update the local HUD only when the local player is the killer
+- `player:kill_credit` for other players may update kill feed and room-facing UI, but must not increment or overwrite the local HUD stat widgets
+- The next authoritative player-state broadcast may self-correct local kills / XP if an earlier event was missed or mishandled
 
 ---
 
@@ -1048,6 +1056,7 @@ minimapGraphics.strokePath();
 - Multiple winners: "Winners: {Name1}, {Name2}"
 - No winner: "No Winner"
 - Winner name color: Gold (#ffd700)
+- Winner names are rendered from authoritative display names known to the client; raw internal player IDs are UI-internal and may be shown only as an emergency fallback if no display name is known
 - No separate "MATCH ENDED" title — the winner text IS the title (`<h2 class="match-end-title">`)
 
 #### Scoreboard Table
@@ -1062,7 +1071,10 @@ minimapGraphics.strokePath();
 - Header background: #2a2a2a
 - Row hover: #252525
 - Local player row: #2a3a4a (blue tint), bold
-- Sorted: Kills descending, then deaths ascending
+- Sorted primarily by kills descending
+- Equal kills share the same displayed rank / place
+- Deaths remain visible as a stat but do **not** silently break kill ties
+- If stable secondary ordering is needed inside a tie group, use authoritative display name ascending for presentation only
 
 #### XP Breakdown
 
@@ -1111,15 +1123,22 @@ export function MatchEndScreen({ matchData, localPlayerId, onClose, onPlayAgain 
   }, [countdown, onPlayAgain]);
 
   const rankedPlayers = [...matchData.finalScores].sort((a, b) =>
-    b.kills !== a.kills ? b.kills - a.kills : a.deaths - b.deaths
+    b.kills !== a.kills ? b.kills - a.kills : resolveDisplayName(a.playerId).localeCompare(resolveDisplayName(b.playerId))
   );
+
+  const rankForIndex = (index: number) => {
+    if (index === 0) return 1;
+    return rankedPlayers[index].kills === rankedPlayers[index - 1].kills
+      ? rankForIndex(index - 1)
+      : index + 1;
+  };
 
   const renderWinners = () => {
     if (matchData.winners.length === 0)
       return <h2 className="match-end-title">No Winner</h2>;
     if (matchData.winners.length === 1)
-      return <h2 className="match-end-title">Winner: <span className="winner-name">{matchData.winners[0]}</span></h2>;
-    return <h2 className="match-end-title">Winners: <span className="winner-name">{matchData.winners.join(', ')}</span></h2>;
+      return <h2 className="match-end-title">Winner: <span className="winner-name">{resolveDisplayName(matchData.winners[0])}</span></h2>;
+    return <h2 className="match-end-title">Winners: <span className="winner-name">{matchData.winners.map(resolveDisplayName).join(', ')}</span></h2>;
   };
 
   return (
@@ -1503,7 +1522,8 @@ it('should show kills in reverse chronological order', () => {
 
 **Expected Output:**
 - Kill feed entry added
-- (Stats tracked in player state, visible in match end)
+- If local player is killer: score and kill HUD update from server-confirmed totals
+- If another player is killer: local score and kill HUD do not change
 
 ---
 
@@ -1545,9 +1565,10 @@ it('should show kills in reverse chronological order', () => {
 
 **Preconditions:**
 - Match ended
+- Authoritative display names for winners are known locally
 
 **Input:**
-- `match:ended` event with winners=["Player1"]
+- `match:ended` event with winners=["player-1"]
 
 **Expected Output:**
 - Modal visible
@@ -1555,7 +1576,7 @@ it('should show kills in reverse chronological order', () => {
 
 ---
 
-### TS-UI-012: Scoreboard Sorted Correctly
+### TS-UI-012: Scoreboard Uses Shared Ranks for Kill Ties
 
 **Category**: Unit
 **Priority**: High
@@ -1565,11 +1586,12 @@ it('should show kills in reverse chronological order', () => {
 
 **Expected Output:**
 - Sorted order by kills descending: [5, 5, 3, 2]
-- Ties broken by deaths ascending
+- Both 5-kill players share the same displayed rank
+- Deaths are displayed but do not break the tie
 
 **TypeScript (Vitest):**
 ```typescript
-it('should sort scoreboard by kills descending, deaths ascending', () => {
+it('should use shared rank for equal-kill players', () => {
   const scores = [
     { playerId: 'a', kills: 3, deaths: 2, xp: 300 },
     { playerId: 'b', kills: 5, deaths: 3, xp: 500 },
@@ -1578,7 +1600,8 @@ it('should sort scoreboard by kills descending, deaths ascending', () => {
   ];
 
   const sorted = sortScores(scores);
-  expect(sorted.map(s => s.playerId)).toEqual(['d', 'b', 'a', 'c']);
+  expect(sorted.map(s => s.playerId)).toEqual(['b', 'd', 'a', 'c']);
+  expect(getDisplayedRanks(sorted)).toEqual([1, 1, 3, 4]);
 });
 ```
 
@@ -1707,6 +1730,7 @@ it('should sort scoreboard by kills descending, deaths ascending', () => {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.4.0 | 2026-04-17 | Clarified authoritative local HUD stat rules: score / kills now update only from server-confirmed local stats, may reconcile from player-state truth, and freeze immediately on `match:ended`. Match-end UI now resolves player IDs to display names, gives shared ranks for kill ties, and stops using deaths as a silent tiebreaker. |
 | 2.3.3 | 2026-04-13 | Kill feed now requires authoritative display names for killer and victim; internal player IDs remain UI-internal and are only an emergency fallback if no display name is known locally. |
 | 2.3.2 | 2026-04-10 | Re-anchored the top-left survival HUD contract: the health cluster now owns the first row at 20px viewport padding, ammo is explicitly stacked underneath it, and the ammo icon/text are required to stay anchored as one unit instead of drifting independently. |
 | 2.3.1 | 2026-04-09 | Corrected stale TS-UI-018 expectations to the bottom-left minimap contract and clarified ammo-display rationale to remove references to title text in the normal gameplay HUD. |

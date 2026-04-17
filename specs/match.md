@@ -1,7 +1,7 @@
 # Match System
 
-> **Spec Version**: 1.0.0
-> **Last Updated**: 2026-02-02
+> **Spec Version**: 1.1.0
+> **Last Updated**: 2026-04-17
 > **Depends On**: [constants.md](constants.md), [rooms.md](rooms.md), [player.md](player.md), [messages.md](messages.md)
 > **Depended By**: [test-index.md](test-index.md)
 
@@ -514,11 +514,30 @@ func (m *Match) DetermineWinners() []string {
 - Client displays "TIE" when winners array has > 1 entry
 - More fair than arbitrary tiebreaker (first to kill, alphabetical, etc.)
 
+**Placement rule**:
+- Equal kills remain equal placement on the results screen
+- Deaths may be displayed as supporting stats, but must not silently break a kill tie
+- Clients may use a stable secondary ordering inside a tie group for presentation, but not to assign different places
+
+### Result Freeze Cutoff
+
+The end of a round uses a strict server freeze.
+
+- A kill counts in final standings only if the server has fully resolved it before broadcasting `match:ended`
+- `match:ended` must be emitted only after all qualifying pre-end kills have updated the authoritative player stats included in `finalScores`
+- Once `match:ended` is emitted, winners, placements, and `finalScores` are frozen
+- Late, duplicated, or out-of-order gameplay events that arrive after `match:ended` must not alter the recorded result
+
+**WHY this cutoff exists**:
+- Prevents the HUD and result screen from disagreeing about last-second kills
+- Gives the client a single unambiguous point where match standings become final
+- Avoids race conditions around late-arriving combat events
+
 ---
 
 ### Final Scores Collection
 
-Collects all player scores for the `match:ended` message.
+Collects the frozen final player scores for the `match:ended` message.
 
 **Pseudocode:**
 ```
@@ -577,6 +596,7 @@ func (m *Match) GetFinalScores(world *World) []PlayerScore {
 - Player's Kills/Deaths/XP are the authoritative source (on PlayerState)
 - Match.PlayerKills only tracks kills for win condition, not full stats
 - World contains the complete, up-to-date player state
+- The resulting `finalScores` snapshot becomes the frozen result payload for all clients
 
 ---
 
@@ -758,9 +778,9 @@ room.Broadcast(msgBytes, "")
 
 ### match:ended
 
-Sent when match concludes (kill target or time limit).
+Sent when match concludes (kill target or time limit). This payload is the frozen authoritative snapshot for match results.
 
-**Trigger**: Kill target reached or time limit expired
+**Trigger**: Kill target reached or time limit expired, after all qualifying pre-end kills are fully resolved
 **Recipient**: All players in room
 
 **TypeScript Schema:**
@@ -881,6 +901,7 @@ this.wsClient.on('match:ended', matchEndedHandler);
 - Prevents processing `player:move` messages after match ends
 - Freezes players in place on the scoreboard
 - Ignores late `match:timer` messages that might arrive out of order
+- Prevents stale late-round gameplay UI updates from mutating frozen standings
 
 ---
 
@@ -892,6 +913,8 @@ this.wsClient.on('match:ended', matchEndedHandler);
 - Format remaining seconds as `MM:SS` for display
 - Sort finalScores by kills descending for leaderboard
 - Handle edge case: winners array may have 0, 1, or multiple entries
+- Render equal-kill players as shared rank/place on the results screen
+- Do not use deaths as a hidden placement tiebreaker when kills are equal
 
 ### Go (Server)
 
@@ -1111,6 +1134,7 @@ test "Highest kills wins on time limit":
 
 **Expected Output:**
 - DetermineWinners returns both player IDs
+- Final results screen would show both players sharing the same place
 
 **Pseudocode:**
 ```
@@ -1333,3 +1357,4 @@ it('should skip match:timer updates after match has ended', () => {
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-02-02 | Initial specification |
+| 1.1.0 | 2026-04-17 | Defined strict server-freeze result cutoff for `match:ended`, clarified that kill ties remain shared placement, and documented frozen-result handling so late gameplay events cannot mutate final standings. |

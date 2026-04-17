@@ -1,7 +1,7 @@
 # Melee Combat
 
-> **Spec Version**: 1.1.0
-> **Last Updated**: 2026-02-16
+> **Spec Version**: 1.2.0
+> **Last Updated**: 2026-04-17
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [hit-detection.md](hit-detection.md)
 > **Depended By**: [messages.md](messages.md), [graphics.md](graphics.md)
 
@@ -488,56 +488,51 @@ func applyKnockback(attacker *PlayerState, target *PlayerState, knockbackDistanc
 
 ### Swing Animation
 
-The melee swing uses a **white stroke-only arc** combined with a **weapon container rotation tween**. There are no per-weapon colors — all melee weapons use white.
+The melee attack is presented as a **weapon-following swing motion**, not a literal player-centered area-of-effect overlay. The range-and-arc hitbox remains a gameplay rule for server hit detection, but it is not rendered as a debug cone in normal play.
 
-**Arc Visual**:
-```typescript
-const slash = this.add.graphics();
-slash.lineStyle(2, 0xffffff, 0.8);  // White, stroke-only
-slash.beginPath();
-slash.arc(attacker.x, attacker.y, range, angle - 0.7, angle + 0.7, false);
-slash.strokePath();  // NO fillPath — stroke only
-this.tweens.add({ targets: slash, alpha: 0, duration: 200, onComplete: () => slash.destroy() });
-```
+**Visual grammar:**
+- Every swing shows readable weapon motion plus a short-lived motion trail
+- The local attacker gets an immediate client-side swing preview on click for responsiveness
+- Other players see the swing only from the server-confirmed `melee:hit` room event
+- A whiff still shows swing motion, but **no** contact effect
+- A confirmed hit spawns a separate world-space contact effect at each victim's contact point
+- The swing trail follows the weapon's actual animated path (bat head / blade path), not a fixed-radius arc centered on the player
+- The player body remains mostly stable; the expressive motion lives in the arms and weapon
 
-**Container Rotation Tween**:
-```typescript
-this.scene.tweens.add({
-    targets: this.weaponContainer,
-    angle: { from: this.weaponContainer.angle - 45, to: this.weaponContainer.angle + 60 },
-    duration: 100,
-    yoyo: true,
-    onComplete: () => {
-        this.isAttacking = false;
-        this.weaponContainer.setAngle(0);
-    }
-});
-```
+**Weapon feel by type:**
+- **Bat**: slightly heavier anticipation, wider trail, chunkier follow-through, blunt impact burst / shock effect on contact
+- **Katana**: tighter anticipation, faster release, thinner directional trail, sharp slash-flare effect on contact
 
 | Property | Value |
 |----------|-------|
-| Arc Color | 0xFFFFFF (white) — all weapons |
-| Arc Stroke Width | 2px |
-| Arc Alpha | 0.8 |
-| Arc Angle | ±0.7 rad (~80°) |
-| Arc Fade | 200ms |
-| Swing From | -45° |
-| Swing To | +60° |
-| Swing Duration | 100ms yoyo |
-| Camera Shake | 50ms, 0.001 intensity (on hit) |
+| Local Preview | Immediate, attacker only |
+| Remote Swing Visibility | Server-confirmed via `melee:hit` |
+| Hitbox Overlay | Not shown literally |
+| Motion Lifetime | Brief; readable but not telegraphed |
+| Anticipation | Present, but subtle and fast |
+| Contact Effect Location | Victim / contact point |
+| Multi-Hit Behavior | Each victim gets its own contact effect |
+| Camera Shake | 50ms, 0.001 intensity (on confirmed hit) |
 
-See [constants.md § Melee Visual Constants](constants.md#melee-visual-constants) and [graphics.md § Melee Swing Arc](graphics.md#melee-swing-arc).
+See [constants.md § Melee Visual Constants](constants.md#melee-visual-constants) and [graphics.md § Melee Swing Motion](graphics.md#melee-swing-motion).
 
-> **Color**: All melee weapons use white (0xFFFFFF) for the swing arc. Per-weapon coloring was removed in favor of a unified visual style matching the prototype.
+> **Readability over realism:** Swing timing, trail thickness, and contact silhouettes may be slightly exaggerated if needed to keep melee legible in crowded multiplayer combat.
 
 ---
 
 ### Client Event Handler
 
-The `melee:hit` message triggers swing animation on all clients.
+The local attacker sees an immediate preview swing on input, while the room still relies on `melee:hit` for the server-confirmed swing and contact confirmation.
 
 **TypeScript Implementation:**
 ```typescript
+// Local attacker preview on click
+const didAttack = shootingManager.meleeAttack();
+if (didAttack) {
+    meleeWeaponManager.startLocalPreview(localPlayerId, aimAngle);
+}
+
+// Server-confirmed room event
 const meleeHitHandler = (data: unknown) => {
     const messageData = data as MeleeHitData;
 
@@ -549,26 +544,32 @@ const meleeHitHandler = (data: unknown) => {
     const aimAngle = this.playerManager.getPlayerAimAngle(messageData.attackerId);
     if (aimAngle === null) return;
 
-    // Update weapon position and trigger swing
+    // Update weapon position and trigger / continue the confirmed swing
     this.meleeWeaponManager.updatePosition(messageData.attackerId, attackerPos);
-    this.meleeWeaponManager.startSwing(messageData.attackerId, aimAngle);
+    this.meleeWeaponManager.startConfirmedSwing(messageData.attackerId, aimAngle);
 
-    // Show hit effect in front of attacker
-    if (this.hitEffectManager) {
-        const effectDistance = 30;
-        const effectX = attackerPos.x + Math.cos(aimAngle) * effectDistance;
-        const effectY = attackerPos.y + Math.sin(aimAngle) * effectDistance;
-        this.hitEffectManager.showMeleeHit(effectX, effectY);
+    // Show per-victim contact effects at victim contact points
+    for (const victimId of messageData.victims) {
+        const victimPos = this.playerManager.getPlayerPosition(victimId);
+        if (!victimPos || !this.hitEffectManager) continue;
+
+        this.hitEffectManager.showMeleeContact(
+            currentWeaponType,
+            victimPos.x,
+            victimPos.y,
+            aimAngle
+        );
     }
 };
 
 this.wsClient.on('melee:hit', meleeHitHandler);
 ```
 
-**Why animation triggered on `melee:hit` (not locally):**
-- **Server-authoritative**: Animation only shows when server confirms attack
-- **Consistency**: All clients see same swing at same time
-- **Anti-cheat**: Can't fake swings that didn't happen
+**Why hybrid local-preview + server-confirmed room event:**
+- **Responsiveness**: The attacker gets immediate swing motion on click
+- **Consistency**: Everyone else still sees only the server-confirmed swing
+- **Authority**: Damage, contact effects, HUD hit confirmation, and stat changes remain server-confirmed
+- **Safe rejection behavior**: If the server later rejects the swing, the local preview remains a harmless feint with no contact effect, no stat change, and no remote visibility
 
 ---
 
@@ -899,7 +900,7 @@ func TestPerformMeleeAttack_BatHitsSingleTarget(t *testing.T) {
 
 ---
 
-### TS-MELEE-013: Melee arc renders correctly
+### TS-MELEE-013: Weapon-following swing trail renders correctly
 
 **Category**: Visual
 **Priority**: High
@@ -908,11 +909,10 @@ func TestPerformMeleeAttack_BatHitsSingleTarget(t *testing.T) {
 - Player performs melee attack with any melee weapon
 
 **Expected Output:**
-- Arc is stroke-only, white (0xFFFFFF), no fill
-- Arc spans ±0.7 rad from aim direction
-- Arc uses weapon range as radius (Bat: 90px, Katana: 110px)
-- Arc fades over 200ms
-- Weapon container rotates from -45° to +60° over 100ms
+- Swing trail follows the animated weapon path rather than a player-centered radius
+- The attack does not render a literal cone / AoE overlay
+- Bat trail reads heavier and wider than Katana trail
+- Katana trail reads thinner and faster than Bat trail
 
 ---
 
@@ -931,7 +931,7 @@ func TestPerformMeleeAttack_BatHitsSingleTarget(t *testing.T) {
 
 ---
 
-### TS-MELEE-015: Weapon container rotation tween on swing
+### TS-MELEE-015: Swing motion includes anticipation, readable follow-through, and overlap protection
 
 **Category**: Visual
 **Priority**: High
@@ -940,9 +940,10 @@ func TestPerformMeleeAttack_BatHitsSingleTarget(t *testing.T) {
 - Player swings a melee weapon
 
 **Expected Output:**
-- Weapon container angle tweens from current-45° to current+60°
-- Duration is 100ms with yoyo (returns to 0)
-- isAttacking flag prevents overlapping swings
+- Swing includes a subtle anticipation before release
+- Weapon motion is readable from the held weapon model even if the trail is faint
+- Local preview and server-confirmed swing use the same visual family
+- Overlap protection prevents stacked unreadable swings
 - Camera shakes on melee hit (50ms, 0.001 intensity)
 
 ---
@@ -953,6 +954,7 @@ func TestPerformMeleeAttack_BatHitsSingleTarget(t *testing.T) {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.2.0 | 2026-04-17 | Reframed melee presentation around weapon-following swing motion instead of a visible AoE arc. Added hybrid local-preview/server-confirmed swing behavior, per-victim weapon-specific contact effects, whiff-vs-hit visual grammar, and updated TS-MELEE-013 / TS-MELEE-015 to validate the new motion language. |
 | 1.0.0 | 2026-02-02 | Initial specification |
 | 1.0.1 | 2026-02-16 | Fixed thread safety note — `world.players` accessed directly under `world.mu.RLock()`, not via `GetAllPlayers()` |
 | 1.1.0 | 2026-02-16 | Updated Bat range (64→90px), Katana range (80→110px), melee arc (90°→80°). Replaced pie-slice arc with white stroke-only arc. Added weapon container rotation tween. Removed per-weapon color table. Added TS-MELEE-015. Ported from pre-BMM prototype. |
