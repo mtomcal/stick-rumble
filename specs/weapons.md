@@ -1,7 +1,7 @@
 # Weapons
 
-> **Spec Version**: 2.1.2
-> **Last Updated**: 2026-04-13
+> **Spec Version**: 2.2.0
+> **Last Updated**: 2026-04-17
 > **Depends On**: [constants.md](constants.md), [arena.md](arena.md), [maps.md](maps.md), [player.md](player.md)
 > **Depended By**: [shooting.md](shooting.md), [melee.md](melee.md), [hit-detection.md](hit-detection.md)
 
@@ -758,9 +758,11 @@ const color = parseHexColor(config.visuals.muzzleFlashColor);
 
 **Weapon State Management:**
 - Track locally for responsive UI (ammo display, reload bar)
-- Server `weapon:state` messages are authoritative
-- On initial spawn and every respawn, the authoritative weapon state is the default pistol unless and until a later pickup is confirmed
-- When a `weapon:state` message disagrees with the local presentation, the client must immediately reconcile all local weapon presentation from that message: fire behavior, held weapon sprite, and melee-vs-ranged visuals
+- Server `weapon:state` messages are the **only** authoritative source for the local player's equipped weapon
+- `weapon:pickup_confirmed` is room feedback, not local equip authority; it may drive crate and pickup UX but must not independently decide local firing mode, ammo UI, crosshair behavior, or held-weapon presentation
+- On initial spawn and every respawn, the authoritative local weapon state is the default pistol unless and until a later `weapon:state` says otherwise
+- When a `weapon:state` message disagrees with the local presentation, the client must reconcile **all** local weapon-derived presentation from that message in one step: fire behavior, held weapon sprite, melee-vs-ranged visuals, ammo/reload UI, and crosshair behavior
+- No subsystem may keep its own long-lived weapon truth that can diverge from `weapon:state`; subsystems may cache render data, but authoritative weapon identity is shared state
 
 ### Go (Server)
 
@@ -1091,6 +1093,7 @@ func TestKnockbackBoundaryClamping(t *testing.T) {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.2.0 | 2026-04-17 | Clarified the equipped-weapon authority model: local weapon truth now comes only from `weapon:state`, `weapon:pickup_confirmed` is room feedback rather than equip authority, respawn must reconcile all weapon-derived local presentation in one step, and no subsystem may keep divergent durable weapon identity. |
 | 2.1.2 | 2026-04-13 | Clarified that spawn and respawn weapon state is authoritative from `weapon:state`, defaults back to Pistol until a later pickup, and must immediately drive the local held-weapon presentation as well as firing behavior. |
 | 2.1.1 | 2026-04-10 | Reduced `WeaponPickupRadius` from 32px to 24px so pickup prompting and confirmation require a clearly intentional approach and no longer feel oversized around crates. |
 | 2.1.0 | 2026-02-23 | Added "Weapon Crate Visual Appearance" section with visual details, proximity prompt, and pickup confirmation specs. |
