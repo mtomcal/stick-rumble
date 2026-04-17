@@ -1,147 +1,89 @@
-# Friends-MVP Implementation Plan
+# Session-First Bootstrap Implementation Plan
 
 ## Goal
 
-Implement the April 11, 2026 Friends-MVP spec changes as production code using strict red/green TDD.
+Implement the feature set defined by commit `baad148` `docs(specs): define ui bugfix flow and session bootstrap` using thin red/green TDD slices.
 
-This plan covers the non-deployment behavior introduced by:
+This plan supersedes the previous Friends-MVP `PLAN.md`. The source-of-truth requirements are already in `specs/`, so this document is now the execution plan for bringing code up to those specs.
 
-- `6a2fac0` `docs(specs): add friends-mvp join flow and aws mvp deployment`
-- `881e6a5` `docs(specs): pre-mortem fixes for friends-mvp and aws deployment`
+## Source Spec Delta
 
-It also incorporates the product decisions confirmed during planning:
+Primary spec changes in `baad148`:
 
-- invite links use a query param, not a routed path
-- canonical share shape is `<configured-client-base-url>/?invite=PIZZA`
-- if there is no saved display name, invite flow blocks on name entry before join
-- if there is a saved display name, fresh invite opens auto-join immediately
-- failed hello attempts stay on the same socket and return to the same join UI
-- reconnect auto-replays the last successful hello once, then falls back to a reconnect card
-- reconnect failure card shows only `Retry <CODE>` and `Play Public`
-- duplicate same-browser invite tabs are hard-blocked client-side
-- host waits in the arena with a minimal overlay, not a separate lobby screen
-- primary share action is `Copy Invite Link`
-- display name persists indefinitely in local storage after successful join
-- mixed-version `room:joined` failures are fatal version mismatches
-- server-side liveness enforcement is part of this work
-- TTL is only a fallback for empty, unstarted code rooms
-- code collision risk between unrelated groups remains an explicit accepted MVP risk
+- `specs/messages.md`
+- `specs/rooms.md`
+- `specs/client-architecture.md`
+- `specs/ui.md`
+- `specs/match.md`
+- `specs/graphics.md`
 
-## Scope
+Feature areas introduced by that commit:
 
-This plan covers five implementation areas:
+- session-first join lifecycle with `session:status` replacing `room:joined` as the primary bootstrap contract
+- explicit `session:leave` support for queue and named-room waiting exits
+- React-owned app session state machine with no mounted Phaser canvas before `match_ready`
+- full-screen React match-end flow with display-ready winner and scoreboard names
+- primary-fire-only mouse contract and context-menu suppression over gameplay
+- HUD simplification: weapon label in ammo cluster, no world-space reload bar, no HUD `RELOADING...`
+- overhead readability cleanup: local player keeps only `YOU`, remote players keep a readable `displayName` plus health stack
+- UI safety rule that raw UUIDs must not appear in player-facing text
 
-- shared wire contract updates for `player:hello`, new error messages, and `room:joined`
-- server room assignment and connection lifecycle changes
-- client invite/join/reconnect UX and state management
-- display name propagation into gameplay rendering
-- config and environment cleanup needed to keep the feature aligned with upcoming deployment work
+## Current State Summary
 
-## Non-Goals
+The codebase is only partially aligned with these specs.
 
-This plan does not implement:
+- Server networking and room management still emit `room:joined` and do not handle `session:leave`.
+- Server match-end payloads still send `winners: string[]` and do not guarantee display-ready winner summaries.
+- Client transport logic still treats `room:joined` as the success latch for reconnect replay and bootstrap readiness.
+- `App.tsx` already has some join/reconnect UI, but Phaser is mounted unconditionally and waiting states are overlays on top of a live canvas.
+- `MatchEndScreen.tsx` still renders `playerId` values and behaves like a dismissible modal.
+- `GameScene.ts` fires on any pointer-down and does not distinguish primary from secondary click.
+- `GameSceneUI.ts` still renders `RELOADING...` text and a world-space reload progress bar.
+- `PlayerManager.ts` still renders local overhead health and uses a looser label/health layout than the new readability contract.
+- `GameSceneEventHandlers.ts` still falls back to truncated player IDs in visible text, which is now out of spec.
 
-- CloudFront or S3 routing rules
-- strict production `CheckOrigin` hardening
-- Elastic IP, TLS, or systemd deployment work
-- account systems, friend lists, or discoverable invite objects
-- persistent session resume across reconnects
-- collision mitigation for human room codes
+## Constraints
 
-Those are deployment or post-MVP concerns. This plan leaves clean seams for them.
-
-## Product Flow To Implement
-
-### Host Flow
-
-1. Host opens the game.
-2. Host enters a display name if none is already stored.
-3. Host chooses friends mode and supplies a code, or lands through `?invite=<raw>`.
-4. Client opens the WebSocket.
-5. Client sends `player:hello` as the first gameplay-relevant message on that connection.
-6. Server sanitizes the display name, normalizes the code, creates or joins the named room, and returns `room:joined`.
-7. If the room is a code room with only one player, the host remains in the arena with a waiting overlay showing the normalized code and a `Copy Invite Link` action.
-
-### Friend Join Flow
-
-1. Friend opens `?invite=<raw>`.
-2. If the browser has no saved display name, client shows a minimal join card with the raw invite code prefilled and blocks on name entry.
-3. If the browser has a saved display name, client auto-joins immediately.
-4. Client sends `player:hello { displayName, mode: "code", code: <raw> }`.
-5. Server normalizes the code and either:
-   - joins the existing room and starts the match if the threshold is crossed
-   - creates a fresh code room if the old one ended
-   - returns `error:bad_room_code`
-   - returns `error:room_full`
-
-### Reconnect Flow
-
-1. Socket drops after a successful join.
-2. Client reconnects and auto-replays the last successful hello once.
-3. If replay succeeds, gameplay resumes on the new connection under MVP rules.
-4. If replay fails, client shows a reconnect card with only:
-   - `Retry <CODE>`
-   - `Play Public`
-
-### Duplicate Tab Flow
-
-1. A second tab in the same browser profile opens the same invite while the first tab is active.
-2. Client-side duplicate-tab guard detects the active claimant.
-3. Second tab is hard-blocked with a blocking screen that directs the user to the existing tab.
-
-## Implementation Principles
-
-- `player:hello` is the only room-assignment entry point
-- a successful hello latches, a failed hello does not
-- the server remains authoritative for room-code normalization and display-name sanitization
-- query-param invite parsing is convenience only, not a second room contract
-- client reconnect behavior replays only the last successful hello, never failed drafts
-- all environment access should be funneled through small config modules rather than scattered direct reads
-- `.env.example` files are documentation, not required runtime dependencies
-- invite-link generation must not assume ownership of any specific production domain
+- Stay spec-first. The relevant specs are already updated; only change specs again if implementation uncovers a real contradiction.
+- Use thin red/green slices. Do not mix schema, server, app-shell, and Phaser refactors into one large step.
+- Prefer repo-root commands and final integrated verification with `make lint && make typecheck && make test`.
+- Preserve existing behavior outside the new session/bootstrap/UI contract.
+- Do not leave mixed bootstrap contracts in place longer than one slice. Every intermediate step must either keep `room:joined` working intentionally or switch both producer and consumer together in the same slice.
 
 ## Delivery Strategy
 
-Work in thin red/green slices. Do not batch schema, server, client, and UX changes into one large commit-sized step.
+Recommended implementation order:
 
-Recommended order:
-
-1. acceptance contract freeze
-2. schema red/green
-3. server room + hello contract red/green
-4. client handshake and invite state red/green
-5. waiting/reconnect/duplicate-tab UX red/green
-6. rendering and display-name propagation red/green
-7. stale-room pruning and socket liveness red/green
-8. config/env cleanup
-9. verification
-10. subagent test-quality pass x3
-11. subagent pre-mortem pass x1
+1. freeze the acceptance contract
+2. update schemas red/green
+3. update server session contract red/green
+4. update client transport/bootstrap red/green
+5. move the app shell to React-owned session states red/green
+6. align gameplay/HUD/input rendering red/green
+7. align match-end payload and UI red/green
+8. run integrated verification
+9. run end-of-work subagent audits
 
 ## Phase 0: Acceptance Contract Freeze
 
-Before code changes, ensure the plan treats the current specs as fixed for this MVP:
+Translate the spec delta into a concrete checklist before touching code.
 
-- `specs/player.md`
-- `specs/rooms.md`
-- `specs/messages.md`
-- `specs/networking.md`
+Acceptance points:
 
-Translate those specs plus the planning decisions above into executable expectations:
-
-- invite links use `?invite=<raw>`
-- code room join is always driven by `player:hello`
-- failed hellos do not latch `HelloSeen`
-- `room:joined` now requires `displayName` and may include `code`
-- reconnect requires a fresh hello every time
-- invite flow requires a saved display name or explicit name entry
-- duplicate same-browser invite tabs are blocked client-side
-- only empty, unstarted code rooms are eligible for TTL reap
-- invite links are generated from configuration, not a hardcoded public hostname
+- `session:status` is the only authoritative pre-match lifecycle message for app-shell state.
+- `session:status.state` supports `searching_for_match`, `waiting_for_players`, and `match_ready`.
+- `session:leave` only affects pre-match states and is ignored once a match is active.
+- Phaser must not mount before `match_ready`.
+- visible UI text must prefer `displayName`; raw `playerId` values are forbidden in player-facing UI.
+- `match:ended` winners and final scores must be display-ready.
+- only primary click may trigger `player:shoot`.
+- right click over the gameplay surface must not open the browser context menu.
+- reload progress must be shown only by the reload arc.
+- local overhead health bar must be removed.
 
 Definition of done:
 
-- each product branch in this document maps to a concrete test or implementation slice
+- every acceptance point maps to one or more tests in the phases below
 
 ## Phase 1: Shared Schema Red
 
@@ -150,412 +92,300 @@ Target files:
 - `events-schema/src/schemas/client-to-server.ts`
 - `events-schema/src/schemas/server-to-client.ts`
 - `events-schema/src/index.ts`
-- `events-schema/src/validate-schemas.ts`
-- existing schema tests in `events-schema`
+- `events-schema/src/validate-schemas.test.ts`
+- `events-schema/src/schemas/client-to-server.test.ts`
+- `events-schema/src/schemas/server-to-client.test.ts`
 - `stick-rumble-server/internal/network/schema_test.go`
-- client schema-validation tests that import generated types
 
 Add failing tests for:
 
-- `player:hello` schema for public and code modes
-- `room:joined` requiring `displayName`
-- `room:joined.code` being optional
-- `PlayerState.displayName` being present where required by broadcasts
-- `error:no_hello`
-- `error:bad_room_code`
-- `error:room_full`
-
-Exit criteria:
-
-- schemas and generated types precisely match the Friends-MVP wire contract
+- `session:leave` client-to-server schema
+- `session:status` server-to-client schema with all three states
+- `session:status` field rules: `mapId` omitted before `match_ready`, `code` omitted for public sessions
+- `match:ended` winners as structured summaries with `displayName`
+- `match:ended.finalScores[*].displayName` required
+- `room:joined` no longer being treated as the primary client bootstrap type in generated TS types
 
 ## Phase 2: Shared Schema Green
 
 Implement the schema changes and regenerate artifacts.
 
-Required outcomes:
+Exit criteria:
 
-- server and client compile against the new types
-- development schema validation can validate the new message family
-- old `room:joined` payload shape is no longer accepted in Friends-MVP codepaths
+- generated types compile on both client and server
+- schema validation passes for `session:status`, `session:leave`, and updated `match:ended`
+- legacy `room:joined` support is treated as compatibility-only, not as the main happy path
 
-## Phase 3: Server Hello And Room Contract Red
+## Phase 3: Server Session Contract Red
 
 Target files:
 
-- `stick-rumble-server/internal/game/room.go`
-- `stick-rumble-server/internal/game/room_lifecycle_test.go`
 - `stick-rumble-server/internal/network/websocket_handler.go`
 - `stick-rumble-server/internal/network/websocket_handler_test.go`
-- `stick-rumble-server/internal/network/message_processor.go`
-- any new focused tests for hello handling
+- `stick-rumble-server/internal/network/integration_test.go`
+- `stick-rumble-server/internal/game/room.go`
+- `stick-rumble-server/internal/game/room_lifecycle_test.go`
+- `stick-rumble-server/internal/game/room_broadcast_test.go`
+- `stick-rumble-server/internal/network/broadcast_helper.go`
 
 Add failing tests for:
 
-- new sockets do not auto-join rooms on connect
-- gameplay messages before hello receive `error:no_hello`
-- valid public hello routes to public queue
-- valid code hello creates a `RoomKindCode` room
-- second joiner on a code room starts the match
-- failed bad-code hello keeps the connection open and `HelloSeen == false`
-- failed room-full hello keeps the connection open and `HelloSeen == false`
-- successful hello latches and later hellos are ignored
-- display-name sanitization falls back to `Guest`
-- room-code normalization is server-authoritative
-- ended code room releases to a fresh rematch room
-- room destruction only deletes `codeIndex[code]` if the index still points at that room
+- public hello while unmatched returns `session:status { state: "searching_for_match" }`
+- code-room hello below threshold returns `session:status { state: "waiting_for_players" }`
+- second player joining a public or code session transitions both players to `match_ready`
+- `session:leave` removes a waiting public player from the queue without disconnecting
+- `session:leave` removes a single waiting code-room player cleanly
+- `session:leave` is ignored after match start
+- gameplay messages before hello still return `error:no_hello`
+- reconnect success latches on `session:status { state: "match_ready" }`, not on queueing/waiting states
+- match-end payload contains winner summaries and score display names
 
-Exit criteria:
-
-- tests clearly reject the current pre-MVP auto-join behavior
-
-## Phase 4: Server Hello And Room Contract Green
+## Phase 4: Server Session Contract Green
 
 Implement the server-side contract.
 
-Expected implementation work:
+Required work:
 
-- extend `game.Player` with `DisplayName` and `HelloSeen`
-- extend `Room` with `Kind`, `Code`, and timestamps needed for later pruning
-- extend `RoomManager` with `codeIndex`
-- replace `AddPlayer` as the connect-time room assignment path with explicit hello-driven public/code assignment
-- implement `sanitizeDisplayName`
-- implement `normalizeRoomCode`
-- update `sendRoomJoinedMessage` to include authoritative `displayName` and optional `code`
-- ensure code-room join path triggers `match.start()` when crossing the threshold
-- preserve the rematch-safe `codeIndex` teardown guard
+- replace direct `room:joined` sends in `RoomManager` with `session:status`
+- add a helper that builds full session snapshots instead of incremental room events
+- add `session:leave` handling in `WebSocketHandler`
+- ensure `player.HelloSeen` still latches only after a successful hello
+- keep queue and named-room cleanup correct when leaving or disconnecting
+- update match-end broadcasting to build winner summaries and display-ready score rows
+- keep weapon spawns and gameplay broadcasts gated behind actual `match_ready`
 
-Refactor goals:
+Implementation note:
 
-- keep public and code-room flows explicit
-- avoid hiding hello gating inside unrelated gameplay handlers
+- if temporary compatibility with `room:joined` is needed for an intermediate slice, keep it short-lived and remove it before final verification
 
-## Phase 5: Client Hello State And Invite Boot Red
+## Phase 5: Client Transport And Bootstrap Red
+
+Target files:
+
+- `stick-rumble-client/src/game/network/WebSocketClient.ts`
+- `stick-rumble-client/src/game/network/WebSocketClient.test.ts`
+- `stick-rumble-client/src/game/network/WebSocketClient.match-end.test.ts`
+- `stick-rumble-client/src/game/scenes/GameSceneEventHandlers.ts`
+- `stick-rumble-client/src/game/scenes/GameSceneEventHandlers.test.ts`
+- `stick-rumble-client/src/shared/types.ts`
+
+Add failing tests for:
+
+- reconnect success is recorded only when `session:status.state === "match_ready"`
+- waiting snapshots do not boot gameplay
+- pending gameplay messages queue until `match_ready`
+- join success callback receives a session snapshot-derived payload, not `room:joined`
+- join failure paths continue to work on the same socket
+- visible fallback names use `Guest`, not UUID fragments
+- updated match-end client types accept structured winners and named score rows
+
+## Phase 6: Client Transport And Bootstrap Green
+
+Implement the transport/bootstrap migration.
+
+Required work:
+
+- add client-side `SessionStatusData`, `WinnerSummary`, and display-ready `PlayerScore` types
+- switch the WebSocket client success latch from `room:joined` to `session:status(match_ready)`
+- switch scene event handling from `room:joined` to `session:status`
+- keep pending gameplay queues keyed to gameplay readiness, not just connection state
+- remove ID-based visible-name fallback from gameplay-side UI helpers
+
+## Phase 7: React App Session State Machine Red
 
 Target files:
 
 - `stick-rumble-client/src/App.tsx`
 - `stick-rumble-client/src/App.test.tsx`
-- `stick-rumble-client/src/game/network/WebSocketClient.ts`
-- `stick-rumble-client/src/game/network/WebSocketClient.test.ts`
-- `stick-rumble-client/src/game/network/WebSocketClient.connection.integration.test.ts`
-- `stick-rumble-client/src/game/network/WebSocketClient.integration.helpers.ts`
-- `stick-rumble-client/src/game/scenes/GameScene.ts`
-- `stick-rumble-client/src/game/scenes/GameSceneEventHandlers.ts`
-- any new join/invite UI component tests
+- `stick-rumble-client/src/ui/common/PhaserGame.tsx`
+- `stick-rumble-client/src/ui/common/PhaserGame.test.tsx`
+- `stick-rumble-client/src/App.css`
 
 Add failing tests for:
 
-- app parses `?invite=<raw>` on boot
-- no saved display name shows a join card and blocks join
-- saved display name with invite auto-joins immediately
-- gameplay systems do not start merely because the socket opened
-- hello is sent before gameplay messages on successful join
-- failed hello keeps the join card active on the same socket
-- `error:bad_room_code` preserves name and raw code entry
-- `error:room_full` preserves name and shows equal-weight actions
-- invite auto-join does not start gameplay input before a successful `room:joined`
+- `join_form`, `searching_for_match`, `waiting_for_players`, `recoverable_error`, `match_end`, and `in_match` render as distinct app states
+- Phaser is not mounted during pre-match states
+- public waiting and code waiting render different screen content from the same `session:status` source
+- waiting states expose `Back/Cancel`, and cancel sends `session:leave`
+- invite links prefill code only and do not auto-submit without a saved display name
+- replay reuses the last successful join intent and sends the user to `recoverable_error` if replay fails
+- match end replaces the gameplay surface rather than layering over a live canvas
 
-Exit criteria:
+## Phase 8: React App Session State Machine Green
 
-- client tests clearly express the desired invite and hello sequencing behavior
+Implement the app-shell rewrite.
 
-## Phase 6: Client Hello State And Invite Boot Green
+Required work:
 
-Implement the client invite and hello state machine.
+- move WebSocket/session ownership fully into the React app shell
+- mount `PhaserGame` only after a `MatchSession` exists
+- make waiting and error states full React screens, not Phaser overlays
+- wire `session:leave` into cancel/back actions
+- keep duplicate-tab protection and invite-prefill behavior intact while removing any hidden-canvas dependency
+- center the gameplay stage and align below-stage content to the same width
 
-Expected implementation work:
+Implementation preference:
 
-- parse the invite query param in app boot logic
-- create a minimal join card state for:
-  - invite code present with no saved name
-  - invite code present with saved name
-  - room-full retry
-  - bad-code retry
-- add local storage persistence for the last successful display name
-- teach `WebSocketClient` or a thin wrapper to send hello as the first meaningful message
-- ensure game input managers are not initialized until a successful room join path is established
-- keep raw invite code in UI state until the server returns the authoritative normalized code
-- source the share-link base URL from config with a safe local/dev fallback rather than a hardcoded domain
+- introduce an explicit app-session reducer or state object rather than adding more ad hoc booleans to `App.tsx`
 
-Refactor goals:
-
-- keep transport concerns in the network layer
-- keep invite/join UI state out of Phaser scene internals as much as practical
-
-## Phase 7: Waiting Overlay, Reconnect, And Duplicate Tab Red
+## Phase 9: Gameplay Input And HUD Red
 
 Target files:
 
-- `stick-rumble-client/src/App.tsx`
-- `stick-rumble-client/src/ui/common/`
 - `stick-rumble-client/src/game/scenes/GameScene.ts`
-- `stick-rumble-client/src/game/scenes/GameSceneEventHandlers.ts`
-- network tests and any new UI component tests
-
-Add failing tests for:
-
-- host alone in a code room sees a waiting overlay in the arena
-- waiting overlay uses the authoritative normalized code from `room:joined.code`
-- primary action is `Copy Invite Link`
-- reconnect replays the last successful hello once
-- failed reconnect replay shows a reconnect card with only `Retry <CODE>` and `Play Public`
-- second same-browser invite tab is blocked while the first tab heartbeat is active
-- stale duplicate-tab claims clear after the owner tab is gone
-- waiting overlay copies an invite link built from configured client base URL and authoritative normalized code
-
-Exit criteria:
-
-- tests reject silent reconnect loops, duplicate joins, and missing host feedback
-
-## Phase 8: Waiting Overlay, Reconnect, And Duplicate Tab Green
-
-Implement the user-facing invite lifecycle.
-
-Expected implementation work:
-
-- add a minimal in-arena waiting overlay for solo hosts in code rooms
-- build canonical share link from the authoritative normalized code
-- implement one automatic reconnect replay using the last successful hello
-- on replay failure, show the reconnect card described above
-- implement same-browser duplicate-tab guard using `BroadcastChannel` with a `localStorage` fallback heartbeat
-- hard-block second tabs in the same browser/profile for the same invite + display name combination
-- generate invite links from a configurable client base URL instead of any baked-in production hostname
-
-Important constraints:
-
-- fresh invite loads with a saved name auto-join immediately
-- reconnect behavior may auto-replay once without confirmation
-- duplicate-tab hard block is client-only and same-browser only
-
-## Phase 9: Display Name Propagation Red
-
-Target files:
-
+- `stick-rumble-client/src/game/scenes/GameScene.ui.test.ts`
+- `stick-rumble-client/src/game/scenes/GameScene.events.test.ts`
+- `stick-rumble-client/src/game/scenes/GameSceneUI.ts`
 - `stick-rumble-client/src/game/entities/PlayerManager.ts`
 - `stick-rumble-client/src/game/entities/PlayerManager.test.ts`
+- `stick-rumble-client/src/game/input/InputManager.test.ts`
+
+Add failing tests for:
+
+- secondary click does not fire and the gameplay surface suppresses the browser context menu
+- ammo cluster shows a weapon label next to ammo
+- world-space reload bar is absent
+- HUD `RELOADING...` text is absent
+- empty-magazine warning still appears only when empty and not already reloading
+- local player shows only `YOU` overhead text and no overhead health bar
+- remote players keep separate readable name and health elements with stable ordering
+
+## Phase 10: Gameplay Input And HUD Green
+
+Implement the gameplay/HUD alignment.
+
+Required work:
+
+- gate shooting to primary pointer input only
+- suppress context menu on the gameplay canvas or stage container
+- simplify reload UI to the reload arc plus optional empty-magazine warning
+- add a text-first equipped weapon label to the ammo cluster
+- remove local overhead health bars
+- tighten remote name/health spacing so they cannot visually collide
+
+## Phase 11: Match-End And Player-Facing Name Safety Red
+
+Target files:
+
+- `stick-rumble-client/src/ui/match/MatchEndScreen.tsx`
+- `stick-rumble-client/src/ui/match/MatchEndScreen.test.tsx`
+- `stick-rumble-client/src/App.test.tsx`
+- `stick-rumble-client/src/game/ui/KillFeedUI.test.ts`
 - `stick-rumble-client/src/game/scenes/GameSceneEventHandlers.test.ts`
-- any server tests covering player-state serialization
 
 Add failing tests for:
 
-- local player stores the authoritative `displayName`
-- remote players render their server-authoritative display names
-- fallback `Guest` renders correctly
-- client treats missing `room:joined.displayName` as a fatal version mismatch
-- mixed-version `room:joined` does not silently degrade
+- match-end winner banner renders `displayName`
+- scoreboard renders player display names and still highlights the local player by `playerId`
+- no raw UUID text appears in match-end UI
+- no raw UUID text appears in kill feed fallback paths
+- match-end no longer closes on backdrop click or ESC if presented as a full screen
 
-Exit criteria:
+## Phase 12: Match-End And Player-Facing Name Safety Green
 
-- tests make the breaking wire posture explicit
+Implement the match-end and visible-name cleanup.
 
-## Phase 10: Display Name Propagation Green
+Required work:
 
-Implement display-name flow from server join to gameplay rendering.
+- convert `MatchEndScreen` from modal behavior to a full-screen result state
+- render structured winners and named scoreboard rows
+- keep identity logic keyed by `playerId` internally
+- replace any remaining UUID-visible fallbacks with safe placeholders such as `Guest`
 
-Expected implementation work:
+## Phase 13: Integrated Verification
 
-- extend client-side player state types with `displayName`
-- thread authoritative display names through `room:joined` and player state updates
-- replace placeholder labels in rendering with authoritative values
-- add blocking version-mismatch handling when required Friends-MVP fields are missing
+Run, at minimum:
 
-## Phase 11: Socket Liveness And Stale Room Reaping Red
+- `make test-client`
+- `make test-server`
+- `make lint`
+- `make typecheck`
+- `make test`
 
-Target files:
+If a full integrated run fails for environmental reasons, record the exact blocker and run the smallest passing subset that still validates the changed surfaces.
 
-- `stick-rumble-server/internal/network/websocket_handler.go`
+## End-Of-Work Subagent Plan
+
+Run these only after the implementation branch is locally green enough for review. All four subagents should use:
+
+- model: `gpt-5.4`
+- reasoning effort: `high`
+
+### Subagent 1: Client Test Quality Verification
+
+Role:
+
+- `test-quality-verifier`
+
+Focus:
+
+- `stick-rumble-client/src/App.test.tsx`
+- `stick-rumble-client/src/ui/common/PhaserGame.test.tsx`
+- `stick-rumble-client/src/ui/match/MatchEndScreen.test.tsx`
+- any new app-session tests added for the session-first rewrite
+
+Prompt shape:
+
+- review the recent client app-shell and match-end tests for vague assertions, missing state-transition coverage, and false-positive-prone mocks; report only meaningful issues
+
+### Subagent 2: Gameplay/UI Assertion Audit
+
+Role:
+
+- `test-quality-verifier`
+
+Focus:
+
+- `stick-rumble-client/src/game/scenes/GameScene.ui.test.ts`
+- `stick-rumble-client/src/game/scenes/GameScene.events.test.ts`
+- `stick-rumble-client/src/game/scenes/GameSceneEventHandlers.test.ts`
+- `stick-rumble-client/src/game/entities/PlayerManager.test.ts`
+- any new tests for primary-click-only firing and overhead readability
+
+Prompt shape:
+
+- review gameplay/UI tests for assertion vagueness, weak visual-contract checks, and missing edge cases around `match_ready`, right-click suppression, reload UI removal, and overhead layout rules
+
+### Subagent 3: Server And Schema Verification
+
+Role:
+
+- `test-quality-verifier`
+
+Focus:
+
+- `events-schema/src/schemas/*.test.ts`
+- `events-schema/src/validate-schemas.test.ts`
 - `stick-rumble-server/internal/network/websocket_handler_test.go`
-- `stick-rumble-server/internal/game/room.go`
-- room lifecycle tests
+- `stick-rumble-server/internal/network/integration_test.go`
+- `stick-rumble-server/internal/game/room_lifecycle_test.go`
 
-Add failing tests for:
+Prompt shape:
 
-- pong activity extends connection liveness
-- dead sockets time out and run disconnect cleanup
-- timed-out disconnects remove players from rooms
-- empty, unstarted code rooms become eligible for TTL cleanup
-- started rooms are never reaped by the TTL sweeper
-- live 1-player connected code rooms are never reaped by TTL
+- review the session bootstrap and leave-flow tests for brittle assumptions, missing negative coverage, and schema/assertion gaps; report only substantive findings
 
-Exit criteria:
+### Subagent 4: Pre-Mortem Analysis
 
-- tests capture the intended division of responsibility:
-  - liveness handles dead sockets
-  - TTL only cleans empty, unstarted leftovers
+Role:
 
-## Phase 12: Socket Liveness And Stale Room Reaping Green
+- `default`
 
-Implement the cleanup hardening.
+Focus:
 
-Expected implementation work:
+- final diff against `baad148` requirements
+- architecture risks across server session state, app-shell ownership, Phaser mount timing, and reconnect behavior
 
-- add read-deadline based liveness enforcement
-- extend pong handling to refresh read deadlines
-- keep periodic ping behavior
-- add room timestamps needed for fallback stale-room cleanup
-- add a background sweep that reaps only:
-  - `RoomKindCode`
-  - unstarted match
-  - empty room
-  - idle past configured TTL
+Prompt shape:
 
-Initial recommended values:
+- perform a pre-mortem on the implementation against commit `baad148`; identify the most likely regressions, hidden coupling points, and production failure modes that could still survive a green test run
 
-- ping interval: keep current periodic behavior unless tests force change
-- stale-room sweep interval: 1 minute
-- stale-room TTL: 15 minutes
+## Exit Criteria
 
-## Phase 13: Config And Env Cleanup
+The work is complete when:
 
-Target files:
-
-- `stick-rumble-client/.env.example`
-- `stick-rumble-server/.env.example`
-- client config helper module
-- server config helper module
-- `Makefile`
-- docs or README sections that describe local setup
-
-Required outcomes:
-
-- no real `.env` files committed
-- client environment access is centralized around:
-  - `VITE_WS_URL`
-  - invite/share client base URL
-- server environment access is centralized around:
-  - `PORT`
-  - `ENABLE_SCHEMA_VALIDATION`
-  - future-facing `GO_ENV`
-  - future-facing `ALLOWED_ORIGINS`
-- Friends-MVP code does not hardcode deployment hostnames
-- invite-link generation uses a configurable base URL with a safe local fallback
-
-## Phase 14: Invite Join Integration And Smoke Coverage
-
-Because this feature is networking-heavy, unit coverage is not sufficient. Add explicit integration and smoke coverage for common invite flows.
-
-Target files:
-
-- `stick-rumble-client/src/game/network/WebSocketClient.connection.integration.test.ts`
-- `stick-rumble-client/src/game/network/WebSocketClient.integration.helpers.ts`
-- new or updated invite-focused integration tests
-- any server-side websocket integration tests needed for hello gating and reconnect behavior
-
-Add failing integration or smoke tests for:
-
-- host creates a code room and receives `room:joined` with authoritative normalized `code`
-- second client joins the same invite code and lands in the same room
-- second client using a case/whitespace/punctuation variant of the code still joins the same room
-- bad invite code returns `error:bad_room_code` and the same connection remains usable for a corrected hello
-- full code room returns `error:room_full` and the same connection remains usable for `mode: "public"` or a different code
-- reconnect replays the last successful hello once and can rejoin if the room is still eligible
-- gameplay input sent before hello is rejected with `error:no_hello`
-- a fresh socket created by reconnect still requires a new hello
-
-Smoke-test expectations:
-
-- these tests should exercise real websocket connect/read/write paths, not only mocked handlers
-- at least one smoke path should cover the common happy path:
-  - client A joins by code
-  - client B joins by invite code
-  - both receive compatible room assignment
-  - match starts when B joins
-
-Exit criteria:
-
-- the common invite join paths are covered by real integration traffic, not only unit tests
-
-Why this phase exists:
-
-- it prevents deployment assumptions from leaking into game logic
-- it keeps the upcoming deployment plan additive instead of corrective
-
-## Verification Sequence
-
-Use narrow targets during red/green loops, then finish with repo-level checks.
-
-Recommended final sequence:
-
-1. `make schema-generate`
-2. `make test-server`
-3. `make test-client`
-4. `make test-integration`
-5. `make lint`
-6. `make typecheck`
-7. `make test`
-
-Skipped verification is unacceptable for this work. The feature is not done unless every required gate above runs and passes.
-
-## Subagent Test-Quality Pass
-
-Run after the full suite is green.
-
-Requirements:
-
-- use `gpt-5.4`
-- run three separate subagent reviews
-- focus only on recently changed tests
-
-Suggested split:
-
-1. schema + server hello/room tests
-2. client invite/join/reconnect/duplicate-tab tests
-3. display-name + cleanup/liveness tests
-
-Review prompt shape:
-
-`Review the recent test changes in /Users/mtomcal/Code/alpha/stick-rumble for vague assertions, false positives, weak coverage, or meaningful missing cases. Focus only on these files: <file list>. Be specific: identify bad assertions or meaningful missing coverage only.`
-
-Gate:
-
-- address high-signal findings before final sign-off
-
-## Subagent Pre-Mortem Pass
-
-Run after the code is green and after the test-quality passes are addressed.
-
-Requirements:
-
-- use one `gpt-5.4` subagent
-
-Focus areas:
-
-- invite query param boot flow failing on edge cases
-- client/server hello sequencing races
-- same-socket retry handling for failed hellos
-- reconnect replay causing silent loops or stale-state bugs
-- duplicate-tab hard block leaving stale locks
-- code-room cleanup failing after dirty disconnects
-- TTL sweep accidentally deleting reachable rooms
-- mixed-version detection missing a partial failure path
-- config seams that will conflict with the deployment phase later
-
-Expected output:
-
-- concise risk list ordered by severity
-- concrete likely failure mode for each risk
-- one mitigation or additional test for every serious risk
-
-## Definition Of Done
-
-The work is done when all of the following are true:
-
-- `player:hello`, the new room errors, and the new `room:joined` shape are implemented end to end
-- server no longer auto-assigns rooms on raw socket connect
-- public and code-room join flows behave per spec
-- invite query param flow works from fresh open through successful join
-- no-saved-name invite opens block on name entry
-- saved-name invite opens auto-join
-- failed hello flows recover on the same socket
-- reconnect auto-replays once and then falls back to the reconnect card
-- duplicate same-browser invite tabs are hard-blocked
-- host waiting overlay is present for solo code-room hosts
-- authoritative display names render correctly
-- dead sockets are cleaned up deterministically
-- empty, unstarted code rooms are eligible for TTL cleanup and no broader rooms are reaped
-- invite happy paths and recovery paths are covered by real websocket integration or smoke tests
-- config and env access are centralized and deployment-friendly
-- all required verification gates run and pass; skipped tests are unacceptable
-- three `gpt-5.4` subagent unit-test reviews have been completed and acted on
-- one `gpt-5.4` subagent pre-mortem review has been completed and acted on
+- the code path from hello to gameplay is driven by `session:status`
+- the app shell owns pre-match and post-match screens with Phaser mounted only for actual gameplay
+- match-end and other player-facing UI render display names rather than IDs
+- the gameplay input and HUD behavior match the updated specs
+- repo quality gates pass
+- the three test-quality subagent passes and one pre-mortem pass have been reviewed and any real findings are addressed or explicitly accepted
