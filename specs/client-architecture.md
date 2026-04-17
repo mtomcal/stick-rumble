@@ -1,7 +1,7 @@
 # Client Architecture
 
-> **Spec Version**: 1.2.0
-> **Last Updated**: 2026-04-07
+> **Spec Version**: 1.4.0
+> **Last Updated**: 2026-04-17
 > **Depends On**: [constants.md](constants.md), [messages.md](messages.md), [networking.md](networking.md), [player.md](player.md), [movement.md](movement.md), [weapons.md](weapons.md), [maps.md](maps.md)
 > **Depended By**: [graphics.md](graphics.md), [ui.md](ui.md), [audio.md](audio.md)
 
@@ -68,6 +68,47 @@ See [constants.md](constants.md) for all values. Key constants for client archit
 | SERVER_TICK_RATE | 60 | Server physics updates per second |
 | CLIENT_UPDATE_RATE | 20 | player:move broadcast frequency (Hz) |
 | CLIENT_UPDATE_INTERVAL | 50 | Milliseconds between player:move messages |
+
+---
+
+## App Session State Machine
+
+**2026-04-17 Amendment:** The client is now modeled as a session-first React application that mounts Phaser only after the app shell has an authoritative `match_ready` session snapshot. This section supersedes older assumptions that Phaser owns the join handshake or that join/wait/reconnect UI is merely an overlay on top of a long-lived hidden game instance.
+
+**TypeScript:**
+```typescript
+type AppSessionState =
+  | 'join_form'
+  | 'joining'
+  | 'searching_for_match'
+  | 'waiting_for_players'
+  | 'match_loading'
+  | 'in_match'
+  | 'match_end'
+  | 'recoverable_error';
+
+interface MatchSession {
+  playerId: string;
+  displayName: string;
+  joinMode: 'public' | 'code';
+  roomId: string;
+  mapId: string;
+  code?: string;
+}
+```
+
+**State Ownership Rules:**
+- React owns the pre-match session lifecycle, including `player:hello`, `session:status`, `session:leave`, replay, and recoverable join failures.
+- Phaser is mounted only after the app shell receives `session:status { state: "match_ready" }` and constructs a `MatchSession`.
+- The `searching_for_match` and `waiting_for_players` screens are app states, not hidden Phaser phases.
+- `match_end` is a full React screen state, not a modal layered over the active canvas.
+- The architecture MUST remain compatible with future React-owned mobile touch controls, but those controls are out of scope for this effort.
+
+**Rendering Rules:**
+- `join_form`, `joining`, `searching_for_match`, `waiting_for_players`, and `recoverable_error` render with no Phaser canvas mounted.
+- `match_loading` is the handoff phase where React prepares the centered stage and mounts Phaser with the completed `MatchSession`.
+- `in_match` renders the centered stage container and any app-shell-owned below-stage content.
+- `match_end` replaces the gameplay surface with a full-screen React results experience.
 
 ---
 
@@ -228,7 +269,7 @@ interface MatchMapContext {
 ```
 
 **Why:**
-- `room:joined` tells the client which shared map to load
+- `session:status { state: "match_ready" }` tells the client which shared map to load
 - scene bounds, background extents, minimap scaling, and crate placement must come from the selected map
 - the client must fail fast locally if the referenced map is not present in the shared registry
 
@@ -1327,8 +1368,10 @@ function setupEventHandlers():
     // Clear old handlers first (scene restart safety)
     cleanupHandlers()
 
-    // Room events
-    registerHandler('room:joined', (data) => {
+    // Session bootstrap events
+    registerHandler('session:status', (data) => {
+        if data.state !== 'match_ready':
+            return
         localPlayerId = data.playerId
         processPendingMessages()
     })
@@ -1366,7 +1409,10 @@ function cleanupHandlers():
 setupEventHandlers(): void {
   this.cleanupHandlers();
 
-  this.registerHandler('room:joined', (data: RoomJoinedData) => {
+  this.registerHandler('session:status', (data: SessionStatusData) => {
+    if (data.state !== 'match_ready') {
+      return;
+    }
     this.scene.localPlayerId = data.playerId;
     this.processPendingMessages();
   });
@@ -1385,7 +1431,7 @@ setupEventHandlers(): void {
 
 **Why:**
 - Handler cleanup prevents accumulation across scene restarts
-- Pending queues handle race condition where messages arrive before room:joined
+- Pending queues handle the race condition where gameplay messages arrive before `session:status { state: "match_ready" }`
 - All handlers in one file for easy maintenance
 - TypeScript types ensure correct data access
 
@@ -1448,11 +1494,11 @@ See [networking.md](networking.md#network-simulator) for server-side counterpart
 **Purpose:** Mount Phaser game instance, enable React ↔ Phaser communication.
 
 **Lifecycle contract (Friends-MVP join flow):**
-- React-owned overlay state such as join errors, waiting-for-friend, reconnect prompts, and match-end UI MUST NOT destroy and recreate the Phaser game instance or its active WebSocket connection.
-- The Phaser instance is long-lived for the lifetime of the mounted `PhaserGame` component. React may refresh bridge callbacks, but callback refreshes must not be coupled to `new Phaser.Game(...)`.
-- Join submission is a bridge operation. Until Phaser installs `window.submitJoinIntent`, React treats the join controls as "connecting" rather than silently dropping input.
-- After React hands off a join intent, the overlay enters a pending "joining" state and remains there until `room:joined`, `error:*`, or a connection failure resolves the attempt.
-- Invite-link auto-submit is allowed only when a complete cached display name already exists before the user interacts. Typing into an initially empty display-name field MUST NOT trigger an automatic join on the first character; in that case the user confirms manually with `Join Code`.
+- React owns the WebSocket session lifecycle and the app-session state machine. Phaser no longer installs the primary join bridge.
+- `PhaserGame` mounts only after the app shell has already resolved a `MatchSession` from `session:status { state: "match_ready" }`.
+- Join errors, queue states, named-room waiting, replay failures, and post-match results are React screen states and MUST NOT depend on a hidden Phaser instance.
+- Replay of the last successful join intent is initiated by the app shell. If replay fails, the client transitions to `recoverable_error` instead of silently dropping back to the join form.
+- Invite links prefill the room code only. They do not auto-submit; the user confirms explicitly from the join form.
 
 **Pseudocode:**
 ```
@@ -1700,7 +1746,7 @@ Depth 0:     Background, arena floor, grid
 
 ### Pending Message Overflow
 
-**Trigger:** Too many messages before room:joined
+**Trigger:** Too many gameplay messages before `session:status { state: "match_ready" }`
 **Detection:** pendingQueue.length > 10
 **Response:** Drop oldest messages (FIFO)
 **Client Notification:** None
@@ -1917,7 +1963,7 @@ it('should cleanup all resources', () => {
 
 **Expected Output:**
 - WebSocket connected
-- room:joined handler registered
+- session:status handler registered
 
 **TypeScript (Vitest):**
 ```typescript
@@ -2025,6 +2071,7 @@ it('should follow local player with camera', () => {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.4.0 | 2026-04-17 | Session-first app shell: React now owns the WebSocket/session lifecycle, explicit app-session states (`join_form`, `searching_for_match`, `waiting_for_players`, `match_loading`, `in_match`, `match_end`, `recoverable_error`) were introduced, and Phaser bootstrap is deferred until an authoritative `match_ready` session snapshot exists. |
 | 1.3.2 | 2026-04-13 | Friends-MVP invite polish: invite auto-submit now only fires when a cached display name already exists before user interaction; typing into an empty display-name field no longer submits on the first character. |
 | 1.3.1 | 2026-04-13 | Friends-MVP join-flow bridge hardening: specified that React overlay state must not remount Phaser or disconnect the active WebSocket, and that join controls expose explicit bridge-ready / joining states instead of silently dropping input before `window.submitJoinIntent` is installed. |
 | 1.3.0 | 2026-02-23 | Updated MinimapUI: circular → square minimap shape. |

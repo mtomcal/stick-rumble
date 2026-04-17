@@ -1,7 +1,7 @@
 # Graphics
 
-> **Spec Version**: 2.3.1
-> **Last Updated**: 2026-04-09
+> **Spec Version**: 2.4.0
+> **Last Updated**: 2026-04-17
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [arena.md](arena.md)
 > **Depended By**: [client-architecture.md](client-architecture.md), [test-index.md](test-index.md)
 
@@ -1100,6 +1100,24 @@ Enemy players display their name above their head.
 - Position: `(player.x, player.y - headRadius - 5px)`, centered on X
 - Depth: Above player sprite
 
+### Overhead Identification And Health Stack
+
+**2026-04-17 Amendment:** The overhead contract is now:
+- local player: minimal `YOU` marker only
+- local player: no overhead health bar
+- remote players: fixed overhead stack with `displayName` above and health bar below
+- remote overhead elements must have stable ordering, visible separation, and a strict no-overlap guarantee
+
+**Why this amendment?**
+- The HUD already provides authoritative local health, so the local overhead health bar is redundant clutter
+- Remote players still need both identification and health readability
+- The earlier cramped/overlapping layout was a product bug, not just a spacing typo
+
+**Behavioral Rules:**
+- Remote overhead layout is defined behaviorally, not by brittle exact pixel offsets
+- The stack must remain readable during movement, rolling, death, and respawn
+- Implementations may tune offsets, but may not allow the name label and health bar to collide or appear cramped
+
 ### Damage Screen Flash
 
 When the local player takes damage, a full-viewport red overlay flashes to provide visceral feedback.
@@ -1589,6 +1607,7 @@ test "player renders all body parts":
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.4.0 | 2026-04-17 | Overhead readability cleanup: local player now keeps only a minimal `YOU` marker with no overhead health bar, while remote players use a fixed `displayName`-over-`health bar` stack with explicit no-overlap and anti-clutter requirements. |
 | 2.3.2 | 2026-04-10 | Renamed enemy weapon visibility to held weapon visibility. Clarified that local and remote held weapons share the same readability contract, and explicitly required the bat to remain visibly brown and recognizable in-hand. |
 | 2.3.1 | 2026-04-09 | Clarified pickup rendering contract: normal gameplay pickups must be weapon-specific floor silhouettes with a secondary zone affordance; generic marker-only presentation is explicitly out of spec. Updated TS-GFX-008 and TS-GFX-009 wording accordingly. |
 | 2.3.0 | 2026-03-02 | Crosshair changed from `⊕` (circle+cross) to simple `+` (cross only, no circle). Hands/arms now grip weapon and follow aim rotation. Hit trail must originate from actual gun barrel tip. Added bugs: remove green aim indicator line, remove orange dot artifact, fix hit trail barrel attachment. |
