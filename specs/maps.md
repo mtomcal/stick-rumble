@@ -1,7 +1,7 @@
 # Maps
 
-> **Spec Version**: 1.1.2
-> **Last Updated**: 2026-04-10
+> **Spec Version**: 1.2.0
+> **Last Updated**: 2026-04-17
 > **Depends On**: [constants.md](constants.md)
 > **Depended By**: [arena.md](arena.md), [rooms.md](rooms.md), [messages.md](messages.md), [weapons.md](weapons.md), [client-architecture.md](client-architecture.md), [server-architecture.md](server-architecture.md)
 
@@ -61,6 +61,8 @@ Maps are stored in shared top-level directories:
 6. The client and server both load maps from the local shared registry by `mapId`.
 7. Blocking geometry must read as blocking geometry on screen; traversable space must read as traversable space on screen.
 8. If a player can perceive a false opening, invisible blocker, or misleading wall edge, the map is invalid even if the raw rectangles are internally consistent.
+9. Any shipped obstacle that visually reads as a solid barrier must block movement, projectiles, and line of sight together by default.
+10. If visual barrier art and authoritative barrier geometry disagree, the map/content is invalid and must be fixed at the authored source rather than compensated for by downstream gameplay systems.
 
 ---
 
@@ -182,7 +184,9 @@ Readability outcomes are enforced in two layers:
 Static schema checks alone cannot prove rendered readability for false openings or hidden blockers.
 
 - any feature that blocks movement, projectiles, or line of sight must be visually aligned with its authoritative geometry closely enough that players never perceive a false gap or hidden blocker
+- any solid-looking wall, desk, pillar, or similar hard barrier in a shipped map must present unified blocking semantics by default rather than quietly differing per system
 - rendered wall and desk edges must not suggest passability where collision forbids passage
+- rendered solid silhouettes must be anchored directly to the authoritative obstacle geometry closely enough that the visible blocking edge is the real blocking edge
 - any opening that is intended to be traversable must read as open at gameplay camera scale
 - authored visual composition must support clean wall sliding and corridor readability during combat movement
 - arena boundary pieces must meet as sealed corners; a visible seam at a border junction is invalid even if the raw blockers technically touch elsewhere
@@ -247,7 +251,13 @@ Weapon crate locations belong to the map file, not to separate hardcoded gamepla
 
 ### Obstacle Semantics
 
-Obstacle `type` is semantic metadata. In v1, all recreated office-map obstacles block movement, projectiles, and LOS, but the schema keeps those behaviors explicit so future maps can vary them without changing the format.
+Obstacle `type` is semantic metadata, but shipped obstacle semantics are still constrained by player readability.
+
+- walls, desks, pillars, and similar hard barriers must block movement, projectiles, and LOS together by default
+- future exceptions are allowed only when the visual language clearly reads as intentionally non-solid or selectively passable, and the exception is called out explicitly in spec and acceptance coverage
+- content authors must not rely on movement code, combat code, or client-side visual tricks to "correct" a misleading obstacle at runtime
+
+In v1, all recreated office-map obstacles block movement, projectiles, and LOS.
 
 ### Collision And Visual Alignment
 
@@ -256,6 +266,7 @@ Authoritative collision geometry and rendered obstacle art are related but disti
 - gameplay correctness is determined by authoritative geometry
 - player readability is determined by what the camera shows
 - the shipped map is only valid when those two layers agree in practice
+- if a player can see a closed-looking barrier that gameplay passes through, or an open-looking lane that gameplay rejects, the map is invalid and must be fixed at the source content
 
 **Required outcome:** a player must never see a usable-looking lane that is collision-blocked, and must never be surprised by collision where no blocker visually reads.
 
@@ -391,6 +402,7 @@ Then each border corner is represented by boundary pieces that meet cleanly with
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.2.0 | 2026-04-17 | Elevated solid-barrier fidelity into a default authoring rule for shipped maps: visually solid obstacles must block movement, projectiles, and LOS together by default, rendered solid silhouettes must stay anchored to authoritative geometry, and barrier drift is explicitly a source-content failure rather than something downstream systems may paper over. |
 | 1.1.2 | 2026-04-10 | Added an explicit sealed-corner readability rule for arena borders, required a canonical border-corner viewpoint in the office map, and added TS-MAP-010 so boundary seams are caught from authoritative map data instead of surfacing only in visual QA. |
 | 1.1.1 | 2026-04-09 | Added explicit `visualAcceptanceViewpoints` data contract and clarified that static schema validation cannot replace viewpoint-driven visual readability acceptance. |
 | 1.1.0 | 2026-04-09 | Added player-facing readability rules: blocking geometry must visually align with collision, traversable openings require safety margin beyond hitbox width, interactable spaces must be clearly reachable, office recreation now defaults to exact prototype fidelity where known, and canonical visual acceptance viewpoints were added for false-gap, invisible-collision, HUD-overlap, and pickup-readability failures. |
