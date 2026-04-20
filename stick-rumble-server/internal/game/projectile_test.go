@@ -6,6 +6,50 @@ import (
 	"time"
 )
 
+func TestProjectileManager_Update_StopsAtFirstWallContact(t *testing.T) {
+	mapConfig := openTestMapConfig()
+	mapConfig.Obstacles = []MapObstacle{
+		{ID: "wall", X: 150, Y: 80, Width: 20, Height: 40, BlocksProjectiles: true},
+	}
+
+	pm := NewProjectileManager(mapConfig)
+	proj := pm.CreateProjectile("player-1", "Pistol", Vector2{X: 100, Y: 100}, 0, 200)
+
+	pm.Update(0.5)
+
+	if pm.GetProjectileByID(proj.ID) == nil {
+		t.Fatal("expected projectile to be preserved until hit detection pass")
+	}
+	if len(pm.GetActiveProjectiles()) != 0 {
+		t.Fatal("expected wall-contact projectile to disappear from active snapshots immediately")
+	}
+	if proj.Position.X != 150 || proj.Position.Y != 100 {
+		t.Fatalf("projectile final position = %+v, want first wall contact at {X:150 Y:100}", proj.Position)
+	}
+}
+
+func TestProjectileManager_Update_FastProjectileCannotTunnelThroughThinWall(t *testing.T) {
+	mapConfig := openTestMapConfig()
+	mapConfig.Obstacles = []MapObstacle{
+		{ID: "thin-wall", X: 180, Y: 90, Width: 2, Height: 20, BlocksProjectiles: true},
+	}
+
+	pm := NewProjectileManager(mapConfig)
+	proj := pm.CreateProjectile("player-1", "Pistol", Vector2{X: 100, Y: 100}, 0, 1000)
+
+	pm.Update(0.2)
+
+	if pm.GetProjectileByID(proj.ID) == nil {
+		t.Fatal("expected projectile to be preserved until hit detection pass")
+	}
+	if len(pm.GetActiveProjectiles()) != 0 {
+		t.Fatal("expected thin-wall projectile to disappear from active snapshots immediately")
+	}
+	if proj.Position.X != 180 || proj.Position.Y != 100 {
+		t.Fatalf("projectile final position = %+v, want thin wall contact at {X:180 Y:100}", proj.Position)
+	}
+}
+
 func TestNewProjectile(t *testing.T) {
 	ownerID := "player-123"
 	startPos := Vector2{X: 100, Y: 200}

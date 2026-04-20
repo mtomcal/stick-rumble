@@ -1,7 +1,7 @@
 # Test Index
 
-> **Spec Version**: 1.3.0
-> **Last Updated**: 2026-04-07
+> **Spec Version**: 1.4.0
+> **Last Updated**: 2026-04-17
 > **Depends On**: All specs (cross-reference document)
 > **Depended By**: None (reference document)
 
@@ -29,11 +29,11 @@ When implementing from scratch, AI agents need to:
 
 | Metric | Value |
 |--------|-------|
-| **Total Test Scenarios** | 250 |
+| **Total Test Scenarios** | 259 |
 | **Specs with Tests** | 20 (+Epic 4 cross-spec) |
-| **Average Tests per Spec** | 12.5 |
-| **Critical Priority Tests** | 75 |
-| **High Priority Tests** | 113 |
+| **Average Tests per Spec** | 13.0 |
+| **Critical Priority Tests** | 82 |
+| **High Priority Tests** | 115 |
 | **Medium Priority Tests** | 62 |
 | **Low Priority Tests** | 0 |
 
@@ -42,7 +42,7 @@ When implementing from scratch, AI agents need to:
 | Category | Count | Percentage |
 |----------|-------|------------|
 | Unit | 159 | 64% |
-| Integration | 59 | 24% |
+| Integration | 68 | 26% |
 | Visual | 32 | 13% |
 
 ### By Spec (Sorted by Count)
@@ -51,14 +51,14 @@ When implementing from scratch, AI agents need to:
 |------|-------|----------|------|--------|-----|
 | graphics.md | 24 | 1 | 13 | 10 | 0 |
 | ui.md | 19 | 3 | 10 | 6 | 0 |
-| melee.md | 15 | 3 | 7 | 5 | 0 |
+| melee.md | 18 | 5 | 8 | 5 | 0 |
 | dodge-roll.md | 14 | 5 | 7 | 2 | 0 |
-| hit-detection.md | 14 | 6 | 7 | 1 | 0 |
+| hit-detection.md | 17 | 8 | 8 | 1 | 0 |
 | player.md | 14 | 3 | 8 | 3 | 0 |
 | match.md | 13 | 3 | 5 | 5 | 0 |
 | maps.md | 6 | 4 | 2 | 0 | 0 |
-| arena.md | 13 | 4 | 2 | 7 | 0 |
-| shooting.md | 13 | 5 | 6 | 2 | 0 |
+| arena.md | 14 | 5 | 2 | 7 | 0 |
+| shooting.md | 15 | 7 | 6 | 2 | 0 |
 | audio.md | 10 | 3 | 3 | 4 | 0 |
 | client-architecture.md | 10 | 3 | 5 | 2 | 0 |
 | messages.md | 10 | 3 | 4 | 3 | 0 |
@@ -83,6 +83,7 @@ When implementing from scratch, AI agents need to:
 | TS-ARENA-003 | Unit | Critical | Player collides with movement-blocking obstacle |
 | TS-ARENA-004 | Integration | Critical | Projectile is destroyed by projectile-blocking obstacle |
 | TS-ARENA-005 | Integration | High | Dodge roll ends on obstacle collision |
+| TS-ARENA-006 | Integration | Critical | First blocking contact wins for shared barrier resolution |
 
 ### Audio Tests (audio.md)
 
@@ -190,6 +191,9 @@ When implementing from scratch, AI agents need to:
 | TS-HIT-012 | Unit | High | Dodge roll i-frames block damage |
 | TS-HIT-013 | Unit | High | No i-frames after 200ms of roll |
 | TS-HIT-014 | Unit | Medium | Projectile destroyed at arena boundary |
+| TS-HIT-015 | Integration | Critical | Hitscan cannot register through blocking geometry |
+| TS-HIT-016 | Integration | High | Partially exposed target remains hittable on exposed portion only |
+| TS-HIT-017 | Integration | Critical | Projectile path blocked by wall before target does not damage target |
 
 ### Match Tests (match.md)
 
@@ -239,6 +243,9 @@ When implementing from scratch, AI agents need to:
 | TS-MELEE-013 | Visual | Medium | Swing animation renders 90° arc |
 | TS-MELEE-014 | Unit | Medium | Non-melee weapon returns empty result |
 | TS-MELEE-015 | Visual | High | Weapon container rotation tween on swing |
+| TS-MELEE-016 | Integration | Critical | Melee cannot damage through blocking geometry |
+| TS-MELEE-017 | Integration | Critical | Bat knockback stops at first wall contact |
+| TS-MELEE-018 | Integration | High | Blocked swing still consumes cooldown |
 
 ### Messages Tests (messages.md)
 
@@ -383,6 +390,8 @@ When implementing from scratch, AI agents need to:
 | TS-SHOOT-011 | Unit | Medium | Vertical recoil accumulates |
 | TS-SHOOT-012 | Unit | Critical | Dead player cannot shoot |
 | TS-SHOOT-013 | Unit | High | Aim sway affects projectile trajectory |
+| TS-SHOOT-014 | Integration | Critical | Blocked near-wall shot still consumes ammo and cooldown |
+| TS-SHOOT-015 | Integration | Critical | Projectile visual terminates at first wall contact |
 
 ### UI Tests (ui.md)
 
@@ -436,7 +445,7 @@ When implementing from scratch, execute tests in this order to verify core funct
 1. **Constants** (TS-CONST-001 to TS-CONST-005)
    - Verify all game constants before using them
 
-2. **Arena** (TS-ARENA-001 to TS-ARENA-013)
+2. **Arena** (TS-ARENA-001 to TS-ARENA-014)
    - Boundaries must work before movement
 
 3. **Overview** (TS-OV-001 to TS-OV-005)
@@ -472,13 +481,13 @@ When implementing from scratch, execute tests in this order to verify core funct
 1. **Weapons** (TS-WEAP-001 to TS-WEAP-010)
    - Weapon stats and behavior
 
-2. **Shooting** (TS-SHOOT-001 to TS-SHOOT-013)
+2. **Shooting** (TS-SHOOT-001 to TS-SHOOT-015)
    - Ranged combat
 
-3. **Hit Detection** (TS-HIT-001 to TS-HIT-014)
+3. **Hit Detection** (TS-HIT-001 to TS-HIT-017)
    - Collision and damage
 
-4. **Melee** (TS-MELEE-001 to TS-MELEE-015)
+4. **Melee** (TS-MELEE-001 to TS-MELEE-018)
    - Melee combat
 
 ### Phase 5: Advanced Mechanics (27 tests)
@@ -534,7 +543,7 @@ Tests that verify individual component behavior without external dependencies.
 - Damage formulas (TS-PLAYER-001, TS-WEAP-010)
 - State machines (TS-ROLL-001 to 004, TS-MATCH-002)
 
-### Integration Tests (57 tests)
+### Integration Tests (68 tests)
 
 Tests that verify multiple systems working together.
 
@@ -598,7 +607,7 @@ Tests that verify rendering output using Playwright screenshots.
 
 ## Tests by Priority
 
-### Critical (71 tests)
+### Critical (82 tests)
 
 **Must pass for the game to be playable.**
 
@@ -610,7 +619,7 @@ These tests verify:
 
 **If any critical test fails:** Game is broken and unplayable.
 
-### High (111 tests)
+### High (115 tests)
 
 **Must pass for the game to be fun.**
 
@@ -647,7 +656,7 @@ Use this checklist to track test implementation progress:
 
 ### Foundation
 - [ ] TS-CONST-001 through TS-CONST-005 (5 tests)
-- [ ] TS-ARENA-001 through TS-ARENA-013 (13 tests)
+- [ ] TS-ARENA-001 through TS-ARENA-014 (14 tests)
 - [ ] TS-OV-001 through TS-OV-005 (5 tests)
 
 ### Core Entities
@@ -661,9 +670,9 @@ Use this checklist to track test implementation progress:
 
 ### Combat
 - [ ] TS-WEAP-001 through TS-WEAP-010 (10 tests)
-- [ ] TS-SHOOT-001 through TS-SHOOT-013 (13 tests)
-- [ ] TS-HIT-001 through TS-HIT-014 (14 tests)
-- [ ] TS-MELEE-001 through TS-MELEE-015 (15 tests)
+- [ ] TS-SHOOT-001 through TS-SHOOT-015 (15 tests)
+- [ ] TS-HIT-001 through TS-HIT-017 (17 tests)
+- [ ] TS-MELEE-001 through TS-MELEE-018 (18 tests)
 
 ### Advanced Mechanics
 - [ ] TS-ROLL-001 through TS-ROLL-014 (14 tests)
@@ -689,3 +698,4 @@ Use this checklist to track test implementation progress:
 | 1.1.1 | 2026-02-16 | Fixed test priorities/categories for shooting.md, rooms.md, server-architecture.md, match.md, and messages.md to match source spec definitions. Corrected systematically inflated Critical counts. Removed phantom Low priority count (0 Low tests exist). Flagged 15 netcode test IDs as index-only (no source spec entries). |
 | 1.1.2 | 2026-02-16 | Fixed priority counts and categories for all 19 specs in By Spec table to match source spec definitions. Fixed detailed catalog entries for arena, audio, client-architecture (added 009/010), constants, dodge-roll, graphics, hit-detection, melee, messages, movement, networking, overview, player, ui, and weapons. Updated implementation checklist client-architecture count from 8 to 10. |
 | 1.2.0 | 2026-02-16 | Added 20 pre-BMM visual port test scenarios. Graphics: 10 new tests (TS-GFX-015 to 024) for blood/healing particles, wall sparks, gun recoil, aim sway, reload pulse, hit indicators, crosshair, corpse fade. UI: 7 new tests (TS-UI-013 to 019) for camera flash/shake, hit markers, damage numbers, minimap. Melee: TS-MELEE-015 (weapon rotation tween). Shooting: TS-SHOOT-013 (aim sway trajectory). Arena: TS-ARENA-013 (floor grid). Updated TS-GFX-011 description (corpse with splayed limbs) and TS-GFX-013 (white stroke-only arc). Total tests: 224 → 244. Visual tests: 13 → 32. High priority: 102 → 111. Medium priority: 51 → 62. |
+| 1.4.0 | 2026-04-17 | Indexed the new wall-barrier acceptance scenarios: TS-ARENA-006, TS-HIT-015/016/017, TS-MELEE-016/017/018, and TS-SHOOT-014/015. Updated summary counts, combat phase ranges, and implementation checklist totals to match the tightened first-contact barrier contract. |

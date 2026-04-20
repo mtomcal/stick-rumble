@@ -21,6 +21,7 @@ import { GameSceneEventHandlers } from './GameSceneEventHandlers';
 import { ScreenShake } from '../effects/ScreenShake';
 import { AudioManager } from '../audio/AudioManager';
 import { AimLine } from '../entities/AimLine';
+import { getWeaponBarrelLength } from '../entities/WeaponGeometry';
 import { ScoreDisplayUI } from '../ui/ScoreDisplayUI';
 import { KillCounterUI } from '../ui/KillCounterUI';
 import { PickupNotificationUI } from '../ui/PickupNotificationUI';
@@ -28,6 +29,7 @@ import { COLORS } from '../../shared/constants';
 import { getWebSocketUrl } from '../config/runtimeConfig';
 import {
   getDefaultMatchMapContext,
+  getFirstBlockingObstacleContact,
   getMatchMapContext,
   isPointInsideBlockingObstacle,
   type MatchMapContext,
@@ -282,10 +284,9 @@ export class GameScene extends Phaser.Scene {
       if (this.isPointerHeld && this.shootingManager && !this.shootingManager.isMeleeWeapon() && this.shootingManager.isAutomatic()) {
         this.shootingManager.setAimAngle(currentAimAngle);
         const obstructed = this.getObstructedBarrelPosition(currentAimAngle);
-        if (obstructed) {
+        const didShoot = this.shootingManager.shoot();
+        if (didShoot && obstructed) {
           this.ui.showWallSpark(obstructed.x, obstructed.y);
-        } else {
-          this.shootingManager.shoot();
         }
       }
 
@@ -393,10 +394,9 @@ export class GameScene extends Phaser.Scene {
       }
 
       const obstructed = this.getObstructedBarrelPosition(aimAngle);
-      if (obstructed) {
+      const didShoot = this.shootingManager.shoot();
+      if (didShoot && obstructed) {
         this.ui.showWallSpark(obstructed.x, obstructed.y);
-      } else {
-        this.shootingManager.shoot();
       }
     });
 
@@ -512,7 +512,7 @@ export class GameScene extends Phaser.Scene {
       this.predictionEngine.setMapContext(mapContext);
     }
     if (this.projectileManager) {
-      this.projectileManager.setWorldBounds(mapContext.width, mapContext.height);
+      this.projectileManager.setWorldBounds(mapContext.width, mapContext.height, mapContext.obstacles);
     }
     if (this.weaponCrateManager) {
       this.weaponCrateManager.initializeFromMapWeaponSpawns(mapContext.weaponSpawns);
@@ -565,6 +565,18 @@ export class GameScene extends Phaser.Scene {
       : null;
     const barrelX = barrel?.x ?? (playerPos.x + Math.cos(aimAngle) * 35);
     const barrelY = barrel?.y ?? (playerPos.y + Math.sin(aimAngle) * 35);
+    const weaponType = this.shootingManager?.getWeaponState().weaponType ?? 'Pistol';
+    const barrelLength = getWeaponBarrelLength(weaponType);
+    const muzzleOriginX = barrelX - Math.cos(aimAngle) * barrelLength;
+    const muzzleOriginY = barrelY - Math.sin(aimAngle) * barrelLength;
+    const wallContact = getFirstBlockingObstacleContact(
+      { x: muzzleOriginX, y: muzzleOriginY },
+      { x: barrelX, y: barrelY },
+      this.matchMapContext.obstacles
+    );
+    if (wallContact) {
+      return { x: wallContact.x, y: wallContact.y };
+    }
 
     if (
       barrelX < 0 ||

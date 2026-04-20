@@ -90,8 +90,8 @@ func TestPerformMeleeAttack_KatanaHitsSingleTarget(t *testing.T) {
 func TestPerformMeleeAttack_TargetOutOfRange(t *testing.T) {
 	bat := NewBat() // 90px range
 	attacker := createTestPlayer("attacker", 100, 100, 0)
-	// Target at 100px to the right (beyond 90px range)
-	target := createTestPlayer("target", 200, 100, 0)
+	// Target positioned so the full 32px-wide hitbox stays beyond 90px range.
+	target := createTestPlayer("target", 210, 100, 0)
 
 	result := PerformMeleeAttack(attacker, []*PlayerState{attacker, target}, bat)
 
@@ -200,7 +200,7 @@ func TestApplyKnockback_BasicKnockback(t *testing.T) {
 	target := createTestPlayer("target", 150, 100, 0)
 
 	initialPos := target.GetPosition()
-	applyKnockback(attacker, target, 40) // Bat knockback is 40px
+	applyKnockback(attacker, target, 40, openTestMapConfig()) // Bat knockback is 40px
 
 	newPos := target.GetPosition()
 	// Target should be pushed 40px further to the right
@@ -219,7 +219,7 @@ func TestApplyKnockback_DiagonalKnockback(t *testing.T) {
 	target := createTestPlayer("target", 130, 130, 0)
 
 	initialPos := target.GetPosition()
-	applyKnockback(attacker, target, 40)
+	applyKnockback(attacker, target, 40, openTestMapConfig())
 
 	newPos := target.GetPosition()
 	attackerPos := attacker.GetPosition()
@@ -251,7 +251,7 @@ func TestApplyKnockback_RightEdgeClamping(t *testing.T) {
 	// Target near right edge
 	target := createTestPlayer("target", ArenaWidth-10, 100, 0)
 
-	applyKnockback(attacker, target, 40)
+	applyKnockback(attacker, target, 40, openTestMapConfig())
 
 	newPos := target.GetPosition()
 	expectedX := ArenaWidth - PlayerWidth/2
@@ -265,7 +265,7 @@ func TestApplyKnockback_LeftEdgeClamping(t *testing.T) {
 	// Target near left edge
 	target := createTestPlayer("target", 10, 100, 0)
 
-	applyKnockback(attacker, target, 40)
+	applyKnockback(attacker, target, 40, openTestMapConfig())
 
 	newPos := target.GetPosition()
 	expectedX := PlayerWidth / 2
@@ -279,7 +279,7 @@ func TestApplyKnockback_TopEdgeClamping(t *testing.T) {
 	// Target near top edge
 	target := createTestPlayer("target", 100, 10, 0)
 
-	applyKnockback(attacker, target, 40)
+	applyKnockback(attacker, target, 40, openTestMapConfig())
 
 	newPos := target.GetPosition()
 	expectedY := PlayerHeight / 2
@@ -293,7 +293,7 @@ func TestApplyKnockback_BottomEdgeClamping(t *testing.T) {
 	// Target near bottom edge
 	target := createTestPlayer("target", 100, ArenaHeight-10, 0)
 
-	applyKnockback(attacker, target, 40)
+	applyKnockback(attacker, target, 40, openTestMapConfig())
 
 	newPos := target.GetPosition()
 	expectedY := ArenaHeight - PlayerHeight/2
@@ -307,12 +307,94 @@ func TestApplyKnockback_ZeroDistance(t *testing.T) {
 	target := createTestPlayer("target", 100, 100, 0)
 
 	initialPos := target.GetPosition()
-	applyKnockback(attacker, target, 40)
+	applyKnockback(attacker, target, 40, openTestMapConfig())
 
 	newPos := target.GetPosition()
 	// No knockback should be applied if players are at same position
 	if newPos.X != initialPos.X || newPos.Y != initialPos.Y {
 		t.Errorf("Expected no position change when at same location, got X:%f Y:%f", newPos.X, newPos.Y)
+	}
+}
+
+func TestPerformMeleeAttack_WallBetweenPlayersPreventsDamage(t *testing.T) {
+	bat := NewBat()
+	mapConfig := openTestMapConfig()
+	mapConfig.Obstacles = []MapObstacle{
+		{ID: "wall", X: 130, Y: 80, Width: 20, Height: 40, BlocksMovement: true, BlocksProjectiles: true, BlocksLineOfSight: true},
+	}
+	attacker := createTestPlayer("attacker", 100, 100, 0)
+	target := createTestPlayer("target", 170, 100, 0)
+
+	result := PerformMeleeAttack(attacker, []*PlayerState{attacker, target}, bat, mapConfig)
+
+	if len(result.HitPlayers) != 0 {
+		t.Fatalf("expected wall-blocked melee swing to miss, got %d hits", len(result.HitPlayers))
+	}
+	if target.Health != 100 {
+		t.Fatalf("target health = %d, want 100 because wall blocks melee reach", target.Health)
+	}
+}
+
+func TestPerformMeleeAttack_PartialCoverStillHitsExposedTarget(t *testing.T) {
+	bat := NewBat()
+	mapConfig := openTestMapConfig()
+	mapConfig.Obstacles = []MapObstacle{
+		{ID: "low-wall", X: 130, Y: 102, Width: 20, Height: 30, BlocksMovement: true, BlocksProjectiles: true, BlocksLineOfSight: true},
+	}
+	attacker := createTestPlayer("attacker", 100, 84, 0)
+	target := createTestPlayer("target", 170, 100, 0)
+
+	result := PerformMeleeAttack(attacker, []*PlayerState{attacker, target}, bat, mapConfig)
+
+	if len(result.HitPlayers) != 1 {
+		t.Fatalf("expected exposed upper target to be hit, got %d hits", len(result.HitPlayers))
+	}
+	if target.Health != 75 {
+		t.Fatalf("target health = %d, want 75 after exposed melee hit", target.Health)
+	}
+}
+
+func TestApplyKnockback_StopsAtFirstWallContact(t *testing.T) {
+	attacker := createTestPlayer("attacker", 100, 100, 0)
+	target := createTestPlayer("target", 150, 100, 0)
+	mapConfig := openTestMapConfig()
+	mapConfig.Obstacles = []MapObstacle{
+		{ID: "wall", X: 175, Y: 70, Width: 20, Height: 60, BlocksMovement: true},
+	}
+
+	applyKnockback(attacker, target, 40, mapConfig)
+
+	newPos := target.GetPosition()
+	if newPos.X != 159 || newPos.Y != 100 {
+		t.Fatalf("knockback stop = %+v, want first wall contact at {X:159 Y:100}", newPos)
+	}
+}
+
+func TestApplyKnockback_DiagonalWallContactDoesNotSlideSideways(t *testing.T) {
+	attacker := createTestPlayer("attacker", 100, 100, 45)
+	target := createTestPlayer("target", 130, 130, 0)
+	mapConfig := openTestMapConfig()
+	mapConfig.Obstacles = []MapObstacle{
+		{ID: "wall", X: 150, Y: 150, Width: 20, Height: 40, BlocksMovement: true},
+	}
+
+	applyKnockback(attacker, target, 40, mapConfig)
+
+	newPos := target.GetPosition()
+	if newPos.X > 134.1 || newPos.Y > 134.1 {
+		t.Fatalf("expected diagonal knockback to stop at first corner contact without sliding, got %+v", newPos)
+	}
+}
+
+func TestPerformMeleeAttack_HitboxEdgeWithinRangeCanStillHit(t *testing.T) {
+	bat := NewBat()
+	attacker := createTestPlayer("attacker", 100, 100, 0)
+	target := createTestPlayer("target", 205, 100, 0)
+
+	result := PerformMeleeAttack(attacker, []*PlayerState{attacker, target}, bat, openTestMapConfig())
+
+	if len(result.HitPlayers) != 1 {
+		t.Fatalf("expected hitbox edge within range to be hittable, got %d hits", len(result.HitPlayers))
 	}
 }
 
@@ -348,16 +430,13 @@ func TestIsInMeleeRange_AtEdgeOfArc(t *testing.T) {
 func TestIsInMeleeRange_JustOutsideArc(t *testing.T) {
 	bat := NewBat() // 80° arc = 40° on each side
 	attacker := createTestPlayer("attacker", 100, 100, 0)
-	// Target at 41° from aim direction (outside 40° half-arc boundary)
-	angleRad := 41 * (math.Pi / 180)
-	targetX := 100 + 50*math.Cos(angleRad)
-	targetY := 100 + 50*math.Sin(angleRad)
-	target := createTestPlayer("target", targetX, targetY, 0)
+	// Target positioned so the full hitbox stays well outside the 40° half-arc boundary.
+	target := createTestPlayer("target", 100, 160, 0)
 
 	inRange := isInMeleeRange(attacker, target, bat)
 
 	if inRange {
-		t.Error("Expected target at 41° (outside 40° half-arc) to NOT be in range")
+		t.Error("Expected target outside the 40° half-arc to NOT be in range")
 	}
 }
 
@@ -377,8 +456,8 @@ func TestIsInMeleeRange_BehindPlayer(t *testing.T) {
 func TestIsInMeleeRange_AtMaxRange(t *testing.T) {
 	bat := NewBat() // 90px range
 	attacker := createTestPlayer("attacker", 100, 100, 0)
-	// Target at exactly 90px to the right
-	target := createTestPlayer("target", 190, 100, 0)
+	// Target positioned so the nearest hitbox edge is exactly 90px away.
+	target := createTestPlayer("target", 206, 100, 0)
 
 	inRange := isInMeleeRange(attacker, target, bat)
 
@@ -390,8 +469,8 @@ func TestIsInMeleeRange_AtMaxRange(t *testing.T) {
 func TestIsInMeleeRange_JustBeyondMaxRange(t *testing.T) {
 	bat := NewBat() // 90px range
 	attacker := createTestPlayer("attacker", 100, 100, 0)
-	// Target at 91px to the right (just beyond range)
-	target := createTestPlayer("target", 191, 100, 0)
+	// Target positioned so the full hitbox stays just beyond 90px range.
+	target := createTestPlayer("target", 207, 100, 0)
 
 	inRange := isInMeleeRange(attacker, target, bat)
 
@@ -433,8 +512,8 @@ func TestKatanaRange_LongerThanBat(t *testing.T) {
 	bat := NewBat()
 	katana := NewKatana()
 	attacker := createTestPlayer("attacker", 100, 100, 0)
-	// Target at 100px (beyond bat range 90px, within katana range 110px)
-	target := createTestPlayer("target", 200, 100, 0)
+	// Target positioned so the hitbox is beyond bat range but within katana range.
+	target := createTestPlayer("target", 207, 100, 0)
 
 	batInRange := isInMeleeRange(attacker, target, bat)
 	katanaInRange := isInMeleeRange(attacker, target, katana)

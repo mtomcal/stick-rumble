@@ -261,6 +261,38 @@ describe('ProjectileManager', () => {
       expect(projectileGfx.x).toBe(300); // 100 + 400 * 0.5
     });
 
+    it('should stop projectile visuals at the first wall contact', () => {
+      projectileManager.setWorldBounds(500, 500, [
+        {
+          id: 'wall',
+          type: 'wall',
+          shape: 'rectangle',
+          x: 150,
+          y: 80,
+          width: 20,
+          height: 40,
+          blocksMovement: true,
+          blocksProjectiles: true,
+          blocksLineOfSight: true,
+        },
+      ]);
+
+      projectileManager.spawnProjectile({
+        id: 'proj-1',
+        ownerId: 'player-1',
+        weaponType: 'Pistol',
+        position: { x: 100, y: 100 },
+        velocity: { x: 200, y: 0 },
+      });
+
+      projectileManager.update(0.5);
+
+      const graphics = Array.from(scene.mockGraphics.values());
+      const projectileGfx = graphics[0];
+      expect(projectileGfx.x).toBe(150);
+      expect(projectileManager.getProjectileCount()).toBe(0);
+    });
+
     it('should remove projectiles that are out of bounds', () => {
       const projectileData: ProjectileData = {
         id: 'proj-1',

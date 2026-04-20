@@ -231,3 +231,135 @@ func TestGameServerReloadCompleteCallback_NoCallback(t *testing.T) {
 		t.Errorf("Ammo should be refilled to %d, got %d", PistolMagazineSize, ws.CurrentAmmo)
 	}
 }
+
+func TestGameServerPlayerShoot_BlockedNearWallStillConsumesAmmoAndCooldown(t *testing.T) {
+	clock := NewManualClock(time.Now())
+	gs := NewGameServerWithClock(nil, clock)
+	mapConfig := openTestMapConfig()
+	mapConfig.Obstacles = []MapObstacle{
+		{ID: "wall", X: 140, Y: 250, Width: 20, Height: 100, BlocksProjectiles: true, BlocksLineOfSight: true},
+	}
+	gs.physics = NewPhysics(mapConfig)
+	gs.projectileManager = NewProjectileManager(mapConfig)
+
+	playerID := "test-player-1"
+	victimID := "test-player-2"
+	gs.AddPlayer(playerID)
+	gs.AddPlayer(victimID)
+
+	pistol := NewPistol()
+	pistol.IsHitscan = true
+	gs.SetWeaponState(playerID, NewWeaponStateWithClock(pistol, clock))
+
+	player, _ := gs.world.GetPlayer(playerID)
+	player.SetPosition(Vector2{X: 105, Y: 300})
+	victim, _ := gs.world.GetPlayer(victimID)
+	victim.SetPosition(Vector2{X: 200, Y: 300})
+
+	ws := gs.GetWeaponState(playerID)
+	startAmmo := ws.CurrentAmmo
+	hitCalled := false
+	gs.SetOnHit(func(hit HitEvent) {
+		hitCalled = true
+	})
+
+	result := gs.PlayerShoot(playerID, 0, clock.Now().UnixMilli())
+	if !result.Success {
+		t.Fatalf("expected blocked shot to still count as a fired shot, got %v", result.Reason)
+	}
+	if ws.CurrentAmmo != startAmmo-1 {
+		t.Fatalf("ammo = %d, want %d after blocked shot", ws.CurrentAmmo, startAmmo-1)
+	}
+	if ws.CanShoot() {
+		t.Fatal("expected blocked shot to consume fire-rate cooldown")
+	}
+	if hitCalled {
+		t.Fatal("blocked shot should not emit hit side effects")
+	}
+	if victim.Health != 100 {
+		t.Fatalf("victim health = %d, want 100 because wall-blocked shot must not damage target", victim.Health)
+	}
+}
+
+func TestGameServerProjectileBlockedByWallDuringLiveSequenceDoesNotDamageTarget(t *testing.T) {
+	clock := NewManualClock(time.Now())
+	gs := NewGameServerWithClock(nil, clock)
+	mapConfig := openTestMapConfig()
+	mapConfig.Obstacles = []MapObstacle{
+		{ID: "wall", X: 150, Y: 80, Width: 20, Height: 40, BlocksProjectiles: true},
+	}
+	gs.world.mapConfig = mapConfig
+	gs.physics = NewPhysics(mapConfig)
+	gs.projectileManager = NewProjectileManager(mapConfig)
+
+	shooterID := "shooter"
+	victimID := "victim"
+	gs.AddPlayer(shooterID)
+	gs.AddPlayer(victimID)
+
+	uzi := NewUzi()
+	gs.SetWeaponState(shooterID, NewWeaponStateWithClock(uzi, clock))
+
+	shooter, _ := gs.world.GetPlayer(shooterID)
+	shooter.SetPosition(Vector2{X: 64, Y: 100})
+	victim, _ := gs.world.GetPlayer(victimID)
+	victim.SetPosition(Vector2{X: 220, Y: 100})
+
+	result := gs.PlayerShoot(shooterID, 0, clock.Now().UnixMilli())
+	if !result.Success || result.Projectile == nil {
+		t.Fatal("expected projectile shot to succeed")
+	}
+
+	gs.projectileManager.Update(0.2)
+	gs.checkHitDetection()
+
+	if victim.Health != 100 {
+		t.Fatalf("victim health = %d, want 100 because live projectile sequence should stop at wall", victim.Health)
+	}
+	if gs.projectileManager.GetProjectileByID(result.Projectile.ID) != nil {
+		t.Fatal("projectile should be removed after wall contact in live sequence")
+	}
+	if result.Projectile.Position.X != 150 || result.Projectile.Position.Y != 100 {
+		t.Fatalf("projectile final position = %+v, want first wall contact", result.Projectile.Position)
+	}
+}
+
+func TestGameServerProjectilePlayerBeforeWallInSameTickStillDamagesTarget(t *testing.T) {
+	clock := NewManualClock(time.Now())
+	gs := NewGameServerWithClock(nil, clock)
+	mapConfig := openTestMapConfig()
+	mapConfig.Obstacles = []MapObstacle{
+		{ID: "wall", X: 200, Y: 80, Width: 20, Height: 40, BlocksProjectiles: true},
+	}
+	gs.world.mapConfig = mapConfig
+	gs.physics = NewPhysics(mapConfig)
+	gs.projectileManager = NewProjectileManager(mapConfig)
+
+	shooterID := "shooter"
+	victimID := "victim"
+	gs.AddPlayer(shooterID)
+	gs.AddPlayer(victimID)
+
+	uzi := NewUzi()
+	gs.SetWeaponState(shooterID, NewWeaponStateWithClock(uzi, clock))
+
+	shooter, _ := gs.world.GetPlayer(shooterID)
+	shooter.SetPosition(Vector2{X: 64, Y: 100})
+	victim, _ := gs.world.GetPlayer(victimID)
+	victim.SetPosition(Vector2{X: 180, Y: 100})
+
+	result := gs.PlayerShoot(shooterID, 0, clock.Now().UnixMilli())
+	if !result.Success || result.Projectile == nil {
+		t.Fatal("expected projectile shot to succeed")
+	}
+
+	gs.projectileManager.Update(0.2)
+	gs.checkHitDetection()
+
+	if victim.Health != 100-uzi.Damage {
+		t.Fatalf("victim health = %d, want %d because player contact is before wall", victim.Health, 100-uzi.Damage)
+	}
+	if gs.projectileManager.GetProjectileByID(result.Projectile.ID) != nil {
+		t.Fatal("projectile should be removed after successful hit")
+	}
+}

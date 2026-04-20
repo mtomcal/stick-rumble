@@ -325,47 +325,58 @@ func (p *Physics) CheckPlayerCrateProximity(player *PlayerState, crate *WeaponCr
 // Hitbox is 32x64 pixels (PlayerWidth x PlayerHeight) centered on player position
 // Returns true if collision detected
 func (p *Physics) CheckProjectilePlayerCollision(proj *Projectile, player *PlayerState) bool {
+	_, hit := p.projectilePlayerContact(proj, player)
+	return hit
+}
+
+func (p *Physics) projectilePlayerContact(proj *Projectile, player *PlayerState) (segmentContact, bool) {
 	// Don't check collision with dead players
 	if !player.IsAlive() {
-		return false
+		return segmentContact{}, false
 	}
 
 	// Don't check collision with invulnerable players (spawn protection)
 	if player.IsInvulnerable {
-		return false
+		return segmentContact{}, false
 	}
 
 	// Don't check collision with rolling players during i-frames
 	if player.IsInvincibleFromRoll() {
-		return false
+		return segmentContact{}, false
 	}
 
 	// Don't check collision with owner
 	if proj.OwnerID == player.ID {
-		return false
+		return segmentContact{}, false
 	}
 
 	playerPos := player.GetPosition()
+	sweepStart := proj.PreviousPos
+	sweepEnd := proj.Position
+	if sweepStart == (Vector2{}) {
+		sweepStart = proj.Position
+	}
 
 	// Validate range: reject hits beyond max projectile range
-	// This prevents impossible long-range hits
-	distanceTraveled := calculateDistance(proj.SpawnPosition, proj.Position)
-	if distanceTraveled > ProjectileMaxRange {
-		return false
+	startDistance := calculateDistance(proj.SpawnPosition, sweepStart)
+	if startDistance > ProjectileMaxRange {
+		return segmentContact{}, false
 	}
 
-	// Calculate half-sizes for AABB collision
-	halfWidth := PlayerWidth / 2
-	halfHeight := PlayerHeight / 2
-
-	// AABB collision detection
-	// Check if projectile point is within the player's bounding box
-	if math.Abs(proj.Position.X-playerPos.X) < halfWidth &&
-		math.Abs(proj.Position.Y-playerPos.Y) < halfHeight {
-		return true
+	sweepEnd = clampSegmentToDistance(proj.SpawnPosition, sweepEnd, ProjectileMaxRange)
+	playerContact, ok := segmentPlayerHitboxContact(sweepStart, sweepEnd, playerPos)
+	if !ok {
+		return segmentContact{}, false
 	}
 
-	return false
+	wallContact, wallBlocked := firstObstacleContact(sweepStart, sweepEnd, p.mapConfig.Obstacles, func(obstacle MapObstacle) bool {
+		return obstacle.BlocksProjectiles
+	})
+	if wallBlocked && wallContact.Distance <= playerContact.Distance {
+		return segmentContact{}, false
+	}
+
+	return playerContact, true
 }
 
 // CheckAllProjectileCollisions checks all projectiles against all players
@@ -378,15 +389,26 @@ func (p *Physics) CheckAllProjectileCollisions(projectiles []*Projectile, player
 			continue
 		}
 
+		var nearestHit *HitEvent
+		nearestDistance := math.MaxFloat64
 		for _, player := range players {
-			if p.CheckProjectilePlayerCollision(proj, player) {
-				hits = append(hits, HitEvent{
+			contact, ok := p.projectilePlayerContact(proj, player)
+			if !ok {
+				continue
+			}
+			if contact.Distance < nearestDistance {
+				event := HitEvent{
 					ProjectileID: proj.ID,
 					VictimID:     player.ID,
 					AttackerID:   proj.OwnerID,
-				})
-				break // Each projectile can only hit one player
+				}
+				nearestHit = &event
+				nearestDistance = contact.Distance
 			}
+		}
+
+		if nearestHit != nil {
+			hits = append(hits, *nearestHit)
 		}
 	}
 

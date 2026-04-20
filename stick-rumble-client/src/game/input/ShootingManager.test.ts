@@ -306,6 +306,10 @@ describe('ShootingManager', () => {
       clock.advance(cooldownMs / 2 + 1);
       shootingManager.shoot();
       expect(mockWsClient.send).toHaveBeenCalled();
+
+      const sentMessage = mockWsClient.send.mock.calls[0][0];
+      expect(sentMessage.timestamp).toBe(clock.now());
+      expect(sentMessage.data.clientTimestamp).toBe(clock.now());
     });
   });
 
@@ -962,6 +966,8 @@ describe('ShootingManager', () => {
       // Can shoot immediately after weapon pickup
       shootingManager.shoot();
       expect(mockWsClient.send).toHaveBeenCalledTimes(1);
+      expect(mockWsClient.send.mock.calls[0][0].timestamp).toBe(clock.now());
+      expect(mockWsClient.send.mock.calls[0][0].data.clientTimestamp).toBe(clock.now());
       vi.clearAllMocks();
 
       // Should NOT be able to shoot again at 100ms (too soon for AK47 cooldown)
@@ -973,6 +979,8 @@ describe('ShootingManager', () => {
       clock.advance(67);
       shootingManager.shoot();
       expect(mockWsClient.send).toHaveBeenCalled();
+      expect(mockWsClient.send.mock.calls[0][0].timestamp).toBe(clock.now());
+      expect(mockWsClient.send.mock.calls[0][0].data.clientTimestamp).toBe(clock.now());
     });
 
     it('should update fire rate cooldown when switching to Shotgun (1 round/sec = 1000ms)', () => {

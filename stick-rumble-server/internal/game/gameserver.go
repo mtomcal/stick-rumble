@@ -420,6 +420,7 @@ const (
 	MeleeFailedNoWeapon   = "no_weapon"
 	MeleeFailedNotMelee   = "not_melee"
 	MeleeFailedPlayerDead = "player_dead"
+	MeleeFailedCooldown   = "cooldown"
 )
 
 // PlayerMeleeAttack attempts a melee attack for the given player
@@ -448,6 +449,9 @@ func (gs *GameServer) PlayerMeleeAttack(playerID string, aimAngle float64) Melee
 	if !ws.Weapon.IsMelee() {
 		return MeleeResult{Success: false, Reason: MeleeFailedNotMelee}
 	}
+	if !ws.CanShoot() {
+		return MeleeResult{Success: false, Reason: MeleeFailedCooldown}
+	}
 
 	// Update player's aim angle for the attack
 	player.SetAimAngle(aimAngle)
@@ -460,8 +464,11 @@ func (gs *GameServer) PlayerMeleeAttack(playerID string, aimAngle float64) Melee
 	}
 	gs.world.mu.RUnlock()
 
+	// Consume melee cooldown even if no victim is reachable.
+	ws.RecordShot()
+
 	// Perform the melee attack
-	result := PerformMeleeAttack(player, allPlayers, ws.Weapon)
+	result := PerformMeleeAttack(player, allPlayers, ws.Weapon, gs.world.GetMapConfig())
 
 	return MeleeResult{
 		Success:          true,
@@ -563,7 +570,7 @@ func (gs *GameServer) DamagePlayer(playerID string, damage int) {
 // checkHitDetection checks for projectile-player collisions and processes hits
 func (gs *GameServer) checkHitDetection() {
 	// Get all active projectiles
-	projectiles := gs.projectileManager.GetActiveProjectiles()
+	projectiles := gs.projectileManager.GetProjectilesForHitDetection()
 	if len(projectiles) == 0 {
 		return
 	}
@@ -610,6 +617,12 @@ func (gs *GameServer) checkHitDetection() {
 		// Notify via callback
 		if gs.onHit != nil {
 			gs.onHit(hit)
+		}
+	}
+
+	for _, proj := range gs.projectileManager.GetProjectilesForHitDetection() {
+		if proj.PendingRemoval {
+			gs.projectileManager.RemoveProjectile(proj.ID)
 		}
 	}
 }
@@ -753,10 +766,17 @@ func (gs *GameServer) processHitscanShot(shooterID string, shooter *PlayerState,
 	// Get shooter muzzle origin
 	shooterPos := getWeaponFireOrigin(shooter.GetPosition(), aimAngle, weapon.Name)
 
+	shotEnd := rayEnd(shooterPos, aimAngle, weapon.Range)
+	wallContact, wallBlocked := firstObstacleContact(shooterPos, shotEnd, gs.physics.mapConfig.Obstacles, func(obstacle MapObstacle) bool {
+		return obstacle.BlocksProjectiles || obstacle.BlocksLineOfSight
+	})
+
 	// Perform raycast hit detection at rewound positions
 	gs.world.mu.RLock()
 	var hitVictim *PlayerState
 	var hitDistance float64 = weapon.Range + 1 // Start beyond range
+	rayDirX := math.Cos(aimAngle)
+	rayDirY := math.Sin(aimAngle)
 
 	for victimID, victim := range gs.world.players {
 		// Skip shooter and dead players
@@ -771,19 +791,21 @@ func (gs *GameServer) processHitscanShot(shooterID string, shooter *PlayerState,
 			victimPos = victim.GetPosition()
 		}
 
-		// Check if raycast hits the victim
-		// Use circular hitbox approximation: radius = PlayerWidth/2 = 16px
-		const hitboxRadius = PlayerWidth / 2
-		if gs.raycastHit(shooterPos, aimAngle, weapon.Range, victimPos, hitboxRadius) {
-			// Calculate distance to find closest hit
-			dx := victimPos.X - shooterPos.X
-			dy := victimPos.Y - shooterPos.Y
-			dist := math.Sqrt(dx*dx + dy*dy)
+		projection := (victimPos.X-shooterPos.X)*rayDirX + (victimPos.Y-shooterPos.Y)*rayDirY
+		if projection <= 0 {
+			continue
+		}
 
-			if dist < hitDistance {
-				hitDistance = dist
-				hitVictim = victim
-			}
+		contact, hit := segmentPlayerHitboxContact(shooterPos, shotEnd, victimPos)
+		if !hit {
+			continue
+		}
+		if wallBlocked && wallContact.Distance <= contact.Distance {
+			continue
+		}
+		if contact.Distance < hitDistance {
+			hitDistance = contact.Distance
+			hitVictim = victim
 		}
 	}
 	gs.world.mu.RUnlock()

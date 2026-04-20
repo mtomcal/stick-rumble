@@ -231,6 +231,136 @@ describe('GameScene - Combat', () => {
       expect(shootSpy).toHaveBeenCalled();
     });
 
+    it('should show wall spark at first barrier contact instead of shooting through cover', async () => {
+      const mockSceneContext = createMockScene();
+      let pointerdownHandler: (() => void) | null = null;
+      const inputOnMock = vi.fn((_event: string, handler: () => void) => {
+        if (_event === 'pointerdown') {
+          pointerdownHandler = handler;
+        }
+      });
+      mockSceneContext.input = {
+        ...mockSceneContext.input,
+        on: inputOnMock,
+        keyboard: {
+          addKey: vi.fn().mockReturnValue({
+            on: vi.fn(),
+          }),
+          addKeys: mockSceneContext.input.keyboard.addKeys,
+        },
+      };
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+
+      mockWebSocketInstance.readyState = 1;
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen(new Event('open'));
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      scene['matchMapContext'] = {
+        ...scene['matchMapContext'],
+        obstacles: [
+          {
+            id: 'wall',
+            type: 'wall',
+            shape: 'rectangle',
+            x: 130,
+            y: 80,
+            width: 20,
+            height: 40,
+            blocksMovement: true,
+            blocksProjectiles: true,
+            blocksLineOfSight: true,
+          },
+        ],
+      };
+
+      vi.spyOn(scene['playerManager'], 'getLocalPlayerPosition').mockReturnValue({ x: 100, y: 100 });
+      vi.spyOn(scene['playerManager'], 'getLocalPlayerId').mockReturnValue('local-player');
+      vi.spyOn(scene['playerManager'], 'getWeaponBarrelPosition').mockReturnValue({ x: 160, y: 100 });
+      vi.spyOn(scene['inputManager'], 'getAimAngle').mockReturnValue(0);
+
+      const showWallSparkSpy = vi.spyOn(scene['ui'], 'showWallSpark');
+      const shootSpy = vi.spyOn(scene['shootingManager'], 'shoot');
+
+      expect(pointerdownHandler).not.toBeNull();
+      pointerdownHandler!();
+
+      expect(showWallSparkSpy).toHaveBeenCalledWith(135, 100);
+      expect(shootSpy).toHaveBeenCalled();
+    });
+
+    it('should not show wall spark when obstructed shot is blocked by local cooldown', async () => {
+      const mockSceneContext = createMockScene();
+      let pointerdownHandler: (() => void) | null = null;
+      const inputOnMock = vi.fn((_event: string, handler: () => void) => {
+        if (_event === 'pointerdown') {
+          pointerdownHandler = handler;
+        }
+      });
+      mockSceneContext.input = {
+        ...mockSceneContext.input,
+        on: inputOnMock,
+        keyboard: {
+          addKey: vi.fn().mockReturnValue({
+            on: vi.fn(),
+          }),
+          addKeys: mockSceneContext.input.keyboard.addKeys,
+        },
+      };
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+      mockWebSocketInstance.readyState = 1;
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen(new Event('open'));
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      scene['matchMapContext'] = {
+        ...scene['matchMapContext'],
+        obstacles: [
+          {
+            id: 'wall',
+            type: 'wall',
+            shape: 'rectangle',
+            x: 130,
+            y: 80,
+            width: 20,
+            height: 40,
+            blocksMovement: true,
+            blocksProjectiles: true,
+            blocksLineOfSight: true,
+          },
+        ],
+      };
+
+      vi.spyOn(scene['playerManager'], 'getLocalPlayerPosition').mockReturnValue({ x: 100, y: 100 });
+      vi.spyOn(scene['playerManager'], 'getLocalPlayerId').mockReturnValue('local-player');
+      vi.spyOn(scene['playerManager'], 'getWeaponBarrelPosition').mockReturnValue({ x: 160, y: 100 });
+      vi.spyOn(scene['inputManager'], 'getAimAngle').mockReturnValue(0);
+
+      const showWallSparkSpy = vi.spyOn(scene['ui'], 'showWallSpark');
+      const shootSpy = vi.spyOn(scene['shootingManager'], 'shoot').mockReturnValue(false);
+
+      expect(pointerdownHandler).not.toBeNull();
+      pointerdownHandler!();
+
+      expect(shootSpy).toHaveBeenCalled();
+      expect(showWallSparkSpy).not.toHaveBeenCalled();
+    });
+
     it('should handle missing keyboard gracefully', async () => {
       const mockSceneContext = createMockScene();
       // Test when keyboard is not available (mobile devices, etc.)
@@ -607,6 +737,157 @@ describe('GameScene - Combat', () => {
       // Update should not fire after pointer released
       scene.update(0, 16);
       expect(shootSpy).not.toHaveBeenCalled();
+    });
+
+    it('should show wall spark and still fire automatic weapon when pointer is held into cover', async () => {
+      const mockSceneContext = createMockScene();
+      let pointerdownHandler: (() => void) | null = null;
+      let pointerupHandler: (() => void) | null = null;
+
+      const inputOnMock = vi.fn((event: string, handler: () => void) => {
+        if (event === 'pointerdown') {
+          pointerdownHandler = handler;
+        } else if (event === 'pointerup') {
+          pointerupHandler = handler;
+        }
+      });
+
+      mockSceneContext.input = {
+        ...mockSceneContext.input,
+        on: inputOnMock,
+        keyboard: {
+          addKey: vi.fn().mockReturnValue({
+            on: vi.fn(),
+          }),
+          addKeys: mockSceneContext.input.keyboard.addKeys,
+        },
+      };
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+      mockWebSocketInstance.readyState = 1;
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen(new Event('open'));
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      scene['matchMapContext'] = {
+        ...scene['matchMapContext'],
+        obstacles: [
+          {
+            id: 'wall',
+            type: 'wall',
+            shape: 'rectangle',
+            x: 130,
+            y: 80,
+            width: 20,
+            height: 40,
+            blocksMovement: true,
+            blocksProjectiles: true,
+            blocksLineOfSight: true,
+          },
+        ],
+      };
+
+      vi.spyOn(scene['shootingManager'], 'isAutomatic').mockReturnValue(true);
+      vi.spyOn(scene['shootingManager'], 'isMeleeWeapon').mockReturnValue(false);
+      vi.spyOn(scene['inputManager'], 'getAimAngle').mockReturnValue(0);
+      vi.spyOn(scene['playerManager'], 'getLocalPlayerPosition').mockReturnValue({ x: 100, y: 100 });
+      vi.spyOn(scene['playerManager'], 'getLocalPlayerId').mockReturnValue('local-player');
+      vi.spyOn(scene['playerManager'], 'getWeaponBarrelPosition').mockReturnValue({ x: 160, y: 100 });
+
+      const showWallSparkSpy = vi.spyOn(scene['ui'], 'showWallSpark');
+      const shootSpy = vi.spyOn(scene['shootingManager'], 'shoot').mockReturnValue(true);
+
+      expect(pointerdownHandler).not.toBeNull();
+      pointerdownHandler!();
+      expect(showWallSparkSpy).toHaveBeenCalledWith(135, 100);
+      expect(shootSpy).toHaveBeenCalledTimes(1);
+
+      showWallSparkSpy.mockClear();
+      shootSpy.mockClear();
+
+      scene.update(0, 16);
+      expect(showWallSparkSpy).toHaveBeenCalledWith(135, 100);
+      expect(shootSpy).toHaveBeenCalledTimes(1);
+
+      expect(pointerupHandler).not.toBeNull();
+      pointerupHandler!();
+    });
+
+    it('should not spam wall sparks during automatic fire when shoot fails locally', async () => {
+      const mockSceneContext = createMockScene();
+      let pointerdownHandler: (() => void) | null = null;
+
+      const inputOnMock = vi.fn((event: string, handler: () => void) => {
+        if (event === 'pointerdown') {
+          pointerdownHandler = handler;
+        }
+      });
+
+      mockSceneContext.input = {
+        ...mockSceneContext.input,
+        on: inputOnMock,
+        keyboard: {
+          addKey: vi.fn().mockReturnValue({
+            on: vi.fn(),
+          }),
+          addKeys: mockSceneContext.input.keyboard.addKeys,
+        },
+      };
+      Object.assign(scene, mockSceneContext);
+
+      scene.create();
+      if (mockSceneContext.delayedCallCallbacks.length > 0) {
+        mockSceneContext.delayedCallCallbacks[0]();
+      }
+      mockWebSocketInstance.readyState = 1;
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen(new Event('open'));
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      scene['matchMapContext'] = {
+        ...scene['matchMapContext'],
+        obstacles: [
+          {
+            id: 'wall',
+            type: 'wall',
+            shape: 'rectangle',
+            x: 130,
+            y: 80,
+            width: 20,
+            height: 40,
+            blocksMovement: true,
+            blocksProjectiles: true,
+            blocksLineOfSight: true,
+          },
+        ],
+      };
+
+      vi.spyOn(scene['shootingManager'], 'isAutomatic').mockReturnValue(true);
+      vi.spyOn(scene['shootingManager'], 'isMeleeWeapon').mockReturnValue(false);
+      vi.spyOn(scene['inputManager'], 'getAimAngle').mockReturnValue(0);
+      vi.spyOn(scene['playerManager'], 'getLocalPlayerPosition').mockReturnValue({ x: 100, y: 100 });
+      vi.spyOn(scene['playerManager'], 'getLocalPlayerId').mockReturnValue('local-player');
+      vi.spyOn(scene['playerManager'], 'getWeaponBarrelPosition').mockReturnValue({ x: 160, y: 100 });
+
+      const showWallSparkSpy = vi.spyOn(scene['ui'], 'showWallSpark');
+      const shootSpy = vi.spyOn(scene['shootingManager'], 'shoot').mockReturnValue(false);
+
+      expect(pointerdownHandler).not.toBeNull();
+      pointerdownHandler!();
+      expect(shootSpy).toHaveBeenCalledTimes(1);
+      expect(showWallSparkSpy).not.toHaveBeenCalled();
+
+      scene.update(0, 16);
+      expect(shootSpy).toHaveBeenCalledTimes(2);
+      expect(showWallSparkSpy).not.toHaveBeenCalled();
     });
 
     it('should NOT continuously fire semi-automatic weapon (Pistol) when pointer held', async () => {

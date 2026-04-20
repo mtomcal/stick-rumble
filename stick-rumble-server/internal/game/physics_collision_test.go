@@ -5,7 +5,7 @@ import "testing"
 // HitEvent collision detection tests
 
 func TestCheckProjectilePlayerCollision_Hit(t *testing.T) {
-	physics := NewPhysics()
+	physics := NewPhysics(openTestMapConfig())
 
 	// Create projectile at position (500, 500)
 	proj := &Projectile{
@@ -28,7 +28,7 @@ func TestCheckProjectilePlayerCollision_Hit(t *testing.T) {
 }
 
 func TestCheckProjectilePlayerCollision_Miss(t *testing.T) {
-	physics := NewPhysics()
+	physics := NewPhysics(openTestMapConfig())
 
 	// Create projectile at position (500, 500)
 	proj := &Projectile{
@@ -51,7 +51,7 @@ func TestCheckProjectilePlayerCollision_Miss(t *testing.T) {
 }
 
 func TestCheckProjectilePlayerCollision_EdgeOfHitbox(t *testing.T) {
-	physics := NewPhysics()
+	physics := NewPhysics(openTestMapConfig())
 
 	// Create projectile
 	proj := &Projectile{
@@ -75,7 +75,7 @@ func TestCheckProjectilePlayerCollision_EdgeOfHitbox(t *testing.T) {
 }
 
 func TestCheckProjectilePlayerCollision_BarelyMiss(t *testing.T) {
-	physics := NewPhysics()
+	physics := NewPhysics(openTestMapConfig())
 
 	// Create projectile
 	proj := &Projectile{
@@ -99,7 +99,7 @@ func TestCheckProjectilePlayerCollision_BarelyMiss(t *testing.T) {
 }
 
 func TestCheckProjectilePlayerCollision_DeadPlayer(t *testing.T) {
-	physics := NewPhysics()
+	physics := NewPhysics(openTestMapConfig())
 
 	// Create projectile
 	proj := &Projectile{
@@ -123,7 +123,7 @@ func TestCheckProjectilePlayerCollision_DeadPlayer(t *testing.T) {
 }
 
 func TestCheckProjectilePlayerCollision_InvulnerablePlayer(t *testing.T) {
-	physics := NewPhysics()
+	physics := NewPhysics(openTestMapConfig())
 
 	// Create projectile
 	proj := &Projectile{
@@ -147,7 +147,7 @@ func TestCheckProjectilePlayerCollision_InvulnerablePlayer(t *testing.T) {
 }
 
 func TestCheckAllProjectileCollisions_SingleHit(t *testing.T) {
-	physics := NewPhysics()
+	physics := NewPhysics(openTestMapConfig())
 
 	// Create one projectile
 	projectiles := []*Projectile{
@@ -187,7 +187,7 @@ func TestCheckAllProjectileCollisions_SingleHit(t *testing.T) {
 }
 
 func TestCheckAllProjectileCollisions_MultipleHits(t *testing.T) {
-	physics := NewPhysics()
+	physics := NewPhysics(openTestMapConfig())
 
 	// Create two projectiles
 	projectiles := []*Projectile{
@@ -225,7 +225,7 @@ func TestCheckAllProjectileCollisions_MultipleHits(t *testing.T) {
 }
 
 func TestCheckAllProjectileCollisions_NoHits(t *testing.T) {
-	physics := NewPhysics()
+	physics := NewPhysics(openTestMapConfig())
 
 	// Create projectiles and players that don't collide
 	projectiles := []*Projectile{
@@ -253,7 +253,7 @@ func TestCheckAllProjectileCollisions_NoHits(t *testing.T) {
 }
 
 func TestCheckAllProjectileCollisions_OwnerImmunity(t *testing.T) {
-	physics := NewPhysics()
+	physics := NewPhysics(openTestMapConfig())
 
 	// Create projectile from player-1
 	projectiles := []*Projectile{
@@ -280,7 +280,7 @@ func TestCheckAllProjectileCollisions_OwnerImmunity(t *testing.T) {
 }
 
 func TestCheckProjectilePlayerCollision_WithinMaxRange(t *testing.T) {
-	physics := NewPhysics()
+	physics := NewPhysics(openTestMapConfig())
 
 	// Create projectile that spawned at (100, 100) and traveled 700px (within 800px max range)
 	proj := &Projectile{
@@ -303,7 +303,7 @@ func TestCheckProjectilePlayerCollision_WithinMaxRange(t *testing.T) {
 }
 
 func TestCheckProjectilePlayerCollision_ExceedsMaxRange(t *testing.T) {
-	physics := NewPhysics()
+	physics := NewPhysics(openTestMapConfig())
 
 	// Create projectile that spawned at (100, 100) and traveled 900px (exceeds 800px max range)
 	proj := &Projectile{
@@ -326,7 +326,7 @@ func TestCheckProjectilePlayerCollision_ExceedsMaxRange(t *testing.T) {
 }
 
 func TestCheckProjectilePlayerCollision_ExactlyMaxRange(t *testing.T) {
-	physics := NewPhysics()
+	physics := NewPhysics(openTestMapConfig())
 
 	// Create projectile that traveled exactly 800px (at max range boundary)
 	proj := &Projectile{
@@ -349,7 +349,7 @@ func TestCheckProjectilePlayerCollision_ExactlyMaxRange(t *testing.T) {
 }
 
 func TestCheckProjectilePlayerCollision_DiagonalRange(t *testing.T) {
-	physics := NewPhysics()
+	physics := NewPhysics(openTestMapConfig())
 
 	// Create projectile that traveled diagonally ~707px (500^2 + 500^2 = 707px < 800px max)
 	proj := &Projectile{
@@ -368,5 +368,77 @@ func TestCheckProjectilePlayerCollision_DiagonalRange(t *testing.T) {
 
 	if !result {
 		t.Error("Expected collision when diagonal travel is within max range (~707px < 800px)")
+	}
+}
+
+func TestCheckProjectilePlayerCollision_WallBeforeTargetDoesNotHit(t *testing.T) {
+	mapConfig := openTestMapConfig()
+	mapConfig.Obstacles = []MapObstacle{
+		{ID: "wall", X: 140, Y: 80, Width: 20, Height: 40, BlocksProjectiles: true},
+	}
+	physics := NewPhysics(mapConfig)
+
+	proj := &Projectile{
+		ID:            "proj-1",
+		OwnerID:       "player-1",
+		SpawnPosition: Vector2{X: 100, Y: 100},
+		PreviousPos:   Vector2{X: 100, Y: 100},
+		Position:      Vector2{X: 220, Y: 100},
+		Active:        true,
+	}
+
+	target := NewPlayerState("player-2")
+	target.SetPosition(Vector2{X: 200, Y: 100})
+
+	if physics.CheckProjectilePlayerCollision(proj, target) {
+		t.Fatal("expected wall-first projectile path to miss target")
+	}
+}
+
+func TestCheckProjectilePlayerCollision_ExposedHitboxBeforeWallStillHits(t *testing.T) {
+	mapConfig := openTestMapConfig()
+	mapConfig.Obstacles = []MapObstacle{
+		{ID: "low-wall", X: 140, Y: 100, Width: 20, Height: 32, BlocksProjectiles: true},
+	}
+	physics := NewPhysics(mapConfig)
+
+	proj := &Projectile{
+		ID:            "proj-1",
+		OwnerID:       "player-1",
+		SpawnPosition: Vector2{X: 100, Y: 84},
+		PreviousPos:   Vector2{X: 100, Y: 84},
+		Position:      Vector2{X: 220, Y: 84},
+		Active:        true,
+	}
+
+	target := NewPlayerState("player-2")
+	target.SetPosition(Vector2{X: 200, Y: 100})
+
+	if !physics.CheckProjectilePlayerCollision(proj, target) {
+		t.Fatal("expected exposed upper hitbox to be hittable before lower wall")
+	}
+}
+
+func TestCheckProjectilePlayerCollision_CoveredPortionStaysBlocked(t *testing.T) {
+	mapConfig := openTestMapConfig()
+	mapConfig.Obstacles = []MapObstacle{
+		{ID: "low-wall", X: 140, Y: 100, Width: 20, Height: 32, BlocksProjectiles: true},
+	}
+	physics := NewPhysics(mapConfig)
+
+	proj := &Projectile{
+		ID:            "proj-1",
+		OwnerID:       "player-1",
+		SpawnPosition: Vector2{X: 100, Y: 116},
+		PreviousPos:   Vector2{X: 100, Y: 116},
+		Position:      Vector2{X: 220, Y: 116},
+		Active:        true,
+	}
+
+	target := NewPlayerState("player-2")
+	target.SetPosition(Vector2{X: 200, Y: 100})
+
+	if physics.CheckProjectilePlayerCollision(proj, target) {
+		t.Fatal("expected covered lower hitbox to stay blocked by wall")
 	}
 }
