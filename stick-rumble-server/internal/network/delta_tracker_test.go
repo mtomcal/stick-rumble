@@ -1,7 +1,9 @@
 package network
 
 import (
+	"math"
 	"testing"
+	"time"
 
 	"github.com/mtomcal/stick-rumble-server/internal/game"
 )
@@ -36,6 +38,11 @@ func TestDeltaTracker_ShouldSendSnapshot(t *testing.T) {
 	// Immediately after, should return false
 	if tracker.ShouldSendSnapshot(playerID) {
 		t.Error("Should return false immediately after snapshot")
+	}
+
+	tracker.lastSentStates[playerID].LastSnapshot = time.Now().Add(-SnapshotInterval - 10*time.Millisecond)
+	if !tracker.ShouldSendSnapshot(playerID) {
+		t.Error("Should return true after snapshot interval elapses")
 	}
 }
 
@@ -140,6 +147,14 @@ func TestDeltaTracker_PositionThreshold(t *testing.T) {
 	if len(delta) != 1 {
 		t.Errorf("Expected delta for large position change, got %d players", len(delta))
 	}
+
+	atThreshold := []game.PlayerStateSnapshot{
+		{ID: "player1", Position: game.Vector2{X: 100 + PositionDeltaThreshold, Y: 100}, Health: 100, Velocity: game.Vector2{X: 0, Y: 0}},
+	}
+	delta = tracker.ComputePlayerDelta(playerID, atThreshold)
+	if len(delta) != 0 {
+		t.Errorf("Expected no delta at exact position threshold, got %d players", len(delta))
+	}
 }
 
 // TestDeltaTracker_HealthChange tests health change detection
@@ -162,6 +177,27 @@ func TestDeltaTracker_HealthChange(t *testing.T) {
 	}
 	if delta[0].Health != 80 {
 		t.Errorf("Expected health 80, got %d", delta[0].Health)
+	}
+}
+
+func TestDeltaTracker_WeaponTypeChange(t *testing.T) {
+	tracker := NewDeltaTracker()
+	playerID := "player1"
+
+	initialState := []game.PlayerStateSnapshot{
+		{ID: "player1", Position: game.Vector2{X: 100, Y: 100}, Health: 100, Velocity: game.Vector2{X: 0, Y: 0}, WeaponType: "Pistol"},
+	}
+	tracker.UpdatePlayerState(playerID, initialState)
+
+	changedWeapon := []game.PlayerStateSnapshot{
+		{ID: "player1", Position: game.Vector2{X: 100, Y: 100}, Health: 100, Velocity: game.Vector2{X: 0, Y: 0}, WeaponType: "Shotgun"},
+	}
+	delta := tracker.ComputePlayerDelta(playerID, changedWeapon)
+	if len(delta) != 1 {
+		t.Fatalf("Expected delta for weapon change, got %d players", len(delta))
+	}
+	if delta[0].WeaponType != "Shotgun" {
+		t.Fatalf("Expected Shotgun in delta, got %q", delta[0].WeaponType)
 	}
 }
 
@@ -270,6 +306,14 @@ func TestDeltaTracker_VelocityChange(t *testing.T) {
 	if delta[0].Velocity.X != 15 || delta[0].Velocity.Y != 25 {
 		t.Errorf("Expected velocity (15, 25), got (%f, %f)", delta[0].Velocity.X, delta[0].Velocity.Y)
 	}
+
+	atThreshold := []game.PlayerStateSnapshot{
+		{ID: "player1", Position: game.Vector2{X: 100, Y: 100}, Health: 100, Velocity: game.Vector2{X: 10 + VelocityDeltaThreshold, Y: 20}},
+	}
+	delta = tracker.ComputePlayerDelta(playerID, atThreshold)
+	if len(delta) != 0 {
+		t.Errorf("Expected no delta at exact velocity threshold, got %d players", len(delta))
+	}
 }
 
 // TestDeltaTracker_AimAngleChange tests aim angle change detection
@@ -301,6 +345,25 @@ func TestDeltaTracker_AimAngleChange(t *testing.T) {
 	}
 	if delta[0].AimAngle != 1.5 {
 		t.Errorf("Expected aim angle 1.5, got %f", delta[0].AimAngle)
+	}
+
+	atThreshold := []game.PlayerStateSnapshot{
+		{ID: "player1", Position: game.Vector2{X: 100, Y: 100}, Health: 100, Velocity: game.Vector2{X: 0, Y: 0}, AimAngle: RotationDeltaThreshold},
+	}
+	delta = tracker.ComputePlayerDelta(playerID, atThreshold)
+	if len(delta) != 0 {
+		t.Errorf("Expected no delta at exact aim threshold, got %d players", len(delta))
+	}
+
+	tracker.UpdatePlayerState(playerID, []game.PlayerStateSnapshot{
+		{ID: "player1", Position: game.Vector2{X: 100, Y: 100}, Health: 100, Velocity: game.Vector2{X: 0, Y: 0}, AimAngle: math.Pi - 0.005},
+	})
+	wrapAround := []game.PlayerStateSnapshot{
+		{ID: "player1", Position: game.Vector2{X: 100, Y: 100}, Health: 100, Velocity: game.Vector2{X: 0, Y: 0}, AimAngle: -math.Pi + 0.005},
+	}
+	delta = tracker.ComputePlayerDelta(playerID, wrapAround)
+	if len(delta) != 0 {
+		t.Errorf("Expected no delta for wrap-around aim jitter, got %d players", len(delta))
 	}
 }
 

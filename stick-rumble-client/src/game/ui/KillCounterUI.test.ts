@@ -110,6 +110,15 @@ describe('KillCounterUI', () => {
     expect(killCounter.getKills()).toBe(0);
   });
 
+  it('should support authoritative total reconciliation via setKills()', () => {
+    const killCounter = new KillCounterUI(mockScene, 1720, 50);
+
+    killCounter.setKills(5);
+
+    expect(killCounter.getKills()).toBe(5);
+    expect(mockText.setText).toHaveBeenCalledWith('KILLS: 5');
+  });
+
   it('should destroy text on destroy()', () => {
     const killCounter = new KillCounterUI(mockScene, 1720, 50);
     killCounter.destroy();

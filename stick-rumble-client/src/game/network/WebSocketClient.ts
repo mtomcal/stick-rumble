@@ -23,6 +23,7 @@ export interface PlayerScore {
   kills: number;
   deaths: number;
   xp: number;
+  displayName?: string;
 }
 
 export interface MatchEndedData {

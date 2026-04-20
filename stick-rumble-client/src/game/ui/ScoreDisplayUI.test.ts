@@ -109,6 +109,15 @@ describe('ScoreDisplayUI', () => {
     expect(mockText.setText).toHaveBeenCalledWith('000350');
   });
 
+  it('should support authoritative total reconciliation via setScore()', () => {
+    const scoreDisplay = new ScoreDisplayUI(mockScene, 1720, 10);
+
+    scoreDisplay.setScore(725);
+
+    expect(scoreDisplay.getScore()).toBe(725);
+    expect(mockText.setText).toHaveBeenCalledWith('000725');
+  });
+
   it('should destroy text on destroy()', () => {
     const scoreDisplay = new ScoreDisplayUI(mockScene, 1720, 10);
     scoreDisplay.destroy();

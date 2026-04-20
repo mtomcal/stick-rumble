@@ -250,15 +250,24 @@ describe('HitEffectManager', () => {
       expect(graphicsMock.fillRect).toHaveBeenCalledWith(-2, -2, 4, 4);
     });
 
-    it('should create white melee impact lines', () => {
+    it('should create distinct bat melee impact lines by default', () => {
       const addGraphics = scene.add.graphics as unknown as ReturnType<typeof vi.fn>;
       const graphicsMock = addGraphics.mock.results[0]?.value;
 
       manager.showMeleeHit(100, 200);
 
-      // Should have filled with white color (0xFFFFFF)
-      expect(graphicsMock.fillStyle).toHaveBeenCalledWith(0xFFFFFF, 1);
-      expect(graphicsMock.fillCircle).toHaveBeenCalledWith(0, 0, 2);
+      expect(graphicsMock.fillStyle).toHaveBeenCalledWith(0xf6d365, 1);
+      expect(graphicsMock.fillCircle).toHaveBeenCalledWith(0, 0, 3);
+    });
+
+    it('should create distinct katana melee impact lines when requested', () => {
+      const addGraphics = scene.add.graphics as unknown as ReturnType<typeof vi.fn>;
+      const graphicsMock = addGraphics.mock.results[0]?.value;
+
+      manager.showMeleeHit(100, 200, 'Katana');
+
+      expect(graphicsMock.fillStyle).toHaveBeenCalledWith(0xb8f2ff, 1);
+      expect(graphicsMock.fillCircle).toHaveBeenCalledWith(6, -4, 2);
     });
 
     it('should create gold muzzle flash (COLORS.MUZZLE_FLASH)', () => {

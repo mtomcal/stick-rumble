@@ -22,10 +22,11 @@ type MatchConfig struct {
 
 // PlayerScore represents a player's final score in a match
 type PlayerScore struct {
-	PlayerID string `json:"playerId"`
-	Kills    int    `json:"kills"`
-	Deaths   int    `json:"deaths"`
-	XP       int    `json:"xp"`
+	PlayerID    string `json:"playerId"`
+	DisplayName string `json:"displayName,omitempty"`
+	Kills       int    `json:"kills"`
+	Deaths      int    `json:"deaths"`
+	XP          int    `json:"xp"`
 }
 
 // Match represents a game match with win conditions and state tracking
@@ -225,10 +226,11 @@ func (m *Match) GetFinalScores(world *World) []PlayerScore {
 
 		// Create score entry with player stats
 		score := PlayerScore{
-			PlayerID: playerID,
-			Kills:    player.Kills,
-			Deaths:   player.Deaths,
-			XP:       player.XP,
+			PlayerID:    playerID,
+			DisplayName: player.DisplayName,
+			Kills:       player.Kills,
+			Deaths:      player.Deaths,
+			XP:          player.XP,
 		}
 		scores = append(scores, score)
 	}

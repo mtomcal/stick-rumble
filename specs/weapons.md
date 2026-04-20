@@ -762,6 +762,7 @@ const color = parseHexColor(config.visuals.muzzleFlashColor);
 - `weapon:pickup_confirmed` is room feedback, not local equip authority; it may drive crate and pickup UX but must not independently decide local firing mode, ammo UI, crosshair behavior, or held-weapon presentation
 - On initial spawn and every respawn, the authoritative local weapon state is the default pistol unless and until a later `weapon:state` says otherwise
 - When a `weapon:state` message disagrees with the local presentation, the client must reconcile **all** local weapon-derived presentation from that message in one step: fire behavior, held weapon sprite, melee-vs-ranged visuals, ammo/reload UI, and crosshair behavior
+- On local respawn, that same one-step reconciliation must happen immediately with the default pistol so no stale melee or pickup state survives until a later event
 - No subsystem may keep its own long-lived weapon truth that can diverge from `weapon:state`; subsystems may cache render data, but authoritative weapon identity is shared state
 
 ### Go (Server)

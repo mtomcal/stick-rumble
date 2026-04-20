@@ -33,6 +33,7 @@ describe('GameSceneEventHandlers - Client-Side Reconciliation', () => {
     position: { x: 500, y: 500 },
     velocity: { x: 0, y: 0 },
     aimAngle: 0,
+    weaponType: 'Pistol',
     health: 100,
     isInvulnerable: false,
     invulnerabilityEnd: '2026-04-10T16:00:00Z',
@@ -80,6 +81,8 @@ describe('GameSceneEventHandlers - Client-Side Reconciliation', () => {
       clearInputHistoryUpTo: vi.fn(),
       setPlayerPosition: vi.fn(),
       getCurrentSequence: vi.fn().mockReturnValue(5),
+      disable: vi.fn(),
+      enable: vi.fn(),
     } as unknown as InputManager;
 
     mockWeaponCrateManager = {
@@ -96,9 +99,12 @@ describe('GameSceneEventHandlers - Client-Side Reconciliation', () => {
 
     mockMeleeWeaponManager = {
       createWeapon: vi.fn(),
+      syncWeapon: vi.fn(),
       updatePosition: vi.fn(),
+      confirmSwing: vi.fn(),
       startSwing: vi.fn(),
       destroy: vi.fn(),
+      getWeaponType: vi.fn().mockReturnValue('Bat'),
     };
 
     mockHitEffectManager = {
@@ -230,6 +236,27 @@ describe('GameSceneEventHandlers - Client-Side Reconciliation', () => {
     expect(call[2]).toBe(true); // Large correction, instant teleport
   });
 
+  it('should request instant correction at the exact 100px threshold', () => {
+    const messageData: PlayerMoveData = {
+      players: [
+        {
+          ...basePlayerState,
+          position: { x: 500, y: 500 },
+        },
+      ],
+      lastProcessedSequence: { 'player-1': 3 },
+      correctedPlayers: ['player-1'],
+    };
+
+    (mockPlayerManager.getPlayerPosition as Mock).mockReturnValue({ x: 400, y: 500 });
+    (mockInputManager.getInputHistory as Mock).mockReturnValue([]);
+
+    playerMoveHandler(messageData);
+
+    const call = (mockPlayerManager.applyReconciledPosition as Mock).mock.calls[0];
+    expect(call[2]).toBe(true);
+  });
+
   it('should always reconcile local player even if not in correctedPlayers list (Story stick-rumble-nki)', () => {
     const messageData: PlayerMoveData = {
       players: [basePlayerState],
@@ -348,5 +375,58 @@ describe('GameSceneEventHandlers - Client-Side Reconciliation', () => {
 
     // Should not call reconciliation if local player not found
     expect(mockPlayerManager.applyReconciledPosition).not.toHaveBeenCalled();
+  });
+
+  it('should reconcile authoritative streamed weaponType before match end freeze', () => {
+    const messageData: PlayerMoveData = {
+      players: [
+        {
+          ...basePlayerState,
+          weaponType: 'Bat',
+        },
+      ],
+      lastProcessedSequence: { 'player-1': 3 },
+    };
+
+    playerMoveHandler(messageData);
+
+    expect(mockMeleeWeaponManager.syncWeapon).toHaveBeenCalledWith(
+      'player-1',
+      'Bat',
+      basePlayerState.position
+    );
+  });
+
+  it('should stop reconciliation and weapon sync after match end freeze', () => {
+    const handlers = new Map<string, (data: unknown) => void>();
+    (mockWsClient.on as Mock).mockImplementation((event: string, handler: (data: unknown) => void) => {
+      handlers.set(event, handler);
+    });
+
+    eventHandlers.setupEventHandlers();
+    const matchEndedHandler = handlers.get('match:ended');
+    const freshPlayerMoveHandler = handlers.get('player:move');
+
+    matchEndedHandler?.({
+      winners: ['player-1'],
+      finalScores: [{ playerId: 'player-1', kills: 5, deaths: 2, xp: 500 }],
+      reason: 'time_limit',
+    });
+
+    vi.clearAllMocks();
+
+    freshPlayerMoveHandler?.({
+      players: [
+        {
+          ...basePlayerState,
+          weaponType: 'Bat',
+        },
+      ],
+      lastProcessedSequence: { 'player-1': 3 },
+    });
+
+    expect(mockPlayerManager.applyReconciledPosition).not.toHaveBeenCalled();
+    expect(mockMeleeWeaponManager.syncWeapon).not.toHaveBeenCalled();
+    expect(mockInputManager.clearInputHistoryUpTo).not.toHaveBeenCalled();
   });
 });

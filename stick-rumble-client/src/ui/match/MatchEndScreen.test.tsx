@@ -10,9 +10,9 @@ describe('MatchEndScreen', () => {
   const mockMatchData: MatchEndData = {
     winners: ['player-1'],
     finalScores: [
-      { playerId: 'player-1', kills: 5, deaths: 2, xp: 150 },
-      { playerId: 'player-2', kills: 3, deaths: 4, xp: 100 },
-      { playerId: 'player-3', kills: 1, deaths: 5, xp: 75 },
+      { playerId: 'player-1', displayName: 'Alice', kills: 5, deaths: 2, xp: 150 },
+      { playerId: 'player-2', displayName: 'Bob', kills: 3, deaths: 4, xp: 100 },
+      { playerId: 'player-3', displayName: 'Carol', kills: 1, deaths: 5, xp: 75 },
     ],
     reason: 'time_expired',
   };
@@ -38,7 +38,7 @@ describe('MatchEndScreen', () => {
       );
 
       expect(screen.getByText(/Winner:/i)).toBeInTheDocument();
-      expect(screen.getByText(/Winner:/i)).toHaveTextContent('player-1');
+      expect(screen.getByText(/Winner:/i)).toHaveTextContent('Alice');
     });
 
     it('should render multiple winners when there is a tie', () => {
@@ -57,7 +57,7 @@ describe('MatchEndScreen', () => {
       );
 
       expect(screen.getByText(/Winners:/i)).toBeInTheDocument();
-      expect(screen.getByText(/Winners:/i)).toHaveTextContent('player-1, player-2');
+      expect(screen.getByText(/Winners:/i)).toHaveTextContent('Alice, Bob');
     });
 
     it('should render final scores table with all players', () => {
@@ -94,25 +94,25 @@ describe('MatchEndScreen', () => {
       const rows = screen.getAllByRole('row');
       // Skip header row (index 0), check data rows
       expect(rows[1]).toHaveTextContent('1');
-      expect(rows[1]).toHaveTextContent('player-1');
+      expect(rows[1]).toHaveTextContent('Alice');
       expect(rows[1]).toHaveTextContent('5');
 
       expect(rows[2]).toHaveTextContent('2');
-      expect(rows[2]).toHaveTextContent('player-2');
+      expect(rows[2]).toHaveTextContent('Bob');
       expect(rows[2]).toHaveTextContent('3');
 
       expect(rows[3]).toHaveTextContent('3');
-      expect(rows[3]).toHaveTextContent('player-3');
+      expect(rows[3]).toHaveTextContent('Carol');
       expect(rows[3]).toHaveTextContent('1');
     });
 
-    it('should rank tied players by deaths ascending', () => {
+    it('should share rank for kill ties and use display name only as presentation order', () => {
       const tiedData: MatchEndData = {
         ...mockMatchData,
         finalScores: [
-          { playerId: 'player-1', kills: 5, deaths: 3, xp: 150 },
-          { playerId: 'player-2', kills: 5, deaths: 2, xp: 150 },
-          { playerId: 'player-3', kills: 3, deaths: 4, xp: 100 },
+          { playerId: 'player-1', displayName: 'Zed', kills: 5, deaths: 1, xp: 150 },
+          { playerId: 'player-2', displayName: 'Amy', kills: 5, deaths: 9, xp: 150 },
+          { playerId: 'player-3', displayName: 'Carol', kills: 3, deaths: 4, xp: 100 },
         ],
       };
 
@@ -126,9 +126,32 @@ describe('MatchEndScreen', () => {
       );
 
       const rows = screen.getAllByRole('row');
-      // player-2 should be ranked higher (fewer deaths)
-      expect(rows[1]).toHaveTextContent('player-2');
-      expect(rows[2]).toHaveTextContent('player-1');
+      expect(rows[1]).toHaveTextContent('1Amy');
+      expect(rows[2]).toHaveTextContent('1Zed');
+      expect(rows[3]).toHaveTextContent('3Carol');
+    });
+
+    it('should fall back to playerId when displayName is blank or whitespace', () => {
+      const fallbackData: MatchEndData = {
+        ...mockMatchData,
+        winners: ['player-2'],
+        finalScores: [
+          { playerId: 'player-1', displayName: '   ', kills: 5, deaths: 2, xp: 150 },
+          { playerId: 'player-2', displayName: '', kills: 6, deaths: 1, xp: 200 },
+        ],
+      };
+
+      render(
+        <MatchEndScreen
+          matchData={fallbackData}
+          localPlayerId="player-1"
+          onClose={mockOnClose}
+          onPlayAgain={mockOnPlayAgain}
+        />
+      );
+
+      expect(screen.getByText(/Winner:/i)).toHaveTextContent('player-2');
+      expect(screen.getByText('player-1')).toBeInTheDocument();
     });
 
     it('should display XP earned for local player', () => {
@@ -391,6 +414,45 @@ describe('MatchEndScreen', () => {
 
       const playAgainButton = screen.getByRole('button', { name: /Play Again/i });
       fireEvent.click(playAgainButton);
+
+      expect(mockOnPlayAgain).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not call onPlayAgain twice when clicked before countdown expiry', () => {
+      render(
+        <MatchEndScreen
+          matchData={mockMatchData}
+          localPlayerId="player-2"
+          onClose={mockOnClose}
+          onPlayAgain={mockOnPlayAgain}
+        />
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: /Play Again/i }));
+
+      act(() => {
+        vi.advanceTimersByTime(10_000);
+      });
+
+      expect(mockOnPlayAgain).toHaveBeenCalledTimes(1);
+      expect(screen.getByText(/Returning to lobby in 0s/i)).toBeInTheDocument();
+    });
+
+    it('should not call onPlayAgain twice when clicked before countdown expiry', () => {
+      render(
+        <MatchEndScreen
+          matchData={mockMatchData}
+          localPlayerId="player-2"
+          onClose={mockOnClose}
+          onPlayAgain={mockOnPlayAgain}
+        />
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: /Play Again/i }));
+
+      act(() => {
+        vi.advanceTimersByTime(10_000);
+      });
 
       expect(mockOnPlayAgain).toHaveBeenCalledTimes(1);
     });

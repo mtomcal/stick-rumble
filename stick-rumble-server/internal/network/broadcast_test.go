@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/mtomcal/stick-rumble-server/internal/game"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -57,6 +58,58 @@ func TestBroadcastPlayerMove(t *testing.T) {
 		assert.NotNil(t, velocity["x"])
 		assert.NotNil(t, velocity["y"])
 	}
+}
+
+func TestBroadcastPlayerMoveIncludesAuthoritativeWeaponTypeInStateUpdates(t *testing.T) {
+	ts := newTestServer()
+	defer ts.Close()
+
+	conn1, conn2 := ts.connectTwoClients(t)
+	defer conn1.Close()
+	defer conn2.Close()
+
+	player1ID := consumeRoomJoinedAndGetPlayerID(t, conn1)
+	_ = consumeRoomJoinedAndGetPlayerID(t, conn2)
+
+	uzi, err := game.CreateWeaponByType("uzi")
+	require.NoError(t, err)
+	ts.handler.gameServer.SetWeaponState(player1ID, game.NewWeaponState(uzi))
+	sendInputState(t, conn1, true, false, false, false)
+
+	assertAuthoritativeWeaponType := func(conn *websocket.Conn) {
+		var msg *Message
+		for range 6 {
+			msg, err = readMessage(t, conn, 2*time.Second)
+			require.NoError(t, err, "Should receive follow-up message")
+			if msg.Type == "state:snapshot" || msg.Type == "state:delta" {
+				break
+			}
+		}
+		require.NotNil(t, msg)
+		require.Contains(t, []string{"state:snapshot", "state:delta"}, msg.Type)
+
+		data, ok := msg.Data.(map[string]interface{})
+		require.True(t, ok)
+
+		players, ok := data["players"].([]interface{})
+		require.True(t, ok)
+
+		foundPlayer := false
+		for _, player := range players {
+			updateMap := player.(map[string]interface{})
+			if updateMap["id"] != player1ID {
+				continue
+			}
+
+			foundPlayer = true
+			assert.Equal(t, "Uzi", updateMap["weaponType"])
+		}
+
+		assert.True(t, foundPlayer, "Expected authoritative player state for picking player")
+	}
+
+	assertAuthoritativeWeaponType(conn1)
+	assertAuthoritativeWeaponType(conn2)
 }
 
 func TestBroadcastProjectileSpawn(t *testing.T) {
@@ -310,6 +363,14 @@ func TestBroadcastWeaponPickup(t *testing.T) {
 	assert.Equal(t, "uzi", data["weaponType"])
 	// Schema uses "nextRespawnTime" as unix timestamp
 	assert.NotNil(t, data["nextRespawnTime"], "Should have nextRespawnTime field")
+
+	msg2, err := readMessageOfType(t, conn2, "weapon:pickup_confirmed", 2*time.Second)
+	require.NoError(t, err, "Other players should also receive weapon:pickup_confirmed")
+	data2, ok := msg2.Data.(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, player1ID, data2["playerId"])
+	assert.Equal(t, "crate-1", data2["crateId"])
+	assert.Equal(t, "uzi", data2["weaponType"])
 
 	// Close connections after reading messages
 	conn1.Close()

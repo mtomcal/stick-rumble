@@ -337,6 +337,7 @@ export class KillFeedUI {
 - Font: Monospaced, ~28px, white (#FFFFFF / COLORS.SCORE)
 - Position: Top-right corner, right-aligned
 - Updated by: authoritative local stats only. Immediate update may come from `player:kill_credit` when the local player is the killer; later authoritative player-state broadcasts may reconcile the display back to server truth if needed
+- Kill-only flourish variants must also stay local-authoritative: the red kill hit marker and outgoing kill indicator appear only when the local player is the credited killer
 - Frozen immediately after `match:ended`
 - Depth: 1000
 
@@ -831,6 +832,8 @@ this.tweens.add({
 
 **Constants**: See [constants.md § Hit Marker Constants](constants.md#hit-marker-constants).
 
+The kill variant is local-credit-only. Remote kills may still update kill feed and final standings, but they must not show the local player's kill marker or kill-direction indicator.
+
 ---
 
 ### Damage Numbers
@@ -1057,6 +1060,7 @@ minimapGraphics.strokePath();
 - No winner: "No Winner"
 - Winner name color: Gold (#ffd700)
 - Winner names are rendered from authoritative display names known to the client; raw internal player IDs are UI-internal and may be shown only as an emergency fallback if no display name is known
+- Blank or whitespace-only display names are treated as unknown and must fall back to the player ID rather than rendering empty text
 - No separate "MATCH ENDED" title — the winner text IS the title (`<h2 class="match-end-title">`)
 
 #### Scoreboard Table

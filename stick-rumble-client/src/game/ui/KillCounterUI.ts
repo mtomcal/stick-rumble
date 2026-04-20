@@ -35,7 +35,11 @@ export class KillCounterUI {
    * Increment kill count and update display
    */
   incrementKills(): void {
-    this.kills++;
+    this.setKills(this.kills + 1);
+  }
+
+  setKills(kills: number): void {
+    this.kills = kills;
     this.killText.setText(`KILLS: ${this.kills}`);
   }
 

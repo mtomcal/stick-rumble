@@ -14,17 +14,36 @@ export function MatchEndScreen({ matchData, localPlayerId, onClose, onPlayAgain 
   const [countdown, setCountdown] = useState(10);
   const hasCalledPlayAgainRef = useRef(false);
 
-  // Sort players by kills descending, then by deaths ascending
+  const resolveDisplayName = (playerId: string) => {
+    const player = matchData.finalScores.find((score) => score.playerId === playerId);
+    const displayName = player?.displayName?.trim();
+    return displayName && displayName.length > 0 ? displayName : playerId;
+  };
+
   const rankedPlayers = [...matchData.finalScores].sort((a, b) => {
     if (b.kills !== a.kills) {
       return b.kills - a.kills;
     }
-    return a.deaths - b.deaths;
+    return resolveDisplayName(a.playerId).localeCompare(resolveDisplayName(b.playerId));
   });
+
+  const rankedPlayersWithPlacement = rankedPlayers.reduce<Array<(typeof rankedPlayers)[number] & { rank: number }>>(
+    (acc, player, index) => {
+      const previousPlayer = rankedPlayers[index - 1];
+      const previousRank = acc[index - 1]?.rank ?? 1;
+      const rank = previousPlayer && previousPlayer.kills === player.kills
+        ? previousRank
+        : index + 1;
+
+      acc.push({ ...player, rank });
+      return acc;
+    },
+    []
+  );
 
   // Find local player data
   const localPlayer = matchData.finalScores.find(p => p.playerId === localPlayerId);
-  const localPlayerRank = rankedPlayers.findIndex(p => p.playerId === localPlayerId) + 1;
+  const localPlayerRank = rankedPlayersWithPlacement.find(p => p.playerId === localPlayerId)?.rank ?? 0;
   const isWinner = matchData.winners.includes(localPlayerId);
   const isTopThree = localPlayerRank > 0 && localPlayerRank <= 3;
 
@@ -72,6 +91,11 @@ export function MatchEndScreen({ matchData, localPlayerId, onClose, onPlayAgain 
   };
 
   const handlePlayAgain = () => {
+    if (hasCalledPlayAgainRef.current) {
+      return;
+    }
+    hasCalledPlayAgainRef.current = true;
+    setCountdown(0);
     onPlayAgain();
   };
 
@@ -83,14 +107,14 @@ export function MatchEndScreen({ matchData, localPlayerId, onClose, onPlayAgain 
     if (matchData.winners.length === 1) {
       return (
         <h2 className="match-end-title">
-          Winner: <span className="winner-name">{matchData.winners[0]}</span>
+          Winner: <span className="winner-name">{resolveDisplayName(matchData.winners[0])}</span>
         </h2>
       );
     }
 
     return (
       <h2 className="match-end-title">
-        Winners: <span className="winner-name">{matchData.winners.join(', ')}</span>
+        Winners: <span className="winner-name">{matchData.winners.map(resolveDisplayName).join(', ')}</span>
       </h2>
     );
   };
@@ -127,13 +151,13 @@ export function MatchEndScreen({ matchData, localPlayerId, onClose, onPlayAgain 
                 </tr>
               </thead>
               <tbody>
-                {rankedPlayers.map((player, index) => (
+                {rankedPlayersWithPlacement.map((player) => (
                   <tr
                     key={player.playerId}
                     className={player.playerId === localPlayerId ? 'local-player' : ''}
                   >
-                    <td>{index + 1}</td>
-                    <td>{player.playerId}</td>
+                    <td>{player.rank}</td>
+                    <td>{resolveDisplayName(player.playerId)}</td>
                     <td>{player.kills}</td>
                     <td>{player.deaths}</td>
                   </tr>

@@ -19,14 +19,25 @@ const WEAPON_STATS: Record<string, WeaponStats> = {
   },
 };
 
-// Melee arc visual constants (all weapons use the same style)
-const ARC_COLOR = 0xFFFFFF;
-const ARC_STROKE_WIDTH = 2;
-const ARC_STROKE_ALPHA = 0.8;
-const ARC_FADE_DURATION = 200;
-const SWING_ANGLE_FROM = -45;
-const SWING_ANGLE_TO = 60;
-const SWING_DURATION = 100;
+type SwingPhase = 'idle' | 'preview' | 'confirmed';
+
+interface SwingStyle {
+  color: number;
+  width: number;
+  alpha: number;
+  fadeDuration: number;
+  radiusMultiplier: number;
+}
+
+const PREVIEW_STYLES: Record<string, SwingStyle> = {
+  bat: { color: 0xf6d365, width: 4, alpha: 0.4, fadeDuration: 90, radiusMultiplier: 0.72 },
+  katana: { color: 0xb8f2ff, width: 3, alpha: 0.35, fadeDuration: 80, radiusMultiplier: 0.88 },
+};
+
+const CONFIRMED_STYLES: Record<string, SwingStyle> = {
+  bat: { color: 0xfff2bf, width: 7, alpha: 0.85, fadeDuration: 150, radiusMultiplier: 1 },
+  katana: { color: 0xf4fbff, width: 5, alpha: 0.92, fadeDuration: 130, radiusMultiplier: 1.08 },
+};
 
 /**
  * MeleeWeapon handles visual rendering of melee weapon swing animations
@@ -39,7 +50,11 @@ export class MeleeWeapon {
 
   private x: number;
   private y: number;
-  private swinging: boolean = false;
+  private swingPhase: SwingPhase = 'idle';
+  private animationToken = 0;
+  private activeAimAngle: number | null = null;
+  private activeStyle: SwingStyle | null = null;
+  private activeTween: Phaser.Tweens.Tween | null = null;
 
   constructor(scene: Phaser.Scene, x: number, y: number, weaponType: string) {
     this.scene = scene;
@@ -55,64 +70,83 @@ export class MeleeWeapon {
   }
 
   /**
-   * Start a melee swing animation with alpha fade tween
-   * Returns false if already swinging
+   * Start a harmless local preview motion.
    */
-  startSwing(aimAngle: number, weaponContainer?: Phaser.GameObjects.Container): boolean {
-    if (this.swinging) {
+  startPreviewSwing(aimAngle: number): boolean {
+    if (this.swingPhase !== 'idle') {
       return false;
     }
 
-    this.swinging = true;
-    this.graphics.setVisible(true);
-    this.graphics.setAlpha(1);
-
-    // Render the arc
-    this.showSwingAnimation(aimAngle);
-
-    // Alpha fade tween on the arc graphics
-    this.scene.tweens.add({
-      targets: this.graphics,
-      alpha: 0,
-      duration: ARC_FADE_DURATION,
-      onComplete: () => {
-        this.swinging = false;
-        this.graphics.setVisible(false);
-        this.graphics.clear();
-      },
-    });
-
-    // Weapon container rotation tween (swing visual)
-    if (weaponContainer) {
-      this.scene.tweens.add({
-        targets: weaponContainer,
-        angle: { from: weaponContainer.angle + SWING_ANGLE_FROM, to: weaponContainer.angle + SWING_ANGLE_TO },
-        duration: SWING_DURATION,
-        yoyo: true,
-      });
-    }
-
+    this.swingPhase = 'preview';
+    this.playSwingAnimation(aimAngle, PREVIEW_STYLES[this.weaponType.toLowerCase()] || PREVIEW_STYLES.bat);
     return true;
   }
 
   /**
-   * Show swing animation at given aim angle — white stroke-only arc
-   * Public for testing
+   * Start or upgrade to the authoritative confirmed swing motion.
    */
+  confirmSwing(aimAngle: number): boolean {
+    if (this.swingPhase === 'confirmed') {
+      return false;
+    }
+
+    this.swingPhase = 'confirmed';
+    this.playSwingAnimation(aimAngle, CONFIRMED_STYLES[this.weaponType.toLowerCase()] || CONFIRMED_STYLES.bat);
+    return true;
+  }
+
+  startSwing(aimAngle: number, weaponContainer?: Phaser.GameObjects.Container): boolean {
+    void weaponContainer;
+    return this.startPreviewSwing(aimAngle);
+  }
+
   showSwingAnimation(aimAngle: number): void {
+    this.graphics.setVisible(true);
+    this.drawSwingArc(aimAngle, CONFIRMED_STYLES[this.weaponType.toLowerCase()] || CONFIRMED_STYLES.bat);
+  }
+
+  private playSwingAnimation(aimAngle: number, style: SwingStyle): void {
+    this.activeTween?.stop();
+    this.activeTween = null;
+    this.animationToken += 1;
+    const token = this.animationToken;
+    this.activeAimAngle = aimAngle;
+    this.activeStyle = style;
+
+    this.graphics.setVisible(true);
+    this.graphics.setAlpha(style.alpha);
+    this.drawSwingArc(aimAngle, style);
+
+    this.activeTween = this.scene.tweens.add({
+      targets: this.graphics,
+      alpha: 0,
+      duration: style.fadeDuration,
+      onComplete: () => {
+        if (this.animationToken !== token) {
+          return;
+        }
+        this.swingPhase = 'idle';
+        this.activeAimAngle = null;
+        this.activeStyle = null;
+        this.activeTween = null;
+        this.graphics.setVisible(false);
+        this.graphics.clear();
+      },
+    });
+  }
+
+  private drawSwingArc(aimAngle: number, style: SwingStyle): void {
     this.graphics.clear();
 
     const arcRadians = (this.stats.arcDegrees * Math.PI) / 180;
     const halfArc = arcRadians / 2;
-
-    // Calculate start and end angles for the arc
+    const radius = this.stats.range * style.radiusMultiplier;
     const startAngle = aimAngle - halfArc;
     const endAngle = aimAngle + halfArc;
 
-    // Draw swing arc — stroke only, white for all weapons
-    this.graphics.lineStyle(ARC_STROKE_WIDTH, ARC_COLOR, ARC_STROKE_ALPHA);
+    this.graphics.lineStyle(style.width, style.color, style.alpha);
     this.graphics.beginPath();
-    this.graphics.arc(this.x, this.y, this.stats.range, startAngle, endAngle, false);
+    this.graphics.arc(this.x, this.y, radius, startAngle, endAngle, false);
     this.graphics.strokePath();
   }
 
@@ -120,7 +154,11 @@ export class MeleeWeapon {
    * Update — no-op since animations are now tween-based
    */
   update(): void {
-    // Animations handled by Phaser tweens, no per-frame logic needed
+    if (this.swingPhase === 'idle' || this.activeAimAngle === null || this.activeStyle === null) {
+      return;
+    }
+
+    this.drawSwingArc(this.activeAimAngle, this.activeStyle);
   }
 
   /**
@@ -129,13 +167,17 @@ export class MeleeWeapon {
   setPosition(x: number, y: number): void {
     this.x = x;
     this.y = y;
+
+    if (this.swingPhase !== 'idle' && this.activeAimAngle !== null && this.activeStyle !== null) {
+      this.drawSwingArc(this.activeAimAngle, this.activeStyle);
+    }
   }
 
   /**
    * Check if currently swinging
    */
   isSwinging(): boolean {
-    return this.swinging;
+    return this.swingPhase !== 'idle';
   }
 
   /**
@@ -156,7 +198,11 @@ export class MeleeWeapon {
    * Cleanup
    */
   destroy(): void {
-    this.swinging = false;
+    this.swingPhase = 'idle';
+    this.activeAimAngle = null;
+    this.activeStyle = null;
+    this.activeTween?.stop();
+    this.activeTween = null;
     if (this.graphics) {
       this.graphics.destroy();
     }

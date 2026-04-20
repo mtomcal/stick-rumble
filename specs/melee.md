@@ -565,6 +565,8 @@ const meleeHitHandler = (data: unknown) => {
 this.wsClient.on('melee:hit', meleeHitHandler);
 ```
 
+While either swing phase is active, the visual must keep following the attacker's current weapon origin as the player moves. The swing is a weapon-following motion accent, not a static decal left behind at the original click point.
+
 **Why hybrid local-preview + server-confirmed room event:**
 - **Responsiveness**: The attacker gets immediate swing motion on click
 - **Consistency**: Everyone else still sees only the server-confirmed swing

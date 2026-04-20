@@ -527,6 +527,8 @@ The end of a round uses a strict server freeze.
 - `match:ended` must be emitted only after all qualifying pre-end kills have updated the authoritative player stats included in `finalScores`
 - Once `match:ended` is emitted, winners, placements, and `finalScores` are frozen
 - Late, duplicated, or out-of-order gameplay events that arrive after `match:ended` must not alter the recorded result
+- After a client receives `match:ended`, it must ignore later gameplay mutation events for that round, including movement, timer, projectile spawn/destroy, damage, death, kill credit, respawn, melee hit, roll state, and weapon room-state events
+- `match:ended` is the authoritative result snapshot for UI; `finalScores` should include each player's display name when the server knows it so the client does not have to reconstruct result labels from transient roster state
 
 **WHY this cutoff exists**:
 - Prevents the HUD and result screen from disagreeing about last-second kills

@@ -67,6 +67,7 @@ describe('Server-to-Client Schemas', () => {
     position: { x: 100, y: 200 },
     velocity: { x: 5, y: -3 },
     aimAngle: 1.57,
+    weaponType: 'Pistol',
     health: 100,
     isInvulnerable: false,
     invulnerabilityEnd: '2026-04-10T16:00:00Z',
@@ -172,6 +173,7 @@ describe('Server-to-Client Schemas', () => {
             position: { x: 300, y: 400 },
             velocity: { x: 0, y: 0 },
             aimAngle: 0,
+            weaponType: 'Bat',
             health: 75,
             isInvulnerable: false,
             invulnerabilityEnd: '2026-04-10T16:00:00Z',
@@ -227,6 +229,18 @@ describe('Server-to-Client Schemas', () => {
       const data = {
         players: [basePlayerState],
         correctedPlayers: [''],
+      };
+      expect(Value.Check(PlayerMoveDataSchema, data)).toBe(false);
+    });
+
+    it('should reject player move data without weaponType', () => {
+      const data = {
+        players: [
+          {
+            ...basePlayerState,
+            weaponType: undefined,
+          },
+        ],
       };
       expect(Value.Check(PlayerMoveDataSchema, data)).toBe(false);
     });
@@ -560,6 +574,7 @@ describe('Server-to-Client Schemas', () => {
     it('should validate valid player score', () => {
       const data = {
         playerId: 'player-1',
+        displayName: 'Alice',
         kills: 10,
         deaths: 2,
         xp: 500,
@@ -575,6 +590,17 @@ describe('Server-to-Client Schemas', () => {
         xp: 50,
       };
       expect(Value.Check(PlayerScoreSchema, data)).toBe(true);
+    });
+
+    it('should reject empty displayName when provided', () => {
+      const data = {
+        playerId: 'player-1',
+        displayName: '',
+        kills: 5,
+        deaths: 2,
+        xp: 100,
+      };
+      expect(Value.Check(PlayerScoreSchema, data)).toBe(false);
     });
 
     it('should reject missing playerId', () => {
@@ -642,8 +668,8 @@ describe('Server-to-Client Schemas', () => {
       const data = {
         winners: ['player-1', 'player-2'],
         finalScores: [
-          { playerId: 'player-1', kills: 10, deaths: 2, xp: 100 },
-          { playerId: 'player-2', kills: 8, deaths: 3, xp: 90 },
+          { playerId: 'player-1', displayName: 'Alice', kills: 10, deaths: 2, xp: 100 },
+          { playerId: 'player-2', displayName: 'Bob', kills: 8, deaths: 3, xp: 90 },
           { playerId: 'player-3', kills: 5, deaths: 5, xp: 50 },
         ],
         reason: 'time_limit',
@@ -694,6 +720,24 @@ describe('Server-to-Client Schemas', () => {
         reason: 'elimination',
       };
       expect(Value.Check(MatchEndedDataSchema, data)).toBe(false);
+    });
+
+    it('should reject negative lastProcessedSequence values in state snapshots', () => {
+      const data = {
+        players: [],
+        projectiles: [],
+        weaponCrates: [],
+        lastProcessedSequence: { 'player-1': -1 },
+      };
+      expect(Value.Check(StateSnapshotDataSchema, data)).toBe(false);
+    });
+
+    it('should reject negative lastProcessedSequence values in state deltas', () => {
+      const data = {
+        players: [],
+        lastProcessedSequence: { 'player-1': -1 },
+      };
+      expect(Value.Check(StateDeltaDataSchema, data)).toBe(false);
     });
   });
 
