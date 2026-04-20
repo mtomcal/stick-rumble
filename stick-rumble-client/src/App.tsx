@@ -2,9 +2,17 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { PhaserGame } from './ui/common/PhaserGame'
 import { MatchEndScreen } from './ui/match/MatchEndScreen'
 import { DebugNetworkPanel } from './ui/debug/DebugNetworkPanel'
-import type { MatchEndData, JoinErrorPayload, JoinIntent, JoinSuccessPayload } from './shared/types'
+import { WebSocketClient } from './game/network/WebSocketClient'
+import type { MatchBootstrap } from './game/sessionRuntime'
+import type {
+  JoinErrorPayload,
+  JoinIntent,
+  MatchEndData,
+  MatchSession,
+  SessionStatusData,
+} from './shared/types'
 import type { NetworkSimulatorStats } from './game/network/NetworkSimulator'
-import { buildInviteLink, formatReconnectLabel, getInviteCodeFromLocation } from './game/config/runtimeConfig'
+import { buildInviteLink, formatReconnectLabel, getInviteCodeFromLocation, getWebSocketUrl } from './game/config/runtimeConfig'
 import './App.css'
 
 const DEFAULT_STATS: NetworkSimulatorStats = {
@@ -17,8 +25,16 @@ const DISPLAY_NAME_STORAGE_KEY = 'stick-rumble.display-name'
 const DUPLICATE_TAB_TTL_MS = 5000
 const DUPLICATE_TAB_HEARTBEAT_MS = 2000
 
+type AppViewState =
+  | 'join_form'
+  | 'joining'
+  | 'searching_for_match'
+  | 'waiting_for_players'
+  | 'in_match'
+  | 'match_end'
+  | 'recoverable_error'
+
 type OverlayMode = 'join' | 'duplicate'
-const JOIN_BRIDGE_READY_EVENT = 'stick-rumble:submit-join-intent-ready'
 
 function getBrowserStorage(): Storage | null {
   if (typeof window === 'undefined') {
@@ -39,12 +55,42 @@ function getBrowserStorage(): Storage | null {
   return null
 }
 
+function toMatchSession(status: SessionStatusData): MatchSession | null {
+  if (status.state !== 'match_ready' || !status.roomId || !status.mapId) {
+    return null
+  }
+
+  return {
+    roomId: status.roomId,
+    playerId: status.playerId,
+    mapId: status.mapId,
+    displayName: status.displayName,
+    joinMode: status.joinMode,
+    code: status.code,
+  }
+}
+
+function formatJoinError(error: JoinErrorPayload | null, currentCode: string): string | null {
+  if (!error) {
+    return null
+  }
+
+  if (error.type === 'error:bad_room_code') {
+    return `Bad room code: ${error.reason ?? 'invalid'}.`
+  }
+  if (error.type === 'error:room_full') {
+    return `Room ${error.code ?? currentCode} is full.`
+  }
+  return `Server rejected ${error.offendingType ?? 'message'} before hello.`
+}
+
 function App() {
   const inviteCode = useMemo(() => getInviteCodeFromLocation(), [])
   const initialSavedDisplayName = useMemo(
     () => getBrowserStorage()?.getItem(DISPLAY_NAME_STORAGE_KEY) ?? '',
     []
   )
+  const clientRef = useRef<WebSocketClient | null>(null)
   const [tabId] = useState(() => `tab-${globalThis.crypto?.randomUUID?.() ?? Date.now().toString(36)}`)
   const claimIntervalRef = useRef<number | null>(null)
   const claimedInviteKeyRef = useRef<string | null>(null)
@@ -53,26 +99,23 @@ function App() {
   const duplicateBlockedKeyRef = useRef<string | null>(null)
   const displayNameDirtyRef = useRef(false)
 
+  const [viewState, setViewState] = useState<AppViewState>('join_form')
+  const [isSocketReady, setIsSocketReady] = useState(false)
+  const [overlayMode, setOverlayMode] = useState<OverlayMode>('join')
+  const [matchBootstrap, setMatchBootstrap] = useState<MatchBootstrap | null>(null)
+  const [sessionStatus, setSessionStatus] = useState<SessionStatusData | null>(null)
   const [matchEndData, setMatchEndData] = useState<MatchEndData | null>(null)
   const [localPlayerId, setLocalPlayerId] = useState<string>('')
+  const [joinError, setJoinError] = useState<JoinErrorPayload | null>(null)
+  const [reconnectIntent, setReconnectIntent] = useState<JoinIntent | null>(null)
   const [debugPanelVisible, setDebugPanelVisible] = useState(false)
   const [networkStats, setNetworkStats] = useState<NetworkSimulatorStats>(DEFAULT_STATS)
-  const [joinError, setJoinError] = useState<JoinErrorPayload | null>(null)
-  const [joinedRoom, setJoinedRoom] = useState<JoinSuccessPayload | null>(null)
-  const [rosterSize, setRosterSize] = useState(0)
-  const [reconnectIntent, setReconnectIntent] = useState<JoinIntent | null>(null)
-  const [overlayMode, setOverlayMode] = useState<OverlayMode>('join')
-  const [isJoinBridgeReady, setIsJoinBridgeReady] = useState(() => typeof window.submitJoinIntent === 'function')
-  const [isJoinPending, setIsJoinPending] = useState(false)
-  const [joinBridgeReadyTick, setJoinBridgeReadyTick] = useState(0)
-  const [joinForm, setJoinForm] = useState(() => {
-    return {
-      displayName: initialSavedDisplayName,
-      code: inviteCode ?? '',
-    }
-  })
+  const [joinForm, setJoinForm] = useState(() => ({
+    displayName: initialSavedDisplayName,
+    code: inviteCode ?? '',
+  }))
 
-  const waitingForFriend = Boolean(joinedRoom?.code) && rosterSize < 2
+  const getClient = useCallback(() => clientRef.current, [])
 
   const getNetworkStats = useCallback(() => {
     if (window.getNetworkSimulatorStats) {
@@ -114,7 +157,7 @@ function App() {
     if (current) {
       try {
         const parsed = JSON.parse(current) as { owner: string; updatedAt: number }
-        if (parsed.owner !== tabId && now-parsed.updatedAt < DUPLICATE_TAB_TTL_MS) {
+        if (parsed.owner !== tabId && now - parsed.updatedAt < DUPLICATE_TAB_TTL_MS) {
           setOverlayMode('duplicate')
           return false
         }
@@ -136,8 +179,8 @@ function App() {
   }, [releaseInviteClaim, tabId])
 
   const submitJoinIntent = useCallback((intent: JoinIntent) => {
-    if (!window.submitJoinIntent) {
-      setIsJoinBridgeReady(false)
+    const client = getClient()
+    if (!client || !isSocketReady) {
       return
     }
 
@@ -148,11 +191,105 @@ function App() {
     setOverlayMode('join')
     setJoinError(null)
     setReconnectIntent(null)
-    setJoinedRoom(null)
-    setRosterSize(0)
-    setIsJoinPending(true)
-    window.submitJoinIntent(intent)
-  }, [claimInviteSlot])
+    setSessionStatus(null)
+    setMatchEndData(null)
+    setViewState('joining')
+    client.setGameplayReady(false)
+    client.sendHello(intent)
+  }, [claimInviteSlot, getClient, isSocketReady])
+
+  useEffect(() => {
+    const client = new WebSocketClient(getWebSocketUrl(), false)
+    clientRef.current = client
+    client.setConnectionStateHandler((connected) => {
+      setIsSocketReady(connected)
+    })
+    client.setReconnectReplayFailedHandler((intent) => {
+      setReconnectIntent(intent)
+      setJoinError(null)
+      setSessionStatus(null)
+      setViewState('recoverable_error')
+    })
+
+    const onSessionStatus = (payload: unknown) => {
+      const status = payload as SessionStatusData
+      setSessionStatus(status)
+      setJoinError(null)
+      setReconnectIntent(null)
+      setJoinForm((prev) => ({ ...prev, displayName: status.displayName, code: status.code ?? prev.code }))
+      getBrowserStorage()?.setItem(DISPLAY_NAME_STORAGE_KEY, status.displayName)
+
+      if (status.state === 'searching_for_match') {
+        setMatchBootstrap(null)
+        setViewState('searching_for_match')
+        return
+      }
+
+      if (status.state === 'waiting_for_players') {
+        setMatchBootstrap(null)
+        setViewState('waiting_for_players')
+        return
+      }
+
+      const nextMatchSession = toMatchSession(status)
+      setMatchEndData(null)
+      setLocalPlayerId(status.playerId)
+      setMatchBootstrap(
+        nextMatchSession && clientRef.current
+          ? { session: nextMatchSession, wsClient: clientRef.current }
+          : null
+      )
+      setViewState(nextMatchSession ? 'in_match' : 'recoverable_error')
+    }
+
+    const onBadRoomCode = (payload: unknown) => {
+      setJoinError({
+        type: 'error:bad_room_code',
+        reason: (payload as { reason?: string })?.reason,
+      })
+      setViewState('recoverable_error')
+    }
+
+    const onRoomFull = (payload: unknown) => {
+      setJoinError({
+        type: 'error:room_full',
+        code: (payload as { code?: string })?.code,
+      })
+      setViewState('recoverable_error')
+    }
+
+    const onNoHello = (payload: unknown) => {
+      setJoinError({
+        type: 'error:no_hello',
+        offendingType: (payload as { offendingType?: string })?.offendingType,
+      })
+      setViewState('recoverable_error')
+    }
+
+    client.on('session:status', onSessionStatus)
+    client.on('error:bad_room_code', onBadRoomCode)
+    client.on('error:room_full', onRoomFull)
+    client.on('error:no_hello', onNoHello)
+
+    client.connect()
+      .catch(() => {
+        setJoinError({
+          type: 'error:no_hello',
+          offendingType: 'socket_connect_failed',
+        })
+        setViewState('recoverable_error')
+      })
+
+    return () => {
+      client.off('session:status', onSessionStatus)
+      client.off('error:bad_room_code', onBadRoomCode)
+      client.off('error:room_full', onRoomFull)
+      client.off('error:no_hello', onNoHello)
+      client.setConnectionStateHandler(undefined)
+      client.disconnect()
+      clientRef.current = null
+    }
+  }, [])
 
   useEffect(() => {
     window.onNetworkSimulatorToggle = () => {
@@ -163,47 +300,12 @@ function App() {
       setDebugPanelVisible((prev) => !prev)
     }
 
-    window.onJoinSuccess = (payload) => {
-      setIsJoinPending(false)
-      setJoinError(null)
-      setOverlayMode('join')
-      setReconnectIntent(null)
-      setJoinedRoom(payload)
-      setJoinForm((prev) => ({ ...prev, displayName: payload.displayName, code: payload.code ?? prev.code }))
-      getBrowserStorage()?.setItem(DISPLAY_NAME_STORAGE_KEY, payload.displayName)
-    }
-
-    window.onJoinError = (payload) => {
-      setIsJoinPending(false)
-      setJoinError(payload)
-      setJoinedRoom(null)
-      setRosterSize(0)
-    }
-
-    window.onRosterSizeChanged = (count) => {
-      setRosterSize(count)
-    }
-
-    window.onReconnectReplayFailed = (intent) => {
-      setIsJoinPending(false)
-      setReconnectIntent(intent)
-    }
-
     return () => {
       delete window.onNetworkSimulatorToggle
-      delete window.onJoinSuccess
-      delete window.onJoinError
-      delete window.onRosterSizeChanged
-      delete window.onReconnectReplayFailed
     }
   }, [getNetworkStats])
 
   useEffect(() => {
-    const onJoinBridgeReady = () => {
-      setIsJoinBridgeReady(true)
-      setJoinBridgeReadyTick((prev) => prev + 1)
-    }
-
     if (typeof BroadcastChannel !== 'undefined') {
       broadcastChannelRef.current = new BroadcastChannel('stick-rumble-invite-claims')
       broadcastChannelRef.current.onmessage = (event: MessageEvent<{ type: string; key: string }>) => {
@@ -244,11 +346,9 @@ function App() {
       }
     }
 
-    window.addEventListener(JOIN_BRIDGE_READY_EVENT, onJoinBridgeReady)
     window.addEventListener('storage', onStorage)
     return () => {
       broadcastChannelRef.current?.close()
-      window.removeEventListener(JOIN_BRIDGE_READY_EVENT, onJoinBridgeReady)
       window.removeEventListener('storage', onStorage)
       releaseInviteClaim()
     }
@@ -261,7 +361,7 @@ function App() {
       !hasPrefilledDisplayName ||
       displayNameDirtyRef.current ||
       autoJoinAttemptedRef.current ||
-      !window.submitJoinIntent
+      !isSocketReady
     ) {
       return
     }
@@ -278,25 +378,42 @@ function App() {
     return () => {
       window.cancelAnimationFrame(frameId)
     }
-  }, [initialSavedDisplayName, inviteCode, joinBridgeReadyTick, submitJoinIntent])
+  }, [initialSavedDisplayName, inviteCode, isSocketReady, submitJoinIntent])
 
   const handleMatchEnd = useCallback((data: MatchEndData, playerId: string) => {
-    setMatchEndData(data)
     setLocalPlayerId(playerId)
+    setMatchEndData(data)
+    setMatchBootstrap(null)
+    setViewState('match_end')
   }, [])
 
-  const handleCloseMatchEnd = () => {
-    setMatchEndData(null)
-  }
+  const handleCancelWaiting = useCallback(() => {
+    const client = getClient()
+    client?.sendSessionLeave()
+    releaseInviteClaim()
+    setSessionStatus(null)
+    setMatchBootstrap(null)
+    setJoinError(null)
+    setViewState('join_form')
+  }, [getClient, releaseInviteClaim])
 
-  const handlePlayAgain = () => {
-    setMatchEndData(null)
-    if (window.restartGame) {
-      window.restartGame()
-    } else {
-      console.warn('App: window.restartGame is not available')
+  const handlePlayAgain = useCallback(() => {
+    const client = getClient()
+    if (!client) {
+      return
     }
-  }
+
+    const lastIntent = reconnectIntent ?? {
+      displayName: sessionStatus?.displayName ?? joinForm.displayName,
+      mode: sessionStatus?.joinMode ?? (joinForm.code.trim() ? 'code' : 'public'),
+      code: sessionStatus?.code ?? (joinForm.code.trim() || undefined),
+    }
+
+    setMatchEndData(null)
+    setJoinError(null)
+    setViewState('joining')
+    client.restartSession(lastIntent)
+  }, [getClient, joinForm.code, joinForm.displayName, reconnectIntent, sessionStatus])
 
   const handleLatencyChange = (latency: number) => {
     if (window.setNetworkSimulatorLatency) {
@@ -320,37 +437,47 @@ function App() {
   }
 
   const copyInviteLink = async () => {
-    if (!joinedRoom?.code) {
+    if (!sessionStatus?.code) {
       return
     }
 
-    const link = buildInviteLink(joinedRoom.code)
+    const link = buildInviteLink(sessionStatus.code)
     await navigator.clipboard?.writeText(link)
   }
 
-  const joinActionsDisabled = !isJoinBridgeReady || isJoinPending
+  const errorText = formatJoinError(joinError, joinForm.code)
+  const shouldRenderPhaser = viewState === 'in_match' && matchBootstrap
 
   return (
     <div className="app-shell">
-      <div className="app-container">
-        <h1 style={{ textAlign: 'center', color: '#ffffff' }}>Stick Rumble - Multiplayer Arena Shooter</h1>
-        <PhaserGame onMatchEnd={handleMatchEnd} />
-        <DebugNetworkPanel
-          isVisible={debugPanelVisible}
-          onClose={() => setDebugPanelVisible(false)}
-          stats={networkStats}
-          onLatencyChange={handleLatencyChange}
-          onPacketLossChange={handlePacketLossChange}
-          onEnabledChange={handleEnabledChange}
-        />
+      <div className="app-header">
+        <h1>Stick Rumble - Multiplayer Arena Shooter</h1>
       </div>
-      <div className="overlay-layer">
-        {overlayMode === 'join' && !joinedRoom && (
+
+      <div className="app-container">
+        {shouldRenderPhaser && matchBootstrap && (
+          <div className="game-frame">
+            <PhaserGame
+              bootstrap={matchBootstrap}
+              onMatchEnd={handleMatchEnd}
+            />
+          </div>
+        )}
+
+        {overlayMode === 'duplicate' ? (
+          <div className="overlay-card">
+            <h2>Invite Already Open</h2>
+            <p>This browser profile already claimed this invite in another tab. Return to the original tab to keep playing.</p>
+          </div>
+        ) : null}
+
+        {overlayMode === 'join' && (viewState === 'join_form' || viewState === 'joining' || viewState === 'recoverable_error') && (
           <div className="overlay-card">
             <h2>{inviteCode ? 'Join Invite' : 'Enter Match'}</h2>
             <label>
               Display Name
               <input
+                aria-label="Display Name"
                 value={joinForm.displayName}
                 onChange={(event) => {
                   displayNameDirtyRef.current = true
@@ -362,71 +489,85 @@ function App() {
             <label>
               Room Code
               <input
+                aria-label="Room Code"
                 value={joinForm.code}
                 onChange={(event) => setJoinForm((prev) => ({ ...prev, code: event.target.value }))}
                 placeholder="PIZZA"
               />
             </label>
-            {joinError && (
-              <p className="overlay-error">
-                {joinError.type === 'error:bad_room_code' && `Bad room code: ${joinError.reason ?? 'invalid'}.`}
-                {joinError.type === 'error:room_full' && `Room ${joinError.code ?? joinForm.code} is full.`}
-                {joinError.type === 'error:no_hello' && `Server rejected ${joinError.offendingType ?? 'message'} before hello.`}
-              </p>
-            )}
-            {!isJoinBridgeReady && <p className="overlay-status">Connecting to game...</p>}
-            {isJoinPending && <p className="overlay-status">Joining...</p>}
+            {errorText ? <p className="overlay-error">{errorText}</p> : null}
+            {!isSocketReady ? <p className="overlay-status">Connecting to game...</p> : null}
+            {viewState === 'joining' ? <p className="overlay-status">Joining...</p> : null}
+            {reconnectIntent ? <p className="overlay-status">Reconnect failed. Choose a new action.</p> : null}
             <div className="overlay-actions">
               <button
-                disabled={joinActionsDisabled}
+                disabled={!isSocketReady || viewState === 'joining'}
                 onClick={() => submitJoinIntent({ displayName: joinForm.displayName, mode: 'public' })}
               >
                 Play Public
               </button>
               <button
-                disabled={joinActionsDisabled}
+                disabled={!isSocketReady || viewState === 'joining'}
                 onClick={() => submitJoinIntent({ displayName: joinForm.displayName, mode: 'code', code: joinForm.code })}
               >
-                {isJoinPending ? 'Joining...' : 'Join Code'}
+                Join with Code
               </button>
             </div>
+            {reconnectIntent ? (
+              <div className="overlay-actions">
+                <button onClick={() => submitJoinIntent(reconnectIntent)}>
+                  {formatReconnectLabel(reconnectIntent)}
+                </button>
+                <button onClick={() => submitJoinIntent({ displayName: joinForm.displayName, mode: 'public' })}>
+                  Play Public
+                </button>
+              </div>
+            ) : null}
           </div>
         )}
-        {overlayMode === 'duplicate' && (
+
+        {viewState === 'searching_for_match' && sessionStatus ? (
           <div className="overlay-card">
-            <h2>Invite Already Open</h2>
-            <p>This browser profile already claimed this invite in another tab. Return to the original tab to keep playing.</p>
+            <h2>Searching For Match</h2>
+            <p>Display Name: {sessionStatus.displayName}</p>
+            <button onClick={handleCancelWaiting}>Back</button>
           </div>
-        )}
-        {waitingForFriend && (
-          <div className="overlay-card overlay-card--corner">
-            <h2>Waiting For Friend</h2>
-            <p>Code: {joinedRoom?.code}</p>
-            <button onClick={() => void copyInviteLink()}>Copy Invite Link</button>
-          </div>
-        )}
-        {reconnectIntent && (
-          <div className="overlay-card overlay-card--corner">
-            <h2>Reconnect Failed</h2>
+        ) : null}
+
+        {viewState === 'waiting_for_players' && sessionStatus ? (
+          <div className="overlay-card">
+            <h2>Waiting For Players</h2>
+            <p>Display Name: {sessionStatus.displayName}</p>
+            <p>Room Code: {sessionStatus.code}</p>
+            <p>Players: {sessionStatus.rosterSize ?? 0}/{sessionStatus.minPlayers ?? 2}</p>
             <div className="overlay-actions">
-              <button onClick={() => submitJoinIntent(reconnectIntent)}>
-                {formatReconnectLabel(reconnectIntent)}
-              </button>
-              <button onClick={() => submitJoinIntent({ displayName: joinForm.displayName, mode: 'public' })}>
-                Play Public
-              </button>
+              <button onClick={() => void copyInviteLink()}>Copy Invite Link</button>
+              <button onClick={handleCancelWaiting}>Cancel</button>
             </div>
           </div>
-        )}
-        {matchEndData && (
+        ) : null}
+
+        {viewState === 'match_end' && matchEndData ? (
           <MatchEndScreen
             matchData={matchEndData}
             localPlayerId={localPlayerId}
-            onClose={handleCloseMatchEnd}
+            onClose={() => {
+              setMatchEndData(null)
+              setViewState('join_form')
+            }}
             onPlayAgain={handlePlayAgain}
           />
-        )}
+        ) : null}
       </div>
+
+      <DebugNetworkPanel
+        isVisible={debugPanelVisible}
+        onClose={() => setDebugPanelVisible(false)}
+        stats={networkStats}
+        onLatencyChange={handleLatencyChange}
+        onPacketLossChange={handlePacketLossChange}
+        onEnabledChange={handleEnabledChange}
+      />
     </div>
   )
 }

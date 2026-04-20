@@ -512,8 +512,9 @@ Request to leave the current pre-match session without disconnecting the socket.
 1. If the player is in the public queue, remove them from the queue
 2. If the player is alone in a named room that has not started, remove them from that room
 3. If the player is in a pre-match waiting state that still allows clean exit, release that waiting state
-4. Send no gameplay bootstrap message afterward; the client returns to `join_form`
-5. If the match is already active, ignore `session:leave` and require a normal disconnect/reconnect instead
+4. Clear the connection's pre-match hello latch so the same socket may send a fresh `player:hello`
+5. Send no gameplay bootstrap message afterward; the client returns to `join_form`
+6. If the match is already active, ignore `session:leave` and require a normal disconnect/reconnect instead
 
 ---
 

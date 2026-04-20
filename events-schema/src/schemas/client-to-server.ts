@@ -40,6 +40,12 @@ export const PlayerHelloMessageSchema = Type.Object(
 export type PlayerHelloMessage = Static<typeof PlayerHelloMessageSchema>;
 
 /**
+ * Complete session:leave message schema (no data payload)
+ */
+export const SessionLeaveMessageSchema = createTypedMessageSchemaNoData('session:leave');
+export type SessionLeaveMessage = Static<typeof SessionLeaveMessageSchema>;
+
+/**
  * Input state data payload.
  * Represents keyboard input state for player movement and aim.
  */

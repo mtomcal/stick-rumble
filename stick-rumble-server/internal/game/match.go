@@ -22,10 +22,16 @@ type MatchConfig struct {
 
 // PlayerScore represents a player's final score in a match
 type PlayerScore struct {
-	PlayerID string `json:"playerId"`
-	Kills    int    `json:"kills"`
-	Deaths   int    `json:"deaths"`
-	XP       int    `json:"xp"`
+	PlayerID    string `json:"playerId"`
+	DisplayName string `json:"displayName"`
+	Kills       int    `json:"kills"`
+	Deaths      int    `json:"deaths"`
+	XP          int    `json:"xp"`
+}
+
+type WinnerSummary struct {
+	PlayerID    string `json:"playerId"`
+	DisplayName string `json:"displayName"`
 }
 
 // Match represents a game match with win conditions and state tracking
@@ -222,16 +228,43 @@ func (m *Match) GetFinalScores(world *World) []PlayerScore {
 		if !exists {
 			continue
 		}
+		displayName := player.DisplayName
+		if displayName == "" {
+			displayName = FallbackDisplayName
+		}
 
 		// Create score entry with player stats
 		score := PlayerScore{
-			PlayerID: playerID,
-			Kills:    player.Kills,
-			Deaths:   player.Deaths,
-			XP:       player.XP,
+			PlayerID:    playerID,
+			DisplayName: displayName,
+			Kills:       player.Kills,
+			Deaths:      player.Deaths,
+			XP:          player.XP,
 		}
 		scores = append(scores, score)
 	}
 
 	return scores
+}
+
+func (m *Match) GetWinnerSummaries(world *World) []WinnerSummary {
+	winnerIDs := m.DetermineWinners()
+	summaries := make([]WinnerSummary, 0, len(winnerIDs))
+
+	world.mu.RLock()
+	defer world.mu.RUnlock()
+
+	for _, playerID := range winnerIDs {
+		displayName := FallbackDisplayName
+		if player, exists := world.players[playerID]; exists && player != nil && player.DisplayName != "" {
+			displayName = player.DisplayName
+		}
+
+		summaries = append(summaries, WinnerSummary{
+			PlayerID:    playerID,
+			DisplayName: displayName,
+		})
+	}
+
+	return summaries
 }

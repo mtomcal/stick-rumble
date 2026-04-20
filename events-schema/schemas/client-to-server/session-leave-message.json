@@ -1,0 +1,21 @@
+{
+  "$id": "session_leaveMessage",
+  "description": "session:leave WebSocket message",
+  "type": "object",
+  "required": [
+    "type",
+    "timestamp"
+  ],
+  "properties": {
+    "type": {
+      "description": "Message type identifier",
+      "const": "session:leave",
+      "type": "string"
+    },
+    "timestamp": {
+      "description": "Unix timestamp in milliseconds",
+      "minimum": 0,
+      "type": "integer"
+    }
+  }
+}

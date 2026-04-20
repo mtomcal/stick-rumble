@@ -91,6 +91,27 @@ describe('WebSocketClient', () => {
 
       await expect(connectPromise).rejects.toThrow();
     });
+
+    it('should notify connection state changes on open and close', async () => {
+      const client = new WebSocketClient('ws://localhost:8080/ws');
+      const handler = vi.fn();
+      client.setConnectionStateHandler(handler);
+
+      const connectPromise = client.connect();
+
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen({});
+      }
+      await connectPromise;
+
+      if (mockWebSocketInstance.onclose) {
+        mockWebSocketInstance.onclose({ code: 1006, reason: '' });
+      }
+
+      expect(handler).toHaveBeenCalledWith(false);
+      expect(handler).toHaveBeenCalledWith(true);
+      expect(handler).toHaveBeenLastCalledWith(false);
+    });
   });
 
   describe('send', () => {

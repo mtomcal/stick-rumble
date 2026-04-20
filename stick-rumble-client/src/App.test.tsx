@@ -1,522 +1,307 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
-import App from './App';
-import type { PhaserGameProps } from './ui/common/PhaserGame';
-import type { MatchEndData } from './shared/types';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import App from './App'
+import type { PhaserGameProps } from './ui/common/PhaserGame'
+import type { JoinIntent, MatchEndData, SessionStatusData } from './shared/types'
 
-// Mock PhaserGame component
-let mockOnMatchEnd: PhaserGameProps['onMatchEnd'];
+const testState = vi.hoisted(() => ({
+  phaserRenderSpy: vi.fn(),
+  capturedOnMatchEnd: undefined as PhaserGameProps['onMatchEnd'],
+  autoConnectReady: true,
+  clientInstances: [] as Array<{
+    emit: (event: string, payload: unknown) => void
+    connect: ReturnType<typeof vi.fn>
+    disconnect: ReturnType<typeof vi.fn>
+    on: ReturnType<typeof vi.fn>
+    off: ReturnType<typeof vi.fn>
+    sendHello: ReturnType<typeof vi.fn>
+    sendSessionLeave: ReturnType<typeof vi.fn>
+    restartSession: ReturnType<typeof vi.fn>
+    setReconnectReplayFailedHandler: ReturnType<typeof vi.fn>
+    setConnectionStateHandler: ReturnType<typeof vi.fn>
+    setGameplayReady: ReturnType<typeof vi.fn>
+    connectionStateHandler?: (connected: boolean) => void
+    onReconnectReplayFailed?: (intent: JoinIntent) => void
+  }>,
+}))
 
 vi.mock('./ui/common/PhaserGame', () => ({
-  PhaserGame: ({ onMatchEnd }: PhaserGameProps) => {
-    mockOnMatchEnd = onMatchEnd;
-    return <div data-testid="phaser-game-mock">Phaser Game</div>;
+  PhaserGame: (props: PhaserGameProps) => {
+    testState.phaserRenderSpy(props)
+    testState.capturedOnMatchEnd = props.onMatchEnd
+    return <div data-testid="phaser-game">Phaser</div>
   },
-}));
+}))
 
-// Mock MatchEndScreen component - expose onPlayAgain
-let mockOnPlayAgain: (() => void) | undefined;
-vi.mock('./ui/match/MatchEndScreen', () => ({
-  MatchEndScreen: ({ onClose, onPlayAgain }: { onClose: () => void; onPlayAgain: () => void }) => {
-    mockOnPlayAgain = onPlayAgain;
-    return (
-      <div data-testid="match-end-screen-mock">
-        <button onClick={onClose}>Close Match End</button>
-        <button onClick={onPlayAgain}>Play Again</button>
-      </div>
-    );
-  },
-}));
-
-// Mock DebugNetworkPanel component - expose callbacks
-let mockOnLatencyChange: ((latency: number) => void) | undefined;
-let mockOnPacketLossChange: ((packetLoss: number) => void) | undefined;
-let mockOnEnabledChange: ((enabled: boolean) => void) | undefined;
 vi.mock('./ui/debug/DebugNetworkPanel', () => ({
-  DebugNetworkPanel: ({ onLatencyChange, onPacketLossChange, onEnabledChange }: any) => {
-    mockOnLatencyChange = onLatencyChange;
-    mockOnPacketLossChange = onPacketLossChange;
-    mockOnEnabledChange = onEnabledChange;
-    return <div data-testid="debug-panel-mock" />;
+  DebugNetworkPanel: () => <div data-testid="debug-panel" />,
+}))
+
+type Handler = (payload: unknown) => void
+
+vi.mock('./game/network/WebSocketClient', () => ({
+  WebSocketClient: class {
+    readonly handlers = new Map<string, Set<Handler>>()
+    readonly connect = vi.fn().mockResolvedValue(undefined)
+    readonly disconnect = vi.fn()
+    readonly on = vi.fn((event: string, handler: Handler) => {
+      const handlers = this.handlers.get(event) ?? new Set<Handler>()
+      handlers.add(handler)
+      this.handlers.set(event, handlers)
+    })
+    readonly off = vi.fn((event: string, handler: Handler) => {
+      this.handlers.get(event)?.delete(handler)
+    })
+    readonly sendHello = vi.fn()
+    readonly sendSessionLeave = vi.fn()
+    readonly restartSession = vi.fn()
+    readonly setReconnectReplayFailedHandler = vi.fn((handler: (intent: JoinIntent) => void) => {
+      this.onReconnectReplayFailed = handler
+    })
+    readonly setConnectionStateHandler = vi.fn((handler?: (connected: boolean) => void) => {
+      this.connectionStateHandler = handler
+      if (testState.autoConnectReady) {
+        handler?.(true)
+      }
+    })
+    readonly setGameplayReady = vi.fn()
+    connectionStateHandler?: (connected: boolean) => void
+    onReconnectReplayFailed?: (intent: JoinIntent) => void
+
+    constructor() {
+      testState.clientInstances.push(this as never)
+    }
+
+    emit(event: string, payload: unknown): void {
+      this.handlers.get(event)?.forEach((handler) => handler(payload))
+    }
   },
-}));
+}))
+
+function getClient() {
+  const client = testState.clientInstances.at(-1)
+  if (!client) {
+    throw new Error('expected WebSocket client to be created')
+  }
+  return client
+}
+
+function emitSessionStatus(status: SessionStatusData): void {
+  act(() => {
+    getClient().emit('session:status', status)
+  })
+}
 
 describe('App', () => {
+  beforeEach(() => {
+    testState.clientInstances.length = 0
+    testState.phaserRenderSpy.mockReset()
+    testState.capturedOnMatchEnd = undefined
+    testState.autoConnectReady = true
+    window.localStorage.clear()
+    window.history.replaceState({}, '', '/')
+  })
+
   afterEach(() => {
-    window.localStorage.clear();
-    window.history.replaceState({}, '', '/');
-    delete window.submitJoinIntent;
-    delete window.onJoinSuccess;
-    delete window.onJoinError;
-    delete window.onRosterSizeChanged;
-    delete window.onReconnectReplayFailed;
-  });
+    vi.clearAllMocks()
+  })
 
-  it('should render the main app container', () => {
-    const { container } = render(<App />);
-    const appContainer = container.querySelector('.app-container');
+  it('renders the join form after the socket connects and keeps Phaser unmounted before match_ready', async () => {
+    render(<App />)
 
-    expect(appContainer).toBeDefined();
-    expect(appContainer).not.toBeNull();
-  });
+    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
 
-  it('should render the game title', () => {
-    render(<App />);
+    expect(screen.getByRole('heading', { name: 'Stick Rumble - Multiplayer Arena Shooter' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Play Public' })).toBeEnabled()
+    expect(screen.queryByTestId('phaser-game')).not.toBeInTheDocument()
+  })
 
-    const title = screen.getByText(/Stick Rumble - Multiplayer Arena Shooter/i);
-    expect(title).toBeDefined();
-  });
+  it('prefills the invite code but does not auto-submit without a saved display name', async () => {
+    window.history.replaceState({}, '', '/?invite=PIZZA')
 
-  it('should render title as h1 element', () => {
-    render(<App />);
+    render(<App />)
 
-    const title = screen.getByRole('heading', { level: 1 });
-    expect(title).toBeDefined();
-    expect(title.textContent).toBe('Stick Rumble - Multiplayer Arena Shooter');
-  });
+    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
 
-  it('should render title with centered text alignment', () => {
-    render(<App />);
+    expect(screen.getByRole('textbox', { name: 'Room Code' })).toHaveValue('PIZZA')
+    expect(getClient().sendHello).not.toHaveBeenCalled()
+  })
 
-    const title = screen.getByRole('heading', { level: 1 });
-    expect(title).toHaveStyle({ textAlign: 'center' });
-  });
+  it('auto-submits an invite when a saved display name exists and the socket is ready', async () => {
+    window.localStorage.setItem('stick-rumble.display-name', 'Alice')
+    window.history.replaceState({}, '', '/?invite=PIZZA')
 
-  it('should render title with white color', () => {
-    render(<App />);
+    render(<App />)
 
-    const title = screen.getByRole('heading', { level: 1 });
-    expect(title).toHaveStyle({ color: '#ffffff' });
-  });
+    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
+    await waitFor(() =>
+      expect(getClient().sendHello).toHaveBeenCalledWith({
+        displayName: 'Alice',
+        mode: 'code',
+        code: 'PIZZA',
+      }),
+    )
+  })
 
-  it('should render PhaserGame component', () => {
-    render(<App />);
+  it('does not auto-submit an invite after the player edits the prefilled display name before reconnect', async () => {
+    testState.autoConnectReady = false
+    window.localStorage.setItem('stick-rumble.display-name', 'Alice')
+    window.history.replaceState({}, '', '/?invite=PIZZA')
 
-    const phaserGame = screen.getByTestId('phaser-game-mock');
-    expect(phaserGame).toBeDefined();
-  });
+    render(<App />)
 
-  it('should render components in correct order', () => {
-    const { container } = render(<App />);
-
-    const appContainer = container.querySelector('.app-container');
-    expect(appContainer?.children).toHaveLength(3);
-
-    // First child should be h1
-    expect(appContainer?.children[0].tagName).toBe('H1');
-
-    // Second child should be the PhaserGame (mocked as div)
-    expect(appContainer?.children[1].getAttribute('data-testid')).toBe('phaser-game-mock');
-
-    // Third child is the DebugNetworkPanel (mocked as div)
-    expect(appContainer?.children[2].getAttribute('data-testid')).toBe('debug-panel-mock');
-  });
-
-  it('should auto-join an invite after the join bridge becomes ready', () => {
-    window.localStorage.setItem('stick-rumble.display-name', 'Saved Player');
-    window.history.replaceState({}, '', '/?invite=PIZZA');
-
-    const submitJoinIntent = vi.fn();
-    const rafSpy = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback: FrameRequestCallback) => {
-      callback(0);
-      return 1;
-    });
-    const cancelSpy = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
-
-    render(<App />);
-    expect(submitJoinIntent).not.toHaveBeenCalled();
-
-    window.submitJoinIntent = submitJoinIntent;
-    act(() => {
-      window.dispatchEvent(new Event('stick-rumble:submit-join-intent-ready'));
-    });
-
-    expect(submitJoinIntent).toHaveBeenCalledWith({
-      displayName: 'Saved Player',
-      mode: 'code',
-      code: 'PIZZA',
-    });
-
-    rafSpy.mockRestore();
-    cancelSpy.mockRestore();
-  });
-
-  it('should keep join actions disabled until the Phaser join bridge is ready', () => {
-    window.history.replaceState({}, '', '/?invite=PIZZA');
-
-    render(<App />);
-
-    expect(screen.getByRole('button', { name: 'Play Public' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Join Code' })).toBeDisabled();
-    expect(screen.getByText('Connecting to game...')).toBeInTheDocument();
-  });
-
-  it('should show a joining state after submit until Phaser resolves the attempt', () => {
-    window.history.replaceState({}, '', '/?invite=PIZZA');
-    const submitJoinIntent = vi.fn();
-
-    render(<App />);
+    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
 
     fireEvent.change(screen.getByRole('textbox', { name: 'Display Name' }), {
-      target: { value: 'Tom' },
-    });
+      target: { value: 'Bob' },
+    })
 
-    window.submitJoinIntent = submitJoinIntent;
     act(() => {
-      window.dispatchEvent(new Event('stick-rumble:submit-join-intent-ready'));
-    });
+      getClient().connectionStateHandler?.(true)
+    })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Join Code' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Join with Code' })).toBeEnabled())
+    expect(getClient().sendHello).not.toHaveBeenCalled()
+  })
 
-    expect(submitJoinIntent).toHaveBeenCalledWith({
-      displayName: 'Tom',
-      mode: 'code',
+  it('renders searching and waiting states from session:status without mounting Phaser', async () => {
+    render(<App />)
+    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
+
+    emitSessionStatus({
+      state: 'searching_for_match',
+      playerId: 'player-1',
+      displayName: 'Alice',
+      joinMode: 'public',
+      rosterSize: 1,
+      minPlayers: 2,
+    })
+
+    expect(screen.getByText(/Searching for match/i)).toBeInTheDocument()
+    expect(screen.queryByTestId('phaser-game')).not.toBeInTheDocument()
+
+    emitSessionStatus({
+      state: 'waiting_for_players',
+      playerId: 'player-1',
+      displayName: 'Alice',
+      joinMode: 'code',
       code: 'PIZZA',
-    });
-    expect(screen.getByText('Joining...', { selector: 'p' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Play Public' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Joining...' })).toBeDisabled();
-  });
+      roomId: 'room-1',
+      rosterSize: 1,
+      minPlayers: 2,
+    })
 
-  it('should not auto-join an invite while the user is typing a new display name', () => {
-    window.history.replaceState({}, '', '/?invite=PIZZA');
-    const submitJoinIntent = vi.fn();
-    const rafSpy = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback: FrameRequestCallback) => {
-      callback(0);
-      return 1;
-    });
-    const cancelSpy = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
+    expect(screen.getByText(/Waiting for players/i)).toBeInTheDocument()
+    expect(screen.queryByTestId('phaser-game')).not.toBeInTheDocument()
+  })
 
-    render(<App />);
-
-    window.submitJoinIntent = submitJoinIntent;
-    act(() => {
-      window.dispatchEvent(new Event('stick-rumble:submit-join-intent-ready'));
-    });
+  it('sends session:leave when backing out of a waiting state', async () => {
+    render(<App />)
+    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
 
     fireEvent.change(screen.getByRole('textbox', { name: 'Display Name' }), {
-      target: { value: 'T' },
-    });
+      target: { value: 'Alice' },
+    })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Room Code' }), {
+      target: { value: 'PIZZA' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Join with Code' }))
 
-    expect(submitJoinIntent).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Join Code' }));
-
-    expect(submitJoinIntent).toHaveBeenCalledWith({
-      displayName: 'T',
-      mode: 'code',
+    emitSessionStatus({
+      state: 'waiting_for_players',
+      playerId: 'player-1',
+      displayName: 'Alice',
+      joinMode: 'code',
       code: 'PIZZA',
-    });
-
-    rafSpy.mockRestore();
-    cancelSpy.mockRestore();
-  });
-
-  describe('Match End Integration', () => {
-    it('should not show match end screen initially', () => {
-      render(<App />);
-
-      expect(screen.queryByTestId('match-end-screen-mock')).toBeNull();
-    });
-
-    it('should show match end screen when match ends', () => {
-      const { rerender } = render(<App />);
-
-      const mockMatchData: MatchEndData = {
-        winners: ['player-1'],
-        finalScores: [
-          { playerId: 'player-1', kills: 5, deaths: 2, xp: 100 },
-          { playerId: 'player-2', kills: 3, deaths: 4, xp: 50 },
-        ],
-        reason: 'time_expired',
-      };
-
-      // Trigger match end via callback
-      act(() => {
-        mockOnMatchEnd?.(mockMatchData, 'player-1');
-      });
-      rerender(<App />);
-
-      expect(screen.getByTestId('match-end-screen-mock')).toBeInTheDocument();
-    });
-
-    it('should close match end screen when close is called', () => {
-      const { rerender } = render(<App />);
-
-      const mockMatchData: MatchEndData = {
-        winners: ['player-1'],
-        finalScores: [{ playerId: 'player-1', kills: 0, deaths: 0, xp: 50 }],
-        reason: 'time_expired',
-      };
-
-      // Show match end screen
-      act(() => {
-        mockOnMatchEnd?.(mockMatchData, 'player-1');
-      });
-      rerender(<App />);
-
-      expect(screen.getByTestId('match-end-screen-mock')).toBeInTheDocument();
-
-      // Close it
-      const closeButton = screen.getByText('Close Match End');
-      fireEvent.click(closeButton);
-
-      expect(screen.queryByTestId('match-end-screen-mock')).toBeNull();
-    });
-  });
-
-  describe('Play Again functionality', () => {
-    it('should pass onPlayAgain callback to MatchEndScreen', () => {
-      const { rerender } = render(<App />);
-
-      const mockMatchData: MatchEndData = {
-        winners: ['player-1'],
-        finalScores: [{ playerId: 'player-1', kills: 0, deaths: 0, xp: 50 }],
-        reason: 'time_expired',
-      };
-
-      // Show match end screen
-      act(() => {
-        mockOnMatchEnd?.(mockMatchData, 'player-1');
-      });
-      rerender(<App />);
-
-      // Verify MatchEndScreen is rendered (callback is passed internally)
-      expect(screen.getByTestId('match-end-screen-mock')).toBeInTheDocument();
-    });
-
-    it('should clear match end data when window.restartGame is called', () => {
-      const { rerender } = render(<App />);
-
-      const mockMatchData: MatchEndData = {
-        winners: ['player-1'],
-        finalScores: [{ playerId: 'player-1', kills: 0, deaths: 0, xp: 50 }],
-        reason: 'time_expired',
-      };
-
-      // Show match end screen
-      act(() => {
-        mockOnMatchEnd?.(mockMatchData, 'player-1');
-      });
-      rerender(<App />);
-
-      expect(screen.getByTestId('match-end-screen-mock')).toBeInTheDocument();
-
-      // Mock window.restartGame
-      const mockRestartGame = vi.fn();
-      window.restartGame = mockRestartGame;
-
-      // Simulate handlePlayAgain being called (which would happen via MatchEndScreen)
-      // We need to trigger this indirectly by accessing the app's internal state
-      // In real scenario, MatchEndScreen's onPlayAgain would trigger handlePlayAgain
-      act(() => {
-        // Manually call window.restartGame as handlePlayAgain would
-        if (window.restartGame) {
-          window.restartGame();
-        }
-      });
-
-      expect(mockRestartGame).toHaveBeenCalledTimes(1);
-
-      // Clean up
-      delete window.restartGame;
-    });
-
-    it('should handle case where window.restartGame is undefined', () => {
-      const { rerender } = render(<App />);
-
-      const mockMatchData: MatchEndData = {
-        winners: ['player-1'],
-        finalScores: [{ playerId: 'player-1', kills: 0, deaths: 0, xp: 50 }],
-        reason: 'time_expired',
-      };
-
-      // Show match end screen
-      act(() => {
-        mockOnMatchEnd?.(mockMatchData, 'player-1');
-      });
-      rerender(<App />);
-
-      // Ensure window.restartGame is undefined
-      delete window.restartGame;
-
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-      // Click Play Again with no window.restartGame
-      act(() => {
-        mockOnPlayAgain?.();
-      });
-
-      expect(warnSpy).toHaveBeenCalledWith('App: window.restartGame is not available');
-      warnSpy.mockRestore();
-    });
-
-    it('should call window.restartGame and clear match end data via Play Again button', () => {
-      const { rerender } = render(<App />);
-
-      const mockMatchData: MatchEndData = {
-        winners: ['player-1'],
-        finalScores: [{ playerId: 'player-1', kills: 0, deaths: 0, xp: 50 }],
-        reason: 'time_expired',
-      };
-
-      // Show match end screen
-      act(() => {
-        mockOnMatchEnd?.(mockMatchData, 'player-1');
-      });
-      rerender(<App />);
-
-      expect(screen.getByTestId('match-end-screen-mock')).toBeInTheDocument();
-
-      // Mock window.restartGame
-      const mockRestartGame = vi.fn();
-      window.restartGame = mockRestartGame;
-
-      // Click Play Again button
-      act(() => {
-        fireEvent.click(screen.getByText('Play Again'));
-      });
-
-      expect(mockRestartGame).toHaveBeenCalledTimes(1);
-      // Match end screen should be hidden after play again
-      expect(screen.queryByTestId('match-end-screen-mock')).toBeNull();
-
-      delete window.restartGame;
-    });
-  });
-
-  describe('Network Simulator callbacks', () => {
-    afterEach(() => {
-      delete window.setNetworkSimulatorLatency;
-      delete window.setNetworkSimulatorPacketLoss;
-      delete window.setNetworkSimulatorEnabled;
-      delete window.getNetworkSimulatorStats;
-      delete window.onNetworkSimulatorToggle;
-    });
-
-    it('should call window.setNetworkSimulatorLatency when latency changes', () => {
-      const mockSetLatency = vi.fn();
-      window.setNetworkSimulatorLatency = mockSetLatency;
-
-      render(<App />);
-
-      act(() => {
-        mockOnLatencyChange?.(50);
-      });
-
-      expect(mockSetLatency).toHaveBeenCalledWith(50);
-    });
-
-    it('should not crash when window.setNetworkSimulatorLatency is undefined', () => {
-      delete window.setNetworkSimulatorLatency;
-
-      render(<App />);
-
-      expect(() => {
-        act(() => {
-          mockOnLatencyChange?.(50);
-        });
-      }).not.toThrow();
-    });
-
-    it('should call window.setNetworkSimulatorPacketLoss when packet loss changes', () => {
-      const mockSetPacketLoss = vi.fn();
-      window.setNetworkSimulatorPacketLoss = mockSetPacketLoss;
-
-      render(<App />);
-
-      act(() => {
-        mockOnPacketLossChange?.(0.1);
-      });
-
-      expect(mockSetPacketLoss).toHaveBeenCalledWith(0.1);
-    });
-
-    it('should not crash when window.setNetworkSimulatorPacketLoss is undefined', () => {
-      delete window.setNetworkSimulatorPacketLoss;
-
-      render(<App />);
-
-      expect(() => {
-        act(() => {
-          mockOnPacketLossChange?.(0.1);
-        });
-      }).not.toThrow();
-    });
-
-    it('should call window.setNetworkSimulatorEnabled when enabled changes', () => {
-      const mockSetEnabled = vi.fn();
-      window.setNetworkSimulatorEnabled = mockSetEnabled;
-
-      render(<App />);
-
-      act(() => {
-        mockOnEnabledChange?.(true);
-      });
-
-      expect(mockSetEnabled).toHaveBeenCalledWith(true);
-    });
-
-    it('should not crash when window.setNetworkSimulatorEnabled is undefined', () => {
-      delete window.setNetworkSimulatorEnabled;
-
-      render(<App />);
-
-      expect(() => {
-        act(() => {
-          mockOnEnabledChange?.(true);
-        });
-      }).not.toThrow();
-    });
-
-    it('should refresh stats via onNetworkSimulatorToggle when stats available', () => {
-      const mockStats = { enabled: true, latency: 100, packetLoss: 0.05 };
-      window.getNetworkSimulatorStats = vi.fn().mockReturnValue(mockStats);
-
-      render(<App />);
-
-      // Trigger the toggle callback
-      act(() => {
-        window.onNetworkSimulatorToggle?.();
-      });
-
-      expect(window.getNetworkSimulatorStats).toHaveBeenCalled();
-    });
-
-    it('should handle onNetworkSimulatorToggle when getNetworkSimulatorStats is undefined', () => {
-      delete window.getNetworkSimulatorStats;
-
-      render(<App />);
-
-      // Should not crash
-      expect(() => {
-        act(() => {
-          window.onNetworkSimulatorToggle?.();
-        });
-      }).not.toThrow();
-    });
-
-    it('should handle onNetworkSimulatorToggle when getNetworkSimulatorStats returns null', () => {
-      window.getNetworkSimulatorStats = vi.fn().mockReturnValue(null);
-
-      render(<App />);
-
-      // Should not crash
-      expect(() => {
-        act(() => {
-          window.onNetworkSimulatorToggle?.();
-        });
-      }).not.toThrow();
-    });
-
-    it('should clean up onNetworkSimulatorToggle on unmount', () => {
-      const { unmount } = render(<App />);
-
-      expect(window.onNetworkSimulatorToggle).toBeDefined();
-
-      unmount();
-
-      expect(window.onNetworkSimulatorToggle).toBeUndefined();
-    });
-  });
-});
+      roomId: 'room-1',
+      rosterSize: 1,
+      minPlayers: 2,
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
+
+    expect(getClient().sendSessionLeave).toHaveBeenCalledTimes(1)
+    expect(window.localStorage.getItem('stick-rumble.active-invite.PIZZA.alice')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Play Public' })).toBeInTheDocument()
+  })
+
+  it('disables join actions when the socket readiness handler reports disconnect', async () => {
+    render(<App />)
+    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
+
+    act(() => {
+      getClient().connectionStateHandler?.(false)
+    })
+
+    expect(screen.getByRole('button', { name: 'Play Public' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Join with Code' })).toBeDisabled()
+    expect(screen.getByText('Connecting to game...')).toBeInTheDocument()
+  })
+
+  it('mounts Phaser only when match_ready arrives and passes a bootstrap session', async () => {
+    render(<App />)
+    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
+
+    emitSessionStatus({
+      state: 'match_ready',
+      playerId: 'player-1',
+      displayName: 'Alice',
+      joinMode: 'code',
+      code: 'PIZZA',
+      roomId: 'room-1',
+      mapId: 'default_office',
+      rosterSize: 2,
+      minPlayers: 2,
+    })
+
+    expect(screen.getByTestId('phaser-game')).toBeInTheDocument()
+    expect(testState.phaserRenderSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        bootstrap: {
+          session: {
+            roomId: 'room-1',
+            playerId: 'player-1',
+            mapId: 'default_office',
+            displayName: 'Alice',
+            joinMode: 'code',
+            code: 'PIZZA',
+          },
+          wsClient: getClient(),
+        },
+      }),
+    )
+  })
+
+  it('replaces gameplay with the match-end screen when Phaser reports match end', async () => {
+    render(<App />)
+    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
+
+    emitSessionStatus({
+      state: 'match_ready',
+      playerId: 'player-1',
+      displayName: 'Alice',
+      joinMode: 'public',
+      roomId: 'room-1',
+      mapId: 'default_office',
+      rosterSize: 2,
+      minPlayers: 2,
+    })
+
+    const matchEndData: MatchEndData = {
+      winners: [{ playerId: 'player-1', displayName: 'Alice' }],
+      finalScores: [
+        { playerId: 'player-1', displayName: 'Alice', kills: 5, deaths: 1, xp: 650 },
+        { playerId: 'player-2', displayName: 'Bob', kills: 3, deaths: 4, xp: 350 },
+      ],
+      reason: 'time_limit',
+    }
+
+    act(() => {
+      testState.capturedOnMatchEnd?.(matchEndData, 'player-1')
+    })
+
+    expect(screen.queryByTestId('phaser-game')).not.toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Match End Results' })).toBeInTheDocument()
+    expect(screen.getByText(/Winner:/i)).toHaveTextContent('Alice')
+  })
+})

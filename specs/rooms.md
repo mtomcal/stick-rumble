@@ -195,7 +195,7 @@ A player's room assignment is driven by a **join intent** supplied by the client
 
 The server must **not** assign a player to a room until it has received and processed a `player:hello`. Messages other than `player:hello` received before the hello are rejected with a `error:no_hello` message; the connection stays open and the client can still send a valid hello afterward.
 
-**Failed-hello semantics.** A hello that fails validation (`error:bad_room_code`, `error:room_full`, schema-invalid) does **not** latch `HelloSeen`. The client may send another `player:hello` on the same connection after re-prompting the user. Only a **successful** hello sets `HelloSeen := true`; once set, all subsequent `player:hello` messages on that connection are silently dropped.
+**Failed-hello semantics.** A hello that fails validation (`error:bad_room_code`, `error:room_full`, schema-invalid) does **not** latch `HelloSeen`. The client may send another `player:hello` on the same connection after re-prompting the user. A **successful** hello sets `HelloSeen := true`, but a later successful `session:leave` from a pre-match state clears that latch so the same socket can submit a fresh join intent. While the player remains in an active session, subsequent `player:hello` messages on that connection are silently dropped.
 
 **Why require an explicit hello instead of auto-joining on upgrade?**
 The WebSocket upgrade gives the server a player ID, but at that instant the server has no idea whether the player wants to play with friends or strangers, and no display name to put on the nameplate. A single dedicated hello message is the simplest way to carry that intent without overloading existing gameplay messages.

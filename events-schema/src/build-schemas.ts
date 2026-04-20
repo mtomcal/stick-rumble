@@ -14,6 +14,7 @@ import {
   PlayerHelloCodeDataSchema,
   PlayerHelloDataSchema,
   PlayerHelloMessageSchema,
+  SessionLeaveMessageSchema,
   InputStateDataSchema,
   InputStateMessageSchema,
   PlayerShootDataSchema,
@@ -80,6 +81,9 @@ import {
   StateSnapshotMessageSchema,
   StateDeltaDataSchema,
   StateDeltaMessageSchema,
+  SessionStatusDataSchema,
+  SessionStatusMessageSchema,
+  WinnerSummarySchema,
 } from './schemas/server-to-client.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -125,6 +129,10 @@ const schemas: SchemaExport[] = [
     outputPath: 'schemas/client-to-server/player-hello-message.json',
   },
   {
+    schema: SessionLeaveMessageSchema,
+    outputPath: 'schemas/client-to-server/session-leave-message.json',
+  },
+  {
     schema: InputStateDataSchema,
     outputPath: 'schemas/client-to-server/input-state-data.json',
   },
@@ -165,6 +173,14 @@ const schemas: SchemaExport[] = [
     outputPath: 'schemas/client-to-server/player-dodge-roll-message.json',
   },
   // Server-to-client schemas
+  {
+    schema: SessionStatusDataSchema,
+    outputPath: 'schemas/server-to-client/session-status-data.json',
+  },
+  {
+    schema: SessionStatusMessageSchema,
+    outputPath: 'schemas/server-to-client/session-status-message.json',
+  },
   {
     schema: RoomJoinedDataSchema,
     outputPath: 'schemas/server-to-client/room-joined-data.json',
@@ -296,6 +312,10 @@ const schemas: SchemaExport[] = [
   {
     schema: MatchTimerMessageSchema,
     outputPath: 'schemas/server-to-client/match-timer-message.json',
+  },
+  {
+    schema: WinnerSummarySchema,
+    outputPath: 'schemas/server-to-client/winner-summary.json',
   },
   {
     schema: MatchEndedDataSchema,

@@ -445,7 +445,7 @@ func (h *WebSocketHandler) broadcastMatchEnded(room *game.Room, world *game.Worl
 	}
 
 	// Determine winners and get final scores
-	winners := room.Match.DetermineWinners()
+	winners := room.Match.GetWinnerSummaries(world)
 	finalScores := room.Match.GetFinalScores(world)
 
 	// Create match:ended message data
