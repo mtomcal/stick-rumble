@@ -7,39 +7,78 @@
 
 ## Overview
 
-This plan implements the strict line-of-sight (LoS) requirements specified in melee.md v1.2.1. The key behavioral change is that melee attacks now require:
+This plan implements the strict melee line-of-sight requirements from `specs/melee.md` v1.2.1 without regressing existing range/arc behavior.
 
-1. **Center point must be clear**: The target's center point must have an unobstructed path from the attacker. If blocked, the attack fails immediately (no hit).
-2. **Majority of hitbox must be exposed**: At least 5 of 9 sample points on the target hitbox must be reachable (center + at least 4 of 8 edge/corner points).
-3. **Boundary-inclusive intersection**: If the segment touches or crosses any wall boundary, that target point is considered blocked.
-4. **First-contact resolution**: When multiple obstacles exist, the closest obstacle along the segment blocks the path.
+The intended rule set is:
+
+1. The target center point must be clear or the attack fails immediately.
+2. At least 5 of 9 hitbox sample points must be reachable after occlusion is checked.
+3. Segment-vs-wall checks are boundary-inclusive: touching a wall counts as blocked.
+4. If multiple blockers exist, the closest blocking contact wins.
+5. `hasMeleeReach` is an occlusion rule layered on top of existing range/arc gating, not a replacement for it.
 
 ---
 
 ## Current Code State
 
-**Existing Files**:
-- `stick-rumble-server/internal/game/melee_attack.go` - Contains `PerformMeleeAttack`, `hasMeleeReach`, `isInMeleeRange`, `meleeHitboxSamplePoints`, `meleePointWithinRangeAndArc`, `applyKnockback`
-- `stick-rumble-server/internal/game/melee_attack_test.go` - 527 lines of existing tests
-- `stick-rumble-server/internal/game/barrier_geometry.go` - Geometry helpers: `segmentRectContact`, `firstObstacleContact`, `clampSegmentToDistance`
+**Existing files**
+- `stick-rumble-server/internal/game/melee_attack.go`
+- `stick-rumble-server/internal/game/melee_attack_test.go`
+- `stick-rumble-server/internal/game/barrier_geometry.go`
+- `stick-rumble-server/internal/game/barrier_geometry_test.go`
+- `stick-rumble-server/internal/game/gameserver_callbacks_test.go`
 
-**Current `hasMeleeReach` Implementation** (lines 60-79 in melee_attack.go):
+**What the current code already gets right**
+- Samples 9 target hitbox points.
+- Uses `firstObstacleContact` for obstacle ordering.
+- Uses boundary-inclusive rectangle geometry today.
+- Already has regression coverage for:
+  - full wall block
+  - partial cover still hitting
+  - knockback stopping at first wall contact
+  - blocked swing still consuming cooldown
+
+**What is actually missing**
+- `hasMeleeReach` returns true on the first reachable point instead of requiring a majority.
+- `hasMeleeReach` does not short-circuit on blocked center.
+- There is no direct unit test proving the strict center-clear rule.
+- There is no direct unit test proving majority counting.
+
+**Important implementation constraint**
+- `PerformMeleeAttack` already resolves a default map config via `resolveMapConfig(...)`. Do not add a `nil mapConfig => fail closed` behavior; that would contradict current server behavior and break existing tests.
+- `isInMeleeRange(...)` remains the primary range/arc gate. The new work should tighten occlusion only.
+
+---
+
+## Correct Implementation Shape
+
+Target behavior for `hasMeleeReach`:
+
 ```go
 func hasMeleeReach(attacker *PlayerState, target *PlayerState, weapon *Weapon, mapConfig MapConfig) bool {
 	attackerPos := attacker.GetPosition()
 	aimAngle := attacker.GetAimAngle()
-	for _, point := range meleeHitboxSamplePoints(target.GetPosition()) {
+	samplePoints := meleeHitboxSamplePoints(target.GetPosition())
+
+	centerPoint := samplePoints[0]
+	if !meleePointWithinRangeAndArc(attackerPos, centerPoint, aimAngle, weapon) {
+		return false
+	}
+	if segmentBlockedByObstacle(attackerPos, centerPoint, mapConfig.Obstacles) {
+		return false
+	}
+
+	reachableCount := 1
+	for i := 1; i < len(samplePoints); i++ {
+		point := samplePoints[i]
 		if !meleePointWithinRangeAndArc(attackerPos, point, aimAngle, weapon) {
 			continue
 		}
-
-		sweepEnd := clampSegmentToDistance(attackerPos, point, weapon.Range)
-		wallContact, blocked := firstObstacleContact(attackerPos, sweepEnd, mapConfig.Obstacles, func(obstacle MapObstacle) bool {
-			return obstacle.BlocksMovement || obstacle.BlocksProjectiles || obstacle.BlocksLineOfSight
-		})
-		pointDistance := calculateDistance(attackerPos, point)
-		if !blocked || wallContact.Distance > pointDistance {
-			return true
+		if !segmentBlockedByObstacle(attackerPos, point, mapConfig.Obstacles) {
+			reachableCount++
+			if reachableCount >= 5 {
+				return true
+			}
 		}
 	}
 
@@ -47,328 +86,173 @@ func hasMeleeReach(attacker *PlayerState, target *PlayerState, weapon *Weapon, m
 }
 ```
 
-**Gap Analysis**: The current implementation:
-1. ✅ Samples 9 points on target hitbox
-2. ✅ Checks range and arc for each point
-3. ✅ Uses `firstObstacleContact` for blocking
-4. ❌ Does NOT short-circuit if center point is blocked
-5. ❌ Does NOT require majority (5/9) of points to be reachable - returns true on first reachable point
-6. ❌ Does NOT properly count reachable points
+Helper intent:
 
----
-
-## Red/Green TDD Implementation Slices
-
-### Slice 1: Center Point Short-Circuit Test (RED)
-
-**File**: `stick-rumble-server/internal/game/melee_attack_test.go`
-
-**New Test**:
 ```go
-func TestHasMeleeReach_CenterBlockedShortCircuit(t *testing.T) {
-	bat := NewBat()
-	mapConfig := openTestMapConfig()
-	mapConfig.Obstacles = []MapObstacle{
-		{ID: "wall", X: 130, Y: 90, Width: 20, Height: 20, BlocksMovement: true, BlocksProjectiles: true, BlocksLineOfSight: true},
-	}
-	attacker := createTestPlayer("attacker", 100, 100, 0)
-	target := createTestPlayer("target", 170, 100, 0)
-
-	// Center point is blocked by wall - should fail immediately
-	reachable := hasMeleeReach(attacker, target, bat, mapConfig)
-
-	if reachable {
-		t.Error("Expected hasMeleeReach to return false when center point is blocked")
-	}
-}
-```
-
-**Expected**: Test fails because current implementation doesn't check center point first.
-
-### Slice 2: Implement Center Point Short-Circuit (GREEN)
-
-**File**: `stick-rumble-server/internal/game/melee_attack.go`
-
-**Modify `hasMeleeReach`** (lines 60-79):
-```go
-func hasMeleeReach(attacker *PlayerState, target *PlayerState, weapon *Weapon, mapConfig MapConfig) bool {
-	attackerPos := attacker.GetPosition()
-	aimAngle := attacker.GetAimAngle()
-	samplePoints := meleeHitboxSamplePoints(target.GetPosition())
-
-	// 1. Center point must be clear (short-circuit if blocked)
-	centerPoint := samplePoints[0] // center is first point
-	if !meleePointWithinRangeAndArc(attackerPos, centerPoint, aimAngle, weapon) {
-		return false
-	}
-	sweepEnd := clampSegmentToDistance(attackerPos, centerPoint, weapon.Range)
-	wallContact, blocked := firstObstacleContact(attackerPos, sweepEnd, mapConfig.Obstacles, func(obstacle MapObstacle) bool {
+func segmentBlockedByObstacle(start, end Vector2, obstacles []MapObstacle) bool {
+	contact, blocked := firstObstacleContact(start, end, obstacles, func(obstacle MapObstacle) bool {
 		return obstacle.BlocksMovement || obstacle.BlocksProjectiles || obstacle.BlocksLineOfSight
 	})
-	centerDistance := calculateDistance(attackerPos, centerPoint)
-	if blocked && wallContact.Distance <= centerDistance {
-		return false // Center point is blocked
-	}
-
-	// 2. Count reachable points (center already counted as reachable)
-	reachableCount := 1
-	for i := 1; i < len(samplePoints); i++ {
-		point := samplePoints[i]
-		if !meleePointWithinRangeAndArc(attackerPos, point, aimAngle, weapon) {
-			continue
-		}
-
-		sweepEnd := clampSegmentToDistance(attackerPos, point, weapon.Range)
-		wallContact, blocked := firstObstacleContact(attackerPos, sweepEnd, mapConfig.Obstacles, func(obstacle MapObstacle) bool {
-			return obstacle.BlocksMovement || obstacle.BlocksProjectiles || obstacle.BlocksLineOfSight
-		})
-		pointDistance := calculateDistance(attackerPos, point)
-		if !blocked || wallContact.Distance > pointDistance {
-			reachableCount++
-			// Short-circuit: stop if we already have 5 reachable points
-			if reachableCount >= 5 {
-				return true
-			}
-		}
-	}
-
-	// 3. Return true if majority (5/9) or more points are reachable
-	return reachableCount >= 5
-}
-```
-
-**Expected**: Slice 1 test now passes.
-
-### Slice 3: Majority Reachable Points Test (RED)
-
-**File**: `stick-rumble-server/internal/game/melee_attack_test.go`
-
-**New Test**:
-```go
-func TestHasMeleeReach_MajorityReachableRequired(t *testing.T) {
-	bat := NewBat()
-	mapConfig := openTestMapConfig()
-	// Wall blocks 5 of 9 points (center + 4 others), leaving only 4 reachable
-	mapConfig.Obstacles = []MapObstacle{
-		{ID: "wall", X: 130, Y: 98, Width: 20, Height: 4, BlocksMovement: true, BlocksProjectiles: true, BlocksLineOfSight: true},
-	}
-	attacker := createTestPlayer("attacker", 100, 100, 0)
-	target := createTestPlayer("target", 170, 100, 0)
-
-	reachable := hasMeleeReach(attacker, target, bat, mapConfig)
-
-	// Only 4 points reachable (less than majority of 5), should fail
-	if reachable {
-		t.Error("Expected hasMeleeReach to return false when fewer than 5 points are reachable")
-	}
-}
-
-func TestHasMeleeReach_ExactlyFivePointsReachable(t *testing.T) {
-	bat := NewBat()
-	mapConfig := openTestMapConfig()
-	// Wall blocks exactly 4 points, leaving 5 reachable (majority)
-	mapConfig.Obstacles = []MapObstacle{
-		{ID: "wall", X: 130, Y: 98, Width: 20, Height: 2, BlocksMovement: true, BlocksProjectiles: true, BlocksLineOfSight: true},
-	}
-	attacker := createTestPlayer("attacker", 100, 100, 0)
-	target := createTestPlayer("target", 170, 100, 0)
-
-	reachable := hasMeleeReach(attacker, target, bat, mapConfig)
-
-	// Exactly 5 points reachable (majority), should succeed
-	if !reachable {
-		t.Error("Expected hasMeleeReach to return true when exactly 5 points are reachable")
-	}
-}
-```
-
-**Expected**: Tests fail because current implementation returns true on first reachable point, not majority.
-
-### Slice 4: Boundary-Inclusive Intersection Test (RED)
-
-**File**: `stick-rumble-server/internal/game/barrier_geometry_test.go`
-
-**New Test**:
-```go
-func TestSegmentRectContact_BoundaryInclusive(t *testing.T) {
-	// Segment that touches the rectangle boundary exactly
-	start := Vector2{X: 100, Y: 100}
-	end := Vector2{X: 150, Y: 100}
-	
-	// Rectangle with left edge at x=150 (segment ends exactly on boundary)
-	area := rect{x: 150, y: 90, width: 20, height: 20}
-	
-	contact, blocked := segmentRectContact(start, end, area)
-	
-	// Touching the boundary should be considered blocked (inclusive)
 	if !blocked {
-		t.Error("Expected segment touching rectangle boundary to be blocked (boundary-inclusive)")
+		return false
 	}
-	if contact.Distance != 50 {
-		t.Errorf("Expected contact distance 50, got %f", contact.Distance)
-	}
+
+	targetDistance := calculateDistance(start, end)
+	return contact.Distance <= targetDistance
 }
 ```
 
-**Expected**: Test may pass depending on current `segmentRectContact` implementation. If it fails, we need to verify boundary-inclusive behavior.
-
-### Slice 5: First-Contact Resolution Test (RED)
-
-**File**: `stick-rumble-server/internal/game/barrier_geometry_test.go`
-
-**New Test**:
-```go
-func TestFirstObstacleContact_ReturnsClosestObstacle(t *testing.T) {
-	start := Vector2{X: 100, Y: 100}
-	end := Vector2{X: 300, Y: 100}
-	
-	obstacles := []MapObstacle{
-		{ID: "far-wall", X: 250, Y: 80, Width: 20, Height: 40, BlocksMovement: true, BlocksProjectiles: true, BlocksLineOfSight: true},
-		{ID: "near-wall", X: 150, Y: 80, Width: 20, Height: 40, BlocksMovement: true, BlocksProjectiles: true, BlocksLineOfSight: true},
-	}
-	
-	contact, blocked := firstObstacleContact(start, end, obstacles, func(ob MapObstacle) bool {
-		return ob.BlocksLineOfSight
-	})
-	
-	if !blocked {
-		t.Error("Expected path to be blocked")
-	}
-	if contact.Obstacle == nil || contact.Obstacle.ID != "near-wall" {
-		t.Errorf("Expected closest obstacle to be 'near-wall' at x=150, got %v", contact.Obstacle)
-	}
-	// Distance from (100,100) to near-wall at x=150 should be ~50
-	if contact.Distance < 49 || contact.Distance > 51 {
-		t.Errorf("Expected contact distance ~50, got %f", contact.Distance)
-	}
-}
-```
-
-**Expected**: Test verifies that `firstObstacleContact` correctly returns the closest obstacle. Should pass if implementation is correct.
-
-### Slice 6: Integration - Strict LoS Implementation (GREEN)
-
-After all unit tests pass, verify the integration in `hasMeleeReach`:
-
-**File**: `stick-rumble-server/internal/game/melee_attack_test.go`
-
-**Update Existing Tests** if needed:
-- `TestPerformMeleeAttack_WallBetweenPlayersPreventsDamage` - should already pass
-- `TestPerformMeleeAttack_PartialCoverStillHitsExposedTarget` - should verify majority rule
-
-### Slice 7: Knockback Hard-Stop Verification (RED/GREEN)
-
-Verify existing knockback tests align with v1.2.1:
-
-**Existing Tests to Verify**:
-- `TestApplyKnockback_StopsAtFirstWallContact` ✅
-- `TestApplyKnockback_DiagonalWallContactDoesNotSlideSideways` ✅
+Notes:
+- Keep the center point range/arc check. If the center itself is outside the melee cone, the spec says the attack fails immediately.
+- Do not rework `isInMeleeRange(...)` in this slice.
+- Do not change `segmentRectContact(...)` unless a new boundary test proves it is wrong. Current geometry already appears inclusive.
 
 ---
 
-## Verification Phase: Subagent Passes
+## Red/Green TDD Slices
 
-After implementation is complete, run the following subagent verification passes:
+### Slice 1: Add a direct center-blocked unit test
 
-### Pass 1: Test Quality Verifier (Subagent 1)
+**File**: `stick-rumble-server/internal/game/melee_attack_test.go`
 
-**Tool**: `@test-quality-verifier`  
-**Focus**: All melee-related test files  
-**Command**:
-```
-Review the melee attack test changes in /Users/mtomcal/Code/alpha/stick-rumble for vague assertions, weak tests, or coverage gaps. Focus on these files: stick-rumble-server/internal/game/melee_attack_test.go, stick-rumble-server/internal/game/barrier_geometry_test.go. Be specific: identify bad assertions or meaningful missing cases only.
-```
+Add a focused `hasMeleeReach(...)` test where:
+- center point is in range/arc
+- wall blocks the center segment
+- several edge points remain geometrically exposed
 
-### Pass 2: Test Quality Verifier (Subagent 2)
+Expected result:
+- `hasMeleeReach(...) == false`
 
-**Tool**: `@test-quality-verifier`  
-**Focus**: Integration tests  
-**Command**:
-```
-Review the melee integration tests in /Users/mtomcal/Code/alpha/stick-rumble for vague assertions, weak tests, or coverage gaps. Focus on these files: stick-rumble-server/internal/network/melee_dodge_test.go, stick-rumble-server/internal/game/gameserver_hitdetection_test.go. Check that TS-MELEE-016, TS-MELEE-017, and TS-MELEE-018 are covered. Be specific: identify bad assertions or meaningful missing cases only.
-```
+This test is important because it proves the new short-circuit rule directly instead of relying only on `PerformMeleeAttack(...)`.
 
-### Pass 3: Test Quality Verifier (Subagent 3)
+### Slice 2: Implement center short-circuit in `hasMeleeReach`
 
-**Tool**: `@test-quality-verifier`  
-**Focus**: Edge cases and boundary conditions  
-**Command**:
-```
-Review the melee barrier occlusion tests in /Users/mtomcal/Code/alpha/stick-rumble for edge case coverage. Focus on these areas: boundary-inclusive intersection (touching wall = blocked), 9-sample-point hitbox coverage, first-contact resolution with multiple obstacles, and short-circuit behavior when center is blocked. Check files: stick-rumble-server/internal/game/melee_attack_test.go, stick-rumble-server/internal/game/barrier_geometry_test.go. Be specific: identify missing edge cases or vague boundary assertions.
-```
+Change `hasMeleeReach(...)` so that:
+- it materializes the sample points once
+- it checks the center point first
+- it returns false immediately if the center path is blocked
 
-### Pass 4: Pre-Mortem Subagent
+Do not add any `nil`/missing-map early failure path.
 
-**Tool**: `general` subagent  
-**Purpose**: Identify potential failure modes before they happen  
-**Prompt**:
-```
-Review the melee combat v1.2.1 implementation in /Users/mtomcal/Code/alpha/stick-rumble for potential failure modes and risks. Focus on:
+### Slice 3: Add majority-counting tests with geometrically valid fixtures
 
-1. Thread safety issues in hasMeleeReach when accessing player positions and map config
-2. Performance concerns with 9 sample points × N targets × M obstacles per melee attack
-3. Numerical precision issues with boundary-inclusive intersection (floating point comparisons)
-4. Inconsistencies between melee line-of-sight and projectile/hitscan barrier logic
-5. Knockback edge cases when player is sandwiched between attacker and wall
-6. Arena bounds clamping interaction with obstacle contact resolution
+**File**: `stick-rumble-server/internal/game/melee_attack_test.go`
 
-Read the relevant files: stick-rumble-server/internal/game/melee_attack.go, stick-rumble-server/internal/game/barrier_geometry.go, stick-rumble-server/internal/game/gameserver.go
+Add two unit tests that use obstacle placement proven to create these cases:
+- center clear, fewer than 5 reachable sample points => fail
+- center clear, exactly 5 reachable sample points => pass
 
-Return a structured report with: (1) identified risks, (2) severity (high/medium/low), (3) recommended mitigations, (4) specific code locations to review.
-```
+Constraints for these tests:
+- Do not reuse the invalid wall fixtures from the previous draft plan.
+- Prefer table-driven assertions if the geometry ends up clearer that way.
+- If a single-obstacle fixture is too brittle, use two obstacles to create an unambiguous 4/9 or 5/9 outcome.
+
+### Slice 4: Implement reachable-point counting
+
+Update `hasMeleeReach(...)` so it:
+- counts the center as reachable after it passes
+- checks remaining sample points only when they are within range/arc
+- returns true once `reachableCount >= 5`
+- returns false if the loop ends below majority
+
+This preserves the existing “hitbox edge within range can still hit” behavior while enforcing the stricter occlusion rule.
+
+### Slice 5: Lock boundary-inclusive behavior with a test
+
+**File**: `stick-rumble-server/internal/game/barrier_geometry_test.go`
+
+Add a test where a segment ends exactly on a rectangle boundary and assert that:
+- contact is reported
+- the distance equals the endpoint distance
+
+This should be treated as a required regression test, not “add if needed,” because the melee spec now depends on this exact rule.
+
+### Slice 6: Lock first-contact resolution with a test
+
+**File**: `stick-rumble-server/internal/game/barrier_geometry_test.go`
+
+Add or keep a direct `firstObstacleContact(...)` test proving the nearer wall wins.
+
+This may already be satisfied by existing coverage; if the current test is adequate, tighten it only if the assertion is too weak.
+
+### Slice 7: Re-verify existing integration coverage
+
+Confirm these still pass and still express the intended rules:
+- `TestPerformMeleeAttack_WallBetweenPlayersPreventsDamage`
+- `TestPerformMeleeAttack_PartialCoverStillHitsExposedTarget`
+- `TestApplyKnockback_StopsAtFirstWallContact`
+- `TestApplyKnockback_DiagonalWallContactDoesNotSlideSideways`
+- `TestPlayerMeleeAttack_WallBlockedStillConsumesCooldown`
+- `TestPlayerMeleeAttack_UsesWorldMapConfigForWallBlocking`
+
+If `TestPerformMeleeAttack_PartialCoverStillHitsExposedTarget` does not actually prove the new majority rule strongly enough, tighten that test or add a second integration case.
+
+---
+
+## Test Design Notes
+
+Avoid these mistakes:
+- Do not make `hasMeleeReach(...)` re-implement overall melee eligibility. Range/arc is already split into `isInMeleeRange(...)` plus per-point filtering.
+- Do not use wall fixtures that accidentally leave 6 reachable points while claiming to prove 4/9 or 5/9.
+- Do not weaken boundary semantics with `<` when the spec requires “touching = blocked”; use `<=` at the blocking decision.
+- Do not remove the default-map behavior from `PerformMeleeAttack(...)`.
+
+Recommended test strategy:
+- For majority tests, assert the final boolean outcome only if the fixture is obviously correct.
+- If the fixture is non-obvious, add a local comment documenting which sample points are intended to remain reachable.
+- Prefer deterministic integer coordinates.
+
+---
+
+## Verification Phase
+
+After implementation:
+
+1. Run targeted server tests for:
+   - `melee_attack_test.go`
+   - `barrier_geometry_test.go`
+   - `gameserver_callbacks_test.go`
+2. Run `make test-server`.
+3. Optionally run a `test-quality-verifier` pass focused on:
+   - `stick-rumble-server/internal/game/melee_attack_test.go`
+   - `stick-rumble-server/internal/game/barrier_geometry_test.go`
+   - `stick-rumble-server/internal/game/gameserver_callbacks_test.go`
+
+If doing a pre-mortem via subagent, use a supported generic/default agent type rather than an invalid `general` type.
 
 ---
 
 ## Acceptance Criteria
 
-Definition of done for this implementation:
+Definition of done:
 
-1. **All existing tests pass**: `make test-server` returns 0
-2. **New tests added**:
-   - `TestHasMeleeReach_CenterBlockedShortCircuit`
-   - `TestHasMeleeReach_MajorityReachableRequired`
-   - `TestHasMeleeReach_ExactlyFivePointsReachable`
-   - `TestSegmentRectContact_BoundaryInclusive` (if needed)
-   - `TestFirstObstacleContact_ReturnsClosestObstacle` (if needed)
-3. **Spec compliance**:
-   - Center point is checked first and short-circuits if blocked
-   - Majority (5/9) of hitbox points must be reachable
-   - Boundary-inclusive intersection (touching = blocked)
-   - First-contact resolution for multiple obstacles
-4. **Subagent verification**: All 4 subagent passes complete with no critical issues
+1. `hasMeleeReach(...)` fails immediately when the center point is blocked.
+2. `hasMeleeReach(...)` requires at least 5 reachable sample points.
+3. Blocking decisions treat wall-boundary contact as blocked.
+4. Existing melee range/arc behavior does not regress.
+5. Existing blocked-swing cooldown behavior does not regress.
+6. `make test-server` passes.
 
 ---
 
 ## Implementation Checklist
 
-- [ ] Slice 1: Write `TestHasMeleeReach_CenterBlockedShortCircuit` (RED)
-- [ ] Slice 2: Implement center point short-circuit in `hasMeleeReach` (GREEN)
-- [ ] Slice 3: Write `TestHasMeleeReach_MajorityReachableRequired` and `TestHasMeleeReach_ExactlyFivePointsReachable` (RED)
-- [ ] Slice 4: Implement majority counting logic in `hasMeleeReach` (GREEN)
-- [ ] Slice 5: Verify boundary-inclusive intersection (add test if needed)
-- [ ] Slice 6: Verify first-contact resolution (add test if needed)
-- [ ] Slice 7: Run `make test-server` and fix any regressions
-- [ ] Slice 8: Run subagent verification passes (3x test-verifier + 1x pre-mortem)
-
----
-
-## Rollback Plan
-
-If implementation fails:
-
-1. `git stash` or `git checkout -- stick-rumble-server/internal/game/melee_attack.go`
-2. `git checkout -- stick-rumble-server/internal/game/melee_attack_test.go`
-3. `make test-server` to verify clean state
-4. Re-attempt with smaller slices
+- [ ] Add center-blocked `hasMeleeReach(...)` unit test
+- [ ] Implement center short-circuit
+- [ ] Add geometrically valid majority-rule unit tests
+- [ ] Implement majority counting
+- [ ] Add explicit boundary-inclusive geometry regression test
+- [ ] Verify or tighten first-contact regression test
+- [ ] Re-run melee and callback server tests
+- [ ] Run `make test-server`
 
 ---
 
 ## References
 
-- **Spec Source**: `specs/melee.md` v1.2.1
-- **Key Test Scenarios**: TS-MELEE-016, TS-MELEE-017, TS-MELEE-018
-- **Related Files**:
-  - `stick-rumble-server/internal/game/melee_attack.go`
-  - `stick-rumble-server/internal/game/melee_attack_test.go`
-  - `stick-rumble-server/internal/game/barrier_geometry.go`
-  - `stick-rumble-server/internal/game/barrier_geometry_test.go`
+- `specs/melee.md`
+- `stick-rumble-server/internal/game/melee_attack.go`
+- `stick-rumble-server/internal/game/melee_attack_test.go`
+- `stick-rumble-server/internal/game/barrier_geometry.go`
+- `stick-rumble-server/internal/game/barrier_geometry_test.go`
+- `stick-rumble-server/internal/game/gameserver_callbacks_test.go`

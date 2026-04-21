@@ -363,9 +363,8 @@ function PerformMeleeAttack(attacker, allPlayers, weapon, mapConfig):
     if weapon == null OR !weapon.IsMelee():
         return { HitPlayers: [], KnockbackApplied: false }
 
-    // Require map configuration for wall blocking
-    if mapConfig == null:
-        return { HitPlayers: [], KnockbackApplied: false }
+    // Resolve a default map configuration if one is not provided
+    mapConfig = resolveMapConfig(mapConfig)
 
     hitPlayers = []
     knockbackApplied = false
@@ -403,7 +402,10 @@ function hasMeleeReach(attacker, target, weapon, mapConfig):
     // Center is clear, check remaining points
     reachableCount = 1 // center counts as 1
     for i = 1 to 8: // remaining edge and corner points
-        if !segmentBlockedByObstacle(attacker.position, samplePoints[i], mapConfig.obstacles):
+        // Occlusion is checked here only for points that are already valid
+        // melee candidates under the range/arc gate.
+        if pointWithinRangeAndArc(attacker.position, samplePoints[i], attacker.aimAngle, weapon) &&
+           !segmentBlockedByObstacle(attacker.position, samplePoints[i], mapConfig.obstacles):
             reachableCount++
         // Short-circuit: stop if we already have 5 reachable points
         if reachableCount >= 5:
@@ -431,7 +433,7 @@ function segmentBlockedByObstacle(start, end, obstacles):
     // If any obstacle found, check if it's closer than target
     if closestObstacle != null:
         targetDistance = distance(start, end)
-        return closestDistance < targetDistance
+        return closestDistance <= targetDistance
     
     return false // No obstacle blocks the path
 ```
