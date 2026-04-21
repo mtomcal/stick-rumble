@@ -1,7 +1,7 @@
 # Constants
 
-> **Spec Version**: 1.4.0
-> **Last Updated**: 2026-04-07
+> **Spec Version**: 1.5.0
+> **Last Updated**: 2026-04-21
 > **Depends On**: None (foundational spec)
 > **Depended By**: [arena.md](arena.md), [player.md](player.md), [movement.md](movement.md), [dodge-roll.md](dodge-roll.md), [weapons.md](weapons.md), [shooting.md](shooting.md), [melee.md](melee.md), [hit-detection.md](hit-detection.md), [match.md](match.md), [rooms.md](rooms.md), [networking.md](networking.md), [audio.md](audio.md), [ui.md](ui.md), [graphics.md](graphics.md)
 
@@ -467,6 +467,7 @@ export const COLORS = {
 | MELEE_SWING_DURATION | 100 | ms | Fast 100ms yoyo tween. Snappy feel. |
 | MELEE_CAMERA_SHAKE_DURATION | 50 | ms | Brief screen shake on melee hit. |
 | MELEE_CAMERA_SHAKE_INTENSITY | 0.001 | ratio | Subtle shake. Felt but not disorienting. |
+| MELEE_ARC_MIN_VISIBLE_LENGTH | 20 | px | Minimum rendered arc length so a swing is still visible when the attacker is flush against a wall. |
 
 ---
 
@@ -848,6 +849,7 @@ if (distance > maxRange * 0.5):
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.2.0 | 2026-04-21 | Added `MELEE_ARC_MIN_VISIBLE_LENGTH` (20px) to Melee Visual Constants. Defines the minimum rendered arc length so a swing remains visible when the attacker is flush against a wall. Referenced by `melee.md` § Swing Animation and `graphics.md` § Melee Swing Arc. |
 | 2.1.1 | 2026-04-09 | Updated movement tuning constants to ACCELERATION=6000 and DECELERATION=6000 for prototype-faithful immediate response. Corrected minimap Y constant to bottom-left derived positioning (`viewportHeight - MINIMAP_SIZE - 20`). |
 | 2.1.0 | 2026-02-23 | Removed reticle center dot and tick constants (reticle is now fixed ~20px, no bloom). Added Hit Confirmation Trail constants (HIT_TRAIL_*). Added Reload Arc constants (RELOAD_ARC_*). Added MINIMAP_BORDER_COLOR and MINIMAP_BORDER_STROKE. Updated minimap shape language from circular to square. Added COLORS.HIT_TRAIL, COLORS.MINIMAP_BORDER, COLORS.RELOAD_ARC. |
 | 1.4.0 | 2026-02-18 | Added COLORS constant group (22 visual color constants). Renamed HEALTH_BAR_WIDTH to PLAYER_HEALTH_BAR_WIDTH, added HUD_HEALTH_BAR_WIDTH=200. Updated MINIMAP_SIZE to 170 and MINIMAP_SCALE to 0.106. Updated BLOOD_COLOR to 0xCC3333. Updated FLOOR_GRID_COLOR to 0xD8DCD8. |

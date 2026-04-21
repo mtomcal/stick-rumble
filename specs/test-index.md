@@ -1,7 +1,7 @@
 # Test Index
 
-> **Spec Version**: 1.4.0
-> **Last Updated**: 2026-04-17
+> **Spec Version**: 1.5.0
+> **Last Updated**: 2026-04-21
 > **Depends On**: All specs (cross-reference document)
 > **Depended By**: None (reference document)
 
@@ -29,11 +29,11 @@ When implementing from scratch, AI agents need to:
 
 | Metric | Value |
 |--------|-------|
-| **Total Test Scenarios** | 259 |
+| **Total Test Scenarios** | 260 |
 | **Specs with Tests** | 20 (+Epic 4 cross-spec) |
 | **Average Tests per Spec** | 13.0 |
 | **Critical Priority Tests** | 82 |
-| **High Priority Tests** | 115 |
+| **High Priority Tests** | 116 |
 | **Medium Priority Tests** | 62 |
 | **Low Priority Tests** | 0 |
 
@@ -41,9 +41,9 @@ When implementing from scratch, AI agents need to:
 
 | Category | Count | Percentage |
 |----------|-------|------------|
-| Unit | 159 | 64% |
+| Unit | 159 | 61% |
 | Integration | 68 | 26% |
-| Visual | 32 | 13% |
+| Visual | 33 | 13% |
 
 ### By Spec (Sorted by Count)
 
@@ -51,7 +51,7 @@ When implementing from scratch, AI agents need to:
 |------|-------|----------|------|--------|-----|
 | graphics.md | 24 | 1 | 13 | 10 | 0 |
 | ui.md | 19 | 3 | 10 | 6 | 0 |
-| melee.md | 18 | 5 | 8 | 5 | 0 |
+| melee.md | 19 | 5 | 9 | 5 | 0 |
 | dodge-roll.md | 14 | 5 | 7 | 2 | 0 |
 | hit-detection.md | 17 | 8 | 8 | 1 | 0 |
 | player.md | 14 | 3 | 8 | 3 | 0 |
@@ -246,6 +246,7 @@ When implementing from scratch, AI agents need to:
 | TS-MELEE-016 | Integration | Critical | Melee cannot damage through blocking geometry |
 | TS-MELEE-017 | Integration | Critical | Bat knockback stops at first wall contact |
 | TS-MELEE-018 | Integration | High | Blocked swing still consumes cooldown |
+| TS-MELEE-019 | Visual | High | Melee arc clips to blocking geometry |
 
 ### Messages Tests (messages.md)
 
@@ -487,7 +488,7 @@ When implementing from scratch, execute tests in this order to verify core funct
 3. **Hit Detection** (TS-HIT-001 to TS-HIT-017)
    - Collision and damage
 
-4. **Melee** (TS-MELEE-001 to TS-MELEE-018)
+4. **Melee** (TS-MELEE-001 to TS-MELEE-019)
    - Melee combat
 
 ### Phase 5: Advanced Mechanics (27 tests)
@@ -672,7 +673,7 @@ Use this checklist to track test implementation progress:
 - [ ] TS-WEAP-001 through TS-WEAP-010 (10 tests)
 - [ ] TS-SHOOT-001 through TS-SHOOT-015 (15 tests)
 - [ ] TS-HIT-001 through TS-HIT-017 (17 tests)
-- [ ] TS-MELEE-001 through TS-MELEE-018 (18 tests)
+- [ ] TS-MELEE-001 through TS-MELEE-019 (19 tests)
 
 ### Advanced Mechanics
 - [ ] TS-ROLL-001 through TS-ROLL-014 (14 tests)
@@ -698,4 +699,4 @@ Use this checklist to track test implementation progress:
 | 1.1.1 | 2026-02-16 | Fixed test priorities/categories for shooting.md, rooms.md, server-architecture.md, match.md, and messages.md to match source spec definitions. Corrected systematically inflated Critical counts. Removed phantom Low priority count (0 Low tests exist). Flagged 15 netcode test IDs as index-only (no source spec entries). |
 | 1.1.2 | 2026-02-16 | Fixed priority counts and categories for all 19 specs in By Spec table to match source spec definitions. Fixed detailed catalog entries for arena, audio, client-architecture (added 009/010), constants, dodge-roll, graphics, hit-detection, melee, messages, movement, networking, overview, player, ui, and weapons. Updated implementation checklist client-architecture count from 8 to 10. |
 | 1.2.0 | 2026-02-16 | Added 20 pre-BMM visual port test scenarios. Graphics: 10 new tests (TS-GFX-015 to 024) for blood/healing particles, wall sparks, gun recoil, aim sway, reload pulse, hit indicators, crosshair, corpse fade. UI: 7 new tests (TS-UI-013 to 019) for camera flash/shake, hit markers, damage numbers, minimap. Melee: TS-MELEE-015 (weapon rotation tween). Shooting: TS-SHOOT-013 (aim sway trajectory). Arena: TS-ARENA-013 (floor grid). Updated TS-GFX-011 description (corpse with splayed limbs) and TS-GFX-013 (white stroke-only arc). Total tests: 224 → 244. Visual tests: 13 → 32. High priority: 102 → 111. Medium priority: 51 → 62. |
-| 1.4.0 | 2026-04-17 | Indexed the new wall-barrier acceptance scenarios: TS-ARENA-006, TS-HIT-015/016/017, TS-MELEE-016/017/018, and TS-SHOOT-014/015. Updated summary counts, combat phase ranges, and implementation checklist totals to match the tightened first-contact barrier contract. |
+| 1.5.0 | 2026-04-21 | Added TS-MELEE-019 (Visual, High) for wall-clipped melee swing arc. Updated summary statistics: Total 259→260, Visual 32→33, High 115→116. Updated melee.md count 18→19, Phase 4 range, and implementation checklist to reflect the new test. |

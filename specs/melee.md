@@ -1,7 +1,7 @@
 # Melee Combat
 
-> **Spec Version**: 1.2.0
-> **Last Updated**: 2026-04-17
+> **Spec Version**: 1.3.0
+> **Last Updated**: 2026-04-21
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [hit-detection.md](hit-detection.md)
 > **Depended By**: [messages.md](messages.md), [graphics.md](graphics.md)
 
@@ -508,11 +508,35 @@ func applyKnockback(attacker *PlayerState, target *PlayerState, knockbackDistanc
 The melee swing uses a **white stroke-only arc** combined with a **weapon container rotation tween**. There are no per-weapon colors — all melee weapons use white.
 
 **Arc Visual**:
+The arc is rendered as a polyline approximation of a circular sector whose radius at each sampled angle is clipped to the first blocking obstacle contact along that radial ray. This prevents the arc from visually extending through walls while maintaining the recognizable arc silhouette.
+
 ```typescript
 const slash = this.add.graphics();
 slash.lineStyle(2, 0xffffff, 0.8);  // White, stroke-only
-slash.beginPath();
-slash.arc(attacker.x, attacker.y, range, angle - 0.7, angle + 0.7, false);
+
+// Sample the arc at regular angular steps
+for (let i = 0; i <= sampleCount; i++) {
+    const sampleAngle = startAngle + (arcSpan * i / sampleCount);
+    const rayEnd = {
+        x: attacker.x + Math.cos(sampleAngle) * weaponRange,
+        y: attacker.y + Math.sin(sampleAngle) * weaponRange
+    };
+
+    // Clip to first blocking contact (movement, projectile, or LOS)
+    const contact = getFirstBlockingObstacleContact(attacker, rayEnd, obstacles);
+    const effectiveRadius = contact
+        ? Math.max(contact.distance, MELEE_ARC_MIN_VISIBLE_LENGTH)
+        : weaponRange;
+
+    const px = attacker.x + Math.cos(sampleAngle) * effectiveRadius;
+    const py = attacker.y + Math.sin(sampleAngle) * effectiveRadius;
+
+    if (i === 0) {
+        slash.moveTo(px, py);
+    } else {
+        slash.lineTo(px, py);
+    }
+}
 slash.strokePath();  // NO fillPath — stroke only
 this.tweens.add({ targets: slash, alpha: 0, duration: 200, onComplete: () => slash.destroy() });
 ```
@@ -542,10 +566,14 @@ this.scene.tweens.add({
 | Swing To | +60° |
 | Swing Duration | 100ms yoyo |
 | Camera Shake | 50ms, 0.001 intensity (on hit) |
+| Wall Clipping | Clip to first blocking contact on each radial ray |
+| Minimum Visible Arc | `MELEE_ARC_MIN_VISIBLE_LENGTH` (20px) |
 
 See [constants.md § Melee Visual Constants](constants.md#melee-visual-constants) and [graphics.md § Melee Swing Arc](graphics.md#melee-swing-arc).
 
 > **Color**: All melee weapons use white (0xFFFFFF) for the swing arc. Per-weapon coloring was removed in favor of a unified visual style matching the prototype.
+
+> **Wall clipping**: The arc is computed once at swing start and remains static for the duration of the animation. The obstacle set is provided to `MeleeWeaponManager` via `setObstacles()`, mirroring the `ProjectileManager.setWorldBounds()` pattern. The visual uses the same blocking criteria as the server's melee reach check: any obstacle that blocks movement, projectiles, or line of sight.
 
 ---
 
@@ -941,6 +969,7 @@ func TestPerformMeleeAttack_BatHitsSingleTarget(t *testing.T) {
 - Arc uses weapon range as radius (Bat: 90px, Katana: 110px)
 - Arc fades over 200ms
 - Weapon container rotates from -45° to +60° over 100ms
+- Arc resolves against blocking geometry (see TS-MELEE-019)
 
 ---
 
@@ -1017,10 +1046,29 @@ func TestPerformMeleeAttack_BatHitsSingleTarget(t *testing.T) {
 
 ---
 
+### TS-MELEE-019: Melee arc clips to blocking geometry
+
+**Category**: Visual
+**Priority**: High
+
+**Preconditions:**
+- Attacker is within melee range of a wall or other blocking obstacle
+- Attacker performs a melee swing aimed toward the obstacle
+
+**Expected Output:**
+- The rendered arc does not extend through the blocking geometry
+- Each radial sample of the arc is clipped to the first blocking contact (movement, projectile, or LOS blocker)
+- If the wall contact is closer than `MELEE_ARC_MIN_VISIBLE_LENGTH` (20px), the arc renders at least that minimum length so the swing remains visible
+- The clipped arc geometry is computed once at swing start and remains static for the animation duration
+- The arc still uses white stroke-only style, 2px width, and fades over 200ms
+
+---
+
 ## Changelog
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.3.0 | 2026-04-21 | Specified wall-clipped melee swing arc: the visual arc now resolves against blocking geometry using radial ray sampling, clips to the first obstacle contact on each ray, enforces a minimum visible length (`MELEE_ARC_MIN_VISIBLE_LENGTH`), and receives obstacles via `MeleeWeaponManager.setObstacles()`. Added TS-MELEE-019. Updated Swing Animation section, TS-MELEE-013, and graphics cross-reference. |
 | 1.2.0 | 2026-04-17 | Added barrier-aware melee behavior: range+arc are no longer sufficient without unobstructed reachability, melee damage cannot pass through solid geometry, bat knockback now stops at the first blocking contact instead of tunneling through barriers, blocked swings still consume cooldown, and new acceptance scenarios cover wall-blocked melee plus knockback hard stops. |
 | 1.0.0 | 2026-02-02 | Initial specification |
 | 1.0.1 | 2026-02-16 | Fixed thread safety note — `world.players` accessed directly under `world.mu.RLock()`, not via `GetAllPlayers()` |

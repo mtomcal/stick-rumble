@@ -1,7 +1,7 @@
 # Graphics
 
-> **Spec Version**: 2.3.1
-> **Last Updated**: 2026-04-09
+> **Spec Version**: 2.4.0
+> **Last Updated**: 2026-04-21
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [arena.md](arena.md)
 > **Depended By**: [client-architecture.md](client-architecture.md), [test-index.md](test-index.md)
 
@@ -623,12 +623,32 @@ Generic pickup markers (for example a standalone yellow circle or `⊕` icon wit
 The melee swing uses a **white stroke-only arc** (no pie-slice fill, no per-weapon colors) combined with a **weapon container rotation tween**.
 
 **Arc Rendering**:
+The arc is drawn as a polyline whose radius at each sampled angle is clipped to the first blocking obstacle contact along that radial ray. This keeps the visual arc aligned with the authoritative reachability check on the server.
+
 ```typescript
 // Stroke-only arc — no fill, white color, all weapons
 const slash = this.add.graphics();
 slash.lineStyle(2, 0xffffff, 0.8);
-slash.beginPath();
-slash.arc(attacker.x, attacker.y, range, angle - 0.7, angle + 0.7, false);
+
+// Build polyline with per-angle wall clipping
+for (let i = 0; i <= sampleCount; i++) {
+    const sampleAngle = startAngle + (arcSpan * i / sampleCount);
+    const rayEnd = {
+        x: attacker.x + Math.cos(sampleAngle) * range,
+        y: attacker.y + Math.sin(sampleAngle) * range
+    };
+
+    const contact = getFirstBlockingObstacleContact(attacker, rayEnd, obstacles);
+    const effectiveRadius = contact
+        ? Math.max(contact.distance, MELEE_ARC_MIN_VISIBLE_LENGTH)
+        : range;
+
+    const px = attacker.x + Math.cos(sampleAngle) * effectiveRadius;
+    const py = attacker.y + Math.sin(sampleAngle) * effectiveRadius;
+
+    if (i === 0) slash.moveTo(px, py);
+    else slash.lineTo(px, py);
+}
 slash.strokePath();
 this.tweens.add({ targets: slash, alpha: 0, duration: 200, onComplete: () => slash.destroy() });
 ```
@@ -658,6 +678,8 @@ this.scene.tweens.add({
 | Swing From | -45° | Wind-up behind player |
 | Swing To | +60° | Forward swing |
 | Swing Duration | 100ms | Fast yoyo tween |
+| Wall Clipping | First blocking contact per radial ray | `melee.md` § Swing Animation |
+| Minimum Visible Arc | `MELEE_ARC_MIN_VISIBLE_LENGTH` (20px) | `constants.md` |
 
 **Constants**: See [constants.md § Melee Visual Constants](constants.md#melee-visual-constants).
 
@@ -1589,6 +1611,7 @@ test "player renders all body parts":
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.4.0 | 2026-04-21 | Melee Swing Arc now clips to blocking geometry: replaced `graphics.arc()` pseudocode with radial ray-marching polyline that resolves against obstacles per-angle. Added wall clipping and minimum visible arc properties to the arc table. Cross-references `melee.md` § Swing Animation and `constants.md` § Melee Visual Constants. |
 | 2.3.2 | 2026-04-10 | Renamed enemy weapon visibility to held weapon visibility. Clarified that local and remote held weapons share the same readability contract, and explicitly required the bat to remain visibly brown and recognizable in-hand. |
 | 2.3.1 | 2026-04-09 | Clarified pickup rendering contract: normal gameplay pickups must be weapon-specific floor silhouettes with a secondary zone affordance; generic marker-only presentation is explicitly out of spec. Updated TS-GFX-008 and TS-GFX-009 wording accordingly. |
 | 2.3.0 | 2026-03-02 | Crosshair changed from `⊕` (circle+cross) to simple `+` (cross only, no circle). Hands/arms now grip weapon and follow aim rotation. Hit trail must originate from actual gun barrel tip. Added bugs: remove green aim indicator line, remove orange dot artifact, fix hit trail barrel attachment. |
