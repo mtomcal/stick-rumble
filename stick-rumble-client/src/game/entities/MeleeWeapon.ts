@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import { MELEE } from '../../shared/constants';
+import { getFirstBlockingObstacleContact, type MapObstacle } from '../../shared/maps';
 
 /**
  * Weapon stats from server implementation
@@ -27,6 +29,7 @@ const ARC_FADE_DURATION = 200;
 const SWING_ANGLE_FROM = -45;
 const SWING_ANGLE_TO = 60;
 const SWING_DURATION = 100;
+const ARC_SAMPLES = 16;
 
 /**
  * MeleeWeapon handles visual rendering of melee weapon swing animations
@@ -58,7 +61,7 @@ export class MeleeWeapon {
    * Start a melee swing animation with alpha fade tween
    * Returns false if already swinging
    */
-  startSwing(aimAngle: number, weaponContainer?: Phaser.GameObjects.Container): boolean {
+  startSwing(aimAngle: number, weaponContainer?: Phaser.GameObjects.Container, obstacles?: readonly MapObstacle[]): boolean {
     if (this.swinging) {
       return false;
     }
@@ -68,7 +71,7 @@ export class MeleeWeapon {
     this.graphics.setAlpha(1);
 
     // Render the arc
-    this.showSwingAnimation(aimAngle);
+    this.showSwingAnimation(aimAngle, obstacles);
 
     // Alpha fade tween on the arc graphics
     this.scene.tweens.add({
@@ -99,7 +102,7 @@ export class MeleeWeapon {
    * Show swing animation at given aim angle — white stroke-only arc
    * Public for testing
    */
-  showSwingAnimation(aimAngle: number): void {
+  showSwingAnimation(aimAngle: number, obstacles?: readonly MapObstacle[]): void {
     this.graphics.clear();
 
     const arcRadians = (this.stats.arcDegrees * Math.PI) / 180;
@@ -111,9 +114,38 @@ export class MeleeWeapon {
 
     // Draw swing arc — stroke only, white for all weapons
     this.graphics.lineStyle(ARC_STROKE_WIDTH, ARC_COLOR, ARC_STROKE_ALPHA);
-    this.graphics.beginPath();
-    this.graphics.arc(this.x, this.y, this.stats.range, startAngle, endAngle, false);
-    this.graphics.strokePath();
+
+    if (obstacles && obstacles.length > 0) {
+      // Polyline approximation with per-angle obstacle clipping
+      this.graphics.beginPath();
+      const step = arcRadians / ARC_SAMPLES;
+      for (let i = 0; i <= ARC_SAMPLES; i++) {
+        const angle = startAngle + step * i;
+        const rayEndX = this.x + Math.cos(angle) * this.stats.range;
+        const rayEndY = this.y + Math.sin(angle) * this.stats.range;
+        const contact = getFirstBlockingObstacleContact(
+          { x: this.x, y: this.y },
+          { x: rayEndX, y: rayEndY },
+          obstacles
+        );
+        const effectiveRadius = contact
+          ? Math.max(contact.distance, MELEE.ARC_MIN_VISIBLE_LENGTH)
+          : this.stats.range;
+        const px = this.x + Math.cos(angle) * effectiveRadius;
+        const py = this.y + Math.sin(angle) * effectiveRadius;
+        if (i === 0) {
+          this.graphics.moveTo(px, py);
+        } else {
+          this.graphics.lineTo(px, py);
+        }
+      }
+      this.graphics.strokePath();
+    } else {
+      // Backward-compatible single arc call when no obstacles provided
+      this.graphics.beginPath();
+      this.graphics.arc(this.x, this.y, this.stats.range, startAngle, endAngle, false);
+      this.graphics.strokePath();
+    }
   }
 
   /**

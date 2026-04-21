@@ -517,6 +517,9 @@ export class GameScene extends Phaser.Scene {
     if (this.weaponCrateManager) {
       this.weaponCrateManager.initializeFromMapWeaponSpawns(mapContext.weaponSpawns);
     }
+    if (this.meleeWeaponManager) {
+      this.meleeWeaponManager.setObstacles(mapContext.obstacles);
+    }
   }
 
   private drawFloorGrid(mapContext: MatchMapContext): void {

@@ -155,6 +155,83 @@ describe('MeleeWeaponManager', () => {
     });
   });
 
+  describe('TS-MELEE-019: Obstacle plumbing', () => {
+    it('should store obstacles via setObstacles', () => {
+      const obstacles = [
+        {
+          id: 'wall',
+          type: 'wall' as const,
+          shape: 'rectangle' as const,
+          x: 100,
+          y: 100,
+          width: 20,
+          height: 20,
+          blocksMovement: true,
+          blocksProjectiles: true,
+          blocksLineOfSight: true,
+        },
+      ];
+
+      manager.setObstacles(obstacles);
+      expect((manager as any).obstacles).toBe(obstacles);
+    });
+
+    it('should pass stored obstacles to weapon.startSwing', () => {
+      const playerId = 'player-1';
+      const position = { x: 100, y: 200 };
+      manager.createWeapon(playerId, 'Bat', position);
+
+      const obstacles = [
+        {
+          id: 'wall',
+          type: 'wall' as const,
+          shape: 'rectangle' as const,
+          x: 100,
+          y: 100,
+          width: 20,
+          height: 20,
+          blocksMovement: true,
+          blocksProjectiles: true,
+          blocksLineOfSight: true,
+        },
+      ];
+      manager.setObstacles(obstacles);
+
+      // Spy on the weapon's startSwing to verify obstacles are passed
+      const weapon = (manager as any).weapons.get(playerId);
+      const startSwingSpy = vi.spyOn(weapon, 'startSwing');
+
+      manager.startSwing(playerId, 0);
+
+      expect(startSwingSpy).toHaveBeenCalledWith(0, undefined, obstacles);
+    });
+
+    it('should work when no obstacles have been set', () => {
+      const playerId = 'player-1';
+      const position = { x: 100, y: 200 };
+      manager.createWeapon(playerId, 'Bat', position);
+
+      // Default obstacles is an empty array
+      const result = manager.startSwing(playerId, 0);
+      expect(result).toBe(true);
+    });
+
+    it('should pass empty obstacles array when setObstacles([]) is called', () => {
+      const playerId = 'player-1';
+      const position = { x: 100, y: 200 };
+      manager.createWeapon(playerId, 'Bat', position);
+
+      manager.setObstacles([]);
+
+      const weapon = (manager as any).weapons.get(playerId);
+      const startSwingSpy = vi.spyOn(weapon, 'startSwing');
+
+      manager.startSwing(playerId, 0);
+
+      expect(startSwingSpy).toHaveBeenCalledWith(0, undefined, []);
+    });
+  });
+
   describe('Position updates', () => {
     it('should update weapon position to follow player', () => {
       const playerId = 'player-1';

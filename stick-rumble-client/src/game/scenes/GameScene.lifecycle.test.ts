@@ -191,4 +191,63 @@ describe('GameScene - Lifecycle Management', () => {
       expect(restartSpy).toHaveBeenCalled();
     });
   });
+
+  describe('applyMatchMapContext', () => {
+    it('should call meleeWeaponManager.setObstacles with map obstacles', () => {
+      const mockSceneContext = createMockScene();
+      Object.assign(scene, mockSceneContext);
+
+      const setObstaclesSpy = vi.fn();
+      (scene as any).meleeWeaponManager = {
+        setObstacles: setObstaclesSpy,
+      };
+
+      const obstacles = [
+        {
+          id: 'wall',
+          type: 'wall',
+          shape: 'rectangle',
+          x: 100,
+          y: 100,
+          width: 20,
+          height: 20,
+          blocksMovement: true,
+          blocksProjectiles: true,
+          blocksLineOfSight: true,
+        },
+      ];
+
+      (scene as any).applyMatchMapContext({
+        mapId: 'default_office',
+        width: 1920,
+        height: 1080,
+        obstacles,
+        weaponSpawns: [],
+        visualAcceptanceViewpoints: [],
+      });
+
+      expect(setObstaclesSpy).toHaveBeenCalledWith(obstacles);
+    });
+
+    it('should call meleeWeaponManager.setObstacles with empty array when map has no obstacles', () => {
+      const mockSceneContext = createMockScene();
+      Object.assign(scene, mockSceneContext);
+
+      const setObstaclesSpy = vi.fn();
+      (scene as any).meleeWeaponManager = {
+        setObstacles: setObstaclesSpy,
+      };
+
+      (scene as any).applyMatchMapContext({
+        mapId: 'default_office',
+        width: 1920,
+        height: 1080,
+        obstacles: [],
+        weaponSpawns: [],
+        visualAcceptanceViewpoints: [],
+      });
+
+      expect(setObstaclesSpy).toHaveBeenCalledWith([]);
+    });
+  });
 });

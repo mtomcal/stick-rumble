@@ -153,6 +153,14 @@ export const WEAPON = {
 } as const;
 
 /**
+ * Melee visual constants
+ */
+export const MELEE = {
+  /** Minimum visible arc length in pixels when flush against a wall */
+  ARC_MIN_VISIBLE_LENGTH: 20,
+} as const;
+
+/**
  * Visual effects constants
  */
 export const EFFECTS = {

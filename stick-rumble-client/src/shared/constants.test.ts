@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { WEAPON, COLORS, MINIMAP, PLAYER } from './constants';
+import { WEAPON, COLORS, MINIMAP, PLAYER, MELEE } from './constants';
 
 /**
  * Test suite for game constants
@@ -85,5 +85,11 @@ describe('WEAPON constants', () => {
     it('should equal 1500ms (1.5 seconds)', () => {
       expect(WEAPON.PISTOL_RELOAD_TIME).toBe(1500);
     });
+  });
+});
+
+describe('MELEE constants', () => {
+  it('should have ARC_MIN_VISIBLE_LENGTH equal to 20', () => {
+    expect(MELEE.ARC_MIN_VISIBLE_LENGTH).toBe(20);
   });
 });

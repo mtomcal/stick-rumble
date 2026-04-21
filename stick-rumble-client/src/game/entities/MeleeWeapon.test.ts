@@ -308,4 +308,417 @@ describe('MeleeWeapon', () => {
       expect(graphics.destroyed).toBe(true);
     });
   });
+
+  describe('TS-MELEE-019: Wall-clipped melee swing arc', () => {
+    beforeEach(() => {
+      weapon = new MeleeWeapon(scene, 100, 100, 'Bat');
+    });
+
+    it('should use moveTo/lineTo polyline instead of arc when obstacles are provided', () => {
+      const graphics = (weapon as any).graphics;
+      const obstacles = [
+        {
+          id: 'wall',
+          type: 'wall' as const,
+          shape: 'rectangle' as const,
+          x: 150,
+          y: 80,
+          width: 20,
+          height: 40,
+          blocksMovement: true,
+          blocksProjectiles: true,
+          blocksLineOfSight: true,
+        },
+      ];
+
+      weapon.showSwingAnimation(0, obstacles);
+
+      expect(graphics.arc).not.toHaveBeenCalled();
+      expect(graphics.beginPath).toHaveBeenCalledTimes(1);
+      expect(graphics.moveTo).toHaveBeenCalledTimes(1);
+      expect(graphics.lineTo).toHaveBeenCalledTimes(16);
+      expect(graphics.strokePath).toHaveBeenCalledTimes(1);
+    });
+
+    it('should still use arc when no obstacles are provided', () => {
+      const graphics = (weapon as any).graphics;
+      weapon.showSwingAnimation(0);
+
+      expect(graphics.arc).toHaveBeenCalled();
+      expect(graphics.moveTo).not.toHaveBeenCalled();
+      expect(graphics.lineTo).not.toHaveBeenCalled();
+    });
+
+    it('should clip arc to first blocking contact when obstacle is in front', () => {
+      const graphics = (weapon as any).graphics;
+      // Place a wall directly in front (aimAngle=0 means facing right)
+      const obstacles = [
+        {
+          id: 'wall',
+          type: 'wall' as const,
+          shape: 'rectangle' as const,
+          x: 150,
+          y: 80,
+          width: 20,
+          height: 40,
+          blocksMovement: true,
+          blocksProjectiles: true,
+          blocksLineOfSight: true,
+        },
+      ];
+
+      weapon.showSwingAnimation(0, obstacles);
+
+      // With weapon at (100,100), aimAngle=0, range=90, the ray end would be at (190, 100)
+      // Wall at x=150 blocks it. Contact distance is 50px.
+      const lineToCalls = graphics.lineTo.mock.calls as number[][];
+      expect(lineToCalls.length).toBe(16);
+
+      // Verify central ray is clipped to the wall contact distance (~50px from origin => x≈150)
+      const midCall = lineToCalls[Math.floor(lineToCalls.length / 2)];
+      expect(midCall[0]).toBeCloseTo(150, 0);
+    });
+
+    it('should enforce minimum visible length of 20px when flush against a wall', () => {
+      const graphics = (weapon as any).graphics;
+      // Place a wall very close to the weapon (contact distance 5px)
+      const obstacles = [
+        {
+          id: 'wall',
+          type: 'wall' as const,
+          shape: 'rectangle' as const,
+          x: 105,
+          y: 80,
+          width: 20,
+          height: 40,
+          blocksMovement: true,
+          blocksProjectiles: true,
+          blocksLineOfSight: true,
+        },
+      ];
+
+      weapon.showSwingAnimation(0, obstacles);
+
+      const lineToCalls = graphics.lineTo.mock.calls as number[][];
+      expect(lineToCalls.length).toBe(16);
+
+      // The central ray should render at least 20px Euclidean distance from weapon position
+      const midCall = lineToCalls[Math.floor(lineToCalls.length / 2)];
+      const distance = Math.hypot(midCall[0] - 100, midCall[1] - 100);
+      expect(distance).toBeCloseTo(20, 10);
+    });
+
+    it('should clamp to exactly 20px when contact distance is between 0 and 20', () => {
+      const graphics = (weapon as any).graphics;
+      // Wall at contact distance 15px
+      const obstacles = [
+        {
+          id: 'wall',
+          type: 'wall' as const,
+          shape: 'rectangle' as const,
+          x: 115,
+          y: 80,
+          width: 20,
+          height: 40,
+          blocksMovement: true,
+          blocksProjectiles: true,
+          blocksLineOfSight: true,
+        },
+      ];
+
+      weapon.showSwingAnimation(0, obstacles);
+
+      const lineToCalls = graphics.lineTo.mock.calls as number[][];
+      const midCall = lineToCalls[Math.floor(lineToCalls.length / 2)];
+      const distance = Math.hypot(midCall[0] - 100, midCall[1] - 100);
+      expect(distance).toBeCloseTo(20, 10);
+    });
+
+    it('should use actual contact distance when it is greater than 20px', () => {
+      const graphics = (weapon as any).graphics;
+      // Wall at contact distance 25px
+      const obstacles = [
+        {
+          id: 'wall',
+          type: 'wall' as const,
+          shape: 'rectangle' as const,
+          x: 125,
+          y: 80,
+          width: 20,
+          height: 40,
+          blocksMovement: true,
+          blocksProjectiles: true,
+          blocksLineOfSight: true,
+        },
+      ];
+
+      weapon.showSwingAnimation(0, obstacles);
+
+      const lineToCalls = graphics.lineTo.mock.calls as number[][];
+      const midCall = lineToCalls[Math.floor(lineToCalls.length / 2)];
+      const distance = Math.hypot(midCall[0] - 100, midCall[1] - 100);
+      expect(distance).toBeCloseTo(25, 0);
+    });
+
+    it('should enforce 20px minimum when weapon starts inside an obstacle', () => {
+      const graphics = (weapon as any).graphics;
+      // Weapon at (100,100), wall encompasses the origin
+      const obstacles = [
+        {
+          id: 'wall',
+          type: 'wall' as const,
+          shape: 'rectangle' as const,
+          x: 90,
+          y: 90,
+          width: 20,
+          height: 20,
+          blocksMovement: true,
+          blocksProjectiles: true,
+          blocksLineOfSight: true,
+        },
+      ];
+
+      weapon.showSwingAnimation(0, obstacles);
+
+      const lineToCalls = graphics.lineTo.mock.calls as number[][];
+      const midCall = lineToCalls[Math.floor(lineToCalls.length / 2)];
+      const distance = Math.hypot(midCall[0] - 100, midCall[1] - 100);
+      expect(distance).toBeCloseTo(20, 10);
+    });
+
+    it('should only clip rays that intersect obstacles, leaving others at full range', () => {
+      const graphics = (weapon as any).graphics;
+      // Place a wall that only blocks the upper half of the arc
+      const obstacles = [
+        {
+          id: 'wall',
+          type: 'wall' as const,
+          shape: 'rectangle' as const,
+          x: 150,
+          y: 60,
+          width: 20,
+          height: 30,
+          blocksMovement: true,
+          blocksProjectiles: true,
+          blocksLineOfSight: true,
+        },
+      ];
+
+      weapon.showSwingAnimation(0, obstacles);
+
+      const lineToCalls = graphics.lineTo.mock.calls as number[][];
+      expect(lineToCalls.length).toBe(16);
+
+      // Some rays should be at full range (~190), others clipped (~150)
+      const xs = lineToCalls.map((call) => call[0]);
+      const maxX = Math.max(...xs);
+      const minX = Math.min(...xs);
+
+      // At least one ray should be at full range (close to 190)
+      expect(maxX).toBeCloseTo(190, 0);
+      // At least one ray should be clipped (close to 150)
+      expect(minX).toBeCloseTo(150, 0);
+    });
+
+    it('should preserve white stroke-only style when using polyline', () => {
+      const graphics = (weapon as any).graphics;
+      const obstacles = [
+        {
+          id: 'wall',
+          type: 'wall' as const,
+          shape: 'rectangle' as const,
+          x: 150,
+          y: 80,
+          width: 20,
+          height: 40,
+          blocksMovement: true,
+          blocksProjectiles: true,
+          blocksLineOfSight: true,
+        },
+      ];
+
+      weapon.showSwingAnimation(0, obstacles);
+
+      expect(graphics.lineStyle).toHaveBeenCalledWith(2, 0xFFFFFF, 0.8);
+      expect(graphics.fillStyle).not.toHaveBeenCalled();
+      expect(graphics.fillPath).not.toHaveBeenCalled();
+    });
+
+    it('should pass obstacles through startSwing to showSwingAnimation', () => {
+      const graphics = (weapon as any).graphics;
+      const obstacles = [
+        {
+          id: 'wall',
+          type: 'wall' as const,
+          shape: 'rectangle' as const,
+          x: 150,
+          y: 80,
+          width: 20,
+          height: 40,
+          blocksMovement: true,
+          blocksProjectiles: true,
+          blocksLineOfSight: true,
+        },
+      ];
+
+      weapon.startSwing(0, undefined, obstacles);
+
+      expect(graphics.arc).not.toHaveBeenCalled();
+      expect(graphics.beginPath).toHaveBeenCalledTimes(1);
+      expect(graphics.moveTo).toHaveBeenCalledTimes(1);
+      expect(graphics.lineTo).toHaveBeenCalledTimes(16);
+    });
+
+    it('should ignore obstacles that do not block projectiles', () => {
+      const graphics = (weapon as any).graphics;
+      const obstacles = [
+        {
+          id: 'glass',
+          type: 'wall' as const,
+          shape: 'rectangle' as const,
+          x: 150,
+          y: 80,
+          width: 20,
+          height: 40,
+          blocksMovement: false,
+          blocksProjectiles: false,
+          blocksLineOfSight: false,
+        },
+      ];
+
+      weapon.showSwingAnimation(0, obstacles);
+
+      // Still uses polyline path because obstacles array is non-empty,
+      // but no rays are clipped since the obstacle does not block projectiles
+      expect(graphics.arc).not.toHaveBeenCalled();
+      expect(graphics.lineTo).toHaveBeenCalledTimes(16);
+
+      // Central ray should be at full range (~190)
+      const lineToCalls = graphics.lineTo.mock.calls as number[][];
+      const midCall = lineToCalls[Math.floor(lineToCalls.length / 2)];
+      expect(midCall[0]).toBeCloseTo(190, 0);
+    });
+
+    it('should clip to the nearest obstacle when multiple block the same ray', () => {
+      const graphics = (weapon as any).graphics;
+      const obstacles = [
+        {
+          id: 'far-wall',
+          type: 'wall' as const,
+          shape: 'rectangle' as const,
+          x: 160,
+          y: 80,
+          width: 20,
+          height: 40,
+          blocksMovement: true,
+          blocksProjectiles: true,
+          blocksLineOfSight: true,
+        },
+        {
+          id: 'near-wall',
+          type: 'wall' as const,
+          shape: 'rectangle' as const,
+          x: 140,
+          y: 80,
+          width: 20,
+          height: 40,
+          blocksMovement: true,
+          blocksProjectiles: true,
+          blocksLineOfSight: true,
+        },
+      ];
+
+      weapon.showSwingAnimation(0, obstacles);
+
+      const lineToCalls = graphics.lineTo.mock.calls as number[][];
+      const midCall = lineToCalls[Math.floor(lineToCalls.length / 2)];
+      // Should clip to the nearer wall at x≈140 (contact distance 40px), not x≈160
+      expect(midCall[0]).toBeCloseTo(140, 0);
+    });
+
+    it('should clip correctly for non-zero aim angles', () => {
+      const graphics = (weapon as any).graphics;
+      // aimAngle = π/2 means facing down; place wall below
+      const obstacles = [
+        {
+          id: 'wall',
+          type: 'wall' as const,
+          shape: 'rectangle' as const,
+          x: 80,
+          y: 150,
+          width: 40,
+          height: 20,
+          blocksMovement: true,
+          blocksProjectiles: true,
+          blocksLineOfSight: true,
+        },
+      ];
+
+      weapon.showSwingAnimation(Math.PI / 2, obstacles);
+
+      const lineToCalls = graphics.lineTo.mock.calls as number[][];
+      expect(lineToCalls.length).toBe(16);
+
+      // Central ray should be clipped to wall at y≈150
+      const midCall = lineToCalls[Math.floor(lineToCalls.length / 2)];
+      expect(midCall[1]).toBeCloseTo(150, 0);
+    });
+
+    it('should render an 80-degree arc span as a polyline', () => {
+      const graphics = (weapon as any).graphics;
+      const obstacles = [
+        {
+          id: 'wall',
+          type: 'wall' as const,
+          shape: 'rectangle' as const,
+          x: 150,
+          y: 80,
+          width: 20,
+          height: 40,
+          blocksMovement: true,
+          blocksProjectiles: true,
+          blocksLineOfSight: true,
+        },
+      ];
+
+      weapon.showSwingAnimation(0, obstacles);
+
+      const moveToCall = graphics.moveTo.mock.calls[0] as number[];
+      const lineToCalls = graphics.lineTo.mock.calls as number[][];
+      const firstPoint = moveToCall;
+      const lastPoint = lineToCalls[lineToCalls.length - 1];
+
+      // First and last points should be at ±40° from aimAngle=0
+      const firstAngle = Math.atan2(firstPoint[1] - 100, firstPoint[0] - 100);
+      const lastAngle = Math.atan2(lastPoint[1] - 100, lastPoint[0] - 100);
+      const arcSpan = lastAngle - firstAngle;
+      expect(arcSpan).toBeCloseTo(80 * Math.PI / 180, 5);
+    });
+
+    it('should clip Katana arc at its longer range', () => {
+      const katana = new MeleeWeapon(scene, 100, 100, 'Katana');
+      const graphics = (katana as any).graphics;
+      const obstacles = [
+        {
+          id: 'wall',
+          type: 'wall' as const,
+          shape: 'rectangle' as const,
+          x: 170,
+          y: 80,
+          width: 20,
+          height: 40,
+          blocksMovement: true,
+          blocksProjectiles: true,
+          blocksLineOfSight: true,
+        },
+      ];
+
+      katana.showSwingAnimation(0, obstacles);
+
+      const lineToCalls = graphics.lineTo.mock.calls as number[][];
+      const midCall = lineToCalls[Math.floor(lineToCalls.length / 2)];
+      // Katana range is 110, wall at x=170 blocks at distance 70px
+      expect(midCall[0]).toBeCloseTo(170, 0);
+    });
+  });
 });

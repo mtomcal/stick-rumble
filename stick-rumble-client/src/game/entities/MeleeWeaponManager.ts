@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { MeleeWeapon } from './MeleeWeapon';
+import { type MapObstacle } from '../../shared/maps';
 
 /**
  * Position interface
@@ -16,6 +17,7 @@ interface Position {
 export class MeleeWeaponManager {
   private scene: Phaser.Scene;
   private weapons: Map<string, MeleeWeapon> = new Map();
+  private obstacles: readonly MapObstacle[] = [];
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -57,6 +59,13 @@ export class MeleeWeaponManager {
   }
 
   /**
+   * Set the obstacle list for arc clipping
+   */
+  setObstacles(obstacles: readonly MapObstacle[]): void {
+    this.obstacles = obstacles;
+  }
+
+  /**
    * Start a swing animation for a player's weapon
    * Returns true if swing started, false if no weapon or already swinging
    */
@@ -66,7 +75,7 @@ export class MeleeWeaponManager {
       return false;
     }
 
-    return weapon.startSwing(aimAngle);
+    return weapon.startSwing(aimAngle, undefined, this.obstacles);
   }
 
   /**
