@@ -386,15 +386,73 @@ func TestApplyKnockback_DiagonalWallContactDoesNotSlideSideways(t *testing.T) {
 	}
 }
 
-func TestPerformMeleeAttack_HitboxEdgeWithinRangeCanStillHit(t *testing.T) {
+func TestPerformMeleeAttack_HitboxEdgeWithinRangeDoesNotOverrideCenterRequirement(t *testing.T) {
 	bat := NewBat()
 	attacker := createTestPlayer("attacker", 100, 100, 0)
 	target := createTestPlayer("target", 205, 100, 0)
 
 	result := PerformMeleeAttack(attacker, []*PlayerState{attacker, target}, bat, openTestMapConfig())
 
-	if len(result.HitPlayers) != 1 {
-		t.Fatalf("expected hitbox edge within range to be hittable, got %d hits", len(result.HitPlayers))
+	if len(result.HitPlayers) != 0 {
+		t.Fatalf("expected target with only an in-range edge sample to miss under the center-clear rule, got %d hits", len(result.HitPlayers))
+	}
+}
+
+func TestHasMeleeReach_CenterBlockedFailsEvenWhenEdgesRemainExposed(t *testing.T) {
+	bat := NewBat()
+	attacker := createTestPlayer("attacker", 100, 100, 0)
+	target := createTestPlayer("target", 170, 100, 0)
+	mapConfig := openTestMapConfig()
+	mapConfig.Obstacles = []MapObstacle{
+		{ID: "center-wall", X: 130, Y: 90, Width: 20, Height: 20, BlocksMovement: true, BlocksProjectiles: true, BlocksLineOfSight: true},
+	}
+
+	if hasMeleeReach(attacker, target, bat, mapConfig) {
+		t.Fatal("expected center-blocked target to fail reach even when upper and lower edges remain exposed")
+	}
+}
+
+func TestHasMeleeReach_RequiresMajorityOfSamplePoints(t *testing.T) {
+	bat := NewBat()
+	attacker := createTestPlayer("attacker", 100, 100, 0)
+	target := createTestPlayer("target", 170, 100, 0)
+
+	testCases := []struct {
+		name      string
+		obstacles []MapObstacle
+		want      bool
+	}{
+		{
+			name: "center clear but only three points reachable fails",
+			obstacles: []MapObstacle{
+				// Blocks top, top-left, and top-right while leaving the center lane open.
+				{ID: "upper-cover", X: 125, Y: 75, Width: 45, Height: 20, BlocksMovement: true, BlocksProjectiles: true, BlocksLineOfSight: true},
+				// Blocks bottom, bottom-left, and bottom-right while leaving the center lane open.
+				{ID: "lower-cover", X: 125, Y: 105, Width: 45, Height: 20, BlocksMovement: true, BlocksProjectiles: true, BlocksLineOfSight: true},
+			},
+			want: false,
+		},
+		{
+			name: "center clear with exactly five reachable points passes",
+			obstacles: []MapObstacle{
+				// Blocks top, top-left, and top-right while leaving center, left, and right clear.
+				{ID: "upper-cover", X: 125, Y: 75, Width: 45, Height: 20, BlocksMovement: true, BlocksProjectiles: true, BlocksLineOfSight: true},
+				// Catches only the bottom-right sample; the bottom-center path stays below this blocker.
+				{ID: "lower-right-cover", X: 160, Y: 121, Width: 10, Height: 4, BlocksMovement: true, BlocksProjectiles: true, BlocksLineOfSight: true},
+			},
+			want: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mapConfig := openTestMapConfig()
+			mapConfig.Obstacles = tc.obstacles
+
+			if got := hasMeleeReach(attacker, target, bat, mapConfig); got != tc.want {
+				t.Fatalf("hasMeleeReach() = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }
 

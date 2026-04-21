@@ -60,22 +60,43 @@ func PerformMeleeAttack(attacker *PlayerState, allPlayers []*PlayerState, weapon
 func hasMeleeReach(attacker *PlayerState, target *PlayerState, weapon *Weapon, mapConfig MapConfig) bool {
 	attackerPos := attacker.GetPosition()
 	aimAngle := attacker.GetAimAngle()
-	for _, point := range meleeHitboxSamplePoints(target.GetPosition()) {
+	samplePoints := meleeHitboxSamplePoints(target.GetPosition())
+
+	centerPoint := samplePoints[0]
+	if !meleePointWithinRangeAndArc(attackerPos, centerPoint, aimAngle, weapon) {
+		return false
+	}
+	if segmentBlockedByObstacle(attackerPos, centerPoint, mapConfig.Obstacles) {
+		return false
+	}
+
+	reachableCount := 1
+	for _, point := range samplePoints[1:] {
 		if !meleePointWithinRangeAndArc(attackerPos, point, aimAngle, weapon) {
 			continue
 		}
 
-		sweepEnd := clampSegmentToDistance(attackerPos, point, weapon.Range)
-		wallContact, blocked := firstObstacleContact(attackerPos, sweepEnd, mapConfig.Obstacles, func(obstacle MapObstacle) bool {
-			return obstacle.BlocksMovement || obstacle.BlocksProjectiles || obstacle.BlocksLineOfSight
-		})
-		pointDistance := calculateDistance(attackerPos, point)
-		if !blocked || wallContact.Distance > pointDistance {
-			return true
+		if !segmentBlockedByObstacle(attackerPos, point, mapConfig.Obstacles) {
+			reachableCount++
+			if reachableCount >= 5 {
+				return true
+			}
 		}
 	}
 
 	return false
+}
+
+func segmentBlockedByObstacle(start, end Vector2, obstacles []MapObstacle) bool {
+	contact, blocked := firstObstacleContact(start, end, obstacles, func(obstacle MapObstacle) bool {
+		return obstacle.BlocksMovement || obstacle.BlocksProjectiles || obstacle.BlocksLineOfSight
+	})
+	if !blocked {
+		return false
+	}
+
+	targetDistance := calculateDistance(start, end)
+	return contact.Distance <= targetDistance
 }
 
 // isInMeleeRange checks if target is within the melee weapon's range and arc

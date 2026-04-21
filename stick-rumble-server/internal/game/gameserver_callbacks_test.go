@@ -382,12 +382,12 @@ func TestPlayerMeleeAttack_Success(t *testing.T) {
 	batWeapon := NewBat()
 	gs.SetWeaponState("player1", NewWeaponState(batWeapon))
 
-	// Position players close together
+	// Position players with the victim fully in front so a majority of hitbox samples remain in arc.
 	player1, _ := gs.world.GetPlayer("player1")
 	player2, _ := gs.world.GetPlayer("player2")
 
 	player1.Position = Vector2{X: 100, Y: 100}
-	player2.Position = Vector2{X: 110, Y: 100} // 10 units away
+	player2.Position = Vector2{X: 150, Y: 100}
 
 	// Perform melee attack
 	result := gs.PlayerMeleeAttack("player1", 0.0)

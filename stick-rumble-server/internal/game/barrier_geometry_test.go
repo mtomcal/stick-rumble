@@ -20,6 +20,24 @@ func TestSegmentRectContact_ReturnsNearestContactPoint(t *testing.T) {
 	}
 }
 
+func TestSegmentRectContact_EndingOnRectangleBoundaryCountsAsBlocked(t *testing.T) {
+	start := Vector2{X: 0, Y: 5}
+	end := Vector2{X: 10, Y: 5}
+	area := rect{x: 10, y: 0, width: 5, height: 10}
+
+	contact, ok := segmentRectContact(start, end, area)
+	if !ok {
+		t.Fatal("expected endpoint on boundary to count as blocked")
+	}
+
+	if contact.Point != end {
+		t.Fatalf("contact point = %+v, want endpoint %+v", contact.Point, end)
+	}
+	if contact.Distance != 10 {
+		t.Fatalf("distance = %v, want endpoint distance 10", contact.Distance)
+	}
+}
+
 func TestSegmentRectContact_Miss(t *testing.T) {
 	start := Vector2{X: 0, Y: 0}
 	end := Vector2{X: 5, Y: 5}
@@ -66,6 +84,9 @@ func TestFirstObstacleContact_PicksNearestObstacle(t *testing.T) {
 	}
 	if contact.Point.X != 10 || contact.Point.Y != 5 {
 		t.Fatalf("contact point = %+v, want {X:10 Y:5}", contact.Point)
+	}
+	if contact.Distance != 10 {
+		t.Fatalf("distance = %v, want 10", contact.Distance)
 	}
 }
 
