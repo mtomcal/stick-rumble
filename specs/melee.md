@@ -1,7 +1,7 @@
 # Melee Combat
 
-> **Spec Version**: 1.2.0
-> **Last Updated**: 2026-04-17
+> **Spec Version**: 1.2.1
+> **Last Updated**: 2026-04-21
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [hit-detection.md](hit-detection.md)
 > **Depended By**: [messages.md](messages.md), [graphics.md](graphics.md)
 
@@ -9,7 +9,7 @@
 
 ## Overview
 
-Melee combat provides close-range weapons (Bat and Katana) as alternatives to ranged weapons. Unlike projectile-based attacks, melee attacks instantly threaten all targets within a cone-shaped area in front of the attacker that are also reachable through open space, enabling area-of-effect (AoE) damage without allowing swords or bats to damage through solid barriers.
+Melee combat provides close-range weapons (Bat and Katana) as alternatives to ranged weapons. Unlike projectile-based attacks, melee attacks threaten targets within a cone-shaped area in front of the attacker only when those targets are fully visible and reachable through open space. A strict line-of-sight requirement ensures walls and barriers completely block melee attacks—enabling area-of-effect (AoE) damage only against exposed targets without allowing swords or bats to damage through solid barriers.
 
 **Why melee weapons exist:**
 1. **Risk/reward gameplay**: Higher damage per hit compensates for the danger of close-range engagement
@@ -338,12 +338,18 @@ func isInMeleeRange(attacker *PlayerState, target *PlayerState, weapon *Weapon) 
 
 ### Barrier Occlusion
 
-Range and arc are necessary but not sufficient. A melee hit is only valid if the target is reachable without a blocking barrier in between.
+Range and arc are necessary but not sufficient. A melee hit is only valid if the target is fully reachable without a blocking barrier in between, using strict line-of-sight requirements.
+
+**Strict Line-of-Sight Requirements:**
+1. **Center point must be clear**: The target's center point must have an unobstructed path from the attacker. If blocked, the attack fails immediately (no hit).
+2. **Majority of hitbox must be exposed**: At least 5 of 9 sample points on the target hitbox must be reachable (center + at least 4 of 8 edge/corner points).
+3. **Segment geometry**: The path is evaluated as a finite line segment from the attacker's center position to each target sample point.
+4. **Boundary-inclusive intersection**: If the segment touches or crosses any wall boundary, that target point is considered blocked (first-contact resolution applies).
+5. **First-contact resolution**: When multiple obstacles exist, the closest obstacle along the segment blocks the path.
 
 - the obstruction check uses authoritative gameplay geometry, not rendered sprite pixels
-- the path is evaluated from the attacker body/weapon-mount side toward the victim's authoritative hit volume
+- the path is evaluated from the attacker center toward the victim's authoritative hit volume
 - if a wall or other blocking barrier is reached first, the target is not hit
-- partial exposure is allowed: if some reachable portion of the victim hit volume is exposed before the barrier, that portion may still be hit
 
 ---
 
@@ -353,8 +359,12 @@ A single melee swing can hit multiple players within the cone.
 
 **Pseudocode:**
 ```
-function PerformMeleeAttack(attacker, allPlayers, weapon):
+function PerformMeleeAttack(attacker, allPlayers, weapon, mapConfig):
     if weapon == null OR !weapon.IsMelee():
+        return { HitPlayers: [], KnockbackApplied: false }
+
+    // Require map configuration for wall blocking
+    if mapConfig == null:
         return { HitPlayers: [], KnockbackApplied: false }
 
     hitPlayers = []
@@ -369,17 +379,61 @@ function PerformMeleeAttack(attacker, allPlayers, weapon):
         if !target.IsAlive():
             continue
 
-        // Check range, arc, and occlusion
-        if isInMeleeRange(attacker, target, weapon):
+        // Check range, arc, and strict line-of-sight
+        if isInMeleeRange(attacker, target, weapon) && hasMeleeReach(attacker, target, weapon, mapConfig):
             hitPlayers.append(target)
             target.TakeDamage(weapon.damage)
 
             // Apply knockback (Bat only)
             if weapon.knockbackDistance > 0:
-                applyKnockback(attacker, target, weapon.knockbackDistance)
+                applyKnockback(attacker, target, weapon.knockbackDistance, mapConfig)
                 knockbackApplied = true
 
     return { HitPlayers: hitPlayers, KnockbackApplied: knockbackApplied }
+
+function hasMeleeReach(attacker, target, weapon, mapConfig):
+    // Sample 9 points on target hitbox (center, edges, corners)
+    samplePoints = getTargetHitboxSamplePoints(target.position)
+    
+    // Check center point first (short-circuit if blocked)
+    centerPoint = samplePoints[0] // center
+    if segmentBlockedByObstacle(attacker.position, centerPoint, mapConfig.obstacles):
+        return false
+    
+    // Center is clear, check remaining points
+    reachableCount = 1 // center counts as 1
+    for i = 1 to 8: // remaining edge and corner points
+        if !segmentBlockedByObstacle(attacker.position, samplePoints[i], mapConfig.obstacles):
+            reachableCount++
+        // Short-circuit: stop if we already have 5 reachable points
+        if reachableCount >= 5:
+            return true
+    
+    // Return true if majority (5/9) or more points are reachable
+    return reachableCount >= 5
+
+function segmentBlockedByObstacle(start, end, obstacles):
+    // Find closest obstacle along segment (first-contact resolution)
+    closestObstacle = null
+    closestDistance = infinity
+    
+    for each obstacle in obstacles:
+        if !obstacle.blocksMovement && !obstacle.blocksProjectiles && !obstacle.blocksLineOfSight:
+            continue // Skip non-blocking obstacles
+        
+        // Check if segment intersects obstacle (boundary-inclusive)
+        if segmentIntersectsRectangle(start, end, obstacle):
+            distance = distanceToIntersection(start, end, obstacle)
+            if distance < closestDistance:
+                closestDistance = distance
+                closestObstacle = obstacle
+    
+    // If any obstacle found, check if it's closer than target
+    if closestObstacle != null:
+        targetDistance = distance(start, end)
+        return closestDistance < targetDistance
+    
+    return false // No obstacle blocks the path
 ```
 
 **Go Implementation:**
@@ -1021,6 +1075,7 @@ func TestPerformMeleeAttack_BatHitsSingleTarget(t *testing.T) {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.2.1 | 2026-04-21 | Clarified strict line-of-sight requirements for melee wall blocking: (1) target's center point must have unobstructed path or attack fails immediately, (2) majority of hitbox points (5/9) must be reachable including center + at least 4 of 8 edge/corner points, (3) segment geometry from attacker center to target points, (4) boundary-inclusive intersection (touching wall = blocked), (5) first-contact resolution for multiple obstacles, (6) short-circuit at majority for efficiency. |
 | 1.2.0 | 2026-04-17 | Added barrier-aware melee behavior: range+arc are no longer sufficient without unobstructed reachability, melee damage cannot pass through solid geometry, bat knockback now stops at the first blocking contact instead of tunneling through barriers, blocked swings still consume cooldown, and new acceptance scenarios cover wall-blocked melee plus knockback hard stops. |
 | 1.0.0 | 2026-02-02 | Initial specification |
 | 1.0.1 | 2026-02-16 | Fixed thread safety note — `world.players` accessed directly under `world.mu.RLock()`, not via `GetAllPlayers()` |
