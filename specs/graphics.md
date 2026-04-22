@@ -1,7 +1,7 @@
 # Graphics
 
-> **Spec Version**: 2.3.1
-> **Last Updated**: 2026-04-09
+> **Spec Version**: 2.4.0
+> **Last Updated**: 2026-04-22
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [arena.md](arena.md)
 > **Depended By**: [client-architecture.md](client-architecture.md), [test-index.md](test-index.md)
 
@@ -126,151 +126,68 @@ interface RenderedPlayer {
 
 ## Behavior
 
-### Player Rendering (Stick Figure)
+### Player Rendering (Live Body)
 
-**Why Stick Figures?**
-Stick figures are fast to render procedurally, instantly recognizable, and create the distinctive visual style of the game. They require no sprites, scale perfectly, and animate smoothly.
+**Why this contract exists**
+The live player body is not just decorative art. It is the on-screen representation of authoritative movement collision. If the visible body shows air where the movement system reads solid contact, players will perceive false openings and false wall gaps even when the underlying physics is internally consistent.
 
-The stick figure is composed of:
+### Canonical Visible Footprint
+
+Every live player must render a stable canonical visible footprint that is the visual representation of the shared player dimensions:
+
+- width derives directly from `PLAYER_WIDTH`
+- height derives directly from `PLAYER_HEIGHT`
+- the footprint is centered on the player world position
+- the footprint stays axis-aligned to the world and does not rotate with aim
+
+For the current game, that means the live player's collision-carrying visible body must read as a `32x64` footprint centered on the player position because `PLAYER_WIDTH = 32` and `PLAYER_HEIGHT = 64`.
+
+**Hard rules:**
+- the canonical visible footprint is the primary live-player body read on screen
+- the canonical visible footprint must be present in all live states: idle, walking, sprinting, aiming, and dodge rolling
+- the canonical visible footprint may not intentionally inset from the authoritative hitbox on any side
+- the outer rendered extents of that footprint must match the authoritative hitbox within at most 1 rendered pixel on each side
+- against movement-blocking obstacles, the live player body must read flush to the authoritative obstacle rectangle edge on the north, east, south, and west sides with no readable air gap at normal gameplay scale
+- this contract applies to the live player body only; corpses, invulnerability rings, labels, weapons, and other attachments are not the collision-reading body
+
+**Obstacle-edge rule:**
+- the real blocking edge is the obstacle's authoritative rectangle boundary from [arena.md](arena.md)
+- obstacle paint treatment must support that edge read; fills, outlines, shadows, or highlights may not create a false visible gap or false visible overlap larger than 1 rendered pixel relative to that boundary
+
+### Footprint-First Styling
+
+The live player still uses a stylized stick-figure presentation, but the rendering contract is footprint-first:
+
+- the canonical visible footprint is mandatory
+- stylized details such as head, arms, hands, legs, feet, and held weapon are secondary layers on top of that footprint
+- those secondary layers may extend beyond the canonical footprint for expression, but they do not redefine where the live body "is" for blocker contact
+- attachments may not be used to hide a body-gap bug or to satisfy flush-contact readability by themselves
+
+The exact artistic shape used to realize the canonical footprint is intentionally not fixed to one named silhouette. A rounded rectangle, capsule-like mass, or another body treatment is acceptable if it satisfies the footprint contract above.
+
+### Preserved Stick-Figure Detail Layer
+
+Stick-figure detail remains part of the live player style because it preserves the prototype's readability and personality. The detail layer is composed of:
 1. **Head**: Filled circle at center
 2. **Arms**: Two lines from center to hands, with circular hands
 3. **Legs**: Two lines from center to feet, with circular feet
 
-**Stick Figure Geometry:**
+These details may animate and aim expressively, but they must not change the canonical collision-carrying outer footprint.
 
+**Rendering order (conceptual):**
 ```
-                    ┌────────────────┐
-                    │  HEAD (r=13)   │
-                    │    @ (0,0)     │
-                    └────────────────┘
-                           │
-           ┌───────────────┼───────────────┐
-           │               │               │
-     LEFT ARM (2px)   BODY ORIGIN    RIGHT ARM (2px)
-     (20, -3)          (0, 0)         (20, 3)
-       ○ hand                          ○ hand
-                           │
-           ┌───────────────┼───────────────┐
-           │               │               │
-     LEFT LEG (3px)                  RIGHT LEG (3px)
-     (animated)                      (animated)
-       ○ foot                          ○ foot
-```
-
-**Pseudocode:**
-```
-function renderStickFigure(player, walkCycle):
+function renderLivePlayer(player, walkCycle):
     graphics.clear()
-    cx, cy = 0, 0  // Local coordinates
-    rot = player.aimAngle
 
-    // Rotation helper
-    calcPoint(localX, localY):
-        return {
-            x: cx + localX * cos(rot) - localY * sin(rot),
-            y: cy + localX * sin(rot) + localY * cos(rot)
-        }
+    canonicalFootprint = bodyFootprintFromPlayerDimensions(
+        width = PLAYER_WIDTH,
+        height = PLAYER_HEIGHT,
+        center = player.position
+    )
 
-    // LEGS (animated with walk cycle) — black for all players
-    stride = 16
-    footSideOffset = 8
-    leftLegProgress = sin(walkCycle)
-    rightLegProgress = sin(walkCycle + PI)
-
-    leftFootPos = calcPoint(leftLegProgress * stride, -footSideOffset)
-    rightFootPos = calcPoint(rightLegProgress * stride, footSideOffset)
-
-    graphics.lineStyle(3, 0x000000)  // Black body
-    drawLine(cx, cy, leftFootPos)
-    drawLine(cx, cy, rightFootPos)
-    graphics.fillCircle(leftFootPos, 3)
-    graphics.fillCircle(rightFootPos, 3)
-
-    // ARMS — black for all players
-    // Hands MUST grip the weapon and follow its rotation.
-    // Hand positions are computed from the weapon's grip area, NOT fixed offsets.
-    // Both hands should be placed along the weapon body at the grip point,
-    // rotating with the aim angle so hands visually hold the gun.
-    weaponGripOffset = 12  // Distance along aim direction to weapon grip
-    handSpread = 3         // Perpendicular offset for two-handed grip
-
-    leftHandPos = calcPoint(weaponGripOffset, -handSpread)
-    rightHandPos = calcPoint(weaponGripOffset, handSpread)
-
-    graphics.lineStyle(2, 0x000000)  // Black body
-    drawLine(cx, cy, leftHandPos)
-    drawLine(cx, cy, rightHandPos)
-    graphics.fillCircle(leftHandPos, 3)
-    graphics.fillCircle(rightHandPos, 3)
-
-    // HEAD — type-specific color (local: 0x2A2A2A, enemy: 0xFF0000, dead: 0x888888)
-    graphics.fillStyle(headColor)
-    graphics.fillCircle(cx, cy, 13)
-    graphics.lineStyle(1, 0x000000, 0.3)
-    graphics.strokeCircle(cx, cy, 13)
-```
-
-**TypeScript:**
-```typescript
-private draw(): void {
-  this.graphics.clear();
-  const cx = 0, cy = 0;
-  const rot = this.rotation;
-
-  const calcPoint = (localX: number, localY: number) => ({
-    x: cx + (localX * Math.cos(rot) - localY * Math.sin(rot)),
-    y: cy + (localX * Math.sin(rot) + localY * Math.cos(rot)),
-  });
-
-  // Legs — black for all players
-  const bodyColor = 0x000000;
-  this.graphics.lineStyle(3, bodyColor, 1);
-  const stride = 16;
-  const footSideOffset = 8;
-  const leftLegProgress = Math.sin(this.walkCycle);
-  const rightLegProgress = Math.sin(this.walkCycle + Math.PI);
-
-  const leftFootPos = calcPoint(leftLegProgress * stride, -footSideOffset);
-  const rightFootPos = calcPoint(rightLegProgress * stride, footSideOffset);
-
-  this.graphics.beginPath();
-  this.graphics.moveTo(cx, cy);
-  this.graphics.lineTo(leftFootPos.x, leftFootPos.y);
-  this.graphics.strokePath();
-
-  this.graphics.beginPath();
-  this.graphics.moveTo(cx, cy);
-  this.graphics.lineTo(rightFootPos.x, rightFootPos.y);
-  this.graphics.strokePath();
-
-  this.graphics.fillStyle(bodyColor, 1);
-  this.graphics.fillCircle(leftFootPos.x, leftFootPos.y, 3);
-  this.graphics.fillCircle(rightFootPos.x, rightFootPos.y, 3);
-
-  // Arms — black for all players
-  this.graphics.lineStyle(2, bodyColor, 1);
-  const leftHandPos = calcPoint(20, -3);
-  const rightHandPos = calcPoint(20, 3);
-
-  this.graphics.beginPath();
-  this.graphics.moveTo(cx, cy);
-  this.graphics.lineTo(leftHandPos.x, leftHandPos.y);
-  this.graphics.strokePath();
-
-  this.graphics.beginPath();
-  this.graphics.moveTo(cx, cy);
-  this.graphics.lineTo(rightHandPos.x, rightHandPos.y);
-  this.graphics.strokePath();
-
-  this.graphics.fillCircle(leftHandPos.x, leftHandPos.y, 3);
-  this.graphics.fillCircle(rightHandPos.x, rightHandPos.y, 3);
-
-  // Head — type-specific color (local: 0x2A2A2A, enemy: 0xFF0000, dead: 0x888888)
-  this.graphics.fillStyle(this.headColor, 1);
-  this.graphics.fillCircle(cx, cy, 13);
-  this.graphics.lineStyle(1, 0x000000, 0.3);
-  this.graphics.strokeCircle(cx, cy, 13);
-}
+    drawCanonicalFootprint(canonicalFootprint)
+    drawStickFigureDetailsInsideOrOnTop(canonicalFootprint, walkCycle, player.aimAngle)
+    drawNonCollisionReadingAttachments(player.weapon, player.label, player.ring)
 ```
 
 ### Walk Animation
@@ -289,6 +206,8 @@ rightLegAngle = sin(walkCycle + PI) * stride
 if !isMoving:
     walkCycle = 0
 ```
+
+**Constraint:** Walk animation may move internal detail, but it may not deform the canonical visible footprint or change the live player's collision-carrying outer extents.
 
 **TypeScript:**
 ```typescript
@@ -717,36 +636,24 @@ private drawMeleeHit(graphics: Phaser.GameObjects.Graphics): void {
 
 ### Dodge Roll Visual
 
-**Why 360° Rotation + Flicker?**
-- Rotation: Clear visual that player is rolling, makes action feel dynamic
-- Flicker: Indicates i-frames, teaches players when they're protected
+**Why the live body must stay stable**
+The dodge roll is still resolved against the same authoritative `PLAYER_WIDTH x PLAYER_HEIGHT` collision body. The live player's collision-carrying visible footprint therefore stays stable during the roll. Roll presentation must not reintroduce false side gaps or make the player body disappear exactly when obstacle contact matters most.
 
-**Roll Animation:**
-- Rotation: 360° over 400ms (full roll duration)
-- Formula: `rollAngle = ((now - rollStartTime) / 400) * 2 * PI`
+**Roll visual rules:**
+- the canonical live-player footprint remains visible during the entire roll
+- the canonical live-player footprint remains axis-aligned and does not rotate with the roll
+- the canonical live-player footprint keeps the same outer extents during the roll as in ordinary movement
+- any roll-specific flair must be a secondary, non-collision-reading layer and must not hide, rotate, or distort the canonical footprint
 
-**Invincibility Flicker (First 200ms):**
-- Visibility toggles on/off
-- Period: 100ms (flicker every 100ms)
-- Formula: `isVisible = ((now - rollStartTime) % 200) < 100`
+**Allowed roll flair examples:**
+- weapon or attachment motion
+- non-body accent effects
+- additional timing cues that do not replace the live body read
 
-**TypeScript:**
-```typescript
-// During roll
-if (isRolling) {
-  const rollElapsed = clock.now() - rollStartTime;
-  const rollAngle = (rollElapsed / 400) * Math.PI * 2;
-  graphics.setRotation(rollAngle);
-
-  // I-frame flicker (first 200ms)
-  if (rollElapsed < 200) {
-    const isVisible = (rollElapsed % 200) < 100;
-    graphics.setVisible(isVisible);
-  } else {
-    graphics.setVisible(true);
-  }
-}
-```
+**Out of spec:**
+- rotating the live collision-carrying body during the roll
+- toggling the live body fully invisible during i-frames
+- shrinking, stretching, or otherwise changing the live body's outer footprint during the roll
 
 ### Dodge Roll Cooldown UI
 
@@ -1390,7 +1297,7 @@ test "player renders all body parts":
 
 ---
 
-### TS-GFX-012: Dodge Roll Shows Rotation
+### TS-GFX-012: Dodge Roll Preserves Canonical Live Footprint
 
 **Category**: Visual
 **Priority**: High
@@ -1399,8 +1306,10 @@ test "player renders all body parts":
 - Player rolling, rollStartTime = 200ms ago
 
 **Expected Output:**
-- Player rotation = (200 / 400) * 2 * PI = PI radians (180°)
-- Visible (past i-frame flicker window)
+- Live body remains visibly present
+- Live body remains axis-aligned rather than rotating with the roll
+- Live body outer extents still match `PLAYER_WIDTH x PLAYER_HEIGHT` within 1 rendered pixel
+- Any roll-specific flair remains secondary and does not become the collision-reading body
 
 ---
 
@@ -1585,10 +1494,51 @@ test "player renders all body parts":
 
 ---
 
+### TS-GFX-025: Canonical live footprint matches shared player dimensions
+
+**Category**: Unit
+**Priority**: Critical
+
+**Preconditions:**
+- Live player rendered in ordinary gameplay state
+
+**Input:**
+- Render the live player while idle, walking, aiming, and rolling
+
+**Expected Output:**
+- The collision-carrying visible body derives directly from `PLAYER_WIDTH` and `PLAYER_HEIGHT`
+- The visible body's outer extents match the authoritative `32x64` hitbox within 1 rendered pixel on each side
+- The visible body remains axis-aligned in every tested live state
+- Animation and aim detail stay inside or on top of that stable outer footprint rather than redefining it
+
+### TS-GFX-026: Live player reads flush against blockers on all four sides
+
+**Category**: Visual
+**Priority**: Critical
+
+**Preconditions:**
+- A movement-blocking obstacle with known authoritative rectangle edges
+- A live player placed so the canonical visible footprint is resolved against the obstacle
+
+**Input:**
+- Test north-side contact
+- Test east-side contact
+- Test south-side contact
+- Test west-side contact
+
+**Expected Output:**
+- The live player's visible body reads flush to the obstacle's authoritative rectangle edge in every direction
+- No readable air gap appears between the live body and the blocker at normal gameplay scale
+- No visible body overhang beyond the authoritative blocker edge exceeds 1 rendered pixel
+- Weapons, hands, labels, rings, or other attachments are not relied on to sell the contact read
+
+---
+
 ## Changelog
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.4.0 | 2026-04-22 | Reframed live-player rendering around a canonical visible footprint derived directly from `PLAYER_WIDTH` and `PLAYER_HEIGHT`. Added a footprint-first contract: the live body must stay axis-aligned, stable across movement and dodge roll, and read flush against authoritative blocker edges on all four sides within a 1 rendered-pixel tolerance. Replaced dodge-roll body rotation/flicker as normative behavior. Added TS-GFX-025 and TS-GFX-026 for geometry and four-direction contact acceptance. |
 | 2.3.2 | 2026-04-10 | Renamed enemy weapon visibility to held weapon visibility. Clarified that local and remote held weapons share the same readability contract, and explicitly required the bat to remain visibly brown and recognizable in-hand. |
 | 2.3.1 | 2026-04-09 | Clarified pickup rendering contract: normal gameplay pickups must be weapon-specific floor silhouettes with a secondary zone affordance; generic marker-only presentation is explicitly out of spec. Updated TS-GFX-008 and TS-GFX-009 wording accordingly. |
 | 2.3.0 | 2026-03-02 | Crosshair changed from `⊕` (circle+cross) to simple `+` (cross only, no circle). Hands/arms now grip weapon and follow aim rotation. Hit trail must originate from actual gun barrel tip. Added bugs: remove green aim indicator line, remove orange dot artifact, fix hit trail barrel attachment. |

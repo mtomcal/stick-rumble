@@ -1,7 +1,7 @@
 # Dodge Roll
 
-> **Spec Version**: 1.0.0
-> **Last Updated**: 2026-02-02
+> **Spec Version**: 1.0.5
+> **Last Updated**: 2026-04-22
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [movement.md](movement.md), [arena.md](arena.md), [messages.md](messages.md)
 > **Depended By**: [hit-detection.md](hit-detection.md), [graphics.md](graphics.md), [ui.md](ui.md)
 
@@ -684,7 +684,7 @@ wsClient.on('roll:end', (data: RollEndData) => {
 - `src/game/ui/DodgeRollCooldownUI.ts` - Visual cooldown indicator
 - `src/game/scenes/GameScene.ts` - SPACE key binding, direction calculation
 - `src/game/scenes/GameSceneEventHandlers.ts` - roll:start, roll:end handlers
-- `src/game/entities/PlayerManager.ts` - Roll visual effects (rotation, flicker)
+- `src/game/entities/PlayerManager.ts` - Roll state presentation hooks for the live player
 
 **Input Binding:**
 ```typescript
@@ -699,8 +699,9 @@ const dodgeKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.SPAC
 - Solid green when ready
 
 **Visual Effects During Roll:**
-- 360° rotation animation over 0.4s duration
-- Flicker effect during i-frames (visible/invisible alternation at 100ms intervals)
+- The live player's collision-carrying visible body remains governed by [graphics.md](graphics.md)
+- Roll presentation must not rotate, hide, or distort the live player's canonical visible footprint
+- Any roll-specific flair must remain a secondary non-collision-reading layer
 - Smooth transition back to normal state on roll:end
 
 ### Go (Server)
@@ -1143,8 +1144,9 @@ it('should show 50% progress at 1.5s', () => {
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.0.0 | 2026-02-02 | Initial specification |
+| 1.0.5 | 2026-04-22 | Aligned client roll presentation with `graphics.md`: the live player's canonical visible footprint stays stable during dodge roll and is no longer specified as full-body rotation/flicker. |
 | 1.0.4 | 2026-02-16 | Fixed error handling — invalid roll logs warning (not silently ignored) per `message_processor.go:442` |
 | 1.0.3 | 2026-02-16 | Fixed player:dodge_roll payload — client sends `data: { direction }`, not empty (schema and implementation diverge) |
 | 1.0.2 | 2026-02-16 | Fixed roll:start audio scope — plays for ALL players' rolls, not just local player |
 | 1.0.1 | 2026-02-16 | Fixed UpdatePlayer return type — returns `UpdatePlayerResult` struct (with `RollCancelled` and `CorrectionNeeded` fields), not `bool`. Added `sanitizeVector2` calls to match source. |
+| 1.0.0 | 2026-02-02 | Initial specification |

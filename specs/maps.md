@@ -1,7 +1,7 @@
 # Maps
 
-> **Spec Version**: 1.2.0
-> **Last Updated**: 2026-04-17
+> **Spec Version**: 1.2.1
+> **Last Updated**: 2026-04-22
 > **Depends On**: [constants.md](constants.md)
 > **Depended By**: [arena.md](arena.md), [rooms.md](rooms.md), [messages.md](messages.md), [weapons.md](weapons.md), [client-architecture.md](client-architecture.md), [server-architecture.md](server-architecture.md)
 
@@ -187,9 +187,11 @@ Static schema checks alone cannot prove rendered readability for false openings 
 - any solid-looking wall, desk, pillar, or similar hard barrier in a shipped map must present unified blocking semantics by default rather than quietly differing per system
 - rendered wall and desk edges must not suggest passability where collision forbids passage
 - rendered solid silhouettes must be anchored directly to the authoritative obstacle geometry closely enough that the visible blocking edge is the real blocking edge
+- blocker rendering must support the live player's canonical visible footprint from [graphics.md](graphics.md) reading flush against the real blocker edge on the north, east, south, and west sides without a readable air gap at gameplay scale
 - any opening that is intended to be traversable must read as open at gameplay camera scale
 - authored visual composition must support clean wall sliding and corridor readability during combat movement
 - arena boundary pieces must meet as sealed corners; a visible seam at a border junction is invalid even if the raw blockers technically touch elsewhere
+- shipped readability coverage must include representative blocker-contact checks for the map's solid obstacle families; this coverage may come from authored viewpoints, dedicated visual regression cases, or both, but it may not be omitted
 
 **Why fail at load time?**
 - Spatial mistakes are content authoring errors, not runtime decisions
@@ -402,6 +404,7 @@ Then each border corner is represented by boundary pieces that meet cleanly with
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.2.1 | 2026-04-22 | Strengthened readability validation around live-player blocker contact. Explicitly required solid obstacle rendering to support flush north/east/south/west contact reads against the canonical live-player footprint from `graphics.md`, and required representative blocker-contact visual coverage for shipped maps. |
 | 1.2.0 | 2026-04-17 | Elevated solid-barrier fidelity into a default authoring rule for shipped maps: visually solid obstacles must block movement, projectiles, and LOS together by default, rendered solid silhouettes must stay anchored to authoritative geometry, and barrier drift is explicitly a source-content failure rather than something downstream systems may paper over. |
 | 1.1.2 | 2026-04-10 | Added an explicit sealed-corner readability rule for arena borders, required a canonical border-corner viewpoint in the office map, and added TS-MAP-010 so boundary seams are caught from authoritative map data instead of surfacing only in visual QA. |
 | 1.1.1 | 2026-04-09 | Added explicit `visualAcceptanceViewpoints` data contract and clarified that static schema validation cannot replace viewpoint-driven visual readability acceptance. |

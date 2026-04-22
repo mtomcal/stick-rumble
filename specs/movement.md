@@ -1,7 +1,7 @@
 # Movement
 
-> **Spec Version**: 1.2.1
-> **Last Updated**: 2026-04-09
+> **Spec Version**: 1.2.3
+> **Last Updated**: 2026-04-22
 > **Depends On**: [constants.md](constants.md), [arena.md](arena.md), [player.md](player.md)
 > **Depended By**: [dodge-roll.md](dodge-roll.md), [shooting.md](shooting.md), [hit-detection.md](hit-detection.md)
 
@@ -597,6 +597,7 @@ predictPosition(position, velocity, input, deltaTime):
 - local prediction resolves movement-blocking obstacles using the same hitbox width/height semantics as the server
 - sliding along walls or desks during ordinary traversal must stay locally stable instead of letting the player body enter blocked space and later snap back
 - prediction may leave velocity unchanged when contact occurs, but the rendered local position must not visibly penetrate blocking geometry during normal movement
+- when the local player is resolved flush against blocking geometry, the live body must visually read flush to that authoritative edge per [graphics.md](graphics.md)
 
 ### Server Reconciliation
 
@@ -674,6 +675,7 @@ The movement system is correct when all of the following are true in live play:
 - reversing direction in close-quarters combat is crisp rather than heavy
 - sprint feels like a distinct faster locomotion state, not a prediction bug source
 - ordinary wall contact produces sliding, not sticky snagging
+- ordinary blocker contact reads visually flush on all four sides via the live player's canonical visible footprint; north/south contact may not show a readable air gap that east/west contact does not
 - local corrections during normal movement are effectively invisible
 
 ### Executable Feel Thresholds
@@ -951,6 +953,7 @@ func TestDiagonalNormalization(t *testing.T) {
 - Player slides cleanly along the surface
 - No sticky corner trapping in normal traversal
 - No routine visible rubberbanding from obstacle disagreement
+- The live player body reads flush to the authoritative blocker edge per [graphics.md](graphics.md)
 
 ---
 
@@ -958,6 +961,7 @@ func TestDiagonalNormalization(t *testing.T) {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.2.3 | 2026-04-22 | Cross-referenced the live-player canonical visible-footprint contract from `graphics.md`. Clarified that ordinary blocker contact must read visually flush on all four sides during local movement, not just avoid overlap or rubberbanding. |
 | 1.2.2 | 2026-04-10 | Clarified that client prediction must resolve active-map bounds and blocking obstacles locally, so normal wall contact does not create visible snap-back. |
 | 1.2.1 | 2026-04-09 | Added executable movement-feel thresholds (start/stop/reversal/sprint) so red/green tests can enforce the perceptual contract directly. |
 | 1.2.0 | 2026-04-09 | Reframed movement around prototype-faithful perceptual outcomes: immediate-feeling start/stop/reversal, sprint retained as a distinct state, visible rubberbanding treated as a defect, prediction/reconciliation updated to match sprint and obstacle semantics, and tests rewritten away from endorsing a 4-second acceleration ramp. |
