@@ -55,8 +55,8 @@ dev:
 	@echo "Server: http://localhost:8080"
 	@echo ""
 	@trap 'kill 0' EXIT; \
-	cd stick-rumble-server && go run cmd/server/main.go & \
-	cd stick-rumble-client && npm run dev
+	cd stick-rumble-server && HOST=0.0.0.0 go run cmd/server/main.go & \
+	cd stick-rumble-client && npm run dev -- --host
 
 # Development - Client only
 dev-client:
@@ -66,7 +66,7 @@ dev-client:
 # Development - Server only
 dev-server:
 	@echo "Starting server..."
-	cd stick-rumble-server && go run cmd/server/main.go
+	cd stick-rumble-server && HOST=0.0.0.0 go run cmd/server/main.go
 
 # Run all tests
 test:

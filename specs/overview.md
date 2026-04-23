@@ -232,6 +232,10 @@ stick-rumble-client/
 └── package.json               # Node dependencies
 
 Dev URL: http://localhost:5173
+
+Local development launched from the repository root must start the client dev server with Vite's `--host` flag so the app is reachable from the host network interface, not only the loopback interface. The server side of the same workflow must also bind on the host network interface rather than loopback-only so phones or other devices on the same LAN can reach both the browser app and the WebSocket endpoint during local testing. This applies to the root workflow entry points `make dev` and `make dev-server`.
+
+When no explicit local-development override is provided for the WebSocket URL, the client must derive the default development socket target from the browser's current hostname and connect to port `8080` on that same host. A page loaded from `http://192.168.1.25:5173` must therefore default to `ws://192.168.1.25:8080/ws`, while a page loaded from `http://localhost:5173` still defaults to `ws://localhost:8080/ws`.
 ```
 
 **Manager Pattern:**

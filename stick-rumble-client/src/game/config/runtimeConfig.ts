@@ -1,10 +1,18 @@
 import type { JoinIntent } from '../../shared/types';
 
-const DEFAULT_WS_URL = 'ws://localhost:8080/ws';
 const INVITE_PARAM = 'invite';
 
+function getDefaultWebSocketUrl(): string {
+  if (typeof globalThis !== 'undefined' && globalThis.location?.hostname) {
+    const protocol = globalThis.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${protocol}//${globalThis.location.hostname}:8080/ws`;
+  }
+
+  return 'ws://localhost:8080/ws';
+}
+
 export function getWebSocketUrl(): string {
-  return import.meta.env.VITE_WS_URL || DEFAULT_WS_URL;
+  return import.meta.env.VITE_WS_URL || getDefaultWebSocketUrl();
 }
 
 export function getClientBaseUrl(): string {

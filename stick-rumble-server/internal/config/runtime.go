@@ -6,10 +6,12 @@ import (
 )
 
 const (
+	DefaultHost = "0.0.0.0"
 	DefaultPort = "8080"
 )
 
 type RuntimeConfig struct {
+	Host                   string
 	Port                   string
 	EnableSchemaValidation bool
 	GoEnv                  string
@@ -17,12 +19,18 @@ type RuntimeConfig struct {
 }
 
 func Load() RuntimeConfig {
+	host := strings.TrimSpace(os.Getenv("HOST"))
+	if host == "" {
+		host = DefaultHost
+	}
+
 	port := strings.TrimSpace(os.Getenv("PORT"))
 	if port == "" {
 		port = DefaultPort
 	}
 
 	return RuntimeConfig{
+		Host:                   host,
 		Port:                   port,
 		EnableSchemaValidation: strings.EqualFold(strings.TrimSpace(os.Getenv("ENABLE_SCHEMA_VALIDATION")), "true"),
 		GoEnv:                  defaultString(strings.TrimSpace(os.Getenv("GO_ENV")), "development"),

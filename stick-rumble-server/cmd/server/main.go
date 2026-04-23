@@ -32,7 +32,7 @@ func startServer(ctx context.Context) error {
 
 	// Create server with configured timeouts
 	server := &http.Server{
-		Addr:         ":" + runtimeConfig.Port,
+		Addr:         runtimeConfig.Host + ":" + runtimeConfig.Port,
 		Handler:      mux,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
@@ -47,7 +47,7 @@ func startServer(ctx context.Context) error {
 
 	// Start HTTP server in goroutine
 	go func() {
-		log.Printf("Starting server on port %s", runtimeConfig.Port)
+		log.Printf("Starting server on %s:%s", runtimeConfig.Host, runtimeConfig.Port)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			serverErrors <- err
 		}

@@ -708,6 +708,7 @@ The server handles SIGTERM and SIGINT for clean shutdown.
 **Pseudocode:**
 ```
 function startServer(ctx):
+    host = env("HOST") or "0.0.0.0"
     port = env("PORT") or "8080"
 
     mux = http.NewServeMux()
@@ -718,7 +719,7 @@ function startServer(ctx):
     network.StartGlobalHandler(ctx)
 
     // Start HTTP server in goroutine
-    go server.ListenAndServe()
+    go server.ListenAndServe(host + ":" + port)
 
     // Wait for ctx cancellation or server error
     select:
@@ -747,6 +748,11 @@ function main():
 **Go:**
 ```go
 func startServer(ctx context.Context) error {
+    host := os.Getenv("HOST")
+    if host == "" {
+        host = "0.0.0.0"
+    }
+
     port := os.Getenv("PORT")
     if port == "" {
         port = "8080"
@@ -760,7 +766,7 @@ func startServer(ctx context.Context) error {
     mux.HandleFunc("/ws", network.HandleWebSocket) // global singleton
 
     server := &http.Server{
-        Addr:         ":" + port,
+        Addr:         host + ":" + port,
         Handler:      mux,
         ReadTimeout:  15 * time.Second,
         WriteTimeout: 15 * time.Second,
