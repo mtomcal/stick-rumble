@@ -22,6 +22,7 @@ export interface PlayerState {
     y: number;
   };
   aimAngle?: number; // Aim angle in radians (optional for backward compatibility)
+  weaponType?: string; // Authoritative equipped weapon type from server state stream
   deathTime?: number; // Timestamp when player died (ms since epoch), undefined if alive
   health?: number; // Current health (0-100)
   isRegenerating?: boolean; // Whether health is currently regenerating
@@ -211,7 +212,8 @@ export class PlayerManager {
 
         // Create weapon graphics (default to Pistol)
         const aimAngle = state.aimAngle ?? 0;
-        const weaponType = this.weaponTypes.get(state.id) ?? 'Pistol';
+        const weaponType = state.weaponType ?? this.weaponTypes.get(state.id) ?? 'Pistol';
+        this.weaponTypes.set(state.id, weaponType);
         const weaponOffsetX = Math.cos(aimAngle) * 10;
         const weaponOffsetY = Math.sin(aimAngle) * 10;
         const weaponGraphics = new ProceduralWeaponGraphics(
@@ -320,6 +322,15 @@ export class PlayerManager {
       // Position updates are handled in update() loop as the sole position writer
 
       // Only update non-positional properties here:
+
+      const authoritativeWeaponType = state.weaponType ?? this.weaponTypes.get(state.id) ?? 'Pistol';
+      if (this.weaponTypes.get(state.id) !== authoritativeWeaponType) {
+        this.weaponTypes.set(state.id, authoritativeWeaponType);
+        const weaponGraphics = this.weaponGraphics.get(state.id);
+        if (weaponGraphics) {
+          weaponGraphics.setWeapon(authoritativeWeaponType);
+        }
+      }
 
       // Update walk cycle animation based on movement (non-positional)
       const isMoving = Math.sqrt(state.velocity.x ** 2 + state.velocity.y ** 2) > 0.1;

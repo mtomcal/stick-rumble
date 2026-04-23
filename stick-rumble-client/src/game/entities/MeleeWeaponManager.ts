@@ -26,15 +26,28 @@ export class MeleeWeaponManager {
    * Only creates for Bat or Katana, removes existing weapon if switching to non-melee
    */
   createWeapon(playerId: string, weaponType: string, position: Position): void {
-    // Remove existing weapon if player has one
-    if (this.weapons.has(playerId)) {
-      this.removeWeapon(playerId);
+    this.syncWeapon(playerId, weaponType, position);
+  }
+
+  syncWeapon(playerId: string, weaponType: string, position: Position): void {
+    const normalizedType = weaponType?.toLowerCase?.() ?? 'pistol';
+    const existingWeapon = this.weapons.get(playerId);
+
+    if (normalizedType !== 'bat' && normalizedType !== 'katana') {
+      if (existingWeapon) {
+        this.removeWeapon(playerId);
+      }
+      return;
     }
 
-    // Only create for melee weapons (case-insensitive check)
-    const normalizedType = weaponType.toLowerCase();
-    if (normalizedType !== 'bat' && normalizedType !== 'katana') {
+    if (existingWeapon && existingWeapon.weaponType.toLowerCase() === normalizedType) {
+      existingWeapon.setPosition(position.x, position.y);
       return;
+    }
+
+    // Remove existing weapon if player has one
+    if (existingWeapon) {
+      this.removeWeapon(playerId);
     }
 
     const weapon = new MeleeWeapon(this.scene, position.x, position.y, weaponType);
@@ -60,13 +73,26 @@ export class MeleeWeaponManager {
    * Start a swing animation for a player's weapon
    * Returns true if swing started, false if no weapon or already swinging
    */
-  startSwing(playerId: string, aimAngle: number): boolean {
+  startPreviewSwing(playerId: string, aimAngle: number): boolean {
     const weapon = this.weapons.get(playerId);
     if (!weapon) {
       return false;
     }
 
-    return weapon.startSwing(aimAngle);
+    return weapon.startPreviewSwing(aimAngle);
+  }
+
+  confirmSwing(playerId: string, aimAngle: number): boolean {
+    const weapon = this.weapons.get(playerId);
+    if (!weapon) {
+      return false;
+    }
+
+    return weapon.confirmSwing(aimAngle);
+  }
+
+  startSwing(playerId: string, aimAngle: number): boolean {
+    return this.startPreviewSwing(playerId, aimAngle);
   }
 
   /**

@@ -167,6 +167,7 @@ export const PlayerStateSchema = Type.Object(
     position: PositionRef,
     velocity: VelocityRef,
     aimAngle: Type.Number({ description: 'Player aim angle in radians' }),
+    weaponType: Type.String({ description: 'Authoritative equipped weapon type for this player', minLength: 1 }),
     health: Type.Number({ description: 'Current health', minimum: 0 }),
     isInvulnerable: Type.Boolean({ description: 'Whether spawn invulnerability is active' }),
     invulnerabilityEnd: Type.String({ description: 'RFC3339 timestamp when invulnerability ends' }),
@@ -750,7 +751,7 @@ export const StateSnapshotDataSchema = Type.Object(
     projectiles: Type.Array(ProjectileSnapshotSchema, { description: 'Complete state of all projectiles' }),
     weaponCrates: Type.Array(WeaponCrateSnapshotSchema, { description: 'Complete state of all weapon crates' }),
     lastProcessedSequence: Type.Optional(
-      Type.Record(Type.String(), Type.Number(), {
+      Type.Record(Type.String(), Type.Number({ minimum: 0 }), {
         description: 'Map of player IDs to their last processed input sequence number for client-side prediction reconciliation',
       })
     ),
@@ -786,7 +787,7 @@ export const StateDeltaDataSchema = Type.Object(
     projectilesAdded: Type.Optional(Type.Array(ProjectileSnapshotSchema, { description: 'New projectiles spawned' })),
     projectilesRemoved: Type.Optional(Type.Array(Type.String(), { description: 'IDs of destroyed projectiles' })),
     lastProcessedSequence: Type.Optional(
-      Type.Record(Type.String(), Type.Number(), {
+      Type.Record(Type.String(), Type.Number({ minimum: 0 }), {
         description: 'Map of player IDs to their last processed input sequence number for client-side prediction reconciliation',
       })
     ),

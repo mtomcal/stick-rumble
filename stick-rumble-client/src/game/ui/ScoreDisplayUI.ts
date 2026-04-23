@@ -35,9 +35,13 @@ export class ScoreDisplayUI {
    * Update the score display
    * @param killerXP XP value from player:kill_credit event (becomes the score)
    */
-  updateScore(killerXP: number): void {
-    this.score = killerXP;
+  setScore(score: number): void {
+    this.score = score;
     this.scoreText.setText(String(this.score).padStart(6, '0'));
+  }
+
+  updateScore(killerXP: number): void {
+    this.setScore(killerXP);
   }
 
   /**

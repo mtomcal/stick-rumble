@@ -255,34 +255,21 @@ describe('GameSceneEventHandlers - Audio Integration', () => {
       expect(mockAudioManager.playWeaponSound).toHaveBeenCalledWith('pistol');
     });
 
-    it('should update weapon type and use it for sounds after weapon pickup', () => {
+    it('should use the authoritative projectile weapon type for local sounds', () => {
       // Set audio manager
       eventHandlers.setAudioManager(mockAudioManager);
-
-      // Simulate weapon pickup for local player
-      const weaponPickupHandler = messageHandlers.get('weapon:pickup_confirmed');
-      expect(weaponPickupHandler).toBeDefined();
-
-      weaponPickupHandler!({
-        playerId: 'player-1',
-        crateId: 'crate-1',
-        weaponType: 'Uzi',
-      });
-
-      // Verify weapon type changed
-      expect(eventHandlers.getCurrentWeaponType()).toBe('Uzi');
 
       // Trigger projectile:spawn
       const projectileSpawnHandler = messageHandlers.get('projectile:spawn');
       projectileSpawnHandler!({
         id: 'proj-6',
         ownerId: 'player-1',
+        weaponType: 'Uzi',
         position: { x: 100, y: 100 },
         velocity: { x: 10, y: 0 },
         damage: 10,
       });
 
-      // Should use updated weapon type
       expect(mockAudioManager.playWeaponSound).toHaveBeenCalledWith('Uzi');
     });
 

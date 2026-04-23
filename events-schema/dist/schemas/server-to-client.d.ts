@@ -134,6 +134,7 @@ export declare const PlayerStateSchema: import("@sinclair/typebox").TObject<{
         y: import("@sinclair/typebox").TNumber;
     }>;
     aimAngle: import("@sinclair/typebox").TNumber;
+    weaponType: import("@sinclair/typebox").TString;
     health: import("@sinclair/typebox").TNumber;
     isInvulnerable: import("@sinclair/typebox").TBoolean;
     invulnerabilityEnd: import("@sinclair/typebox").TString;
@@ -162,6 +163,7 @@ export declare const PlayerMoveDataSchema: import("@sinclair/typebox").TObject<{
             y: import("@sinclair/typebox").TNumber;
         }>;
         aimAngle: import("@sinclair/typebox").TNumber;
+        weaponType: import("@sinclair/typebox").TString;
         health: import("@sinclair/typebox").TNumber;
         isInvulnerable: import("@sinclair/typebox").TBoolean;
         invulnerabilityEnd: import("@sinclair/typebox").TString;
@@ -195,6 +197,7 @@ export declare const PlayerMoveMessageSchema: import("@sinclair/typebox").TObjec
                 y: import("@sinclair/typebox").TNumber;
             }>;
             aimAngle: import("@sinclair/typebox").TNumber;
+            weaponType: import("@sinclair/typebox").TString;
             health: import("@sinclair/typebox").TNumber;
             isInvulnerable: import("@sinclair/typebox").TBoolean;
             invulnerabilityEnd: import("@sinclair/typebox").TString;
@@ -740,6 +743,7 @@ export declare const StateSnapshotDataSchema: import("@sinclair/typebox").TObjec
             y: import("@sinclair/typebox").TNumber;
         }>;
         aimAngle: import("@sinclair/typebox").TNumber;
+        weaponType: import("@sinclair/typebox").TString;
         health: import("@sinclair/typebox").TNumber;
         isInvulnerable: import("@sinclair/typebox").TBoolean;
         invulnerabilityEnd: import("@sinclair/typebox").TString;
@@ -794,6 +798,7 @@ export declare const StateSnapshotMessageSchema: import("@sinclair/typebox").TOb
                 y: import("@sinclair/typebox").TNumber;
             }>;
             aimAngle: import("@sinclair/typebox").TNumber;
+            weaponType: import("@sinclair/typebox").TString;
             health: import("@sinclair/typebox").TNumber;
             isInvulnerable: import("@sinclair/typebox").TBoolean;
             invulnerabilityEnd: import("@sinclair/typebox").TString;
@@ -848,6 +853,7 @@ export declare const StateDeltaDataSchema: import("@sinclair/typebox").TObject<{
             y: import("@sinclair/typebox").TNumber;
         }>;
         aimAngle: import("@sinclair/typebox").TNumber;
+        weaponType: import("@sinclair/typebox").TString;
         health: import("@sinclair/typebox").TNumber;
         isInvulnerable: import("@sinclair/typebox").TBoolean;
         invulnerabilityEnd: import("@sinclair/typebox").TString;
@@ -894,6 +900,7 @@ export declare const StateDeltaMessageSchema: import("@sinclair/typebox").TObjec
                 y: import("@sinclair/typebox").TNumber;
             }>;
             aimAngle: import("@sinclair/typebox").TNumber;
+            weaponType: import("@sinclair/typebox").TString;
             health: import("@sinclair/typebox").TNumber;
             isInvulnerable: import("@sinclair/typebox").TBoolean;
             invulnerabilityEnd: import("@sinclair/typebox").TString;

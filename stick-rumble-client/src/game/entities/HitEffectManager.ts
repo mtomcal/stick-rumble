@@ -5,6 +5,7 @@ import { COLORS } from '../../shared/constants';
  * Effect type identifier
  */
 type EffectType = 'bullet' | 'melee' | 'muzzle';
+type MeleeEffectWeapon = 'bat' | 'katana';
 
 /**
  * Pooled effect object
@@ -37,7 +38,6 @@ export class HitEffectManager {
 
   // Visual constants
   private static readonly BULLET_COLOR = 0xffff00; // Yellow
-  private static readonly MELEE_COLOR = 0xffffff; // White
   private static readonly MUZZLE_COLOR = COLORS.MUZZLE_FLASH;
   private static readonly EFFECT_DEPTH = 60; // Above players (50), below UI (100+)
   private static readonly FADE_DURATION = 100; // 100ms fade
@@ -112,24 +112,30 @@ export class HitEffectManager {
   /**
    * Create melee hit texture (white impact lines)
    */
-  private drawMeleeHit(graphics: Phaser.GameObjects.Graphics): void {
+  private drawMeleeHit(graphics: Phaser.GameObjects.Graphics, weaponType: MeleeEffectWeapon): void {
     graphics.clear();
-    graphics.lineStyle(2, HitEffectManager.MELEE_COLOR, 1);
+    if (weaponType === 'katana') {
+      graphics.lineStyle(3, 0xf4fbff, 1);
+      graphics.beginPath();
+      graphics.moveTo(-10, 6);
+      graphics.lineTo(10, -6);
+      graphics.strokePath();
+      graphics.fillStyle(0xb8f2ff, 1);
+      graphics.fillCircle(6, -4, 2);
+      return;
+    }
 
-    // Draw impact lines in X pattern
+    graphics.lineStyle(3, 0xfff2bf, 1);
     graphics.beginPath();
-    graphics.moveTo(-6, -6);
-    graphics.lineTo(6, 6);
+    graphics.moveTo(-8, 0);
+    graphics.lineTo(8, 0);
     graphics.strokePath();
-
     graphics.beginPath();
-    graphics.moveTo(6, -6);
-    graphics.lineTo(-6, 6);
+    graphics.moveTo(0, -8);
+    graphics.lineTo(0, 8);
     graphics.strokePath();
-
-    // Add center circle
-    graphics.fillStyle(HitEffectManager.MELEE_COLOR, 1);
-    graphics.fillCircle(0, 0, 2);
+    graphics.fillStyle(0xf6d365, 1);
+    graphics.fillCircle(0, 0, 3);
   }
 
   /**
@@ -179,11 +185,12 @@ export class HitEffectManager {
    * Show melee hit effect at specified position
    * Returns to pool after 100ms fade
    */
-  showMeleeHit(x: number, y: number): Phaser.GameObjects.Graphics {
+  showMeleeHit(x: number, y: number, weaponType: string = 'bat'): Phaser.GameObjects.Graphics {
     const effect = this.getPooledEffect();
     effect.type = 'melee';
 
-    this.drawMeleeHit(effect.graphics);
+    const normalizedWeapon = weaponType.toLowerCase() === 'katana' ? 'katana' : 'bat';
+    this.drawMeleeHit(effect.graphics, normalizedWeapon);
     effect.graphics.setPosition(x, y);
     effect.graphics.setAlpha(1);
     effect.graphics.setVisible(true);

@@ -20,6 +20,7 @@ import type { KillCounterUI } from '../ui/KillCounterUI';
 import type { ChatLogUI } from '../ui/ChatLogUI';
 import type { PickupNotificationUI } from '../ui/PickupNotificationUI';
 import type { AimLine } from '../entities/AimLine';
+import { getWeaponConfigSync } from '../../shared/weaponConfig';
 import type { JoinErrorPayload, MatchSession } from '../../shared/types';
 // Import generated schema types for server→client messages (replaces manual type assertions)
 import type {
@@ -72,8 +73,8 @@ export class GameSceneEventHandlers {
   private audioManager: AudioManager | null = null;
   private currentWeaponType: string = 'pistol'; // Default weapon
   private matchEnded: boolean = false; // Flag to stop processing player:move after match ends
-  private pendingPlayerMoves: unknown[] = []; // Queue for player:move messages before room:joined
-  private pendingWeaponSpawns: unknown[] = []; // Queue for weapon:spawned messages before room:joined
+  private pendingPlayerMoves: unknown[] = []; // Queue for player:move messages before session bootstrap completes
+  private pendingWeaponSpawns: unknown[] = []; // Queue for weapon:spawned messages before session bootstrap completes
   private scoreDisplayUI: ScoreDisplayUI | null = null;
   private killCounterUI: KillCounterUI | null = null;
   private chatLogUI: ChatLogUI | null = null;
@@ -214,6 +215,55 @@ export class GameSceneEventHandlers {
     return this.currentWeaponType;
   }
 
+  private shouldIgnoreLateGameplayEvent(): boolean {
+    return this.matchEnded;
+  }
+
+  private resetLocalWeaponAuthorityToPistol(): void {
+    this.currentWeaponType = 'Pistol';
+
+    const localPlayerId = this.playerManager.getLocalPlayerId();
+    if (!localPlayerId) {
+      return;
+    }
+
+    this.playerManager.updatePlayerWeapon(localPlayerId, 'Pistol');
+
+    const playerPosition = this.playerManager.getPlayerPosition(localPlayerId);
+    if (playerPosition) {
+      this.meleeWeaponManager.syncWeapon(localPlayerId, 'Pistol', playerPosition);
+    } else {
+      this.meleeWeaponManager.removeWeapon(localPlayerId);
+    }
+
+    if (!this.shootingManager) {
+      return;
+    }
+
+    const pistolConfig = getWeaponConfigSync('Pistol');
+    const pistolMagazine = pistolConfig?.magazineSize ?? 15;
+
+    this.shootingManager.updateWeaponState({
+      currentAmmo: pistolMagazine,
+      maxAmmo: pistolMagazine,
+      isReloading: false,
+      canShoot: true,
+      weaponType: 'Pistol',
+      isMelee: false,
+    });
+    this.shootingManager.setWeaponType('Pistol');
+    this.ui.updateAmmoDisplay(this.shootingManager);
+  }
+
+  private syncLocalHudStats(kills: number, xp: number): void {
+    if (this.matchEnded) {
+      return;
+    }
+
+    this.scoreDisplayUI?.setScore(xp);
+    this.killCounterUI?.setKills(kills);
+  }
+
   /**
    * Cleanup all registered event handlers
    * Called before re-registering handlers to prevent accumulation
@@ -258,7 +308,7 @@ export class GameSceneEventHandlers {
       // The server assigns a NEW player ID on each connection.
       if (!this.playerManager.getLocalPlayerId()) {
         // Queue player:move until session:status(match_ready) has set the local player ID
-        // This prevents creating duplicate sprites when player:move arrives before room:joined
+        // This prevents creating duplicate sprites when player:move arrives before bootstrap completes
         // Limit queue size to prevent memory issues while waiting for room (keep only latest 10)
         if (this.pendingPlayerMoves.length >= 10) {
           this.pendingPlayerMoves.shift();
@@ -276,11 +326,13 @@ export class GameSceneEventHandlers {
           this.toRenderPlayerState(player)
         );
         this.playerManager.updatePlayers(renderPlayerStates, { isDelta });
-        this.onRosterSizeChanged?.(messageData.players.length);
+        if (!isDelta) {
+          this.onRosterSizeChanged?.(messageData.players.length);
+        }
 
         // Update melee weapon positions to follow players
         for (const player of messageData.players) {
-          this.meleeWeaponManager.updatePosition(player.id, player.position);
+          this.meleeWeaponManager.syncWeapon(player.id, player.weaponType, player.position);
         }
 
         // Update input manager with local player position for aim calculation
@@ -301,6 +353,8 @@ export class GameSceneEventHandlers {
               const isRegen = 'isRegenerating' in localPlayer ? (localPlayer as { isRegenerating?: boolean }).isRegenerating ?? false : false;
               this.getHealthBarUI().updateHealth(this.localPlayerHealth, 100, isRegen);
             }
+
+            this.syncLocalHudStats(localPlayer.kills ?? 0, localPlayer.xp ?? 0);
           }
         }
 
@@ -341,8 +395,10 @@ export class GameSceneEventHandlers {
       // Reset match ended flag for new match
       this.matchEnded = false;
       this.currentWeaponType = 'pistol';
+      this.inputManager?.enable?.();
+      this.shootingManager?.enable?.();
 
-      // Clear existing players to prevent duplication if room:joined fires multiple times
+      // Clear existing players to prevent duplication if bootstrap fires multiple times
       // This handles reconnect scenarios and future match restart functionality
       this.playerManager.destroy();
 
@@ -432,6 +488,9 @@ export class GameSceneEventHandlers {
     }
 
     const playerLeftHandler = (data: unknown) => {
+      if (this.shouldIgnoreLateGameplayEvent()) {
+        return;
+      }
       const messageData = data as PlayerLeftData;
       this.playerManager.removePlayer(messageData.playerId);
       this.meleeWeaponManager.removeWeapon(messageData.playerId);
@@ -441,7 +500,10 @@ export class GameSceneEventHandlers {
 
     // Store and register projectile:spawn handler
     const projectileSpawnHandler = (data: unknown) => {
-      // Skip until room:joined has set local player ID (scene not ready)
+      if (this.shouldIgnoreLateGameplayEvent()) {
+        return;
+      }
+      // Skip until session:status(match_ready) has set local player ID (scene not ready)
       if (!this.playerManager.getLocalPlayerId()) {
         return;
       }
@@ -460,26 +522,29 @@ export class GameSceneEventHandlers {
       }
 
       const isLocalPlayer = messageData.ownerId === this.playerManager.getLocalPlayerId();
+      const firedWeaponType =
+        typeof messageData.weaponType === 'string' && messageData.weaponType.length > 0
+          ? messageData.weaponType
+          : this.currentWeaponType;
 
       // Trigger gun recoil visual on the firing player's weapon
       this.playerManager.triggerWeaponRecoil(messageData.ownerId);
 
       // Trigger screen shake for local player's weapon fire (Story 3.3 Polish)
       if (this.screenShake && isLocalPlayer) {
-        this.screenShake.shakeOnWeaponFire(this.currentWeaponType);
+        this.screenShake.shakeOnWeaponFire(firedWeaponType);
       }
 
       // Play weapon firing sound (Story 3.3 Polish: Weapon-Specific Firing Sounds)
       if (this.audioManager) {
         if (isLocalPlayer) {
-          // Local player: play normal sound using current weapon type
-          this.audioManager.playWeaponSound(this.currentWeaponType);
+          this.audioManager.playWeaponSound(firedWeaponType);
         } else {
           // Remote player: play positional audio
           const localPlayerPosition = this.playerManager.getLocalPlayerPosition();
           if (localPlayerPosition) {
             this.audioManager.playWeaponSoundPositional(
-              this.currentWeaponType,
+              firedWeaponType,
               messageData.position.x,
               messageData.position.y,
               localPlayerPosition.x,
@@ -494,6 +559,9 @@ export class GameSceneEventHandlers {
 
     // Store and register projectile:destroy handler
     const projectileDestroyHandler = (data: unknown) => {
+      if (this.shouldIgnoreLateGameplayEvent()) {
+        return;
+      }
       const messageData = data as ProjectileDestroyData;
       this.projectileManager.removeProjectile(messageData.id);
     };
@@ -502,6 +570,9 @@ export class GameSceneEventHandlers {
 
     // Store and register weapon:state handler
     const weaponStateHandler = (data: unknown) => {
+      if (this.shouldIgnoreLateGameplayEvent()) {
+        return;
+      }
       const messageData = data as WeaponStateData;
       const authoritativeWeaponType =
         typeof messageData.weaponType === 'string' && messageData.weaponType.length > 0
@@ -546,6 +617,9 @@ export class GameSceneEventHandlers {
 
     // Store and register shoot:failed handler
     const shootFailedHandler = (data: unknown) => {
+      if (this.shouldIgnoreLateGameplayEvent()) {
+        return;
+      }
       const messageData = data as ShootFailedData;
       if (messageData.reason === 'empty') {
         // TODO: Play empty click sound in future story
@@ -557,6 +631,9 @@ export class GameSceneEventHandlers {
 
     // Store and register player:damaged handler
     const playerDamagedHandler = (data: unknown) => {
+      if (this.shouldIgnoreLateGameplayEvent()) {
+        return;
+      }
       const messageData = data as PlayerDamagedData;
       console.log(
         `Player ${messageData.victimId} took ${messageData.damage} damage from ${messageData.attackerId} (health: ${messageData.newHealth})`
@@ -588,7 +665,7 @@ export class GameSceneEventHandlers {
         // If damageType is 'melee', show melee hit effect, otherwise bullet impact
         const damageType = 'damageType' in messageData ? (messageData as { damageType?: string }).damageType : undefined;
         if (damageType === 'melee') {
-          this.hitEffectManager.showMeleeHit(victimPos.x, victimPos.y);
+          // Contact effects are authored from melee:hit so they can render per-victim once.
         } else {
           this.hitEffectManager.showBulletImpact(victimPos.x, victimPos.y);
         }
@@ -605,6 +682,9 @@ export class GameSceneEventHandlers {
 
     // Store and register hit:confirmed handler
     const hitConfirmedHandler = (data: unknown) => {
+      if (this.shouldIgnoreLateGameplayEvent()) {
+        return;
+      }
       const messageData = data as HitConfirmedData;
       console.log(`Hit confirmed! Dealt ${messageData.damage} damage to ${messageData.victimId}`);
       this.ui.showHitMarker(false);
@@ -638,6 +718,9 @@ export class GameSceneEventHandlers {
 
     // Store and register player:death handler
     const playerDeathHandler = (data: unknown) => {
+      if (this.shouldIgnoreLateGameplayEvent()) {
+        return;
+      }
       const messageData = data as PlayerDeathData;
       console.log(`Player ${messageData.victimId} was killed by ${messageData.attackerId}`);
 
@@ -652,32 +735,27 @@ export class GameSceneEventHandlers {
 
     // Store and register player:kill_credit handler
     const playerKillCreditHandler = (data: unknown) => {
+      if (this.shouldIgnoreLateGameplayEvent()) {
+        return;
+      }
       const messageData = data as PlayerKillCreditData;
       console.log(`Kill credit: ${messageData.killerId} killed ${messageData.victimId} (Kills: ${messageData.killerKills}, XP: ${messageData.killerXP})`);
-
-      // Show kill variant hit marker (red, 2x scale)
-      this.ui.showHitMarker(true);
-
-      // Show outgoing directional hit indicator with kill variant
-      const killLocalPos = this.playerManager.getLocalPlayerPosition();
-      const killVictimPos = this.playerManager.getPlayerPosition(messageData.victimId);
-      if (killLocalPos && killVictimPos) {
-        this.ui.showHitIndicator(killLocalPos.x, killLocalPos.y, killVictimPos.x, killVictimPos.y, 'outgoing', true);
-      }
 
       this.killFeedUI.addKill(
         this.resolvePlayerDisplayName(messageData.killerId),
         this.resolvePlayerDisplayName(messageData.victimId)
       );
 
-      // Update score display with XP from kill credit
-      if (this.scoreDisplayUI) {
-        this.scoreDisplayUI.updateScore(messageData.killerXP);
-      }
+      if (messageData.killerId === this.playerManager.getLocalPlayerId()) {
+        this.ui.showHitMarker(true);
 
-      // Increment kill counter
-      if (this.killCounterUI) {
-        this.killCounterUI.incrementKills();
+        const killLocalPos = this.playerManager.getLocalPlayerPosition();
+        const killVictimPos = this.playerManager.getPlayerPosition(messageData.victimId);
+        if (killLocalPos && killVictimPos) {
+          this.ui.showHitIndicator(killLocalPos.x, killLocalPos.y, killVictimPos.x, killVictimPos.y, 'outgoing', true);
+        }
+
+        this.syncLocalHudStats(messageData.killerKills, messageData.killerXP);
       }
     };
     this.handlerRefs.set('player:kill_credit', playerKillCreditHandler);
@@ -685,6 +763,9 @@ export class GameSceneEventHandlers {
 
     // Store and register player:respawn handler
     const playerRespawnHandler = (data: unknown) => {
+      if (this.shouldIgnoreLateGameplayEvent()) {
+        return;
+      }
       const messageData = data as PlayerRespawnData;
       console.log(`Player ${messageData.playerId} respawned at (${messageData.position.x}, ${messageData.position.y})`);
 
@@ -692,6 +773,7 @@ export class GameSceneEventHandlers {
       if (messageData.playerId === this.playerManager.getLocalPlayerId()) {
         this.localPlayerHealth = messageData.health;
         this.getHealthBarUI().updateHealth(this.localPlayerHealth, 100, false); // Not regenerating on respawn
+        this.resetLocalWeaponAuthorityToPistol();
 
         // Teleport to spawn position before showing to prevent flicker
         this.playerManager.teleportPlayer(messageData.playerId, messageData.position);
@@ -737,9 +819,24 @@ export class GameSceneEventHandlers {
       // Trigger match end UI via React callback
       const localPlayerId = this.playerManager.getLocalPlayerId();
       if (localPlayerId && window.onMatchEnd) {
+        const finalScoresWithDisplayNames = messageData.finalScores.map((score) => {
+          const displayName = score.displayName?.trim();
+          return {
+            ...score,
+            displayName:
+              displayName && displayName.length > 0
+                ? displayName
+                : this.resolvePlayerDisplayName(score.playerId),
+          };
+        });
         // Bridge between MatchEndedData schema and window.onMatchEnd type
-        // Both schema and window.onMatchEnd now use PlayerScore[] for finalScores
-        window.onMatchEnd(messageData as unknown as import('../../../src/shared/types.js').MatchEndData, localPlayerId);
+        window.onMatchEnd(
+          {
+            ...messageData,
+            finalScores: finalScoresWithDisplayNames,
+          } as unknown as import('../../../src/shared/types.js').MatchEndData,
+          localPlayerId
+        );
       }
     };
     this.handlerRefs.set('match:ended', matchEndedHandler);
@@ -747,6 +844,9 @@ export class GameSceneEventHandlers {
 
     // Store and register weapon:spawned handler (initial weapon crate spawns)
     const weaponSpawnedHandler = (data: unknown) => {
+      if (this.shouldIgnoreLateGameplayEvent()) {
+        return;
+      }
       // Queue until session:status(match_ready) has set local player ID (scene not ready)
       if (!this.playerManager.getLocalPlayerId()) {
         // Limit queue size to prevent memory issues (keep only latest 10)
@@ -768,6 +868,9 @@ export class GameSceneEventHandlers {
 
     // Store and register weapon:pickup_confirmed handler
     const weaponPickupConfirmedHandler = (data: unknown) => {
+      if (this.shouldIgnoreLateGameplayEvent()) {
+        return;
+      }
       const messageData = data as WeaponPickupConfirmedData;
       // Mark crate as unavailable
       this.weaponCrateManager.markUnavailable(messageData.crateId);
@@ -777,27 +880,9 @@ export class GameSceneEventHandlers {
         this.pickupPromptUI.hide();
       }
 
-      // Track weapon type for local player (Story 3.3 Polish - for recoil feedback)
-      if (messageData.playerId === this.playerManager.getLocalPlayerId()) {
-        this.currentWeaponType = messageData.weaponType;
-      }
-
-      // Update weapon sprite for the player (Story 3.7A - weapon sprites)
-      this.playerManager.updatePlayerWeapon(messageData.playerId, messageData.weaponType);
-
       // Show pickup notification for local player
       if (messageData.playerId === this.playerManager.getLocalPlayerId() && this.pickupNotificationUI) {
         this.pickupNotificationUI.show(messageData.weaponType);
-      }
-
-      // Create melee weapon visual if picking up Bat or Katana
-      const playerPos = this.playerManager.getPlayerPosition(messageData.playerId);
-      if (playerPos) {
-        this.meleeWeaponManager.createWeapon(
-          messageData.playerId,
-          messageData.weaponType,
-          playerPos
-        );
       }
     };
     this.handlerRefs.set('weapon:pickup_confirmed', weaponPickupConfirmedHandler);
@@ -805,6 +890,9 @@ export class GameSceneEventHandlers {
 
     // Store and register weapon:respawned handler
     const weaponRespawnedHandler = (data: unknown) => {
+      if (this.shouldIgnoreLateGameplayEvent()) {
+        return;
+      }
       const messageData = data as WeaponRespawnedData;
       // Mark crate as available again
       this.weaponCrateManager.markAvailable(messageData.crateId);
@@ -814,6 +902,9 @@ export class GameSceneEventHandlers {
 
     // Store and register melee:hit handler (triggers swing animation)
     const meleeHitHandler = (data: unknown) => {
+      if (this.shouldIgnoreLateGameplayEvent()) {
+        return;
+      }
       const messageData = data as MeleeHitData;
 
       // Get attacker's current aim angle and position
@@ -829,18 +920,25 @@ export class GameSceneEventHandlers {
         return;
       }
 
+      const weaponType =
+        this.meleeWeaponManager.getWeaponType(messageData.attackerId)
+        ?? this.playerManager.getPlayerState(messageData.attackerId)?.weaponType
+        ?? 'Bat';
+
+      this.meleeWeaponManager.createWeapon(messageData.attackerId, weaponType, attackerPos);
+
       // Update weapon position and trigger swing animation
       this.meleeWeaponManager.updatePosition(messageData.attackerId, attackerPos);
-      this.meleeWeaponManager.startSwing(messageData.attackerId, aimAngle);
+      this.meleeWeaponManager.confirmSwing(messageData.attackerId, aimAngle);
 
-      // Show melee hit effect at attacker position (Story 3.7B: Hit Effects)
-      // Effect will appear at the swing origin, actual damage is shown via player:damaged
-      if (this.hitEffectManager) {
-        // Calculate effect position in front of attacker based on aim angle
-        const effectDistance = 30; // Distance in front of attacker
-        const effectX = attackerPos.x + Math.cos(aimAngle) * effectDistance;
-        const effectY = attackerPos.y + Math.sin(aimAngle) * effectDistance;
-        this.hitEffectManager.showMeleeHit(effectX, effectY);
+      if (this.hitEffectManager && messageData.victims.length > 0) {
+        for (const victimId of messageData.victims) {
+          const victimPos = this.playerManager.getPlayerPosition(victimId);
+          if (!victimPos) {
+            continue;
+          }
+          this.hitEffectManager.showMeleeHit(victimPos.x, victimPos.y, weaponType);
+        }
       }
     };
     this.handlerRefs.set('melee:hit', meleeHitHandler);
@@ -848,6 +946,9 @@ export class GameSceneEventHandlers {
 
     // Store and register roll:start handler
     const rollStartHandler = (data: unknown) => {
+      if (this.shouldIgnoreLateGameplayEvent()) {
+        return;
+      }
       const messageData = data as RollStartData;
       console.log(`Player ${messageData.playerId} started dodge roll`);
 
@@ -868,6 +969,9 @@ export class GameSceneEventHandlers {
 
     // Store and register roll:end handler
     const rollEndHandler = (data: unknown) => {
+      if (this.shouldIgnoreLateGameplayEvent()) {
+        return;
+      }
       const messageData = data as RollEndData;
       console.log(`Player ${messageData.playerId} ended dodge roll (reason: ${messageData.reason})`);
 
@@ -892,6 +996,9 @@ export class GameSceneEventHandlers {
 
     if (player.aimAngle !== undefined) {
       renderPlayerState.aimAngle = player.aimAngle;
+    }
+    if (player.weaponType !== undefined) {
+      renderPlayerState.weaponType = player.weaponType;
     }
     if (player.deathTime !== undefined) {
       renderPlayerState.deathTime = Date.parse(player.deathTime);

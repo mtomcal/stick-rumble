@@ -1,6 +1,6 @@
 # Messages
 
-> **Spec Version**: 1.4.1
+> **Spec Version**: 1.5.0
 > **Last Updated**: 2026-04-23
 > **Depends On**: [constants.md](constants.md), [player.md](player.md)
 > **Depended By**: [networking.md](networking.md), [rooms.md](rooms.md), [weapons.md](weapons.md), [shooting.md](shooting.md), [melee.md](melee.md), [hit-detection.md](hit-detection.md), [match.md](match.md), [client-architecture.md](client-architecture.md), [server-architecture.md](server-architecture.md)
@@ -922,13 +922,20 @@ interface Velocity {
 
 interface PlayerState {
   id: string;
+  displayName: string;
   position: Position;
   velocity: Velocity;
   aimAngle: number;              // Aim angle in radians
+  weaponType: string;            // Equipped weapon identity for authoritative remote presentation
   health: number;
   isRolling: boolean;
   isInvulnerable: boolean;       // Spawn protection active
   invulnerabilityEndTime: number; // Timestamp (ms) when invulnerability expires
+  deathTime?: number;
+  kills: number;
+  deaths: number;
+  xp: number;
+  isRegenerating: boolean;
 }
 
 interface PlayerMoveData {
@@ -943,9 +950,11 @@ interface PlayerMoveData {
 // PlayerStateSnapshot is the struct serialized for each player in broadcasts
 type PlayerStateSnapshot struct {
     ID                     string     `json:"id"`
+    DisplayName            string     `json:"displayName"`
     Position               Vector2    `json:"position"`
     Velocity               Vector2    `json:"velocity"`
     AimAngle               float64    `json:"aimAngle"`
+    WeaponType             string     `json:"weaponType"`
     Health                 int        `json:"health"`
     IsInvulnerable         bool       `json:"isInvulnerable"`
     InvulnerabilityEndTime time.Time  `json:"invulnerabilityEnd"`
@@ -961,7 +970,9 @@ type PlayerStateSnapshot struct {
 **Canonical wire contract:**
 - `aimAngle` is transmitted on the wire as `aimAngle`
 - `aimAngle` is authoritative for remote facing, held-weapon orientation, melee swing direction, and any projectile visuals derived from the player's aim
+- `weaponType` is transmitted for every player and is authoritative for remote held-weapon identity, including respawn resets back to pistol
 - accepting a new `input:state` updates the player's authoritative `aimAngle` immediately, even if the player is stationary
+- remote clients must not infer a player's current held weapon from `weapon:pickup_confirmed`; pickup messages are room events, while current remote weapon identity comes from the player-state stream
 - client-only convenience fields may be derived locally, but they must not replace the wire-level `aimAngle`
 
 **Example:**
@@ -976,6 +987,7 @@ type PlayerStateSnapshot struct {
         "position": { "x": 100.5, "y": 200.3 },
         "velocity": { "x": 5.0, "y": -2.5 },
         "aimAngle": 0.785,
+        "weaponType": "AK47",
         "health": 85,
         "isInvulnerable": false,
         "invulnerabilityEndTime": 1704067201200,
@@ -986,6 +998,7 @@ type PlayerStateSnapshot struct {
         "position": { "x": 500.0, "y": 300.0 },
         "velocity": { "x": 0.0, "y": 0.0 },
         "aimAngle": 3.14,
+        "weaponType": "Pistol",
         "health": 100,
         "isInvulnerable": false,
         "invulnerabilityEndTime": 1704067201200,
@@ -1000,9 +1013,11 @@ type PlayerStateSnapshot struct {
 1. Wait for `session:status { state: "match_ready" }` before processing
 2. For each player in array:
    - Create sprite if new player
-   - Update position, `aimAngle`, health
-   - Update remote body pose and held weapon using `aimAngle`
+   - Update position, `aimAngle`, health, and `weaponType`
+   - Update remote body pose using `aimAngle`
+   - Update remote held weapon from `weaponType` in the player-state stream
    - Update local health bar if local player
+   - Allow local kills / deaths / XP / held-weapon presentation to reconcile from the authoritative local player state if an earlier event-driven HUD update drifted
 3. Remove sprites for players no longer in array
 4. Ignored after `match:ended`
 
@@ -1381,11 +1396,13 @@ interface PlayerKillCreditData {
 ```
 
 **Client Handling:**
-1. Update scoreboard
-2. Check win condition (kill target reached)
-3. Show "+100 XP" feedback to killer
-4. Update score display: score = `killerXP`, formatted as 6-digit zero-padded (`String(killerXP).padStart(6, '0')`)
-5. Update kill counter: `"KILLS: " + killerKills`
+1. Update kill feed / scoreboard surfaces
+2. If `killerId` matches the local player, update local score display from `killerXP`
+3. If `killerId` matches the local player, update local kill counter from `killerKills`
+4. If `killerId` does **not** match the local player, do not increment or overwrite the local HUD kill / XP display
+5. Show "+100 XP" feedback to killer
+6. Check win condition (kill target reached)
+7. Allow the next authoritative player-state broadcast to reconcile local kills / XP if this event was missed or arrived out of order
 
 > **Score = XP:** The 6-digit score display in the top-right HUD maps directly to `killerXP`. There is no separate `killerScore` field. The client formats XP as zero-padded 6 digits (e.g., XP of 450 displays as `"000450"`).
 
@@ -1470,9 +1487,11 @@ interface MatchTimerData {
 
 Announces match completion with final results.
 
-**Why include all scores?** Clients need final statistics for the end-of-match scoreboard. Including all data in one message prevents race conditions.
+**Why include all scores?** Clients need final statistics for the end-of-match scoreboard. Including all data in one message prevents race conditions and creates a single frozen result snapshot.
 
 **When Sent:** Kill target reached OR timer expires
+
+**Strict cutoff rule:** The server emits `match:ended` only after every qualifying kill that completed before the cutoff has been fully resolved into deaths, kills, XP, winners, and `finalScores`. After `match:ended` is broadcast, standings are frozen; later stale or in-flight gameplay events do not modify the result.
 
 **Recipients:** All players in room
 
@@ -1550,10 +1569,11 @@ type MatchEndedData struct {
 **Client Handling:**
 1. Set match ended flag
 2. Disable player input
-3. Stop processing `player:move` and `match:timer`
-4. Show match results screen
-5. Display winner announcement and rankings using `displayName`
-6. Use `playerId` only for non-visible identity logic such as local-player highlighting
+3. Stop processing `player:move`, `match:timer`, and any later stat-changing gameplay UI updates
+4. Freeze in-match HUD stats
+5. Show match results screen
+6. Display winner announcement and rankings using `displayName`
+7. Use `playerId` only for non-visible identity logic such as local-player highlighting
 
 ---
 
@@ -1667,8 +1687,9 @@ interface WeaponPickupConfirmedData {
 **Client Handling:**
 1. Mark crate as unavailable (gray out sprite)
 2. Hide pickup prompt if showing
-3. Update player's weapon visual
-4. If local player: update weapon type for effects
+3. Update pickup-related world feedback (crate state, notifications, optional room-visible pickup feedback)
+4. Do **not** treat this message as authoritative for the local equipped weapon; local equip truth comes from `weapon:state`
+5. Do **not** treat this message as authoritative for remote held-weapon identity; remote equip truth comes from the player-state stream (`player:move` / `state:snapshot` / `state:delta`)
 
 ---
 
@@ -2133,7 +2154,7 @@ Client                          Server
 - Receive `player:death`
 - After 3 seconds, receive `player:respawn`
 
-### TS-MSG-006: match:ended stops game processing
+### TS-MSG-006: match:ended freezes gameplay and stat processing
 
 **Category**: Integration
 **Priority**: High
@@ -2147,6 +2168,7 @@ Client                          Server
 **Expected Output:**
 - Receive `match:ended` with winners and scores
 - `player:move` messages stop being processed
+- Late stat-changing gameplay events do not mutate the frozen HUD
 
 ### TS-MSG-007: weapon:pickup_confirmed marks crate unavailable
 
@@ -2215,7 +2237,7 @@ Client                          Server
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.4.0 | 2026-04-17 | Session-first join flow: added `session:leave` and `session:status`, made `session:status` the sole authoritative app-shell bootstrap for join/search/wait/match-ready flow, deprecated `room:joined` as the primary client bootstrap contract, and made `match:ended` display-ready by adding `displayName` to winners and final scores while preserving `playerId` for identity logic. |
+| 1.5.0 | 2026-04-23 | Merged the April contract changes: `session:leave` and `session:status` define the session-first bootstrap flow, `match:ended` winners and final scores are display-ready with `displayName` while `playerId` remains non-visible identity data, `player:move` documents authoritative per-player `weaponType` for remote held-weapon presentation, `weapon:pickup_confirmed` is room feedback rather than equip authority, `player:kill_credit` only updates local HUD stats for the local killer, and `match:ended` freezes later stat-facing UI updates. |
 | 1.3.1 | 2026-04-11 | Friends-MVP pre-mortem fixes: (1) `player:hello` latching tightened — only **successful** hellos set `HelloSeen`; failed hellos (`error:bad_room_code`, `error:room_full`) leave the connection free to send another hello; (2) reconnection contract made explicit — every new connection must begin with a fresh `player:hello`, in-progress match resume is out of scope for MVP; (3) `room:joined` compatibility posture documented as breaking (no pre-MVP client support, atomic client+server deploy required); (4) `error:no_hello` / `error:bad_room_code` / `error:room_full` server-behavior blocks updated to explicitly state `HelloSeen` stays `false`. |
 | 1.3.0 | 2026-04-11 | Friends-MVP: added `player:hello` (required join intent), `error:no_hello`, `error:bad_room_code`, `error:room_full`. Extended `room:joined` with authoritative `displayName` and optional `code`. Client-to-server count: 7→8; server-to-client: 22→25. |
 | 1.2.0 | 2026-02-18 | Art style alignment: Added isInvulnerable and invulnerabilityEndTime to TypeScript PlayerState. Documented reload progress tracking (client-side timestamp approach). Documented score=XP mapping. Added Go-to-TypeScript field name mapping table for player:move. |

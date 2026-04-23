@@ -51,6 +51,7 @@ type PlayerStateSnapshot struct {
 	Position               Vector2    `json:"position"`
 	Velocity               Vector2    `json:"velocity"`
 	AimAngle               float64    `json:"aimAngle"`            // Aim angle in radians
+	WeaponType             string     `json:"weaponType"`          // Current equipped weapon type
 	Health                 int        `json:"health"`              // Current health (0-100)
 	IsInvulnerable         bool       `json:"isInvulnerable"`      // Spawn protection flag
 	InvulnerabilityEndTime time.Time  `json:"invulnerabilityEnd"`  // When spawn protection ends
@@ -199,6 +200,7 @@ func (p *PlayerState) Snapshot() PlayerStateSnapshot {
 		Position:               p.Position,
 		Velocity:               p.Velocity,
 		AimAngle:               p.AimAngle,
+		WeaponType:             "",
 		Health:                 p.Health,
 		IsInvulnerable:         p.IsInvulnerable,
 		InvulnerabilityEndTime: p.InvulnerabilityEndTime,
