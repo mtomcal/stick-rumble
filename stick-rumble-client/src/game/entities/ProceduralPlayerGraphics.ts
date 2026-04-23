@@ -1,5 +1,31 @@
 import Phaser from 'phaser';
-import { COLORS } from '../../shared/constants';
+import { COLORS, PLAYER } from '../../shared/constants';
+
+export interface CanonicalPlayerBodyBounds {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  width: number;
+  height: number;
+  centerX: number;
+  centerY: number;
+}
+
+export function getCanonicalPlayerBodyBounds(centerX: number, centerY: number): CanonicalPlayerBodyBounds {
+  const halfWidth = PLAYER.WIDTH / 2;
+  const halfHeight = PLAYER.HEIGHT / 2;
+  return {
+    left: centerX - halfWidth,
+    right: centerX + halfWidth,
+    top: centerY - halfHeight,
+    bottom: centerY + halfHeight,
+    width: PLAYER.WIDTH,
+    height: PLAYER.HEIGHT,
+    centerX,
+    centerY,
+  };
+}
 
 /**
  * ProceduralPlayerGraphics renders stick figure characters using procedural graphics
@@ -14,6 +40,8 @@ import { COLORS } from '../../shared/constants';
  * - Spawn invulnerability ring rendering
  */
 export class ProceduralPlayerGraphics {
+  private static readonly BODY_OUTLINE_ALPHA = 0.3;
+  private static readonly BODY_OUTLINE_WIDTH = 1;
   private scene: Phaser.Scene;
   private graphics: Phaser.GameObjects.Graphics;
   private x: number;
@@ -46,6 +74,8 @@ export class ProceduralPlayerGraphics {
     // Create graphics object
     this.graphics = scene.add.graphics();
     this.graphics.setDepth(50); // Render below UI but above background
+    this.graphics.x = Math.round(x);
+    this.graphics.y = Math.round(y);
 
     // Initial draw
     this.draw();
@@ -97,20 +127,10 @@ export class ProceduralPlayerGraphics {
   private draw(): void {
     this.graphics.clear();
 
-    // Use local coordinates since Graphics transform is set in setPosition()
+    const weaponAim = this.aimAngle ?? this.rotation;
+    const bounds = getCanonicalPlayerBodyBounds(0, 0);
     const cx = 0;
     const cy = 0;
-    const rot = this.rotation;
-
-    // Helper to rotate points around center
-    const calcPoint = (localX: number, localY: number) => {
-      return {
-        x: cx + (localX * Math.cos(rot) - localY * Math.sin(rot)),
-        y: cy + (localX * Math.sin(rot) + localY * Math.cos(rot)),
-      };
-    };
-
-    const weaponAim = this.aimAngle ?? this.rotation;
     const calcAimPoint = (distance: number, sideOffset: number) => {
       return {
         x: cx + (distance * Math.cos(weaponAim) - sideOffset * Math.sin(weaponAim)),
@@ -124,27 +144,45 @@ export class ProceduralPlayerGraphics {
       this.graphics.strokeCircle(cx, cy, 25);
     }
 
+    // Canonical live body: this is the collision-reading footprint on screen.
+    this.graphics.fillStyle(this.bodyColor, 1);
+    this.graphics.fillRect(bounds.left, bounds.top, bounds.width, bounds.height);
+    this.graphics.lineStyle(
+      ProceduralPlayerGraphics.BODY_OUTLINE_WIDTH,
+      0x000000,
+      ProceduralPlayerGraphics.BODY_OUTLINE_ALPHA
+    );
+    this.graphics.strokeRect(bounds.left, bounds.top, bounds.width, bounds.height);
+
     // --- LEGS ---
     this.graphics.lineStyle(3, this.bodyColor, 1);
 
-    const stride = 16;
-    const footSideOffset = 8;
+    const stride = 5;
+    const footSideOffset = 6;
+    const hipY = bounds.bottom - 18;
+    const footY = bounds.bottom - 4;
 
     const leftLegProgress = Math.sin(this.walkCycle);
     const rightLegProgress = Math.sin(this.walkCycle + Math.PI);
 
-    const leftFootPos = calcPoint(leftLegProgress * stride, -footSideOffset);
-    const rightFootPos = calcPoint(rightLegProgress * stride, footSideOffset);
+    const leftFootPos = {
+      x: cx - footSideOffset + leftLegProgress * stride,
+      y: footY,
+    };
+    const rightFootPos = {
+      x: cx + footSideOffset + rightLegProgress * stride,
+      y: footY,
+    };
 
     // Draw left leg
     this.graphics.beginPath();
-    this.graphics.moveTo(cx, cy);
+    this.graphics.moveTo(cx - 5, hipY);
     this.graphics.lineTo(leftFootPos.x, leftFootPos.y);
     this.graphics.strokePath();
 
     // Draw right leg
     this.graphics.beginPath();
-    this.graphics.moveTo(cx, cy);
+    this.graphics.moveTo(cx + 5, hipY);
     this.graphics.lineTo(rightFootPos.x, rightFootPos.y);
     this.graphics.strokePath();
 
@@ -162,13 +200,13 @@ export class ProceduralPlayerGraphics {
 
     // Draw left arm
     this.graphics.beginPath();
-    this.graphics.moveTo(cx, cy);
+    this.graphics.moveTo(cx, bounds.top + 18);
     this.graphics.lineTo(leftHandPos.x, leftHandPos.y);
     this.graphics.strokePath();
 
     // Draw right arm
     this.graphics.beginPath();
-    this.graphics.moveTo(cx, cy);
+    this.graphics.moveTo(cx, bounds.top + 18);
     this.graphics.lineTo(rightHandPos.x, rightHandPos.y);
     this.graphics.strokePath();
 
@@ -225,8 +263,8 @@ export class ProceduralPlayerGraphics {
     this.x = x;
     this.y = y;
     // Update Graphics transform for camera follow
-    this.graphics.x = x;
-    this.graphics.y = y;
+    this.graphics.x = Math.round(x);
+    this.graphics.y = Math.round(y);
     this.updateLabelPosition();
     this.draw();
   }
@@ -249,6 +287,10 @@ export class ProceduralPlayerGraphics {
   setAimAngle(aimAngle: number): void {
     this.aimAngle = aimAngle;
     this.draw();
+  }
+
+  getCanonicalBodyBounds(): CanonicalPlayerBodyBounds {
+    return getCanonicalPlayerBodyBounds(Math.round(this.x), Math.round(this.y));
   }
 
   /**

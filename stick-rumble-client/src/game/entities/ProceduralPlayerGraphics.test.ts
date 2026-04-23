@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import Phaser from 'phaser';
-import { ProceduralPlayerGraphics } from './ProceduralPlayerGraphics';
-import { COLORS } from '../../shared/constants';
+import {
+  getCanonicalPlayerBodyBounds,
+  ProceduralPlayerGraphics,
+} from './ProceduralPlayerGraphics';
+import { COLORS, PLAYER } from '../../shared/constants';
 
 describe('ProceduralPlayerGraphics', () => {
   let scene: Phaser.Scene;
@@ -13,11 +16,13 @@ describe('ProceduralPlayerGraphics', () => {
       clear: vi.fn(),
       lineStyle: vi.fn(),
       fillStyle: vi.fn(),
+      fillRect: vi.fn(),
       beginPath: vi.fn(),
       moveTo: vi.fn(),
       lineTo: vi.fn(),
       strokePath: vi.fn(),
       fillCircle: vi.fn(),
+      strokeRect: vi.fn(),
       strokeCircle: vi.fn(),
       destroy: vi.fn(),
       setVisible: vi.fn(),
@@ -72,9 +77,27 @@ describe('ProceduralPlayerGraphics', () => {
       // Should draw circles (head, hands, feet)
       expect(graphics.fillCircle).toHaveBeenCalled();
     });
+
+    it('should initialize the graphics transform to the spawn position', () => {
+      new ProceduralPlayerGraphics(scene, 101, 199, COLORS.ENEMY_HEAD, COLORS.BODY);
+
+      expect(graphics.x).toBe(101);
+      expect(graphics.y).toBe(199);
+    });
   });
 
   describe('Stick figure rendering', () => {
+    it('should draw the canonical live body from shared player dimensions', () => {
+      new ProceduralPlayerGraphics(scene, 100, 100, COLORS.PLAYER_HEAD, COLORS.BODY);
+
+      expect(graphics.fillRect).toHaveBeenCalledWith(
+        -PLAYER.WIDTH / 2,
+        -PLAYER.HEIGHT / 2,
+        PLAYER.WIDTH,
+        PLAYER.HEIGHT
+      );
+    });
+
     it('should use body color for legs and arms', () => {
       new ProceduralPlayerGraphics(scene, 100, 100, COLORS.PLAYER_HEAD, COLORS.BODY);
 
@@ -206,6 +229,46 @@ describe('ProceduralPlayerGraphics', () => {
   });
 
   describe('Walk cycle animation', () => {
+    it('should preserve the canonical body extents while idle, moving, aiming, and rotating fallback aim', () => {
+      const player = new ProceduralPlayerGraphics(scene, 100, 200, COLORS.ENEMY_HEAD, COLORS.BODY);
+      const expectedBounds = {
+        left: 84,
+        right: 116,
+        top: 168,
+        bottom: 232,
+      };
+
+      expect(player.getCanonicalBodyBounds()).toEqual(
+        expect.objectContaining(expectedBounds)
+      );
+
+      player.update(16, true);
+      expect(player.getCanonicalBodyBounds()).toEqual(
+        expect.objectContaining(expectedBounds)
+      );
+
+      player.setAimAngle(Math.PI / 3);
+      expect(player.getCanonicalBodyBounds()).toEqual(
+        expect.objectContaining(expectedBounds)
+      );
+
+      player.setRotation(Math.PI / 2);
+      expect(player.getCanonicalBodyBounds()).toEqual(
+        expect.objectContaining(expectedBounds)
+      );
+    });
+
+    it('should redraw the canonical live body rectangle when movement updates', () => {
+      const player = new ProceduralPlayerGraphics(scene, 100, 200, COLORS.ENEMY_HEAD, COLORS.BODY);
+      (graphics.fillRect as any).mockClear();
+      (graphics.strokeRect as any).mockClear();
+
+      player.update(16, true);
+
+      expect(graphics.fillRect).toHaveBeenCalledWith(-PLAYER.WIDTH / 2, -PLAYER.HEIGHT / 2, PLAYER.WIDTH, PLAYER.HEIGHT);
+      expect(graphics.strokeRect).toHaveBeenCalledWith(-PLAYER.WIDTH / 2, -PLAYER.HEIGHT / 2, PLAYER.WIDTH, PLAYER.HEIGHT);
+    });
+
     it('should update walk cycle when moving', () => {
       const player = new ProceduralPlayerGraphics(scene, 100, 100, COLORS.ENEMY_HEAD, COLORS.BODY);
       (graphics.clear as any).mockClear();
@@ -302,6 +365,26 @@ describe('ProceduralPlayerGraphics', () => {
       player.setRotation(Math.PI / 2);
 
       expect(player.getRotation()).toBe(Math.PI / 2);
+    });
+
+    it('should not rotate the canonical body footprint when rotation changes', () => {
+      const player = new ProceduralPlayerGraphics(scene, 100, 200, COLORS.ENEMY_HEAD, COLORS.BODY);
+      const before = player.getCanonicalBodyBounds();
+
+      player.setRotation(Math.PI / 2);
+
+      expect(player.getCanonicalBodyBounds()).toEqual(before);
+    });
+
+    it('should redraw the same canonical body rectangle when fallback rotation changes', () => {
+      const player = new ProceduralPlayerGraphics(scene, 100, 200, COLORS.ENEMY_HEAD, COLORS.BODY);
+      (graphics.fillRect as any).mockClear();
+      (graphics.strokeRect as any).mockClear();
+
+      player.setRotation(Math.PI / 2);
+
+      expect(graphics.fillRect).toHaveBeenCalledWith(-PLAYER.WIDTH / 2, -PLAYER.HEIGHT / 2, PLAYER.WIDTH, PLAYER.HEIGHT);
+      expect(graphics.strokeRect).toHaveBeenCalledWith(-PLAYER.WIDTH / 2, -PLAYER.HEIGHT / 2, PLAYER.WIDTH, PLAYER.HEIGHT);
     });
   });
 
@@ -418,6 +501,72 @@ describe('ProceduralPlayerGraphics', () => {
       const barrel = player.getBarrelPosition();
       expect(barrel.x).toBeCloseTo(100);
       expect(barrel.y).toBeCloseTo(220);
+    });
+  });
+
+  describe('Aim redraw invariance', () => {
+    it('should redraw the same canonical body rectangle when aim changes', () => {
+      const player = new ProceduralPlayerGraphics(scene, 100, 200, COLORS.ENEMY_HEAD, COLORS.BODY);
+      (graphics.fillRect as any).mockClear();
+      (graphics.strokeRect as any).mockClear();
+
+      player.setAimAngle(Math.PI / 3);
+
+      expect(graphics.fillRect).toHaveBeenCalledWith(-PLAYER.WIDTH / 2, -PLAYER.HEIGHT / 2, PLAYER.WIDTH, PLAYER.HEIGHT);
+      expect(graphics.strokeRect).toHaveBeenCalledWith(-PLAYER.WIDTH / 2, -PLAYER.HEIGHT / 2, PLAYER.WIDTH, PLAYER.HEIGHT);
+    });
+  });
+
+  describe('Canonical footprint geometry', () => {
+    it('should derive bounds directly from PLAYER.WIDTH and PLAYER.HEIGHT', () => {
+      expect(getCanonicalPlayerBodyBounds(320, 640)).toEqual({
+        left: 320 - PLAYER.WIDTH / 2,
+        right: 320 + PLAYER.WIDTH / 2,
+        top: 640 - PLAYER.HEIGHT / 2,
+        bottom: 640 + PLAYER.HEIGHT / 2,
+        width: PLAYER.WIDTH,
+        height: PLAYER.HEIGHT,
+        centerX: 320,
+        centerY: 640,
+      });
+    });
+
+    it('should stay flush to an obstacle on all four sides within one rendered pixel', () => {
+      const obstacle = { x: 400, y: 500, width: 120, height: 80 };
+      const contacts = [
+        {
+          name: 'north',
+          bounds: getCanonicalPlayerBodyBounds(obstacle.x + 40, obstacle.y - PLAYER.HEIGHT / 2),
+          gap: (body: ReturnType<typeof getCanonicalPlayerBodyBounds>) => Math.abs(body.bottom - obstacle.y),
+        },
+        {
+          name: 'east',
+          bounds: getCanonicalPlayerBodyBounds(
+            obstacle.x + obstacle.width + PLAYER.WIDTH / 2,
+            obstacle.y + 40
+          ),
+          gap: (body: ReturnType<typeof getCanonicalPlayerBodyBounds>) =>
+            Math.abs(body.left - (obstacle.x + obstacle.width)),
+        },
+        {
+          name: 'south',
+          bounds: getCanonicalPlayerBodyBounds(
+            obstacle.x + 40,
+            obstacle.y + obstacle.height + PLAYER.HEIGHT / 2
+          ),
+          gap: (body: ReturnType<typeof getCanonicalPlayerBodyBounds>) =>
+            Math.abs(body.top - (obstacle.y + obstacle.height)),
+        },
+        {
+          name: 'west',
+          bounds: getCanonicalPlayerBodyBounds(obstacle.x - PLAYER.WIDTH / 2, obstacle.y + 40),
+          gap: (body: ReturnType<typeof getCanonicalPlayerBodyBounds>) => Math.abs(body.right - obstacle.x),
+        },
+      ];
+
+      for (const contact of contacts) {
+        expect(contact.gap(contact.bounds), `${contact.name} gap`).toBeLessThanOrEqual(1);
+      }
     });
   });
 

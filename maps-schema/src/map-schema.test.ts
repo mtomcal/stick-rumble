@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import defaultOfficeMap from '../../maps/default_office.json';
 import { buildMapRegistry, type MapConfig, validateMapConfig } from './map-schema.js';
 
+const PLAYER_WIDTH = 32;
+const PLAYER_HEIGHT = 64;
+
 function createValidMap(overrides: Partial<MapConfig> = {}): MapConfig {
   return {
     id: 'test_map',
@@ -59,11 +62,49 @@ function createValidMap(overrides: Partial<MapConfig> = {}): MapConfig {
   };
 }
 
+function findObstacle(id: string) {
+  const obstacle = defaultOfficeMap.obstacles.find((candidate) => candidate.id === id);
+  expect(obstacle).toBeDefined();
+  return obstacle!;
+}
+
+function findViewpoint(id: string) {
+  const viewpoint = defaultOfficeMap.visualAcceptanceViewpoints.find((candidate) => candidate.id === id);
+  expect(viewpoint).toBeDefined();
+  return viewpoint!;
+}
+
 describe('map schema validation', () => {
   it('loads the default_office map into a valid registry', () => {
     const registry = buildMapRegistry([defaultOfficeMap]);
 
     expect(registry.get('default_office')).toBeDefined();
+  });
+
+  it('ships explicit blocker-contact viewpoints for wall and desk obstacle families on all four sides', () => {
+    const wall = findObstacle('wall_upper_horizontal');
+    const desk = findObstacle('desk_north_east');
+    const wallChecks = [
+      ['vp_blocker_contact_wall_north', { x: 960, y: wall.y - PLAYER_HEIGHT / 2 }],
+      ['vp_blocker_contact_wall_east', { x: wall.x + wall.width + PLAYER_WIDTH / 2, y: 364 }],
+      ['vp_blocker_contact_wall_south', { x: 960, y: wall.y + wall.height + PLAYER_HEIGHT / 2 }],
+      ['vp_blocker_contact_wall_west', { x: wall.x - PLAYER_WIDTH / 2, y: 364 }],
+    ] as const;
+    const deskChecks = [
+      ['vp_blocker_contact_desk_north', { x: 1580, y: desk.y - PLAYER_HEIGHT / 2 }],
+      ['vp_blocker_contact_desk_east', { x: desk.x + desk.width + PLAYER_WIDTH / 2, y: 208 }],
+      ['vp_blocker_contact_desk_south', { x: 1580, y: desk.y + desk.height + PLAYER_HEIGHT / 2 }],
+      ['vp_blocker_contact_desk_west', { x: desk.x - PLAYER_WIDTH / 2, y: 208 }],
+    ] as const;
+
+    for (const [viewpointId, expectedPosition] of [...wallChecks, ...deskChecks]) {
+      expect(findViewpoint(viewpointId)).toEqual(
+        expect.objectContaining({
+          expectedOutcome: 'reads_blocked',
+          playerPosition: expectedPosition,
+        })
+      );
+    }
   });
 
   it('rejects invalid map structure', () => {

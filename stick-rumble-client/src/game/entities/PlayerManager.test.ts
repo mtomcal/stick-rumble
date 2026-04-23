@@ -60,6 +60,7 @@ const createMockScene = () => {
     lineStyle: ReturnType<typeof vi.fn>;
     fillStyle: ReturnType<typeof vi.fn>;
     fillRect: ReturnType<typeof vi.fn>;
+    strokeRect: ReturnType<typeof vi.fn>;
     beginPath: ReturnType<typeof vi.fn>;
     moveTo: ReturnType<typeof vi.fn>;
     lineTo: ReturnType<typeof vi.fn>;
@@ -152,6 +153,7 @@ const createMockScene = () => {
           lineStyle: vi.fn().mockReturnThis(),
           fillStyle: vi.fn().mockReturnThis(),
           fillRect: vi.fn().mockReturnThis(),
+          strokeRect: vi.fn().mockReturnThis(),
           beginPath: vi.fn().mockReturnThis(),
           moveTo: vi.fn().mockReturnThis(),
           lineTo: vi.fn().mockReturnThis(),
@@ -159,7 +161,10 @@ const createMockScene = () => {
           fillCircle: vi.fn().mockReturnThis(),
           strokeCircle: vi.fn().mockReturnThis(),
           setDepth: vi.fn().mockReturnThis(),
-          setVisible: vi.fn().mockReturnThis(),
+          setVisible: vi.fn(function (this: any, visible: boolean) {
+            this.visible = visible;
+            return this;
+          }),
           setPosition: vi.fn().mockReturnThis(),
           destroy: vi.fn(),
           visible: true,
@@ -995,82 +1000,59 @@ describe('PlayerManager', () => {
   });
 
   describe('dodge roll visual effects', () => {
-    it('should apply 360° rotation animation when player is rolling', () => {
+    it('should keep the live body axis-aligned when player is rolling', () => {
       playerManager.setLocalPlayerId('player-1');
 
-      const rollingState: PlayerState[] = [
-        {
-          id: 'player-1',
-          position: { x: 100, y: 200 },
-          velocity: { x: 0, y: 0 },
-          isRolling: true
-        },
-      ];
-
-      playerManager.updatePlayers(rollingState);
-
-      const graphics = mockScene.graphicsObjects[0];
-      // ProceduralPlayerGraphics.setRotation triggers draw() which calls clear()
-      expect(graphics.clear).toHaveBeenCalled();
-    });
-
-    it('should apply visibility flicker during invincibility frames when rolling', () => {
-      playerManager.setLocalPlayerId('player-1');
-
-      // Player rolling (first 0.2s = i-frames)
-      const rollingState: PlayerState[] = [
-        {
-          id: 'player-1',
-          position: { x: 100, y: 200 },
-          velocity: { x: 0, y: 0 },
-          isRolling: true
-        },
-      ];
-
-      playerManager.updatePlayers(rollingState);
-
-      const graphics = mockScene.graphicsObjects[0];
-      // During rolling, setVisible is called for flicker effect
-      expect(graphics.setVisible).toHaveBeenCalled();
-    });
-
-    it('should restore visibility when roll ends', () => {
-      playerManager.setLocalPlayerId('player-1');
-
-      // Start rolling
-      const rollingState: PlayerState[] = [
-        {
-          id: 'player-1',
-          position: { x: 100, y: 200 },
-          velocity: { x: 0, y: 0 },
-          isRolling: true
-        },
-      ];
-
-      playerManager.updatePlayers(rollingState);
-
-      const graphics = mockScene.graphicsObjects[0];
-
-      // End rolling
-      const notRollingState: PlayerState[] = [
+      playerManager.updatePlayers([
         {
           id: 'player-1',
           position: { x: 100, y: 200 },
           velocity: { x: 0, y: 0 },
           isRolling: false
         },
+      ]);
+
+      const rollingState: PlayerState[] = [
+        {
+          id: 'player-1',
+          position: { x: 100, y: 200 },
+          velocity: { x: 0, y: 0 },
+          isRolling: true
+        },
       ];
 
-      playerManager.updatePlayers(notRollingState);
+      const graphics = mockScene.graphicsObjects[0];
+      vi.clearAllMocks();
+      playerManager.updatePlayers(rollingState);
 
-      // Visibility should be restored to true
+      const playerGraphics = (playerManager as any).players.get('player-1');
+      expect(playerGraphics.getRotation()).toBe(0);
+      expect(graphics.fillRect).toHaveBeenCalledWith(-16, -32, 32, 64);
+      expect(graphics.strokeRect).toHaveBeenCalledWith(-16, -32, 32, 64);
+    });
+
+    it('should keep the live body visible without flicker during roll', () => {
+      playerManager.setLocalPlayerId('player-1');
+
+      const rollingState: PlayerState[] = [
+        {
+          id: 'player-1',
+          position: { x: 100, y: 200 },
+          velocity: { x: 0, y: 0 },
+          isRolling: true
+        },
+      ];
+
+      playerManager.updatePlayers(rollingState);
+
+      const graphics = mockScene.graphicsObjects[0];
       expect(graphics.setVisible).toHaveBeenCalledWith(true);
+      expect(graphics.setVisible).not.toHaveBeenCalledWith(false);
     });
 
-    it('should clear rotation when roll ends', () => {
+    it('should still leave the live body visible after roll:start', () => {
       playerManager.setLocalPlayerId('player-1');
 
-      // Start rolling
       const rollingState: PlayerState[] = [
         {
           id: 'player-1',
@@ -1083,8 +1065,35 @@ describe('PlayerManager', () => {
       playerManager.updatePlayers(rollingState);
 
       const graphics = mockScene.graphicsObjects[0];
+      expect(graphics.setVisible).toHaveBeenCalledWith(true);
+      expect(graphics.visible).toBe(true);
+    });
 
-      // End rolling
+    it('should keep redrawing the same canonical body footprint through roll start and roll end', () => {
+      playerManager.setLocalPlayerId('player-1');
+
+      const initialState: PlayerState[] = [
+        {
+          id: 'player-1',
+          position: { x: 100, y: 200 },
+          velocity: { x: 0, y: 0 },
+          isRolling: false
+        },
+      ];
+
+      playerManager.updatePlayers(initialState);
+      const graphics = mockScene.graphicsObjects[0];
+      vi.clearAllMocks();
+
+      playerManager.updatePlayers([
+        {
+          id: 'player-1',
+          position: { x: 100, y: 200 },
+          velocity: { x: 0, y: 0 },
+          isRolling: true
+        },
+      ]);
+
       const notRollingState: PlayerState[] = [
         {
           id: 'player-1',
@@ -1094,10 +1103,15 @@ describe('PlayerManager', () => {
         },
       ];
 
+      expect(graphics.fillRect).toHaveBeenCalledWith(-16, -32, 32, 64);
+      expect(graphics.setVisible).toHaveBeenCalledWith(true);
+      vi.clearAllMocks();
+
       playerManager.updatePlayers(notRollingState);
 
-      // Rotation cleared, setRotation(0) triggers draw() which calls clear()
-      expect(graphics.clear).toHaveBeenCalled();
+      expect(graphics.setVisible).toHaveBeenCalledWith(true);
+      expect(graphics.setVisible).not.toHaveBeenCalledWith(false);
+      expect(graphics.fillRect).toHaveBeenCalledWith(-16, -32, 32, 64);
     });
 
     it('should handle players with undefined isRolling (backward compatibility)', () => {

@@ -32,8 +32,29 @@ import {
   getFirstBlockingObstacleContact,
   getMatchMapContext,
   isPointInsideBlockingObstacle,
+  type MapObstacle,
   type MatchMapContext,
 } from '../../shared/maps';
+
+const OBSTACLE_EDGE_INSET_PX = 1;
+
+export function getObstacleReadableEdgeStrokeRect(obstacle: MapObstacle): {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+} | null {
+  if (obstacle.width <= OBSTACLE_EDGE_INSET_PX * 2 || obstacle.height <= OBSTACLE_EDGE_INSET_PX * 2) {
+    return null;
+  }
+
+  return {
+    x: obstacle.x + OBSTACLE_EDGE_INSET_PX,
+    y: obstacle.y + OBSTACLE_EDGE_INSET_PX,
+    width: obstacle.width - OBSTACLE_EDGE_INSET_PX * 2,
+    height: obstacle.height - OBSTACLE_EDGE_INSET_PX * 2,
+  };
+}
 
 export class GameScene extends Phaser.Scene {
   private wsClient!: WebSocketClient;
@@ -550,8 +571,16 @@ export class GameScene extends Phaser.Scene {
       const fillColor = obstacle.type === 'desk' ? 0x8f948f : 0x646864;
       this.obstacleGraphics.fillStyle(fillColor, 1);
       this.obstacleGraphics.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
-      this.obstacleGraphics.lineStyle(2, 0x2f3330, 1);
-      this.obstacleGraphics.strokeRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+      const readableEdgeStroke = getObstacleReadableEdgeStrokeRect(obstacle);
+      if (readableEdgeStroke) {
+        this.obstacleGraphics.lineStyle(1, 0x2f3330, 1);
+        this.obstacleGraphics.strokeRect(
+          readableEdgeStroke.x,
+          readableEdgeStroke.y,
+          readableEdgeStroke.width,
+          readableEdgeStroke.height
+        );
+      }
     }
   }
 
