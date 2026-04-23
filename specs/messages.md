@@ -1,7 +1,7 @@
 # Messages
 
-> **Spec Version**: 1.4.0
-> **Last Updated**: 2026-04-17
+> **Spec Version**: 1.4.1
+> **Last Updated**: 2026-04-23
 > **Depends On**: [constants.md](constants.md), [player.md](player.md)
 > **Depended By**: [networking.md](networking.md), [rooms.md](rooms.md), [weapons.md](weapons.md), [shooting.md](shooting.md), [melee.md](melee.md), [hit-detection.md](hit-detection.md), [match.md](match.md), [client-architecture.md](client-architecture.md), [server-architecture.md](server-architecture.md)
 
@@ -127,6 +127,17 @@ type Message struct {
 | `roll:end` | Dodge roll ended | Room broadcast |
 | `state:snapshot` | Full state (delta compression) | Per-client (1 Hz) |
 | `state:delta` | Incremental state changes | Per-client (20 Hz) |
+
+### Session Lifecycle Contract
+
+`session:status` is the authoritative readiness signal for both production clients and automated tests.
+
+- A successful `player:hello` does **not** guarantee the player can immediately enter gameplay.
+- Consumers that need a playable match session must wait for `session:status.state == "match_ready"`.
+- Consumers that only need to confirm the player has joined a pre-match session may wait for a non-error `session:status` state such as `searching_for_match` or `waiting_for_players`.
+- `room:joined` remains a legacy compatibility event only. New client flows, app bootstrap logic, and integration tests must not rely on it as the primary synchronization point.
+
+**Why make this explicit?** The session-first flow separates "the server accepted my join intent" from "the match is ready to bootstrap." Tests that wait for a ready-room event when the player is still waiting can leak sockets, stall teardown, and misdiagnose correct waiting behavior as a networking failure.
 
 ---
 

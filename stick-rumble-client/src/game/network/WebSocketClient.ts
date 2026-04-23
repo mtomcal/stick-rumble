@@ -287,7 +287,7 @@ export class WebSocketClient {
   private handleMessage(message: Message): void {
     if (message.type === 'session:status') {
       const sessionStatus = message.data as SessionStatusData | undefined;
-      if (sessionStatus?.state === 'match_ready' && this.lastRequestedHello) {
+      if (sessionStatus && this.lastRequestedHello) {
         this.lastSuccessfulHello = { ...this.lastRequestedHello };
         this.reconnectReplayPending = false;
       }

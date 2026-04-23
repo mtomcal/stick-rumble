@@ -1,7 +1,7 @@
 # Rooms
 
-> **Spec Version**: 1.4.0
-> **Last Updated**: 2026-04-17
+> **Spec Version**: 1.4.1
+> **Last Updated**: 2026-04-23
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [networking.md](networking.md), [messages.md](messages.md), [maps.md](maps.md)
 > **Depended By**: [match.md](match.md), [server-architecture.md](server-architecture.md)
 
@@ -210,6 +210,12 @@ After a successful `player:hello`, the player-visible outcomes are:
 - any room that has reached the start threshold and now has complete bootstrap context -> `session:status { state: "match_ready", roomId, mapId, ... }`
 
 This distinction matters because the app shell now has separate React states for public queue waiting and named-room waiting. A player may therefore have a successful hello without yet having a playable match session.
+
+**Testing rule.** Any automation that drives room joins must synchronize against `session:status`:
+- wait for `waiting_for_players` when validating single-player named-room setup
+- wait for `match_ready` when validating gameplay bootstrap or multi-player room readiness
+
+Automation must not assume that a lone player joining a named room will receive an immediate ready-room event.
 
 **Regression notice — public tab-reload fast-path.**
 Pre-MVP, a browser tab reload would transparently re-join the player to an existing 1-player public room without any re-handshake. Under Friends-MVP, the reconnecting client MUST re-send `player:hello` first because `HelloSeen` is per-connection and does not survive a socket close. The tab-reload fast-path in [`AddPublicPlayer`](rooms.md#room-creation-auto-matchmaking) still works — it re-finds a 1-player public room by the same `Player.ID` handling rules — but only **after** a fresh hello has been processed on the new connection. This is the documented MVP trade-off for having a clean join-intent contract; server-side session stickiness would need a persistent session token the server does not currently keep.

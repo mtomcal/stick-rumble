@@ -8,8 +8,8 @@
  *
  * ### ✅ DO: Use Event-Driven Waits
  * ```typescript
- * // Good - Wait for specific events
- * await waitForEvent('room:joined', client);
+ * // Good - Wait for specific lifecycle states
+ * await waitForSessionStatusState(client, 'match_ready');
  * const moveData = await waitForEvent('player:move', client);
  *
  * // Good - Wait for conditions to be met
@@ -30,8 +30,8 @@
  *
  * // Wait for both to join room
  * await Promise.all([
- *   waitForEvent('room:joined', client1),
- *   waitForEvent('room:joined', client2)
+ *   waitForSessionStatusState(client1, 'match_ready'),
+ *   waitForSessionStatusState(client2, 'match_ready')
  * ]);
  * ```
  *
@@ -50,6 +50,7 @@
 
 import { beforeEach, afterEach, vi } from 'vitest';
 import { WebSocketClient } from './WebSocketClient';
+import type { SessionStatusData, SessionStatusState } from '../../shared/types';
 
 const TEST_SERVER_PORT = process.env.TEST_SERVER_PORT ?? '8081';
 
@@ -165,11 +166,12 @@ function createTestDisplayName(index: number): string {
 
 export async function connectClientToCodeRoom(
   client: WebSocketClient,
-  options: { code?: string; displayName?: string } = {}
+  options: { code?: string; displayName?: string; expectedState?: SessionStatusState | SessionStatusState[] } = {}
 ): Promise<WebSocketClient> {
   const code = options.code ?? createTestInviteCode();
   const displayName = options.displayName ?? createTestDisplayName(clients.indexOf(client) + 1);
-  const roomJoinedPromise = waitForEvent('room:joined', client);
+  const expectedStates = options.expectedState ?? ['waiting_for_players', 'match_ready'];
+  const sessionStatusPromise = waitForSessionStatusState(client, expectedStates);
 
   await client.connect();
   client.sendHello({
@@ -177,7 +179,7 @@ export async function connectClientToCodeRoom(
     code,
     displayName,
   });
-  await roomJoinedPromise;
+  await sessionStatusPromise;
 
   return client;
 }
@@ -191,11 +193,10 @@ export function delay(ms: number): Promise<void> {
 }
 
 /**
- * Connect multiple clients and wait for them all to join the same code room
+ * Connect multiple clients and wait for them all to reach match_ready in the same code room.
  *
- * This helper properly handles the race condition where room:joined events
- * are sent immediately upon connection. It sets up event handlers BEFORE
- * connecting to ensure no events are missed.
+ * This helper properly handles the session-first flow by waiting for
+ * session:status(match_ready) instead of any legacy room event.
  *
  * @example
  * const [client1, client2] = await connectClientsToRoom(
@@ -203,19 +204,23 @@ export function delay(ms: number): Promise<void> {
  *   createClient()
  * );
  *
- * @param clients - One or more WebSocketClient instances to connect
+ * @param clients - Two or more WebSocketClient instances to connect
  * @returns Promise that resolves when all clients have joined the same code room
  */
 export async function connectClientsToRoom(
   ...clientsToConnect: WebSocketClient[]
 ): Promise<WebSocketClient[]> {
+  if (clientsToConnect.length < 2) {
+    throw new Error('connectClientsToRoom requires at least 2 clients to reach match_ready');
+  }
+
   console.log(`[connectClientsToRoom] Connecting ${clientsToConnect.length} client(s)...`);
   const code = createTestInviteCode();
 
-  // Set up room:joined handlers BEFORE connecting (to avoid race condition)
-  const roomJoinedPromises = clientsToConnect.map((client, index) => {
-    console.log(`[connectClientsToRoom] Setting up room:joined handler for client ${index + 1}`);
-    return waitForEvent('room:joined', client);
+  // Set up session:status(match_ready) handlers BEFORE connecting.
+  const matchReadyPromises = clientsToConnect.map((client, index) => {
+    console.log(`[connectClientsToRoom] Setting up session:status(match_ready) handler for client ${index + 1}`);
+    return waitForSessionStatusState(client, 'match_ready');
   });
 
   // Connect all clients
@@ -233,9 +238,9 @@ export async function connectClientsToRoom(
     });
   });
 
-  // Wait for all room:joined events
-  console.log(`[connectClientsToRoom] Waiting for all room:joined events...`);
-  await Promise.all(roomJoinedPromises);
+  // Wait for all clients to be gameplay-ready.
+  console.log(`[connectClientsToRoom] Waiting for all session:status(match_ready) events...`);
+  await Promise.all(matchReadyPromises);
 
   console.log(`[connectClientsToRoom] All clients joined room successfully`);
   return clientsToConnect;
@@ -262,8 +267,8 @@ export interface WaitOptions {
  * so this can be safely used alongside other event handlers.
  *
  * @example
- * // Wait for room:joined event
- * const data = await waitForEvent('room:joined', client);
+ * // Wait for match_ready lifecycle state
+ * const data = await waitForSessionStatusState(client, 'match_ready');
  *
  * @example
  * // Wait with custom timeout
@@ -277,7 +282,7 @@ export interface WaitOptions {
  * // This won't interfere with the collection handler above
  * await waitForEvent('player:move', client);
  *
- * @param eventName - The event type to wait for (e.g., 'room:joined', 'player:move')
+ * @param eventName - The event type to wait for (e.g., 'session:status', 'player:move')
  * @param client - The WebSocketClient instance to listen on
  * @param options - Optional configuration for timeout and polling
  * @returns Promise that resolves with the event data when the event is received
@@ -318,6 +323,58 @@ export function waitForEvent<T = unknown>(
 
     console.log(`[waitForEvent] Waiting for '${eventName}'...`);
     client.on(eventName, handler);
+  });
+}
+
+export function waitForSessionStatusState(
+  client: WebSocketClient,
+  expectedState: SessionStatusState | SessionStatusState[],
+  options: WaitOptions = {}
+): Promise<SessionStatusData> {
+  const expectedStates = new Set(Array.isArray(expectedState) ? expectedState : [expectedState]);
+  const { timeout = DEFAULT_TIMEOUT } = options;
+
+  return new Promise<SessionStatusData>((resolve, reject) => {
+    let resolved = false;
+    const startTime = Date.now();
+
+    const handler = (data: unknown) => {
+      const sessionStatus = data as SessionStatusData | undefined;
+      if (!sessionStatus || !expectedStates.has(sessionStatus.state)) {
+        return;
+      }
+
+      if (!resolved) {
+        resolved = true;
+        const duration = Date.now() - startTime;
+        console.log(
+          `[waitForSessionStatusState] '${sessionStatus.state}' received after ${duration}ms`
+        );
+        clearTimeout(timeoutId);
+        client.off('session:status', handler);
+        resolve(sessionStatus);
+      }
+    };
+
+    const timeoutId = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        console.error(
+          `[waitForSessionStatusState] TIMEOUT after ${timeout}ms waiting for states: ${[...expectedStates].join(', ')}`
+        );
+        client.off('session:status', handler);
+        reject(
+          new Error(
+            `Timeout waiting for session:status in states [${[...expectedStates].join(', ')}] after ${timeout}ms`
+          )
+        );
+      }
+    }, timeout);
+
+    console.log(
+      `[waitForSessionStatusState] Waiting for session:status in states: ${[...expectedStates].join(', ')}`
+    );
+    client.on('session:status', handler);
   });
 }
 
