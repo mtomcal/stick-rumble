@@ -25,13 +25,13 @@ import { ScoreDisplayUI } from '../ui/ScoreDisplayUI';
 import { KillCounterUI } from '../ui/KillCounterUI';
 import { PickupNotificationUI } from '../ui/PickupNotificationUI';
 import { COLORS } from '../../shared/constants';
-import { getWebSocketUrl } from '../config/runtimeConfig';
 import {
   getDefaultMatchMapContext,
   getMatchMapContext,
   isPointInsideBlockingObstacle,
   type MatchMapContext,
 } from '../../shared/maps';
+import { getActiveMatchBootstrap } from '../sessionRuntime';
 
 export class GameScene extends Phaser.Scene {
   private wsClient!: WebSocketClient;
@@ -156,9 +156,13 @@ export class GameScene extends Phaser.Scene {
     // Setup F8 key for network debug panel toggle
     this.setupF8KeyHandler();
 
-    // Connect to WebSocket server
-    const wsUrl = getWebSocketUrl();
-    this.wsClient = new WebSocketClient(wsUrl, false, this.networkSimulator);
+    const bootstrap = getActiveMatchBootstrap();
+    if (!bootstrap) {
+      throw new Error('GameScene requires an active match bootstrap')
+    }
+
+    this.wsClient = bootstrap.wsClient;
+    this.applyMatchMapContext(getMatchMapContext(bootstrap.session.mapId));
 
     // Initialize event handlers module
     this.eventHandlers = new GameSceneEventHandlers(
@@ -188,46 +192,13 @@ export class GameScene extends Phaser.Scene {
 
     // Inject audio manager into event handlers for weapon firing sounds (Story 3.3 Polish)
     this.eventHandlers.setAudioManager(this.audioManager);
-    this.eventHandlers.setJoinCallbacks(
-      (payload) => {
-        window.onJoinSuccess?.(payload);
-        this.initializeGameplaySystems();
-      },
-      (payload) => {
-        window.onJoinError?.(payload);
-      },
-      (count) => {
-        window.onRosterSizeChanged?.(count);
-      }
-    );
-    this.wsClient.setReconnectReplayFailedHandler((intent) => {
-      window.onReconnectReplayFailed?.(intent);
-    });
 
     // Setup message handlers before connecting
     this.eventHandlers.setupEventHandlers();
-
-    // Defer connection until next frame to ensure scene is fully initialized
-    this.time.delayedCall(100, () => {
-      this.wsClient.connect()
-        .then(() => {
-          console.log('Connected to server!');
-          this.initializeGameplaySystems();
-          window.submitJoinIntent = (intent) => {
-            this.wsClient.sendHello(intent);
-          };
-          window.dispatchEvent(new Event('stick-rumble:submit-join-intent-ready'));
-        })
-        .catch(err => {
-          console.error('Failed to connect:', err);
-
-          // Display connection error
-          this.add.text(10, 30, 'Failed to connect to server', {
-            fontSize: '14px',
-            color: '#ff0000'
-          });
-        });
-    });
+    this.playerManager.setLocalPlayerId(bootstrap.session.playerId);
+    this.healthBarUI.updateHealth(100, 100, false);
+    this.initializeGameplaySystems();
+    this.wsClient.setGameplayReady(true);
   }
 
   update(_time: number, delta: number): void {
@@ -314,13 +285,12 @@ export class GameScene extends Phaser.Scene {
       this.meleeWeaponManager.update();
     }
 
-    // Update reload UI progress (world-space bar and arc above local player)
+    // Update reload UI progress using the reload arc only.
     if (this.shootingManager && this.shootingManager.isReloading()) {
       const progress = this.shootingManager.getReloadProgress();
       const localPos = this.playerManager?.getLocalPlayerPosition();
       const playerX = localPos?.x ?? 0;
       const playerY = localPos?.y ?? 0;
-      this.ui.updateReloadProgress(progress, playerX, playerY, 60, 4);
       this.ui.updateReloadCircle(progress, playerX, playerY);
     }
 
@@ -357,6 +327,7 @@ export class GameScene extends Phaser.Scene {
 
     this.inputManager = new InputManager(this, this.wsClient);
     this.inputManager.init();
+    this.input.mouse?.disableContextMenu();
 
     this.shootingManager = new ShootingManager(this, this.wsClient);
     this.dodgeRollManager = new DodgeRollManager();
@@ -368,8 +339,12 @@ export class GameScene extends Phaser.Scene {
     this.eventHandlers.setDodgeRollManager(this.dodgeRollManager);
     this.eventHandlers.setPredictionEngine(this.predictionEngine);
 
-    this.input.on('pointerdown', () => {
+    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (!this.shootingManager || !this.inputManager) {
+        return;
+      }
+
+      if (pointer.button !== 0) {
         return;
       }
 
@@ -458,7 +433,6 @@ export class GameScene extends Phaser.Scene {
       GameSceneUI.HUD_LAYOUT.AMMO_TEXT_Y
     );
     this.ui.updateAmmoDisplay(this.shootingManager);
-    this.ui.createReloadProgressBar(10, 70, 200, 10);
     this.ui.createReloadCircleIndicator();
     this.ui.createCrosshair();
     this.ui.setupMinimap();
@@ -717,13 +691,9 @@ export class GameScene extends Phaser.Scene {
       this.shootingManager.destroy();
     }
 
-    // Disconnect WebSocket on scene restart
-    // This triggers a fresh connection with new player ID
     if (this.wsClient) {
-      this.wsClient.disconnect();
+      this.wsClient.setGameplayReady(false);
     }
-
-    delete window.submitJoinIntent;
 
     // Cleanup network simulator globals
     this.cleanupNetworkSimulatorGlobals();

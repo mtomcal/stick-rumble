@@ -408,8 +408,8 @@ describe('GameSceneEventHandlers - Client-Side Reconciliation', () => {
     const freshPlayerMoveHandler = handlers.get('player:move');
 
     matchEndedHandler?.({
-      winners: ['player-1'],
-      finalScores: [{ playerId: 'player-1', kills: 5, deaths: 2, xp: 500 }],
+      winners: [{ playerId: 'player-1', displayName: 'Alice' }],
+      finalScores: [{ playerId: 'player-1', displayName: 'Alice', kills: 5, deaths: 2, xp: 500 }],
       reason: 'time_limit',
     });
 

@@ -1,7 +1,7 @@
 # UI System
 
-> **Spec Version**: 2.4.0
-> **Last Updated**: 2026-04-17
+> **Spec Version**: 2.5.0
+> **Last Updated**: 2026-04-23
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [match.md](match.md), [client-architecture.md](client-architecture.md), [graphics.md](graphics.md)
 > **Depended By**: [test-index.md](test-index.md)
 
@@ -9,9 +9,9 @@
 
 ## Overview
 
-The UI system provides all heads-up display (HUD) elements, feedback indicators, and overlays that communicate game state to the player. The system is divided between Phaser-rendered in-game UI (health bars, ammo, timers) and React-rendered modal overlays (match end screen).
+The UI system provides all heads-up display (HUD) elements, feedback indicators, and application screens that communicate game state to the player. The system is divided between Phaser-rendered in-game UI (health bars, ammo, timers, crosshair) and React-rendered application states (join form, waiting screens, recoverable errors, match end).
 
-**Why this architecture?** Phaser handles real-time, frame-synced UI that must update at 60 FPS (crosshair, cooldowns). React handles static modals where responsiveness matters less but accessibility and standard UI patterns matter more (forms, buttons, text input).
+**Why this architecture?** Phaser handles real-time, frame-synced UI that must update at 60 FPS. React handles session and screen transitions where accessibility, deterministic state transitions, and standard form patterns matter more than frame-locked rendering.
 
 All in-game HUD elements are screen-fixed (scroll factor 0) and render above world entities. The player-facing contract is stronger than a depth number: fixed HUD pixels are sacrosanct and may never be visually overlapped by world-space entities at any camera position.
 
@@ -76,25 +76,31 @@ All UI constants are defined here and referenced in [constants.md](constants.md#
 
 ### MatchEndData
 
-Sent by server on `match:ended`, consumed by React modal.
+Sent by server on `match:ended`, consumed by the React post-match screen.
 
 **TypeScript:**
 ```typescript
 interface PlayerScore {
   playerId: string;
+  displayName: string;
   kills: number;
   deaths: number;
   xp: number;
 }
 
+interface WinnerSummary {
+  playerId: string;
+  displayName: string;
+}
+
 interface MatchEndData {
-  winners: string[];      // Array of winner player IDs (can be multiple on tie)
+  winners: WinnerSummary[];
   finalScores: PlayerScore[];
   reason: 'kill_target' | 'time_limit';
 }
 ```
 
-**Why this structure?** `winners` is an array to handle ties. `finalScores` includes all players (even 0-kill) for complete leaderboard.
+**Why this structure?** `winners` remains an array to handle ties. `playerId` is retained for stable identity logic, while `displayName` is the required player-facing label used by the UI. `finalScores` includes all players (even 0-kill) for complete leaderboard.
 
 ### UIElementPosition
 
@@ -109,6 +115,52 @@ interface UIElementPosition {
   depth: number;
 }
 ```
+
+---
+
+## Application Screens
+
+**2026-04-17 Amendment:** The app now uses explicit React screen states instead of rendering pre-match dialogs on top of an already-mounted Phaser canvas. This section supersedes older assumptions that join, waiting-for-friend, reconnect failure, and match end are primarily modal overlays.
+
+### Centered Stage Contract
+
+- React owns the canonical gameplay stage container.
+- When gameplay is active, the Phaser canvas is centered inside that stage.
+- Below-stage content must align to the same stage width.
+- During pre-match states there is no mounted gameplay canvas and no reserved blank fake-canvas placeholder.
+
+### `join_form`
+
+- Primary action: `Play Public`
+- Secondary action: `Join with Code`, which reveals room-code controls inline instead of navigating to a separate screen
+- Invite links prefill the room code only; they do not auto-submit
+- The form may provide light client-side display-name guidance, but server sanitization remains authoritative
+- Blank display names are allowed; the server may fall back to `Guest`
+
+### `searching_for_match`
+
+- No canvas is mounted
+- Shared waiting-screen layout is used
+- The screen shows the chosen display name as read-only session info
+- The user may explicitly cancel and return to the join form
+
+### `waiting_for_players`
+
+- No canvas is mounted
+- Shared waiting-screen layout is used
+- The screen shows the chosen display name, room code, roster progress, `Copy Invite Link`, and `Back/Cancel`
+- Join fields are not editable from this state
+
+### `recoverable_error`
+
+- Join and replay failures are explicit states, not silent jumps back to the form
+- The screen presents the failure reason and a recommended next action
+
+### `match_end`
+
+- Match end is a full React screen state, not a modal above the canvas
+- `Play Again` reuses the player's last successful join intent
+- If replay fails, the client transitions to `recoverable_error`
 
 ---
 
@@ -268,7 +320,7 @@ export class HealthBarUI {
 2. If > 5 entries → remove oldest (FIFO)
 3. After 5 seconds → fade out over 1 second
 4. On fade complete → remove and reposition remaining entries
-5. Names shown are the authoritative display names currently known to the client for the killer and victim. Internal player IDs are not shown in the visible kill feed except as an emergency fallback when no display name has ever been observed for that player.
+5. Names shown are the authoritative display names currently known to the client for the killer and victim. Internal player IDs must never appear in the visible kill feed; if a display name is unexpectedly unavailable, render a safe placeholder such as `Guest`.
 
 **Pseudocode:**
 ```
@@ -402,10 +454,10 @@ export class KillCounterUI {
 
 **Visual Specification:**
 - Icon (left of text): Yellow/orange target/crosshair icon (#E0A030 / COLORS.AMMO_READY) when ready; red rotating spinner icon when reloading
+- Equipped weapon label: text-first label adjacent to the ammo count (e.g. `PISTOL`, `AK47`, `SHOTGUN`, `BAT`)
 - Text format: "{current}/{max}" (e.g., "15/15")
 - Text color: Yellow/orange (#E0A030 / COLORS.AMMO_READY) when ready
 - Font: 16px
-- Reloading state: "RELOADING..." text in red/coral (#CC5555 / COLORS.AMMO_RELOADING) appears to the right of the counter
 - Fist/infinite-ammo weapons: Display "INF" instead of ammo count (no max shown)
 - Visibility: Hidden for melee weapons (Bat, Katana)
 - Depth: 1000
@@ -427,7 +479,6 @@ updateAmmoDisplay(shootingManager: ShootingManager): void {
     if (isMelee) {
       this.ammoText.setVisible(false);
       this.ammoIcon.setVisible(false);
-      this.reloadingText.setVisible(false);
     } else {
       this.ammoText.setVisible(true);
       this.ammoIcon.setVisible(true);
@@ -443,12 +494,8 @@ updateAmmoDisplay(shootingManager: ShootingManager): void {
       // Icon state: ready vs reloading
       if (isReloading) {
         this.ammoIcon.setTint(0xFF0000); // Red spinner when reloading
-        this.reloadingText.setVisible(true);
-        this.reloadingText.setText('RELOADING...');
-        this.reloadingText.setColor('#CC5555'); // COLORS.AMMO_RELOADING
       } else {
         this.ammoIcon.setTint(0xE0A030); // COLORS.AMMO_READY
-        this.reloadingText.setVisible(false);
       }
     }
   }
@@ -459,20 +506,20 @@ updateAmmoDisplay(shootingManager: ShootingManager): void {
 
 ### Reload Indicators
 
-Three complementary indicators for reload state:
+**2026-04-17 HUD Simplification Amendment:** The local combat HUD is simplified as follows:
+- the ammo cluster includes a text-first equipped-weapon label near the ammo count
+- the circular reload arc is the only reload-progress indicator
+- the world-space reload progress bar is removed
+- the HUD `RELOADING...` text is removed
+- `RELOAD!` remains allowed only as a distinct empty-magazine warning when the player is not currently reloading
 
-#### Reload Progress Bar (World-Space, Above Player)
+These rules supersede older text in this document that described multiple simultaneous reload-progress affordances.
 
-**Position**: World-space above the player character, same pattern as health bars rendered above entities (not screen-fixed)
+One reload-progress indicator and one distinct empty-magazine warning:
 
-**Visual Specification:**
-- Dimensions: ~60×6 px
-- Background: Dark gray (#333333), 0.8 alpha
-- Progress fill: White (#FFFFFF)
-- Visibility: Only during reload, hidden for melee
-- Depth: World-space (rendered with player entities)
+#### Reload Progress Bar (Removed)
 
-**Why world-space?** Keeps reload feedback attached to the player character, consistent with world-space health bars. Easier to track during movement.
+The former world-space reload progress bar above the player is out of spec and must not be rendered. The circular reload arc below is now the sole reload-progress indicator.
 
 #### Reload Arc (Player-Centered)
 
@@ -484,7 +531,7 @@ Three complementary indicators for reload state:
 - Arc: Starts at top (270° / -90°), sweeps clockwise proportional to reload progress
 - Depth: World-space (rendered with player entities)
 
-**Why player-centered?** Keeps reload feedback attached to the player character, consistent with the world-space reload progress bar above the player. Easier to track during movement than a screen-center indicator.
+**Why player-centered?** Keeps reload feedback attached to the player character without duplicating the signal in a second progress widget. Easier to track during movement than a screen-center indicator.
 
 **TypeScript:**
 ```typescript
@@ -520,11 +567,9 @@ function updateReloadUI(isReloading, isEmpty, reloadProgress, isMelee):
         return
 
     if isReloading:
-        showProgressBar(reloadProgress)
         showReloadArc(reloadProgress)
         hideReloadText()
     else if isEmpty:
-        hideProgressBar()
         hideReloadArc()
         showFlashingReloadText()
     else:
@@ -1028,31 +1073,21 @@ minimapGraphics.strokePath();
 
 ---
 
-### Match End Screen (React Modal)
+### Match End Screen (React Full Screen)
 
 **Trigger**: `match:ended` event
 
-> **Note:** This is distinct from the [Death Screen Overlay](#death-screen-overlay-per-death), which is a Phaser-rendered overlay shown on each individual death during the match. The Match End Screen is a React modal that appears once when the entire match concludes.
+> **Note:** This is distinct from the [Death Screen Overlay](#death-screen-overlay-per-death), which is a Phaser-rendered overlay shown on each individual death during the match. The Match End Screen is now a full React screen that replaces the gameplay surface once the entire match concludes.
 
-**Why React?** Complex layout (tables, buttons, forms) is easier in React. Accessibility features (keyboard nav, screen readers) come free.
+**Why React?** Complex layout (tables, buttons, forms) is easier in React. Accessibility features (keyboard nav, screen readers) come free, and making match end a full screen avoids the layering/focus bugs common to React-over-Phaser modals.
 
 **Visual Specification:**
 
-#### Backdrop
-- Fixed fullscreen
-- Background: rgba(0, 0, 0, 0.8)
-- z-index: 1000
-- Click outside modal → close
-
-#### Modal Container
-- Max width: 600px
-- Max height: 80vh
-- Centered vertically and horizontally
-- Border: 2px solid white
-- Border radius: 8px
-- Background: #1a1a1a
-- Padding: 20px
-- Overflow-y: auto
+#### Screen Container
+- Full viewport React screen
+- Centered content column
+- No click-outside-to-close behavior
+- Results content may use a centered card or panel within the screen
 
 #### Winner Section
 - Single winner: "Winner: {PlayerName}"
@@ -1062,6 +1097,7 @@ minimapGraphics.strokePath();
 - Winner names are rendered from authoritative display names known to the client; raw internal player IDs are UI-internal and may be shown only as an emergency fallback if no display name is known
 - Blank or whitespace-only display names are treated as unknown and must fall back to the player ID rather than rendering empty text
 - No separate "MATCH ENDED" title — the winner text IS the title (`<h2 class="match-end-title">`)
+- Visible player-facing text must use `displayName`; raw `playerId` values are forbidden in the rendered UI
 
 #### Scoreboard Table
 
@@ -1099,9 +1135,9 @@ minimapGraphics.strokePath();
 - Auto-triggers restart at 0
 
 #### Controls
-- Close button (×): Top-right corner, red on hover
-- "Play Again" button: Full-width, green (#4a7a4a), 18px bold
-- ESC key: Closes modal
+- "Play Again" button: primary action, reuses the last successful join intent
+- Secondary action may return to the join form when explicitly offered
+- ESC close behavior is no longer required for the full-screen presentation
 
 **TypeScript (React):**
 ```tsx
@@ -1734,7 +1770,7 @@ it('should use shared rank for equal-kill players', () => {
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 2.4.0 | 2026-04-17 | Clarified authoritative local HUD stat rules: score / kills now update only from server-confirmed local stats, may reconcile from player-state truth, and freeze immediately on `match:ended`. Match-end UI now resolves player IDs to display names, gives shared ranks for kill ties, and stops using deaths as a silent tiebreaker. |
+| 2.5.0 | 2026-04-23 | Merged the April UI contract updates: the app shell is session-first with no mounted canvas before `match_ready`, the ammo cluster owns the equipped-weapon label and reload arc-only presentation, local score and kill HUD values remain server-authoritative and freeze on `match:ended`, and the match-end screen uses display-ready names plus shared placement for kill ties without deaths as a hidden tiebreaker. |
 | 2.3.3 | 2026-04-13 | Kill feed now requires authoritative display names for killer and victim; internal player IDs remain UI-internal and are only an emergency fallback if no display name is known locally. |
 | 2.3.2 | 2026-04-10 | Re-anchored the top-left survival HUD contract: the health cluster now owns the first row at 20px viewport padding, ammo is explicitly stacked underneath it, and the ammo icon/text are required to stay anchored as one unit instead of drifting independently. |
 | 2.3.1 | 2026-04-09 | Corrected stale TS-UI-018 expectations to the bottom-left minimap contract and clarified ammo-display rationale to remove references to title text in the normal gameplay HUD. |

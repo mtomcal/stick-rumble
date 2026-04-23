@@ -1,0 +1,21 @@
+{
+  "$id": "WinnerSummary",
+  "description": "Display-ready winner identity summary",
+  "type": "object",
+  "required": [
+    "playerId",
+    "displayName"
+  ],
+  "properties": {
+    "playerId": {
+      "description": "Winner player identifier",
+      "minLength": 1,
+      "type": "string"
+    },
+    "displayName": {
+      "description": "Display-ready winner name",
+      "minLength": 1,
+      "type": "string"
+    }
+  }
+}

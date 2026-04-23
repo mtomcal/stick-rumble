@@ -9,10 +9,28 @@
   ],
   "properties": {
     "winners": {
-      "description": "Array of winner player IDs",
+      "description": "Array of display-ready winner summaries",
       "type": "array",
       "items": {
-        "type": "string"
+        "$id": "WinnerSummary",
+        "description": "Display-ready winner identity summary",
+        "type": "object",
+        "required": [
+          "playerId",
+          "displayName"
+        ],
+        "properties": {
+          "playerId": {
+            "description": "Winner player identifier",
+            "minLength": 1,
+            "type": "string"
+          },
+          "displayName": {
+            "description": "Display-ready winner name",
+            "minLength": 1,
+            "type": "string"
+          }
+        }
       }
     },
     "finalScores": {
@@ -24,6 +42,7 @@
         "type": "object",
         "required": [
           "playerId",
+          "displayName",
           "kills",
           "deaths",
           "xp"
@@ -31,6 +50,11 @@
         "properties": {
           "playerId": {
             "description": "Player unique identifier",
+            "minLength": 1,
+            "type": "string"
+          },
+          "displayName": {
+            "description": "Display-ready player name",
             "minLength": 1,
             "type": "string"
           },

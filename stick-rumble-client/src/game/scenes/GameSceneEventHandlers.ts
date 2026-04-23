@@ -21,10 +21,10 @@ import type { ChatLogUI } from '../ui/ChatLogUI';
 import type { PickupNotificationUI } from '../ui/PickupNotificationUI';
 import type { AimLine } from '../entities/AimLine';
 import { getWeaponConfigSync } from '../../shared/weaponConfig';
-import type { JoinErrorPayload, JoinSuccessPayload } from '../../shared/types';
+import type { JoinErrorPayload, MatchSession } from '../../shared/types';
 // Import generated schema types for server→client messages (replaces manual type assertions)
 import type {
-  RoomJoinedData,
+  SessionStatusData,
   PlayerMoveData,
   ProjectileSpawnData,
   ProjectileDestroyData,
@@ -73,22 +73,22 @@ export class GameSceneEventHandlers {
   private audioManager: AudioManager | null = null;
   private currentWeaponType: string = 'pistol'; // Default weapon
   private matchEnded: boolean = false; // Flag to stop processing player:move after match ends
-  private pendingPlayerMoves: unknown[] = []; // Queue for player:move messages before room:joined
-  private pendingWeaponSpawns: unknown[] = []; // Queue for weapon:spawned messages before room:joined
+  private pendingPlayerMoves: unknown[] = []; // Queue for player:move messages before session bootstrap completes
+  private pendingWeaponSpawns: unknown[] = []; // Queue for weapon:spawned messages before session bootstrap completes
   private scoreDisplayUI: ScoreDisplayUI | null = null;
   private killCounterUI: KillCounterUI | null = null;
   private chatLogUI: ChatLogUI | null = null;
   private pickupNotificationUI: PickupNotificationUI | null = null;
   private aimLine: AimLine | null = null;
   private onMatchMapChanged: (mapId: string) => void;
-  private onRoomJoined: ((payload: JoinSuccessPayload) => void) | null = null;
+  private onRoomJoined: ((payload: MatchSession) => void) | null = null;
   private onJoinError: ((payload: JoinErrorPayload) => void) | null = null;
   private onRosterSizeChanged: ((count: number) => void) | null = null;
 
   private resolvePlayerDisplayName(playerId: string): string {
     const playerState = this.playerManager.getPlayerState(playerId);
     const displayName = playerState?.displayName?.trim();
-    return displayName && displayName.length > 0 ? displayName : playerId;
+    return displayName && displayName.length > 0 ? displayName : 'Guest';
   }
 
   constructor(
@@ -199,7 +199,7 @@ export class GameSceneEventHandlers {
   }
 
   setJoinCallbacks(
-    onRoomJoined: ((payload: JoinSuccessPayload) => void) | null,
+    onRoomJoined: ((payload: MatchSession) => void) | null,
     onJoinError: ((payload: JoinErrorPayload) => void) | null,
     onRosterSizeChanged: ((count: number) => void) | null
   ): void {
@@ -304,11 +304,11 @@ export class GameSceneEventHandlers {
       if (this.matchEnded) {
         return;
       }
-      // If no local player ID set, queue and wait for room:joined
+      // If no local player ID set, queue and wait for session:status(match_ready)
       // The server assigns a NEW player ID on each connection.
       if (!this.playerManager.getLocalPlayerId()) {
-        // Queue player:move until room:joined has set the local player ID
-        // This prevents creating duplicate sprites when player:move arrives before room:joined
+        // Queue player:move until session:status(match_ready) has set the local player ID
+        // This prevents creating duplicate sprites when player:move arrives before bootstrap completes
         // Limit queue size to prevent memory issues while waiting for room (keep only latest 10)
         if (this.pendingPlayerMoves.length >= 10) {
           this.pendingPlayerMoves.shift();
@@ -382,9 +382,15 @@ export class GameSceneEventHandlers {
     this.handlerRefs.set('player:move', playerMoveHandler);
     this.wsClient.on('player:move', playerMoveHandler);
 
-    // Store and register room:joined handler
+    // Store and register session:status handler
     const roomJoinedHandler = (data: unknown) => {
-      const messageData = data as RoomJoinedData;
+      const messageData = data as SessionStatusData;
+
+      this.onRosterSizeChanged?.(messageData.rosterSize ?? 0);
+
+      if (messageData.state !== 'match_ready') {
+        return;
+      }
 
       // Reset match ended flag for new match
       this.matchEnded = false;
@@ -392,7 +398,7 @@ export class GameSceneEventHandlers {
       this.inputManager?.enable?.();
       this.shootingManager?.enable?.();
 
-      // Clear existing players to prevent duplication if room:joined fires multiple times
+      // Clear existing players to prevent duplication if bootstrap fires multiple times
       // This handles reconnect scenarios and future match restart functionality
       this.playerManager.destroy();
 
@@ -405,7 +411,7 @@ export class GameSceneEventHandlers {
         if (!messageData.displayName) {
           this.onJoinError?.({
             type: 'error:no_hello',
-            offendingType: 'room:joined:missing_display_name',
+            offendingType: 'session:status:missing_display_name',
           });
           return;
         }
@@ -423,13 +429,16 @@ export class GameSceneEventHandlers {
           this.chatLogUI.addSystemMessage('You joined the match');
         }
 
-        this.onRoomJoined?.({
-          roomId: messageData.roomId,
-          playerId: messageData.playerId,
-          mapId: messageData.mapId,
-          displayName: messageData.displayName,
-          code: messageData.code,
-        });
+        if (messageData.roomId && messageData.mapId) {
+          this.onRoomJoined?.({
+            roomId: messageData.roomId,
+            playerId: messageData.playerId,
+            mapId: messageData.mapId,
+            displayName: messageData.displayName,
+            joinMode: messageData.joinMode,
+            code: messageData.code,
+          });
+        }
 
         // Process any queued weapon:spawned messages
         for (const pendingData of this.pendingWeaponSpawns) {
@@ -443,8 +452,8 @@ export class GameSceneEventHandlers {
         this.pendingWeaponSpawns = [];
       }
     };
-    this.handlerRefs.set('room:joined', roomJoinedHandler);
-    this.wsClient.on('room:joined', roomJoinedHandler);
+    this.handlerRefs.set('session:status', roomJoinedHandler);
+    this.wsClient.on('session:status', roomJoinedHandler);
 
     if (this.onJoinError) {
       const badRoomCodeHandler = (data: unknown) => {
@@ -494,7 +503,7 @@ export class GameSceneEventHandlers {
       if (this.shouldIgnoreLateGameplayEvent()) {
         return;
       }
-      // Skip until room:joined has set local player ID (scene not ready)
+      // Skip until session:status(match_ready) has set local player ID (scene not ready)
       if (!this.playerManager.getLocalPlayerId()) {
         return;
       }
@@ -838,7 +847,7 @@ export class GameSceneEventHandlers {
       if (this.shouldIgnoreLateGameplayEvent()) {
         return;
       }
-      // Queue until room:joined has set local player ID (scene not ready)
+      // Queue until session:status(match_ready) has set local player ID (scene not ready)
       if (!this.playerManager.getLocalPlayerId()) {
         // Limit queue size to prevent memory issues (keep only latest 10)
         if (this.pendingWeaponSpawns.length >= 10) {

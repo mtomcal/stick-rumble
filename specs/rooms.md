@@ -1,7 +1,7 @@
 # Rooms
 
-> **Spec Version**: 1.3.1
-> **Last Updated**: 2026-04-11
+> **Spec Version**: 1.4.1
+> **Last Updated**: 2026-04-23
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [networking.md](networking.md), [messages.md](messages.md), [maps.md](maps.md)
 > **Depended By**: [match.md](match.md), [server-architecture.md](server-architecture.md)
 
@@ -43,7 +43,7 @@ Friends need a way to end up in the same match without a discovery UI, accounts,
 - [constants.md](constants.md) - Room capacity limits
 - [player.md](player.md) - Player state structure
 - [networking.md](networking.md) - WebSocket connection lifecycle
-- [messages.md](messages.md) - `room:joined` and `player:left` message formats
+- [messages.md](messages.md) - `session:status`, `session:leave`, and `player:left` message formats
 - [maps.md](maps.md) - map registry ownership and room-level map assignment
 
 ---
@@ -100,7 +100,7 @@ type Player struct {
 ```
 
 **Why store `DisplayName` on the network-context player and not only on `PlayerState`?**
-The network layer needs the name before the player has a `PlayerState` — specifically, when routing the hello into a room and building the initial `room:joined` payload. Once the player is attached to a room, the name is copied onto `PlayerState.DisplayName`, which becomes the authoritative source for gameplay broadcasts.
+The network layer needs the name before the player has a `PlayerState` — specifically, when routing the hello into a room and building the initial `session:status` payload. Once the player is attached to a room, the name is copied onto `PlayerState.DisplayName`, which becomes the authoritative source for gameplay broadcasts.
 
 **Why a channel for sending?**
 - Decouples game loop from socket writes
@@ -137,11 +137,18 @@ The `ID` is an opaque routing handle used inside the server (broadcast bookkeepi
 
 **TypeScript (Client doesn't track room state explicitly):**
 ```typescript
-// Client receives roomId, playerId, and mapId after room:joined
-interface RoomJoinedData {
-    roomId: string;
+// Client receives pre-match lifecycle from session:status and only creates
+// a MatchSession once state == "match_ready".
+interface SessionStatusData {
+    state: 'searching_for_match' | 'waiting_for_players' | 'match_ready';
     playerId: string;
-    mapId: string;
+    displayName: string;
+    joinMode: 'public' | 'code';
+    roomId?: string;
+    code?: string;
+    rosterSize?: number;
+    minPlayers?: number;
+    mapId?: string;
 }
 ```
 
@@ -188,10 +195,27 @@ A player's room assignment is driven by a **join intent** supplied by the client
 
 The server must **not** assign a player to a room until it has received and processed a `player:hello`. Messages other than `player:hello` received before the hello are rejected with a `error:no_hello` message; the connection stays open and the client can still send a valid hello afterward.
 
-**Failed-hello semantics.** A hello that fails validation (`error:bad_room_code`, `error:room_full`, schema-invalid) does **not** latch `HelloSeen`. The client may send another `player:hello` on the same connection after re-prompting the user. Only a **successful** hello sets `HelloSeen := true`; once set, all subsequent `player:hello` messages on that connection are silently dropped.
+**Failed-hello semantics.** A hello that fails validation (`error:bad_room_code`, `error:room_full`, schema-invalid) does **not** latch `HelloSeen`. The client may send another `player:hello` on the same connection after re-prompting the user. A **successful** hello sets `HelloSeen := true`, but a later successful `session:leave` from a pre-match state clears that latch so the same socket can submit a fresh join intent. While the player remains in an active session, subsequent `player:hello` messages on that connection are silently dropped.
 
 **Why require an explicit hello instead of auto-joining on upgrade?**
 The WebSocket upgrade gives the server a player ID, but at that instant the server has no idea whether the player wants to play with friends or strangers, and no display name to put on the nameplate. A single dedicated hello message is the simplest way to carry that intent without overloading existing gameplay messages.
+
+### Client-Facing Session Outcomes
+
+**2026-04-17 Amendment:** The room system now reports join progress to the client through `session:status`, not `room:joined`.
+
+After a successful `player:hello`, the player-visible outcomes are:
+- public hello with no ready room yet -> `session:status { state: "searching_for_match" }`
+- named-room hello where the player is alone or still below threshold -> `session:status { state: "waiting_for_players" }`
+- any room that has reached the start threshold and now has complete bootstrap context -> `session:status { state: "match_ready", roomId, mapId, ... }`
+
+This distinction matters because the app shell now has separate React states for public queue waiting and named-room waiting. A player may therefore have a successful hello without yet having a playable match session.
+
+**Testing rule.** Any automation that drives room joins must synchronize against `session:status`:
+- wait for `waiting_for_players` when validating single-player named-room setup
+- wait for `match_ready` when validating gameplay bootstrap or multi-player room readiness
+
+Automation must not assume that a lone player joining a named room will receive an immediate ready-room event.
 
 **Regression notice — public tab-reload fast-path.**
 Pre-MVP, a browser tab reload would transparently re-join the player to an existing 1-player public room without any re-handshake. Under Friends-MVP, the reconnecting client MUST re-send `player:hello` first because `HelloSeen` is per-connection and does not survive a socket close. The tab-reload fast-path in [`AddPublicPlayer`](rooms.md#room-creation-auto-matchmaking) still works — it re-finds a 1-player public room by the same `Player.ID` handling rules — but only **after** a fresh hello has been processed on the new connection. This is the documented MVP trade-off for having a clean join-intent contract; server-side session stickiness would need a persistent session token the server does not currently keep.
@@ -265,7 +289,7 @@ Friends-MVP intentionally ships **no collision mitigation**. Two unrelated frien
 - At friend-group scale, the probability of two groups simultaneously picking the same short common word for a same-minute play session is low, and recovery is trivial: pick a different code and send a fresh `player:hello`.
 
 **How collisions surface to users:**
-- The joining player receives `room:joined` with the expected `code`. They cannot distinguish "I joined my friend's room" from "I joined a stranger's room with the same code."
+- The joining player receives `session:status` with the expected `code`. They cannot distinguish "I joined my friend's room" from "I joined a stranger's room with the same code."
 - If the stranger's room is already full, the joiner gets `error:room_full` and can retry with a different code.
 - There is no server log alert for code collisions; they are invisible to operators as well as players.
 
@@ -289,7 +313,7 @@ function addPublicPlayer(player):
             room.addPlayer(player)
             room.match.registerPlayer(player)
             playerToRoom[player.id] = room.id
-            send room:joined to player
+            send session:status { state: "match_ready", roomId, playerId: player.id, displayName, joinMode: "public", mapId } to player
             return room
 
     // Normal flow: add to waiting list
@@ -310,8 +334,8 @@ function addPublicPlayer(player):
         playerToRoom[player1.id] = room.id
         playerToRoom[player2.id] = room.id
 
-        send room:joined { roomId, playerId: player1.id, mapId } to player1
-        send room:joined { roomId, playerId: player2.id, mapId } to player2
+        send session:status { state: "match_ready", roomId, playerId: player1.id, displayName, joinMode: "public", rosterSize: 2, minPlayers: 2, mapId } to player1
+        send session:status { state: "match_ready", roomId, playerId: player2.id, displayName, joinMode: "public", rosterSize: 2, minPlayers: 2, mapId } to player2
 
         return room
 
@@ -335,8 +359,8 @@ func (rm *RoomManager) AddPublicPlayer(player *Player) *Room {
             rm.playerToRoom[player.ID] = room.ID
             room.Match.RegisterPlayer(player.ID)
 
-            // RoomManager sends room:joined directly (not caller)
-            rm.sendRoomJoinedMessage(player, room)
+            // RoomManager sends session:status directly (not caller)
+            rm.sendSessionStatus(player, room, "match_ready")
             return room
         }
     }
@@ -362,9 +386,9 @@ func (rm *RoomManager) AddPublicPlayer(player *Player) *Room {
 
         room.Match.Start()
 
-        // RoomManager sends room:joined to both players
-        rm.sendRoomJoinedMessage(player1, room)
-        rm.sendRoomJoinedMessage(player2, room)
+        // RoomManager sends match_ready session snapshots to both players
+        rm.sendSessionStatus(player1, room, "match_ready")
+        rm.sendSessionStatus(player2, room, "match_ready")
 
         return room
     }
@@ -419,7 +443,10 @@ function joinCodedRoom(player, rawCode):
         if room.playerCount >= MIN_PLAYERS_TO_START and not room.match.isStarted:
             room.match.start()
 
-        send room:joined { roomId: room.id, playerId: player.id, mapId: room.mapId, code: code } to player
+        if room.playerCount >= MIN_PLAYERS_TO_START and room.match.isStarted:
+            send session:status { state: "match_ready", roomId: room.id, playerId: player.id, displayName, joinMode: "code", code: code, rosterSize: room.playerCount, minPlayers: MIN_PLAYERS_TO_START, mapId: room.mapId } to player
+        else:
+            send session:status { state: "waiting_for_players", roomId: room.id, playerId: player.id, displayName, joinMode: "code", code: code, rosterSize: room.playerCount, minPlayers: MIN_PLAYERS_TO_START } to player
         return room
 
     return createFreshCodedRoom(player, code)
@@ -438,7 +465,7 @@ function createFreshCodedRoom(player, normalizedCode):
     // second player submits the same code; the joining branch above is the
     // one that flips match state to started.
 
-    send room:joined { roomId, playerId, mapId, code: normalizedCode } to player
+    send session:status { state: "waiting_for_players", roomId, playerId, displayName, joinMode: "code", code: normalizedCode, rosterSize: 1, minPlayers: MIN_PLAYERS_TO_START } to player
     return room
 ```
 
@@ -611,46 +638,48 @@ func (r *Room) Broadcast(message []byte, excludePlayerID string) {
 **Why 10ms timeout instead of default?**
 - Current implementation uses `default` (immediate)
 - Dropping is acceptable for non-critical messages
-- Critical messages (room:joined, match:ended) sent individually
+- Critical messages (`session:status`, `match:ended`) are sent individually
 
 ### Client Room Handling
 
-The client doesn't maintain full room state explicitly. It learns the minimum required context after `room:joined`: `roomId`, `playerId`, and `mapId`.
+The client doesn't maintain full room state explicitly. It learns the authoritative pre-match lifecycle through `session:status`, then derives a `MatchSession` only once `state == "match_ready"`.
 
 **TypeScript:**
 ```typescript
-function handleRoomJoined(message: Message): void {
-    const data = message.data as RoomJoinedData;
+function handleSessionStatus(message: Message): void {
+    const data = message.data as SessionStatusData;
+    appSession.replace(data);
 
-    // Clear stale state from previous match
-    playerManager.destroy();
+    if (data.state !== 'match_ready') {
+        return;
+    }
 
-    // Set local player identity
-    playerManager.setLocalPlayerId(data.playerId);
+    // Create gameplay bootstrap only once the room is actually playable
+    const matchSession: MatchSession = {
+        playerId: data.playerId,
+        displayName: data.displayName,
+        joinMode: data.joinMode,
+        roomId: data.roomId!,
+        mapId: data.mapId!,
+        code: data.code,
+    };
 
-    // Reset health (respawn state)
-    this.localPlayerHealth = 100;
-
-    // Reset match state
-    this.matchEnded = false;
-
-    // Process queued messages that arrived before room:joined
-    this.processPendingMessages();
+    mountPhaser(matchSession);
 }
 ```
 
-**Why destroy before setting local player?**
-- Prevents duplicate sprites from reconnection
-- Clears references to old player entities
-- Ensures clean slate for new match
+**Why split waiting from match-ready?**
+- Public matchmaking can succeed logically while the player is still waiting in the queue
+- Named-room hosts can sit in a valid room before a second player arrives
+- The app shell needs deterministic screen states for `searching_for_match`, `waiting_for_players`, and `match_ready`
 
 ### Pending Message Queue
 
-Messages may arrive before `room:joined` due to network timing. The client queues these.
+Messages may arrive before gameplay bootstrap due to network timing. The client queues gameplay-only messages until `session:status { state: "match_ready" }` has been received and Phaser is mounted.
 
 **TypeScript:**
 ```typescript
-// Queue pending messages if room not joined yet
+// Queue pending messages if gameplay is not bootstrapped yet
 private pendingPlayerMoves: PlayerMoveData[] = [];
 private pendingWeaponSpawns: WeaponSpawnedData[] = [];
 private readonly MAX_PENDING_MESSAGES = 10;
@@ -665,7 +694,7 @@ function queueMessage(type: string, data: unknown): void {
     // Similar for weapon:spawned
 }
 
-// Inside room:joined handler:
+// Inside match_ready handling:
 // Pending player:move messages are DISCARDED (stale, captured before room was created)
 this.pendingPlayerMoves = [];
 
@@ -762,7 +791,7 @@ for (const pendingData of this.pendingWeaponSpawns) {
 
 1. **No Room State**: Client only knows its player ID, not room structure
 2. **Handler Cleanup**: Call `clearHandlers()` on reconnect to prevent duplicates
-3. **Pending Queue**: Process queued messages after `room:joined`
+3. **Pending Queue**: Process queued messages after `session:status { state: "match_ready" }`
 4. **Match End Flag**: Check `matchEnded` before processing movement messages
 
 ---
@@ -785,7 +814,7 @@ for (const pendingData of this.pendingWeaponSpawns) {
 **Expected Output:**
 - After player1: Returns nil (waiting)
 - After player2: Returns Room with both players
-- Both players receive room:joined
+- Both players receive `session:status { state: "match_ready" }`
 
 **Pseudocode:**
 ```
@@ -901,7 +930,7 @@ func TestAddPlayerToFullRoom(t *testing.T) {
 }
 ```
 
-### TS-ROOM-004: room:joined Sent To Both Players
+### TS-ROOM-004: `session:status(match_ready)` Sent To Both Players
 
 **Category**: Integration
 **Priority**: Critical
@@ -914,21 +943,23 @@ func TestAddPlayerToFullRoom(t *testing.T) {
 - Player 2 connects
 
 **Expected Output:**
-- Player 1 receives room:joined with their ID
-- Player 2 receives room:joined with their ID
+- Player 1 receives `session:status { state: "match_ready" }` with their ID
+- Player 2 receives `session:status { state: "match_ready" }` with their ID
 - Different player IDs
 
 **Pseudocode:**
 ```
-test "room:joined sent to both players":
+test "session:status(match_ready) sent to both players":
     ws1 = connect("ws://localhost:8080/ws")
     ws2 = connect("ws://localhost:8080/ws")
 
     msg1 = ws1.receive()
     msg2 = ws2.receive()
 
-    assert msg1.type == "room:joined"
-    assert msg2.type == "room:joined"
+    assert msg1.type == "session:status"
+    assert msg1.data.state == "match_ready"
+    assert msg2.type == "session:status"
+    assert msg2.data.state == "match_ready"
     assert msg1.data.playerId != msg2.data.playerId
 ```
 
@@ -952,7 +983,7 @@ test "player:left sent when player disconnects":
     ws1 = connect("ws://localhost:8080/ws")
     ws2 = connect("ws://localhost:8080/ws")
 
-    // Both receive room:joined
+    // Both receive session:status(match_ready)
     ws1.receive()
     ws2.receive()
 
@@ -1101,7 +1132,7 @@ test "broadcast reaches all room members":
 - Normalized code for both is `"PIZZA"`
 - After A's hello: a new `RoomKindCode` room exists, `room.match.isStarted == false`
 - After B's hello: `room.match.isStarted == true` (the join, not the creation, is what starts the match)
-- Both receive `room:joined` with the same `roomId` and `code: "PIZZA"`
+- Both receive `session:status` snapshots for the same `roomId` and `code: "PIZZA"`; the host first observes `waiting_for_players`, then both transition to `match_ready`
 - `codeIndex["PIZZA"]` points to that room
 
 ### TS-ROOM-012: Named Room — Code Normalization Collisions Converge
@@ -1264,6 +1295,7 @@ test "tab reload joins existing room":
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.4.0 | 2026-04-17 | Session-first client alignment: documented public `searching_for_match`, named-room `waiting_for_players`, and `match_ready` as explicit `session:status` outcomes after a successful hello; updated client-facing room handling to bootstrap gameplay only from `match_ready`; and switched room/messaging references from `room:joined` to `session:status` / `session:leave`. |
 | 1.3.1 | 2026-04-11 | Friends-MVP pre-mortem fixes: (1) code-room join path now explicitly calls `match.start()` when the joiner crosses `MIN_PLAYERS_TO_START`; (2) room destruction now only deletes `codeIndex[code]` if the index still points at the room being destroyed, preventing a rematch-in-progress room from being unindexed when the old room's stragglers disconnect (new TS-ROOM-018); (3) failed-hello semantics clarified — `error:bad_room_code` / `error:room_full` do not latch `HelloSeen`; (4) added "Accepted Risk: Code Collisions Between Unrelated Groups" section making the collision trade-off explicit; (5) added regression notice for the public tab-reload fast-path now requiring a fresh `player:hello`. |
 | 1.3.0 | 2026-04-11 | Friends-MVP: introduced named rooms (`RoomKindCode`), room-code normalization, join-intent via `player:hello`, display-name sanitization and `PlayerState.DisplayName`, error modes `error:no_hello` / `error:bad_room_code` / `error:room_full { code }`. Added TS-ROOM-011..017. |
 | 1.0.0 | 2026-02-02 | Initial specification |

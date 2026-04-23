@@ -1,168 +1,56 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { GameScene } from './GameScene';
-import { createMockScene, createMockWebSocket } from './GameScene.test.setup';
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { setupBootstrappedGameScene } from './GameScene.bootstrap-test-helpers'
+import { setActiveMatchBootstrap } from '../sessionRuntime'
 
-// Mock Phaser for InputManager - MUST BE AT TOP LEVEL
 vi.mock('phaser', () => ({
   default: {
     Scene: class {
-      scene = { key: '' };
+      scene = { key: '' }
       constructor(config: { key: string }) {
-        this.scene.key = config.key;
+        this.scene.key = config.key
       }
     },
     Input: {
       Keyboard: {
         KeyCodes: {
-          W: 87,
-          A: 65,
-          S: 83,
-          D: 68,
+          SPACE: 32,
+          F8: 119,
         },
       },
     },
+    Math: {
+      DegToRad: (degrees: number) => degrees * (Math.PI / 180),
+    },
   },
-}));
+}))
 
-describe('GameScene - Spectator Mode', () => {
-  let scene: GameScene;
-  let mockWebSocketInstance: ReturnType<typeof createMockWebSocket>['mockWebSocketInstance'];
-  let originalWebSocket: typeof WebSocket;
-
-  beforeEach(() => {
-    originalWebSocket = globalThis.WebSocket;
-    const { MockWebSocket, mockWebSocketInstance: wsInstance } = createMockWebSocket();
-    mockWebSocketInstance = wsInstance;
-    globalThis.WebSocket = MockWebSocket as unknown as typeof WebSocket;
-
-    vi.stubGlobal('import.meta', {
-      env: {
-        VITE_WS_URL: 'ws://localhost:8080/ws',
-      },
-    });
-
-    scene = new GameScene();
-  });
-
+describe('GameScene spectator transitions', () => {
   afterEach(() => {
-    globalThis.WebSocket = originalWebSocket;
-    vi.clearAllMocks();
-    vi.unstubAllGlobals();
-  });
+    setActiveMatchBootstrap(null)
+    vi.clearAllMocks()
+  })
 
-  describe('Damage Event Handlers', () => {
-    it('should enter spectator mode when local player dies', async () => {
-      const mockSceneContext = createMockScene();
-      Object.assign(scene, mockSceneContext);
+  it('enters spectator mode when the local player dies', () => {
+    const { scene, wsClient } = setupBootstrappedGameScene()
+    const enterSpy = vi.spyOn(scene['spectator'], 'enterSpectatorMode')
 
-      scene.create();
+    wsClient.emit('player:death', {
+      victimId: 'player-1',
+      killerId: 'player-2',
+    })
 
-      // Trigger the delayed callback to create WebSocket and set local player ID
-      if (mockSceneContext.delayedCallCallbacks.length > 0) {
-        mockSceneContext.delayedCallCallbacks[0]();
-      }
+    expect(enterSpy).toHaveBeenCalledTimes(1)
+  })
 
-      // Set local player ID
-      const roomJoinedMessage = {
-        data: JSON.stringify({
-          type: 'room:joined',
-          timestamp: Date.now(),
-          data: { playerId: 'local-player', roomId: 'room-1', mapId: 'default_office', displayName: 'Local Player' }
-        })
-      };
+  it('exits spectator mode when the local player respawns', () => {
+    const { scene, wsClient } = setupBootstrappedGameScene()
+    const exitSpy = vi.spyOn(scene['spectator'], 'exitSpectatorMode')
 
-      if (mockWebSocketInstance.onmessage) {
-        mockWebSocketInstance.onmessage(roomJoinedMessage as MessageEvent);
-      }
+    wsClient.emit('player:respawn', {
+      playerId: 'player-1',
+      position: { x: 100, y: 200 },
+    })
 
-      // Simulate local player death
-      const deathMessage = {
-        data: JSON.stringify({
-          type: 'player:death',
-          timestamp: Date.now(),
-          data: {
-            victimId: 'local-player',
-            attackerId: 'attacker-1'
-          }
-        })
-      };
-
-      if (mockWebSocketInstance.onmessage) {
-        mockWebSocketInstance.onmessage(deathMessage as MessageEvent);
-      }
-
-      // Verify spectator UI was created — rewritten death screen shows "YOU DIED"
-      expect(mockSceneContext.add.text).toHaveBeenCalledWith(
-        expect.any(Number),
-        expect.any(Number),
-        'YOU DIED',
-        expect.any(Object)
-      );
-    });
-
-    it('should exit spectator mode when local player respawns', async () => {
-      const mockSceneContext = createMockScene();
-      Object.assign(scene, mockSceneContext);
-
-      scene.create();
-
-      // Trigger the delayed callback to create WebSocket and set local player ID
-      if (mockSceneContext.delayedCallCallbacks.length > 0) {
-        mockSceneContext.delayedCallCallbacks[0]();
-      }
-
-      // Set local player ID
-      const roomJoinedMessage = {
-        data: JSON.stringify({
-          type: 'room:joined',
-          timestamp: Date.now(),
-          data: { playerId: 'local-player', roomId: 'room-1', mapId: 'default_office', displayName: 'Local Player' }
-        })
-      };
-
-      if (mockWebSocketInstance.onmessage) {
-        mockWebSocketInstance.onmessage(roomJoinedMessage as MessageEvent);
-      }
-
-      // Simulate local player death (enter spectator mode)
-      const deathMessage = {
-        data: JSON.stringify({
-          type: 'player:death',
-          timestamp: Date.now(),
-          data: {
-            victimId: 'local-player',
-            attackerId: 'attacker-1'
-          }
-        })
-      };
-
-      if (mockWebSocketInstance.onmessage) {
-        mockWebSocketInstance.onmessage(deathMessage as MessageEvent);
-      }
-
-      // Get text creation count before respawn
-      const textCountBeforeRespawn = mockSceneContext.add.text.mock.calls.length;
-
-      // Simulate local player respawn
-      const respawnMessage = {
-        data: JSON.stringify({
-          type: 'player:respawn',
-          timestamp: Date.now(),
-          data: {
-            playerId: 'local-player',
-            position: { x: 500, y: 300 },
-            health: 100
-          }
-        })
-      };
-
-      if (mockWebSocketInstance.onmessage) {
-        mockWebSocketInstance.onmessage(respawnMessage as MessageEvent);
-      }
-
-      // Verify spectator UI was created (2 text objects: spectator text + countdown)
-      // At least 2 more text objects should have been created during death
-      expect(textCountBeforeRespawn).toBeGreaterThan(0);
-    });
-  });
-});
+    expect(exitSpy).toHaveBeenCalledTimes(1)
+  })
+})

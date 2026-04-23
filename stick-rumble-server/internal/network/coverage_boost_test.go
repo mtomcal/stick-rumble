@@ -488,14 +488,15 @@ func TestGlobalHandleWebSocket(t *testing.T) {
 	defer conn1.Close()
 	defer conn2.Close()
 
-	// Both should receive room:joined
-	msg1, err := readMessageOfType(t, conn1, "room:joined", 2*time.Second)
+	msg1, _, err := readSessionStatus(t, conn1, "match_ready", 2*time.Second)
 	require.NoError(t, err)
-	assert.Equal(t, "room:joined", msg1.Type)
+	require.NotNil(t, msg1)
+	assert.Equal(t, "session:status", msg1.Type)
 
-	msg2, err := readMessageOfType(t, conn2, "room:joined", 2*time.Second)
+	msg2, _, err := readSessionStatus(t, conn2, "match_ready", 2*time.Second)
 	require.NoError(t, err)
-	assert.Equal(t, "room:joined", msg2.Type)
+	require.NotNil(t, msg2)
+	assert.Equal(t, "session:status", msg2.Type)
 }
 
 // ==========================
@@ -574,8 +575,7 @@ func TestSendWeaponStateToWaitingPlayer(t *testing.T) {
 	conn1 := ts.connectClient(t)
 	defer conn1.Close()
 
-	// Wait for room:joined — single player might get a "waiting" state
-	// We need to find the player ID
+	// Wait for the searching_for_match snapshot so the single player is registered
 	time.Sleep(200 * time.Millisecond)
 
 	// Use the handler directly with an unknown player (will hit SendToWaitingPlayer)

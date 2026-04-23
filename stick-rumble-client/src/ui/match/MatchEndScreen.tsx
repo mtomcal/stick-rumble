@@ -1,6 +1,6 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { calculateXP } from '../../game/utils/xpCalculator';
-import type { MatchEndData } from '../../shared/types';
+import type { MatchEndData, PlayerScore, WinnerSummary } from '../../shared/types';
 import './MatchEndScreen.css';
 
 export interface MatchEndScreenProps {
@@ -10,24 +10,33 @@ export interface MatchEndScreenProps {
   onPlayAgain: () => void;
 }
 
-export function MatchEndScreen({ matchData, localPlayerId, onClose, onPlayAgain }: MatchEndScreenProps) {
+const fallbackDisplayName = 'Guest';
+
+function sanitizeDisplayName(displayName: string | undefined): string {
+  const trimmed = displayName?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : fallbackDisplayName;
+}
+
+function resolveWinnerDisplayName(winner: WinnerSummary): string {
+  return sanitizeDisplayName(winner.displayName);
+}
+
+function resolveScoreDisplayName(score: PlayerScore): string {
+  return sanitizeDisplayName(score.displayName);
+}
+
+export function MatchEndScreen({ matchData, localPlayerId, onPlayAgain }: MatchEndScreenProps) {
   const [countdown, setCountdown] = useState(10);
   const hasCalledPlayAgainRef = useRef(false);
-
-  const resolveDisplayName = (playerId: string) => {
-    const player = matchData.finalScores.find((score) => score.playerId === playerId);
-    const displayName = player?.displayName?.trim();
-    return displayName && displayName.length > 0 ? displayName : playerId;
-  };
 
   const rankedPlayers = [...matchData.finalScores].sort((a, b) => {
     if (b.kills !== a.kills) {
       return b.kills - a.kills;
     }
-    return resolveDisplayName(a.playerId).localeCompare(resolveDisplayName(b.playerId));
+    return resolveScoreDisplayName(a).localeCompare(resolveScoreDisplayName(b));
   });
 
-  const rankedPlayersWithPlacement = rankedPlayers.reduce<Array<(typeof rankedPlayers)[number] & { rank: number }>>(
+  const rankedPlayersWithPlacement = rankedPlayers.reduce<Array<PlayerScore & { rank: number }>>(
     (acc, player, index) => {
       const previousPlayer = rankedPlayers[index - 1];
       const previousRank = acc[index - 1]?.rank ?? 1;
@@ -38,45 +47,29 @@ export function MatchEndScreen({ matchData, localPlayerId, onClose, onPlayAgain 
       acc.push({ ...player, rank });
       return acc;
     },
-    []
+    [],
   );
 
-  // Find local player data
-  const localPlayer = matchData.finalScores.find(p => p.playerId === localPlayerId);
-  const localPlayerRank = rankedPlayersWithPlacement.find(p => p.playerId === localPlayerId)?.rank ?? 0;
-  const isWinner = matchData.winners.includes(localPlayerId);
+  const localPlayer = matchData.finalScores.find((player) => player.playerId === localPlayerId);
+  const localPlayerRank = rankedPlayersWithPlacement.find((player) => player.playerId === localPlayerId)?.rank ?? 0;
+  const isWinner = matchData.winners.some((winner) => winner.playerId === localPlayerId);
   const isTopThree = localPlayerRank > 0 && localPlayerRank <= 3;
 
-  // Calculate XP breakdown
   const localPlayerKills = localPlayer?.kills ?? 0;
   const xpData = calculateXP(localPlayerKills, isWinner, isTopThree);
 
-  // Handle ESC key
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
-
-  // Countdown timer
   useEffect(() => {
     if (countdown <= 0) {
       return;
     }
 
     const timer = setInterval(() => {
-      setCountdown(prev => Math.max(0, prev - 1));
+      setCountdown((previous) => Math.max(0, previous - 1));
     }, 1000);
 
     return () => clearInterval(timer);
   }, [countdown]);
 
-  // Trigger onPlayAgain when countdown reaches 0
   useEffect(() => {
     if (countdown === 0 && !hasCalledPlayAgainRef.current) {
       hasCalledPlayAgainRef.current = true;
@@ -84,16 +77,11 @@ export function MatchEndScreen({ matchData, localPlayerId, onClose, onPlayAgain 
     }
   }, [countdown, onPlayAgain]);
 
-  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.target === e.currentTarget) {
-      onClose();
-    }
-  };
-
   const handlePlayAgain = () => {
     if (hasCalledPlayAgainRef.current) {
       return;
     }
+
     hasCalledPlayAgainRef.current = true;
     setCountdown(0);
     onPlayAgain();
@@ -107,38 +95,28 @@ export function MatchEndScreen({ matchData, localPlayerId, onClose, onPlayAgain 
     if (matchData.winners.length === 1) {
       return (
         <h2 className="match-end-title">
-          Winner: <span className="winner-name">{resolveDisplayName(matchData.winners[0])}</span>
+          Winner: <span className="winner-name">{resolveWinnerDisplayName(matchData.winners[0])}</span>
         </h2>
       );
     }
 
     return (
       <h2 className="match-end-title">
-        Winners: <span className="winner-name">{matchData.winners.map(resolveDisplayName).join(', ')}</span>
+        Winners: <span className="winner-name">{matchData.winners.map(resolveWinnerDisplayName).join(', ')}</span>
       </h2>
     );
   };
 
   return (
-    <div className="match-end-backdrop" onClick={handleBackdropClick}>
+    <div className="match-end-backdrop">
       <div
         className="match-end-modal"
         role="dialog"
         aria-label="Match End Results"
-        onClick={(e) => e.stopPropagation()}
       >
-        <button
-          className="close-button"
-          onClick={onClose}
-          aria-label="Close"
-        >
-          ×
-        </button>
-
         {renderWinners()}
 
         <div className="match-end-content">
-          {/* Rankings Table */}
           <section className="rankings-section">
             <h3>Final Rankings</h3>
             <table className="rankings-table">
@@ -157,7 +135,7 @@ export function MatchEndScreen({ matchData, localPlayerId, onClose, onPlayAgain 
                     className={player.playerId === localPlayerId ? 'local-player' : ''}
                   >
                     <td>{player.rank}</td>
-                    <td>{resolveDisplayName(player.playerId)}</td>
+                    <td>{resolveScoreDisplayName(player)}</td>
                     <td>{player.kills}</td>
                     <td>{player.deaths}</td>
                   </tr>
@@ -166,7 +144,6 @@ export function MatchEndScreen({ matchData, localPlayerId, onClose, onPlayAgain 
             </table>
           </section>
 
-          {/* XP Breakdown */}
           <section className="xp-section">
             <h3>XP Earned</h3>
             <div className="xp-breakdown">
@@ -193,12 +170,10 @@ export function MatchEndScreen({ matchData, localPlayerId, onClose, onPlayAgain 
             </div>
           </section>
 
-          {/* Countdown Timer */}
           <div className="countdown-section">
             <p>Returning to lobby in {countdown}s</p>
           </div>
 
-          {/* Play Again Button */}
           <button className="play-again-button" onClick={handlePlayAgain}>
             Play Again
           </button>

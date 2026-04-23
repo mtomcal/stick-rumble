@@ -137,10 +137,11 @@ Final score data for a single player, used in `match:ended` message.
 **Go:**
 ```go
 type PlayerScore struct {
-    PlayerID string `json:"playerId"`
-    Kills    int    `json:"kills"`
-    Deaths   int    `json:"deaths"`
-    XP       int    `json:"xp"`
+    PlayerID    string `json:"playerId"`
+    DisplayName string `json:"displayName"`
+    Kills       int    `json:"kills"`
+    Deaths      int    `json:"deaths"`
+    XP          int    `json:"xp"`
 }
 ```
 
@@ -148,6 +149,7 @@ type PlayerScore struct {
 ```typescript
 interface PlayerScore {
   playerId: string;
+  displayName: string;
   kills: number;
   deaths: number;
   xp: number;
@@ -158,6 +160,31 @@ interface PlayerScore {
 - Deaths show engagement (a player with 5 kills and 15 deaths was active)
 - XP provides a secondary metric beyond raw kills
 - Enables future features like K/D ratio display
+
+### WinnerSummary
+
+Display-ready winner identity used in `match:ended`.
+
+**Go:**
+```go
+type WinnerSummary struct {
+    PlayerID    string `json:"playerId"`
+    DisplayName string `json:"displayName"`
+}
+```
+
+**TypeScript:**
+```typescript
+interface WinnerSummary {
+  playerId: string;
+  displayName: string;
+}
+```
+
+**WHY keep both ID and display name?**
+- `playerId` remains the stable internal identity for local-row highlighting and tie-safe logic
+- `displayName` is the required player-facing label for winner banners and score tables
+- Raw IDs must not leak into rendered match-end UI
 
 ---
 
@@ -788,7 +815,7 @@ Sent when match concludes (kill target or time limit). This payload is the froze
 **TypeScript Schema:**
 ```typescript
 interface MatchEndedData {
-  winners: string[];       // Array of winner player IDs (multiple if tie)
+  winners: WinnerSummary[];
   finalScores: PlayerScore[]; // All player stats
   reason: string;          // "kill_target" or "time_limit"
 }
@@ -800,7 +827,7 @@ winners := room.Match.DetermineWinners()
 finalScores := room.Match.GetFinalScores(world)
 
 data := map[string]interface{}{
-    "winners":     winners,
+    "winners":     buildWinnerSummaries(winners, world),
     "finalScores": finalScores,
     "reason":      room.Match.EndReason,
 }
@@ -1342,7 +1369,11 @@ test "Match can only end once":
 ```typescript
 it('should skip match:timer updates after match has ended', () => {
   // Trigger match:ended
-  matchEndedHandler({ winners: ['p1'], finalScores: [], reason: 'kill_target' });
+  matchEndedHandler({
+    winners: [{ playerId: 'p1', displayName: 'Player 1' }],
+    finalScores: [],
+    reason: 'kill_target',
+  });
 
   // Attempt timer update
   matchTimerHandler({ remainingSeconds: 100 });
@@ -1358,5 +1389,6 @@ it('should skip match:timer updates after match has ended', () => {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.1.0 | 2026-04-17 | Match results became display-ready: `PlayerScore` now includes `displayName`, `WinnerSummary` was added for winner banners, and the spec now explicitly keeps `playerId` for identity logic while forbidding raw IDs in rendered match-end UI. |
 | 1.0.0 | 2026-02-02 | Initial specification |
 | 1.1.0 | 2026-04-17 | Defined strict server-freeze result cutoff for `match:ended`, clarified that kill ties remain shared placement, and documented frozen-result handling so late gameplay events cannot mutate final standings. |

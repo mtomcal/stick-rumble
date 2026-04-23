@@ -4,14 +4,17 @@ import {
   HEALTH_URL,
   clients,
   createClient,
+  connectClientsToRoom,
   delay,
   DEFAULT_TIMEOUT,
   DEFAULT_POLL_INTERVAL,
   verifyNoLingeringHandlers,
   setupIntegrationTest,
   cleanupIntegrationTest,
+  waitForSessionStatusState,
 } from './WebSocketClient.integration.helpers';
 import { WebSocketClient } from './WebSocketClient';
+import type { SessionStatusData } from '../../shared/types';
 
 describe('WebSocketClient.integration.helpers', () => {
   beforeEach(() => {
@@ -119,6 +122,99 @@ describe('WebSocketClient.integration.helpers', () => {
 
       // Should have waited at least 50ms (with small tolerance)
       expect(elapsed).toBeGreaterThanOrEqual(45);
+    });
+  });
+
+  describe('waitForSessionStatusState', () => {
+    function createMockClient() {
+      const handlers = new Map<string, Set<(data: unknown) => void>>();
+
+      return {
+        on: vi.fn((messageType: string, handler: (data: unknown) => void) => {
+          const set = handlers.get(messageType) ?? new Set();
+          set.add(handler);
+          handlers.set(messageType, set);
+        }),
+        off: vi.fn((messageType: string, handler: (data: unknown) => void) => {
+          const set = handlers.get(messageType);
+          if (!set) {
+            return;
+          }
+          set.delete(handler);
+          if (set.size === 0) {
+            handlers.delete(messageType);
+          }
+        }),
+        emit: (messageType: string, data: SessionStatusData) => {
+          handlers.get(messageType)?.forEach((handler) => handler(data));
+        },
+        getHandlerCount: (messageType: string) => handlers.get(messageType)?.size ?? 0,
+      };
+    }
+
+    it('should ignore non-matching session states until the expected state arrives', async () => {
+      const client = createMockClient();
+
+      const promise = waitForSessionStatusState(client as unknown as WebSocketClient, 'match_ready');
+
+      client.emit('session:status', {
+        state: 'waiting_for_players',
+        playerId: 'player-1',
+        displayName: 'Player',
+        joinMode: 'code',
+      });
+      expect(client.getHandlerCount('session:status')).toBe(1);
+
+      client.emit('session:status', {
+        state: 'match_ready',
+        playerId: 'player-1',
+        displayName: 'Player',
+        joinMode: 'code',
+        roomId: 'room-1',
+        mapId: 'default_office',
+      });
+
+      await expect(promise).resolves.toMatchObject({
+        state: 'match_ready',
+        roomId: 'room-1',
+      });
+      expect(client.getHandlerCount('session:status')).toBe(0);
+    });
+
+    it('should remove its handler when timing out', async () => {
+      vi.useFakeTimers();
+      const client = createMockClient();
+
+      const promise = waitForSessionStatusState(
+        client as unknown as WebSocketClient,
+        'match_ready',
+        { timeout: 100 }
+      );
+      const rejection = promise.catch((error) => error);
+
+      await vi.advanceTimersByTimeAsync(101);
+
+      const error = await rejection;
+      expect(error).toBeInstanceOf(Error);
+      expect(error.message).toBe(
+        'Timeout waiting for session:status in states [match_ready] after 100ms'
+      );
+      expect(client.getHandlerCount('session:status')).toBe(0);
+    });
+  });
+
+  describe('connectClientsToRoom', () => {
+    it('should reject when fewer than 2 clients are provided', async () => {
+      const client = {
+        connect: vi.fn(),
+        sendHello: vi.fn(),
+        on: vi.fn(),
+        off: vi.fn(),
+      };
+
+      await expect(connectClientsToRoom(client as unknown as WebSocketClient)).rejects.toThrow(
+        'connectClientsToRoom requires at least 2 clients to reach match_ready'
+      );
     });
   });
 
