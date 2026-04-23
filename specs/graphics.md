@@ -552,6 +552,7 @@ Melee attacks are rendered as **weapon-following swing motion** with a short tra
 **Swing Presentation Rules:**
 - The held weapon must visibly travel through a meaningful path in the player's hands
 - The trail follows the moving weapon tip / blade path rather than a fixed-radius arc centered on the body
+- The trail remains visually attached to the rendered weapon origin/pivot and may not float ahead of the weapon as a separate reach ring
 - A tiny anticipation before the forward sweep is allowed and encouraged for readability
 - The player body remains mostly stable; the arms and weapon carry the expressive motion
 - The local attacker may see an immediate preview swing, but remote players only see the server-confirmed swing
@@ -1327,7 +1328,7 @@ test "player renders all body parts":
 
 ---
 
-### TS-GFX-013: Melee arc renders as white stroke-only
+### TS-GFX-013: Melee swing trail renders as weapon-following stroke-only motion
 
 **Category**: Visual
 **Priority**: High
@@ -1336,10 +1337,10 @@ test "player renders all body parts":
 - Player performs melee attack
 
 **Expected Output:**
-- Arc is stroke-only (no fill), white color (0xFFFFFF)
-- Arc spans ±0.7 rad from aim direction
-- Weapon container rotates from -45° to +60° over 100ms (yoyo)
-- Arc fades in 200ms
+- Trail is stroke-only (no fill)
+- Trail follows the held weapon pivot/tip path rather than a player-centered range ring
+- Trail does not render as a floating reach arc ahead of the weapon
+- Bat reads heavier/wider than Katana
 
 ---
 
@@ -1552,6 +1553,7 @@ test "player renders all body parts":
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.5.2 | 2026-04-23 | Clarified melee swing presentation: the trail must stay attached to the rendered weapon origin/tip path and must not appear as a floating player-centered reach ring. |
 | 2.5.1 | 2026-04-22 | Merged the latest visual clarifications: local overhead readability keeps only `YOU` for the local player, melee presentation uses weapon-following swing motion and weapon-specific contact effects, and the live-player silhouette must still read as the authoritative 48x48 top-down footprint flush to blocker edges. |
 | 2.5.0 | 2026-04-22 | Merged the April visual clarifications: local overhead readability now keeps only `YOU` for the local player while remote players use a fixed `displayName` + health stack, and melee presentation now uses weapon-following swing motion with weapon-specific contact effects instead of the old debug-like arc/`X` grammar. |
 | 2.4.4 | 2026-04-22 | Updated live-player rendering to match the new 48x48 authoritative footprint. Preserved the true top-down stick-figure direction while giving the player more on-map presence. |

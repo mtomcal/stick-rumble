@@ -7,6 +7,54 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import Phaser from 'phaser';
 import { MeleeWeapon } from './MeleeWeapon';
 
+const WEAPON_ORIGIN_OFFSET = 10;
+const BAT_LENGTH = 50.5;
+const KATANA_LENGTH = 65;
+const HALF_ARC_RADIANS = (80 * Math.PI / 180) / 2;
+const TRAIL_SEGMENTS = 6;
+
+function getTrailStartPoint(
+  centerX: number,
+  centerY: number,
+  aimAngle: number,
+  weaponLength: number,
+  radiusMultiplier = 1
+) {
+  const pivotX = centerX + Math.cos(aimAngle) * WEAPON_ORIGIN_OFFSET;
+  const pivotY = centerY + Math.sin(aimAngle) * WEAPON_ORIGIN_OFFSET;
+  const radius = weaponLength * radiusMultiplier;
+  const startAngle = aimAngle - HALF_ARC_RADIANS;
+
+  return {
+    x: pivotX + Math.cos(startAngle) * radius,
+    y: pivotY + Math.sin(startAngle) * radius,
+  };
+}
+
+function getTrailPoints(
+  centerX: number,
+  centerY: number,
+  aimAngle: number,
+  weaponLength: number,
+  radiusMultiplier = 1
+) {
+  const pivotX = centerX + Math.cos(aimAngle) * WEAPON_ORIGIN_OFFSET;
+  const pivotY = centerY + Math.sin(aimAngle) * WEAPON_ORIGIN_OFFSET;
+  const radius = weaponLength * radiusMultiplier;
+  const startAngle = aimAngle - HALF_ARC_RADIANS;
+  const endAngle = aimAngle + HALF_ARC_RADIANS;
+
+  return Array.from({ length: TRAIL_SEGMENTS + 1 }, (_, index) => {
+    const t = index / TRAIL_SEGMENTS;
+    const angle = startAngle + (endAngle - startAngle) * t;
+
+    return {
+      x: pivotX + Math.cos(angle) * radius,
+      y: pivotY + Math.sin(angle) * radius,
+    };
+  });
+}
+
 describe('MeleeWeapon', () => {
   let scene: Phaser.Scene;
   let weapon: MeleeWeapon;
@@ -119,18 +167,22 @@ describe('MeleeWeapon', () => {
     it('should redraw an active swing at the new position', () => {
       const graphics = (weapon as any).graphics;
       weapon.startSwing(0);
-      graphics.arc.mockClear();
+      graphics.moveTo.mockClear();
+      graphics.lineTo.mockClear();
 
       weapon.setPosition(200, 300);
 
-      expect(graphics.arc).toHaveBeenCalledWith(
-        200,
-        300,
-        expect.any(Number),
-        expect.any(Number),
-        expect.any(Number),
-        false
-      );
+      const expectedPoints = getTrailPoints(200, 300, 0, BAT_LENGTH, 0.72);
+      const [moveX, moveY] = graphics.moveTo.mock.calls[0];
+      expect(graphics.moveTo).toHaveBeenCalledTimes(1);
+      expect(moveX).toBeCloseTo(expectedPoints[0].x, 5);
+      expect(moveY).toBeCloseTo(expectedPoints[0].y, 5);
+      expect(graphics.lineTo.mock.calls).toHaveLength(expectedPoints.length - 1);
+      expectedPoints.slice(1).forEach((point, index) => {
+        const [lineX, lineY] = graphics.lineTo.mock.calls[index];
+        expect(lineX).toBeCloseTo(point.x, 5);
+        expect(lineY).toBeCloseTo(point.y, 5);
+      });
     });
   });
 
@@ -184,40 +236,41 @@ describe('MeleeWeapon', () => {
       expect(graphics.fillStyle).not.toHaveBeenCalled();
     });
 
-    it('should render the full 80-degree bat-confirmed arc', () => {
+    it('should render the full 80-degree bat-confirmed trail from the held weapon path, not a player-centered range arc', () => {
       const graphics = (weapon as any).graphics;
-      weapon.showSwingAnimation(0);
+      weapon.confirmSwing(0);
       expect(graphics.setVisible).toHaveBeenCalledWith(true);
 
-      expect(graphics.arc).toHaveBeenCalledWith(
-        100, // x position
-        100, // y position
-        90,  // Bat confirmed radius
-        expect.any(Number),
-        expect.any(Number),
-        false
-      );
+      const points = getTrailPoints(100, 100, 0, BAT_LENGTH, 1);
+      const [moveX, moveY] = graphics.moveTo.mock.calls[0];
 
-      // Verify arc span is 80 degrees (80 * PI / 180 ≈ 1.3963 radians)
-      const arcCall = graphics.arc.mock.calls[0];
-      const startAngle = arcCall[3];
-      const endAngle = arcCall[4];
-      const arcSpan = endAngle - startAngle;
-      expect(arcSpan).toBeCloseTo(80 * Math.PI / 180, 5);
+      expect(moveX).toBeCloseTo(points[0].x, 5);
+      expect(moveY).toBeCloseTo(points[0].y, 5);
+      expect(graphics.arc).not.toHaveBeenCalled();
+      expect(graphics.lineTo.mock.calls).toHaveLength(points.length - 1);
+      points.slice(1).forEach((point, index) => {
+        const [lineX, lineY] = graphics.lineTo.mock.calls[index];
+        expect(lineX).toBeCloseTo(point.x, 5);
+        expect(lineY).toBeCloseTo(point.y, 5);
+      });
     });
 
-    it('should render the full 80-degree katana-confirmed arc with extended radius', () => {
+    it('should render the katana trail from the held weapon path with its extended tip radius', () => {
       const katana = new MeleeWeapon(scene, 100, 100, 'Katana');
       const graphics = (katana as any).graphics;
-      katana.showSwingAnimation(Math.PI / 4);
+      katana.confirmSwing(Math.PI / 4);
 
-      const arcCall = graphics.arc.mock.calls[0];
-      expect(arcCall[0]).toBe(100);
-      expect(arcCall[1]).toBe(100);
-      expect(arcCall[2]).toBeCloseTo(118.8, 5);
-      expect(arcCall[5]).toBe(false);
-      const arcSpan = arcCall[4] - arcCall[3];
-      expect(arcSpan).toBeCloseTo(80 * Math.PI / 180, 5);
+      const points = getTrailPoints(100, 100, Math.PI / 4, KATANA_LENGTH, 1.08);
+      const [moveX, moveY] = graphics.moveTo.mock.calls[0];
+      expect(moveX).toBeCloseTo(points[0].x, 5);
+      expect(moveY).toBeCloseTo(points[0].y, 5);
+      expect(graphics.arc).not.toHaveBeenCalled();
+      expect(graphics.lineTo.mock.calls).toHaveLength(points.length - 1);
+      points.slice(1).forEach((point, index) => {
+        const [lineX, lineY] = graphics.lineTo.mock.calls[index];
+        expect(lineX).toBeCloseTo(point.x, 5);
+        expect(lineY).toBeCloseTo(point.y, 5);
+      });
     });
 
     it('should clear graphics before each render', () => {
@@ -233,34 +286,45 @@ describe('MeleeWeapon', () => {
       const graphics = (weapon as any).graphics;
       expect(graphics.depth).toBe(100);
     });
+
+    it('should redraw confirmed geometry using the server-corrected aim angle after a preview', () => {
+      const graphics = (weapon as any).graphics;
+      weapon.startPreviewSwing(0);
+      graphics.moveTo.mockClear();
+      graphics.lineTo.mockClear();
+
+      weapon.confirmSwing(Math.PI / 2);
+
+      const start = getTrailStartPoint(100, 100, Math.PI / 2, BAT_LENGTH, 1);
+      const [moveX, moveY] = graphics.moveTo.mock.calls[0];
+      expect(moveX).toBeCloseTo(start.x, 5);
+      expect(moveY).toBeCloseTo(start.y, 5);
+    });
   });
 
-  describe('TS-GFX-013: Melee arc renders with weapon-specific readability styling', () => {
-    it('should render Bat arc with confirmed bat stroke params', () => {
+  describe('TS-GFX-013: Melee trail renders with weapon-specific readability styling', () => {
+    it('should render Bat trail with confirmed bat stroke params', () => {
       const bat = new MeleeWeapon(scene, 50, 75, 'Bat');
       const graphics = (bat as any).graphics;
       bat.showSwingAnimation(Math.PI);
 
       expect(graphics.lineStyle).toHaveBeenCalledWith(7, 0xfff2bf, 0.85);
-      expect(graphics.arc).toHaveBeenCalledWith(
-        50, 75, 90,
-        expect.any(Number), expect.any(Number), false
-      );
+      expect(graphics.moveTo).toHaveBeenCalledTimes(1);
+      expect(graphics.lineTo.mock.calls.length).toBeGreaterThan(2);
+      expect(graphics.arc).not.toHaveBeenCalled();
       expect(graphics.strokePath).toHaveBeenCalledTimes(1);
       expect(graphics.fillPath).not.toHaveBeenCalled();
     });
 
-    it('should render Katana arc with confirmed katana stroke params', () => {
+    it('should render Katana trail with confirmed katana stroke params', () => {
       const katana = new MeleeWeapon(scene, 200, 150, 'Katana');
       const graphics = (katana as any).graphics;
       katana.showSwingAnimation(0);
 
       expect(graphics.lineStyle).toHaveBeenCalledWith(5, 0xf4fbff, 0.92);
-      const arcCall = graphics.arc.mock.calls[0];
-      expect(arcCall[0]).toBe(200);
-      expect(arcCall[1]).toBe(150);
-      expect(arcCall[2]).toBeCloseTo(118.8, 5);
-      expect(arcCall[5]).toBe(false);
+      expect(graphics.moveTo).toHaveBeenCalledTimes(1);
+      expect(graphics.lineTo.mock.calls.length).toBeGreaterThan(2);
+      expect(graphics.arc).not.toHaveBeenCalled();
       expect(graphics.strokePath).toHaveBeenCalledTimes(1);
       expect(graphics.fillPath).not.toHaveBeenCalled();
     });

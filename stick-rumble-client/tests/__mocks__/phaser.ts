@@ -16,6 +16,7 @@ class MockGraphics {
   strokePath = vi.fn();
   fillPath = vi.fn();
   moveTo = vi.fn();
+  lineTo = vi.fn();
   closePath = vi.fn();
   setVisible = vi.fn((visible: boolean) => {
     this._visible = visible;

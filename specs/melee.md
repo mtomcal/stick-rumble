@@ -570,6 +570,8 @@ The melee attack is presented as a **weapon-following swing motion**, not a lite
 - A whiff still shows swing motion, but **no** contact effect
 - A confirmed hit spawns a separate world-space contact effect at each victim's contact point
 - The swing trail follows the weapon's actual animated path (bat head / blade path), not a fixed-radius arc centered on the player
+- The swing trail stays visually attached to the held weapon pivot and tip path so the sweep reads as the bat or blade moving through space
+- The swing trail must not appear as a large player-centered radius or ring that floats ahead of the held weapon and overstates reach
 - The player body remains mostly stable; the expressive motion lives in the arms and weapon
 
 **Weapon feel by type:**
@@ -1080,6 +1082,7 @@ func TestPerformMeleeAttack_BatHitsSingleTarget(t *testing.T) {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.2.3 | 2026-04-23 | Clarified swing readability: the melee trail must stay attached to the held weapon pivot/tip path and must not render as an oversized player-centered reach arc that floats ahead of the weapon. |
 | 1.2.2 | 2026-04-22 | Merged the melee presentation and wall-occlusion updates: swings use weapon-following motion with per-victim contact effects, while authoritative hit validation still requires strict boundary-inclusive line of sight and stops bat knockback at the first blocking contact. |
 | 1.2.1 | 2026-04-21 | Clarified strict line-of-sight requirements for melee wall blocking: (1) target's center point must have unobstructed path or attack fails immediately, (2) majority of hitbox points (5/9) must be reachable including center + at least 4 of 8 edge/corner points, (3) segment geometry from attacker center to target points, (4) boundary-inclusive intersection (touching wall = blocked), (5) first-contact resolution for multiple obstacles, (6) short-circuit at majority for efficiency. |
 | 1.2.0 | 2026-04-17 | Reframed melee presentation around weapon-following swing motion instead of a visible AoE arc. Added hybrid local-preview/server-confirmed swing behavior, per-victim weapon-specific contact effects, whiff-vs-hit visual grammar, wall-blocked melee validation, barrier-stopped bat knockback, and blocked-swing cooldown consumption. |

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { getWeaponBarrelLength } from './WeaponGeometry';
 
 /**
  * Weapon stats from server implementation
@@ -28,6 +29,9 @@ interface SwingStyle {
   fadeDuration: number;
   radiusMultiplier: number;
 }
+
+const HELD_WEAPON_OFFSET = 10;
+const TRAIL_SEGMENTS = 6;
 
 const PREVIEW_STYLES: Record<string, SwingStyle> = {
   bat: { color: 0xf6d365, width: 4, alpha: 0.4, fadeDuration: 90, radiusMultiplier: 0.72 },
@@ -140,13 +144,29 @@ export class MeleeWeapon {
 
     const arcRadians = (this.stats.arcDegrees * Math.PI) / 180;
     const halfArc = arcRadians / 2;
-    const radius = this.stats.range * style.radiusMultiplier;
+    const pivotX = this.x + Math.cos(aimAngle) * HELD_WEAPON_OFFSET;
+    const pivotY = this.y + Math.sin(aimAngle) * HELD_WEAPON_OFFSET;
+    const radius = getWeaponBarrelLength(this.weaponType) * style.radiusMultiplier;
     const startAngle = aimAngle - halfArc;
     const endAngle = aimAngle + halfArc;
 
     this.graphics.lineStyle(style.width, style.color, style.alpha);
     this.graphics.beginPath();
-    this.graphics.arc(this.x, this.y, radius, startAngle, endAngle, false);
+
+    for (let index = 0; index <= TRAIL_SEGMENTS; index += 1) {
+      const t = index / TRAIL_SEGMENTS;
+      const angle = startAngle + (endAngle - startAngle) * t;
+      const pointX = pivotX + Math.cos(angle) * radius;
+      const pointY = pivotY + Math.sin(angle) * radius;
+
+      if (index === 0) {
+        this.graphics.moveTo(pointX, pointY);
+        continue;
+      }
+
+      this.graphics.lineTo(pointX, pointY);
+    }
+
     this.graphics.strokePath();
   }
 

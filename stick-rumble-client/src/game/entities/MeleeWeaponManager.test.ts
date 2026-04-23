@@ -8,26 +8,49 @@ import { MeleeWeaponManager } from './MeleeWeaponManager';
 describe('MeleeWeaponManager', () => {
   let scene: Phaser.Scene;
   let manager: MeleeWeaponManager;
+  let createdGraphics: Array<{
+    clear: ReturnType<typeof vi.fn>;
+    lineStyle: ReturnType<typeof vi.fn>;
+    fillStyle: ReturnType<typeof vi.fn>;
+    beginPath: ReturnType<typeof vi.fn>;
+    moveTo: ReturnType<typeof vi.fn>;
+    lineTo: ReturnType<typeof vi.fn>;
+    arc: ReturnType<typeof vi.fn>;
+    closePath: ReturnType<typeof vi.fn>;
+    strokePath: ReturnType<typeof vi.fn>;
+    fillPath: ReturnType<typeof vi.fn>;
+    destroy: ReturnType<typeof vi.fn>;
+    setVisible: ReturnType<typeof vi.fn>;
+    setDepth: ReturnType<typeof vi.fn>;
+    setAlpha: ReturnType<typeof vi.fn>;
+  }>;
+
+  const createGraphics = () => ({
+    clear: vi.fn().mockReturnThis(),
+    lineStyle: vi.fn().mockReturnThis(),
+    fillStyle: vi.fn().mockReturnThis(),
+    beginPath: vi.fn().mockReturnThis(),
+    moveTo: vi.fn().mockReturnThis(),
+    lineTo: vi.fn().mockReturnThis(),
+    arc: vi.fn().mockReturnThis(),
+    closePath: vi.fn().mockReturnThis(),
+    strokePath: vi.fn().mockReturnThis(),
+    fillPath: vi.fn().mockReturnThis(),
+    destroy: vi.fn(),
+    setVisible: vi.fn().mockReturnThis(),
+    setDepth: vi.fn().mockReturnThis(),
+    setAlpha: vi.fn().mockReturnThis(),
+  });
 
   beforeEach(() => {
+    createdGraphics = [];
     // Create a minimal scene mock
     scene = {
       add: {
-        graphics: vi.fn().mockReturnValue({
-          clear: vi.fn().mockReturnThis(),
-          lineStyle: vi.fn().mockReturnThis(),
-          fillStyle: vi.fn().mockReturnThis(),
-          beginPath: vi.fn().mockReturnThis(),
-          moveTo: vi.fn().mockReturnThis(),
-          lineTo: vi.fn().mockReturnThis(),
-          arc: vi.fn().mockReturnThis(),
-          closePath: vi.fn().mockReturnThis(),
-          strokePath: vi.fn().mockReturnThis(),
-          fillPath: vi.fn().mockReturnThis(),
-          destroy: vi.fn(),
-          setVisible: vi.fn().mockReturnThis(),
-          setDepth: vi.fn().mockReturnThis(),
-          setAlpha: vi.fn().mockReturnThis(),
+        graphics: vi.fn().mockImplementation(() => {
+          const graphics = createGraphics();
+          createdGraphics.push(graphics);
+          return graphics;
         }),
       },
       tweens: {
@@ -110,12 +133,24 @@ describe('MeleeWeaponManager', () => {
       const position = { x: 100, y: 200 };
 
       manager.createWeapon(playerId, 'Bat', position);
-      const firstGraphics = scene.add.graphics();
+      const firstGraphics = createdGraphics[0];
 
       manager.createWeapon(playerId, 'Pistol', position); // Switching to non-melee
 
       expect(firstGraphics.destroy).toHaveBeenCalled();
       expect(manager.hasWeapon(playerId)).toBe(false);
+    });
+
+    it('should reuse the same weapon instance when syncing the same melee type', () => {
+      const playerId = 'player-1';
+      manager.createWeapon(playerId, 'Bat', { x: 100, y: 200 });
+
+      const firstWeapon = (manager as any).weapons.get(playerId);
+      manager.syncWeapon(playerId, 'Bat', { x: 150, y: 250 });
+      const secondWeapon = (manager as any).weapons.get(playerId);
+
+      expect(secondWeapon).toBe(firstWeapon);
+      expect(createdGraphics).toHaveLength(1);
     });
   });
 
@@ -153,6 +188,18 @@ describe('MeleeWeaponManager', () => {
 
       expect(result).toBe(false);
     });
+
+    it('should upgrade an existing preview to a confirmed swing', () => {
+      const playerId = 'player-1';
+      const weapon = (manager as any).weapons.get(playerId);
+      const confirmSpy = vi.spyOn(weapon, 'confirmSwing');
+
+      manager.startPreviewSwing(playerId, 0);
+      const result = manager.confirmSwing(playerId, Math.PI / 2);
+
+      expect(result).toBe(true);
+      expect(confirmSpy).toHaveBeenCalledWith(Math.PI / 2);
+    });
   });
 
   describe('Position updates', () => {
@@ -161,11 +208,12 @@ describe('MeleeWeaponManager', () => {
       const initialPos = { x: 100, y: 200 };
       manager.createWeapon(playerId, 'Bat', initialPos);
 
+      const weapon = (manager as any).weapons.get(playerId);
+      const setPositionSpy = vi.spyOn(weapon, 'setPosition');
       const newPos = { x: 150, y: 250 };
       manager.updatePosition(playerId, newPos);
 
-      // Position update should not throw
-      expect(() => manager.update()).not.toThrow();
+      expect(setPositionSpy).toHaveBeenCalledWith(150, 250);
     });
 
     it('should handle position updates for non-existent weapons gracefully', () => {
@@ -184,10 +232,17 @@ describe('MeleeWeaponManager', () => {
       manager.createWeapon(player1, 'Bat', { x: 100, y: 200 });
       manager.createWeapon(player2, 'Katana', { x: 150, y: 250 });
 
+      const firstWeapon = (manager as any).weapons.get(player1);
+      const secondWeapon = (manager as any).weapons.get(player2);
+      const firstUpdateSpy = vi.spyOn(firstWeapon, 'update');
+      const secondUpdateSpy = vi.spyOn(secondWeapon, 'update');
       manager.startSwing(player1, 0);
       manager.startSwing(player2, Math.PI / 2);
 
-      expect(() => manager.update()).not.toThrow();
+      manager.update();
+
+      expect(firstUpdateSpy).toHaveBeenCalledTimes(1);
+      expect(secondUpdateSpy).toHaveBeenCalledTimes(1);
     });
 
     it('should handle swing completion via tween onComplete', () => {
@@ -212,9 +267,7 @@ describe('MeleeWeaponManager', () => {
 
       manager.createWeapon(player1, 'Bat', { x: 100, y: 200 });
       manager.createWeapon(player2, 'Katana', { x: 150, y: 250 });
-
-      const graphics1 = scene.add.graphics();
-      const graphics2 = scene.add.graphics();
+      const [graphics1, graphics2] = createdGraphics;
 
       manager.destroy();
 
@@ -245,7 +298,7 @@ describe('MeleeWeaponManager', () => {
     it('should destroy weapon graphics on removal', () => {
       const playerId = 'player-1';
       manager.createWeapon(playerId, 'Bat', { x: 100, y: 200 });
-      const graphics = scene.add.graphics();
+      const graphics = createdGraphics[0];
 
       manager.removeWeapon(playerId);
 
