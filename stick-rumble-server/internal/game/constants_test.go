@@ -17,8 +17,8 @@ func TestConstants(t *testing.T) {
 		{"Deceleration", Deceleration, 6000.0},
 		{"ArenaWidth", ArenaWidth, 1920.0},
 		{"ArenaHeight", ArenaHeight, 1080.0},
-		{"PlayerWidth", PlayerWidth, 32.0},
-		{"PlayerHeight", PlayerHeight, 64.0},
+		{"PlayerWidth", PlayerWidth, 48.0},
+		{"PlayerHeight", PlayerHeight, 48.0},
 	}
 
 	for _, tt := range tests {

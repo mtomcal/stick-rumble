@@ -1,7 +1,7 @@
 # Arena
 
-> **Spec Version**: 2.0.0
-> **Last Updated**: 2026-04-07
+> **Spec Version**: 2.1.3
+> **Last Updated**: 2026-04-22
 > **Depends On**: [constants.md](constants.md), [maps.md](maps.md)
 > **Depended By**: [player.md](player.md), [movement.md](movement.md), [dodge-roll.md](dodge-roll.md), [weapons.md](weapons.md), [shooting.md](shooting.md), [hit-detection.md](hit-detection.md), [graphics.md](graphics.md)
 
@@ -41,8 +41,8 @@ All arena-adjacent tuning values are defined in [constants.md](constants.md). Th
 
 | Constant | Value | Unit | Description |
 |----------|-------|------|-------------|
-| PLAYER_WIDTH | 32 | px | Player hitbox width for clamping and obstacle collision |
-| PLAYER_HEIGHT | 64 | px | Player hitbox height for clamping and obstacle collision |
+| PLAYER_WIDTH | 48 | px | Player hitbox width for clamping and obstacle collision |
+| PLAYER_HEIGHT | 48 | px | Player hitbox height for clamping and obstacle collision |
 | WEAPON_PICKUP_RADIUS | 32 | px | Distance for weapon crate pickup |
 | PROJECTILE_MAX_RANGE | 800 | px | Maximum projectile travel distance |
 
@@ -92,12 +92,12 @@ Players use an axis-aligned bounding box for collision and boundary enforcement.
 
 | Property | Formula |
 |----------|---------|
-| Half-width | PLAYER_WIDTH / 2 = 16 px |
-| Half-height | PLAYER_HEIGHT / 2 = 32 px |
-| Left edge | x - 16 |
-| Right edge | x + 16 |
-| Top edge | y - 32 |
-| Bottom edge | y + 32 |
+| Half-width | PLAYER_WIDTH / 2 = 24 px |
+| Half-height | PLAYER_HEIGHT / 2 = 24 px |
+| Left edge | x - 24 |
+| Right edge | x + 24 |
+| Top edge | y - 24 |
+| Bottom edge | y + 24 |
 
 ### Arena Obstacle
 
@@ -137,6 +137,9 @@ Movement-blocking obstacles are part of authoritative arena collision in v1.
 - players may not occupy movement-blocking obstacle space
 - projectiles may not pass through projectile-blocking obstacles
 - LOS queries treat LOS-blocking obstacles as opaque
+- authoritative blocking geometry is also a hard stop for hitscan traces, melee reachability checks, and forced movement such as knockback
+- along any attempted path, the first blocking contact wins and systems may not tunnel through or resolve beyond that contact point
+- for live-player contact readability, the authoritative obstacle rectangle edge is the real blocking edge; rendering must not imply a different collision edge
 
 For the first recreated office map, every obstacle blocks movement, projectiles, and line of sight.
 
@@ -147,7 +150,16 @@ Projectiles are destroyed when either:
 - they collide with a projectile-blocking obstacle
 - they exceed their weapon range or lifetime rules
 
-Projectile out-of-bounds checks use the selected map width and height.
+Projectile out-of-bounds checks use the selected map width and height. Projectile-wall resolution must use the swept path from the previous position to the candidate position for the frame, not only the end-point sample. When that swept path intersects blocking geometry, the projectile terminates at the first blocking contact point and must not continue visually or physically past the barrier.
+
+### Shared Barrier Contract
+
+The selected map's authoritative blocking geometry is the shared source of truth for all spatial systems.
+
+- movement, projectile travel, hitscan traces, melee reachability, LOS, and forced movement all resolve against the same map-authored blockers
+- client prediction and local presentation may mirror barrier checks for responsiveness, but the server remains authoritative for whether a barrier stopped the interaction
+- if a barrier blocks the path before the intended destination or victim, everything beyond that first blocking contact is treated as unreachable for that resolution step
+- the live player's canonical visible footprint from [graphics.md](graphics.md) must read flush to that same authoritative blocker edge within the visual tolerance defined there
 
 ### Dodge Roll Boundary Termination
 
@@ -204,7 +216,7 @@ Then the player center is clamped to the maximum valid X
 
 Given a movement-blocking obstacle from the selected map  
 When a player attempts to move into it  
-Then authoritative movement resolution prevents overlap
+Then authoritative movement resolution prevents overlap and the obstacle's rectangle edge remains the real blocking edge for live-player contact reads
 
 ### TS-ARENA-004: projectile is destroyed by projectile-blocking obstacle
 
@@ -223,3 +235,32 @@ Then it is destroyed and does not continue through the geometry
 Given a rolling player intersecting blocking geometry  
 When the roll movement is stopped by collision  
 Then the roll ends immediately and cooldown still applies
+
+### TS-ARENA-006: first blocking contact wins for shared barrier resolution
+
+**Category:** Integration  
+**Priority:** Critical
+
+Given authoritative blocking geometry between an origin and a later destination or victim  
+When a movement, attack, LOS, or forced-movement path reaches the barrier first  
+Then resolution stops at that first blocking contact and nothing beyond it is treated as reachable in that step
+
+### TS-ARENA-007: authoritative obstacle edge is the visual contact edge for live players
+
+**Category:** Integration  
+**Priority:** High
+
+Given a live player rendered flush against a movement-blocking obstacle  
+When the player body reaches north, east, south, or west contact against that obstacle  
+Then the visible contact read is anchored to the obstacle's authoritative rectangle edge rather than to decorative stroke or shading
+
+---
+
+## Changelog
+
+| Version | Date | Changes |
+|---------|------|---------|
+| 2.1.3 | 2026-04-22 | Updated the authoritative player bounding box from 32x32 to 48x48. Arena clamping and obstacle collision examples now use a 24px half-size. |
+| 2.1.2 | 2026-04-22 | Updated the authoritative player bounding box to 32x32. Arena clamping and obstacle collision examples now use a 16px half-height instead of 32px. |
+| 2.1.1 | 2026-04-22 | Clarified that the obstacle rectangle edge is the real blocking edge for live-player contact reads. Cross-referenced the canonical visible-footprint contract from `graphics.md` and added TS-ARENA-007 for visual edge alignment. |
+| 2.1.0 | 2026-04-17 | Introduced map-selected arena geometry as the authoritative source for movement bounds, obstacle collision, LOS blocking, projectile blocking, and spawn-space validation. Added shared barrier contract and first-blocking-contact rule across movement, projectiles, melee, LOS, and forced movement. |

@@ -1,7 +1,7 @@
 # Hit Detection
 
-> **Spec Version**: 1.1.0
-> **Last Updated**: 2026-02-15
+> **Spec Version**: 1.3.2
+> **Last Updated**: 2026-04-22
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [shooting.md](shooting.md), [arena.md](arena.md), [messages.md](messages.md)
 > **Depended By**: [match.md](match.md), [client-architecture.md](client-architecture.md), [server-architecture.md](server-architecture.md)
 
@@ -17,8 +17,8 @@ The hit detection system is the collision detection and damage application layer
 3. **Fairness**: Lag compensation rewinds positions using each player's RTT
 
 The system supports two collision modes:
-- **Projectile collision** (Uzi, AK47, Shotgun): AABB point-vs-rectangle check each tick
-- **Hitscan collision** (Pistol): Ray-circle intersection with lag-compensated position rewinding
+- **Projectile collision** (Uzi, AK47, Shotgun): swept-path first-contact resolution against blocking geometry and authoritative player hit volume
+- **Hitscan collision** (Pistol): lag-compensated ray first-contact resolution against blocking geometry and authoritative player hit volume
 
 The system runs at **60 Hz** (every 16.67ms) as part of the main game tick, checking all active projectiles against all alive players. When a hit is detected, damage is applied, messages are broadcast, and death/kill tracking is updated.
 
@@ -50,8 +50,8 @@ All hit detection constants are defined in [constants.md](constants.md). Key val
 
 | Constant | Value | Unit | Description |
 |----------|-------|------|-------------|
-| PLAYER_WIDTH | 32 | px | Player hitbox width |
-| PLAYER_HEIGHT | 64 | px | Player hitbox height |
+| PLAYER_WIDTH | 48 | px | Player hitbox width |
+| PLAYER_HEIGHT | 48 | px | Player hitbox height |
 | PROJECTILE_MAX_LIFETIME | 1000 | ms | Projectile auto-expire after 1 second |
 | PROJECTILE_MAX_RANGE | 800 | px | Projectile ignored after traveling 800px |
 | SPAWN_INVULNERABILITY_DURATION | 2000 | ms | Post-respawn invulnerability |
@@ -122,19 +122,19 @@ interface HitEvent {
 
 ```
 Hitbox dimensions:
-- Width: 32 pixels
-- Height: 64 pixels
+- Width: 48 pixels
+- Height: 48 pixels
 - Center: Player position (x, y)
 
 Boundaries:
-- Left:   x - 16
-- Right:  x + 16
-- Top:    y - 32
-- Bottom: y + 32
+- Left:   x - 24
+- Right:  x + 24
+- Top:    y - 24
+- Bottom: y + 24
 ```
 
 **Why AABB instead of circle collision?**
-1. **Stick figure shape**: Players are tall and thin (32x64), poorly approximated by a circle
+1. **Top-down footprint**: Players still use a box-shaped gameplay footprint, and an AABB keeps the overhead 48x48 body exact against world geometry
 2. **Performance**: AABB collision is faster than circle-rectangle
 3. **Intuitive hitbox**: Matches the visual stick figure silhouette
 
@@ -242,8 +242,12 @@ function checkProjectilePlayerCollision(projectile, player):
     if distanceTraveled > PROJECTILE_MAX_RANGE:
         return false
 
-    // Check 6: AABB collision test
-    return aabbCollision(projectile.position, player.position, player.hitbox)
+    // Check 6: Projectile path must reach target before blocking geometry
+    if blockingGeometryIntersectsBeforeTarget(projectile.previousPosition, projectile.position, player.hitbox):
+        return false
+
+    // Check 7: Target hit volume intersection
+    return sweptHitboxIntersection(projectile.previousPosition, projectile.position, player.hitbox)
 ```
 
 **Go:**
@@ -275,54 +279,27 @@ func (p *Physics) CheckProjectilePlayerCollision(proj *Projectile, player *Playe
         return false
     }
 
-    // Check 6: AABB collision
-    playerPos := player.GetPosition()
-    halfWidth := PlayerWidth / 2   // 16 pixels
-    halfHeight := PlayerHeight / 2 // 32 pixels
+    // Check 6: The swept path to the player must not be blocked first
+    if blockedBeforeTarget(proj.PreviousPosition, proj.Position, player.Hitbox) {
+        return false
+    }
 
-    return math.Abs(proj.Position.X-playerPos.X) < halfWidth &&
-           math.Abs(proj.Position.Y-playerPos.Y) < halfHeight
+    // Check 7: Swept intersection against the authoritative player hit volume
+    return sweptHitboxIntersection(proj.PreviousPosition, proj.Position, player.Hitbox)
 }
 ```
 
-### AABB Collision Algorithm
+### Authoritative Target Hit Volume
 
-The collision test uses a simple axis-aligned bounding box check. A projectile (treated as a point) hits if it's within the player's rectangular hitbox.
+The player hitbox remains the authoritative target volume, but attacks must resolve continuously against that volume rather than relying on an end-of-frame point sample.
 
-**Why point-vs-rectangle instead of circle-vs-rectangle?**
-- Projectiles are small (4px diameter) relative to movement speed
-- Point collision is faster to calculate
-- Visual tracer gives perceived "thickness" without needing circle collision
+**Required outcome:**
+- a projectile or hitscan ray can hit any exposed portion of the 48x48 player hitbox
+- blocking geometry protects only the covered portion of that hitbox
+- if a barrier is reached before the target hit volume, the attack is blocked
+- if an exposed portion of the hit volume is reached before the barrier, the hit is valid
 
-**Pseudocode:**
-```
-function aabbCollision(point, center, halfSize):
-    dx = abs(point.x - center.x)
-    dy = abs(point.y - center.y)
-    return dx < halfSize.x AND dy < halfSize.y
-```
-
-**Go:**
-```go
-func aabbCollision(pointX, pointY, centerX, centerY, halfWidth, halfHeight float64) bool {
-    dx := math.Abs(pointX - centerX)
-    dy := math.Abs(pointY - centerY)
-    return dx < halfWidth && dy < halfHeight
-}
-```
-
-**TypeScript:**
-```typescript
-function aabbCollision(
-  pointX: number, pointY: number,
-  centerX: number, centerY: number,
-  halfWidth: number, halfHeight: number
-): boolean {
-  const dx = Math.abs(pointX - centerX);
-  const dy = Math.abs(pointY - centerY);
-  return dx < halfWidth && dy < halfHeight;
-}
-```
+Implementations may use segment-vs-AABB, ray-vs-AABB, or any equivalent continuous intersection method so long as those player-facing outcomes hold.
 
 ### Damage Application
 
@@ -521,7 +498,7 @@ func (p *PlayerState) IsInvincibleFromRoll() bool {
 
 ### Hitscan Hit Detection (Pistol)
 
-Hitscan weapons use ray-circle collision with lag compensation, processed in `gameserver.go:processHitscanShot()`.
+Hitscan weapons use lag-compensated first-contact ray resolution against blocking geometry and the target's authoritative hit volume.
 
 **Why hitscan for Pistol?** The Pistol is configured as `isHitscan: true` in `weapon-configs.json`. Hitscan means the bullet hits instantly (no travel time), requiring a raycast from the shooter's position in the aim direction.
 
@@ -536,7 +513,10 @@ function processHitscanShot(shooterID, aimAngle, clientTimestamp):
     rewindDuration = min(shooterRTT, 150ms)
     queryTime = now() - rewindDuration
 
-    // 3. Raycast against all alive players at REWOUND positions
+    // 3. Resolve the first blocking barrier along the ray
+    barrierDistance = nearestBlockingIntersection(origin, aimAngle, maxRange, queryTime)
+
+    // 4. Raycast against all alive players at REWOUND positions
     closestHit = nil
     closestDistance = infinity
 
@@ -549,22 +529,22 @@ function processHitscanShot(shooterID, aimAngle, clientTimestamp):
         victimPosition = positionHistory.GetPositionAt(playerID, queryTime)
         if not found: use current position as fallback
 
-        // Ray-circle intersection
-        if raycastHit(shooterPos, aimAngle, victimPosition, radius=16px, maxRange):
+        // Ray-hitbox intersection before the first barrier
+        if raycastHitsTargetVolumeBeforeBarrier(shooterPos, aimAngle, victimHitbox, barrierDistance):
             if hitDistance < closestDistance:
                 closestHit = player
                 closestDistance = hitDistance
 
-    // 4. Apply damage to closest hit
+    // 5. Apply damage to closest hit
     if closestHit != nil:
         applyDamage(closestHit, weaponDamage, shooterID)
 ```
 
-**Ray-circle intersection** (`raycastHit()`):
-1. Project victim center onto ray direction vector
-2. If projection is negative or beyond max range: miss
-3. Calculate perpendicular distance from ray to victim center
-4. If distance ≤ radius (PlayerWidth/2 = 16px): hit
+**First-contact cover requirement:**
+1. Determine the nearest blocking barrier along the ray
+2. Test each rewound target hitbox against the same ray
+3. Only contacts that occur before the blocking barrier are valid
+4. Partial cover is respected: exposed portions of the target hitbox remain hittable, covered portions do not
 
 **Why 150ms cap?** Prevents players with extremely high latency from "seeing the past" too far back. At 150ms, positions are at most 150ms stale — beyond that, the advantage becomes unfair to other players.
 
@@ -887,7 +867,7 @@ func TestDirectHit(t *testing.T) {
 **Priority**: High
 
 **Preconditions:**
-- Player at position (500, 500) with 32x64 hitbox
+- Player at position (500, 500) with 48x48 hitbox
 - Projectile at position (515, 530) (just inside right-bottom edge)
 
 **Input:**
@@ -1250,12 +1230,63 @@ func TestProjectileOutOfBounds(t *testing.T) {
 }
 ```
 
+### TS-HIT-015: hitscan cannot register through blocking geometry
+
+**Category**: Integration
+**Priority**: Critical
+
+**Preconditions:**
+- Shooter and victim are aligned on a hitscan line
+- A visible blocking wall lies between them
+
+**Input:**
+- Process a hitscan shot from shooter toward victim
+
+**Expected Output:**
+- No damage is applied to the victim
+- The ray resolves at the wall, not the victim
+
+### TS-HIT-016: partially exposed target remains hittable on exposed portion only
+
+**Category**: Integration
+**Priority**: High
+
+**Preconditions:**
+- Victim is partially behind cover
+- Some portion of the authoritative 48x48 hitbox remains exposed before the first barrier contact
+
+**Input:**
+- Fire a projectile or hitscan attack at the exposed side
+
+**Expected Output:**
+- The exposed portion can be hit
+- Cover still protects the covered portion
+
+### TS-HIT-017: projectile path blocked by wall before target does not damage target
+
+**Category**: Integration
+**Priority**: Critical
+
+**Preconditions:**
+- Projectile path toward a victim intersects a visible blocking wall first
+
+**Input:**
+- Advance projectile resolution along the swept path
+
+**Expected Output:**
+- First contact is the wall
+- Victim behind the wall is not damaged
+- Projectile is removed at the wall contact
+
 ---
 
 ## Changelog
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.3.2 | 2026-04-22 | Updated the authoritative player hitbox from 32x32 to 48x48. Revised the hitbox boundaries and rationale to match the larger overhead player footprint. |
+| 1.3.1 | 2026-04-22 | Updated the authoritative player hitbox from 32x64 to 32x32. Revised the hitbox boundaries and rationale to match the overhead player footprint. |
+| 1.3.0 | 2026-04-17 | Reframed hit detection around continuous first-contact barrier resolution: projectiles and hitscan now resolve against blocking geometry before target hit volume, partial cover is defined against the authoritative 32x64 hitbox instead of a center-point approximation, and new acceptance scenarios cover wall-blocked hitscan, partial exposure, and projectile-first wall contact. |
 | 1.2.0 | 2026-02-18 | Art style alignment: Added client-side sections for Damage Numbers (#FF4444, float-and-fade), Hit Direction Indicators (#CC3333 chevrons), Blood Particle Effects (#CC3333), and Damage Screen Flash (#FF0000 overlay). |
 | 1.1.3 | 2026-02-16 | Fixed hitscan pseudocode — hitscan does NOT check `IsInvulnerable` or `IsInvincibleFromRoll()` (unlike projectile collision). Invulnerable/rolling players can be hit by hitscan. |
 | 1.1.2 | 2026-02-16 | Fixed client `handleHitConfirmed` — only calls `this.ui.showHitMarker()`, no `audioManager.playHitmarker()` (audio is TODO) |

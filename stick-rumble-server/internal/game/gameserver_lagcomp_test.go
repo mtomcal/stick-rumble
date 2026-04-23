@@ -9,6 +9,7 @@ import (
 func TestHitscanWeapon_LagCompensation(t *testing.T) {
 	clock := NewManualClock(time.Now())
 	gs := NewGameServerWithClock(nil, clock)
+	setGameServerOpenMap(gs)
 
 	shooterID := "shooter"
 	victimID := "victim"
@@ -62,6 +63,7 @@ func TestHitscanWeapon_LagCompensation(t *testing.T) {
 func TestHitscanWeapon_MaxRewindClamp(t *testing.T) {
 	clock := NewManualClock(time.Now())
 	gs := NewGameServerWithClock(nil, clock)
+	setGameServerOpenMap(gs)
 
 	shooterID := "shooter"
 	victimID := "victim"
@@ -112,6 +114,7 @@ func TestHitscanWeapon_MaxRewindClamp(t *testing.T) {
 func TestProjectileWeapon_NoLagCompensation(t *testing.T) {
 	clock := NewManualClock(time.Now())
 	gs := NewGameServerWithClock(nil, clock)
+	setGameServerOpenMap(gs)
 
 	shooterID := "shooter"
 
@@ -156,6 +159,7 @@ func TestProjectileWeapon_NoLagCompensation(t *testing.T) {
 func TestProjectileWeapon_SpawnsFromBarrelOrigin(t *testing.T) {
 	clock := NewManualClock(time.Now())
 	gs := NewGameServerWithClock(nil, clock)
+	setGameServerOpenMap(gs)
 
 	shooterID := "shooter"
 	gs.AddPlayer(shooterID)
@@ -260,6 +264,7 @@ func TestRaycastHit_OutOfRange(t *testing.T) {
 func TestHitscanShoot_SkipsDeadPlayers(t *testing.T) {
 	clock := NewManualClock(time.Now())
 	gs := NewGameServerWithClock(nil, clock)
+	setGameServerOpenMap(gs)
 
 	shooterID := "shooter"
 	deadVictimID := "dead-victim"
@@ -293,6 +298,7 @@ func TestHitscanShoot_SkipsDeadPlayers(t *testing.T) {
 func TestHitscanShoot_SkipsShooter(t *testing.T) {
 	clock := NewManualClock(time.Now())
 	gs := NewGameServerWithClock(nil, clock)
+	setGameServerOpenMap(gs)
 
 	shooterID := "shooter"
 
@@ -319,6 +325,7 @@ func TestHitscanShoot_SkipsShooter(t *testing.T) {
 func TestHitscanWeapon_UsesBarrelOrigin(t *testing.T) {
 	clock := NewManualClock(time.Now())
 	gs := NewGameServerWithClock(nil, clock)
+	setGameServerOpenMap(gs)
 
 	shooterID := "shooter"
 	victimID := "victim"
@@ -352,6 +359,7 @@ func TestHitscanWeapon_UsesBarrelOrigin(t *testing.T) {
 func TestHitscanShoot_ClosestHit(t *testing.T) {
 	clock := NewManualClock(time.Now())
 	gs := NewGameServerWithClock(nil, clock)
+	setGameServerOpenMap(gs)
 
 	shooterID := "shooter"
 	nearVictimID := "near-victim"
@@ -396,6 +404,7 @@ func TestHitscanShoot_ClosestHit(t *testing.T) {
 func TestHitscanShoot_NoPositionHistory(t *testing.T) {
 	clock := NewManualClock(time.Now())
 	gs := NewGameServerWithClock(nil, clock)
+	setGameServerOpenMap(gs)
 
 	shooterID := "shooter"
 	victimID := "victim"
@@ -435,5 +444,105 @@ func TestHitscanShoot_NoPositionHistory(t *testing.T) {
 	expectedHealth := 100 - PistolDamage
 	if victim.Health != expectedHealth {
 		t.Errorf("Victim should have health %d after hit (fallback to current pos), got %d", expectedHealth, victim.Health)
+	}
+}
+
+func TestHitscanShoot_WallBeforeVictimBlocksDamage(t *testing.T) {
+	clock := NewManualClock(time.Now())
+	gs := NewGameServerWithClock(nil, clock)
+	mapConfig := openTestMapConfig()
+	mapConfig.Obstacles = []MapObstacle{
+		{ID: "wall", X: 200, Y: 260, Width: 20, Height: 80, BlocksProjectiles: true, BlocksLineOfSight: true},
+	}
+	gs.physics = NewPhysics(mapConfig)
+	gs.projectileManager = NewProjectileManager(mapConfig)
+
+	shooterID := "shooter"
+	victimID := "victim"
+	gs.AddPlayer(shooterID)
+	gs.AddPlayer(victimID)
+
+	pistol := NewPistol()
+	pistol.IsHitscan = true
+	gs.SetWeaponState(shooterID, NewWeaponState(pistol))
+
+	shooter, _ := gs.world.GetPlayer(shooterID)
+	shooter.SetPosition(Vector2{X: 150, Y: 300})
+	victim, _ := gs.world.GetPlayer(victimID)
+	victim.SetPosition(Vector2{X: 280, Y: 300})
+
+	result := gs.PlayerShoot(shooterID, 0, clock.Now().UnixMilli())
+	if !result.Success {
+		t.Fatalf("shot should still succeed, got %v", result.Reason)
+	}
+	if victim.Health != 100 {
+		t.Fatalf("victim health = %d, want 100 because wall blocks hitscan", victim.Health)
+	}
+}
+
+func TestHitscanShoot_PartialCoverExposedShoulderStillHits(t *testing.T) {
+	clock := NewManualClock(time.Now())
+	gs := NewGameServerWithClock(nil, clock)
+	mapConfig := openTestMapConfig()
+	mapConfig.Obstacles = []MapObstacle{
+		{ID: "low-wall", X: 200, Y: 300, Width: 20, Height: 40, BlocksProjectiles: true, BlocksLineOfSight: true},
+	}
+	gs.physics = NewPhysics(mapConfig)
+	gs.projectileManager = NewProjectileManager(mapConfig)
+
+	shooterID := "shooter"
+	victimID := "victim"
+	gs.AddPlayer(shooterID)
+	gs.AddPlayer(victimID)
+
+	pistol := NewPistol()
+	pistol.IsHitscan = true
+	gs.SetWeaponState(shooterID, NewWeaponState(pistol))
+
+	shooter, _ := gs.world.GetPlayer(shooterID)
+	shooter.SetPosition(Vector2{X: 150, Y: 290})
+	victim, _ := gs.world.GetPlayer(victimID)
+	victim.SetPosition(Vector2{X: 280, Y: 300})
+
+	result := gs.PlayerShoot(shooterID, 0, clock.Now().UnixMilli())
+	if !result.Success {
+		t.Fatalf("shot should succeed, got %v", result.Reason)
+	}
+	if victim.Health != 100-PistolDamage {
+		t.Fatalf("victim health = %d, want %d because the exposed upper body is hittable", victim.Health, 100-PistolDamage)
+	}
+}
+
+func TestHitscanShoot_CoveredPortionStaysProtected(t *testing.T) {
+	clock := NewManualClock(time.Now())
+	gs := NewGameServerWithClock(nil, clock)
+	mapConfig := openTestMapConfig()
+	mapConfig.Obstacles = []MapObstacle{
+		{ID: "low-wall", X: 200, Y: 300, Width: 20, Height: 40, BlocksProjectiles: true, BlocksLineOfSight: true},
+	}
+	gs.world.mapConfig = mapConfig
+	gs.physics = NewPhysics(mapConfig)
+	gs.projectileManager = NewProjectileManager(mapConfig)
+
+	shooterID := "shooter"
+	victimID := "victim"
+	gs.AddPlayer(shooterID)
+	gs.AddPlayer(victimID)
+
+	pistol := NewPistol()
+	pistol.IsHitscan = true
+	gs.SetWeaponState(shooterID, NewWeaponState(pistol))
+
+	shooter, _ := gs.world.GetPlayer(shooterID)
+	shooter.SetPosition(Vector2{X: 150, Y: 316})
+	victim, _ := gs.world.GetPlayer(victimID)
+	victim.SetPosition(Vector2{X: 280, Y: 300})
+
+	result := gs.PlayerShoot(shooterID, 0, clock.Now().UnixMilli())
+	if !result.Success {
+		t.Fatalf("shot should succeed, got %v", result.Reason)
+	}
+	if victim.Health != 100 {
+		t.Fatalf("victim health = %d, want 100 because covered portion should stay protected", victim.Health)
 	}
 }

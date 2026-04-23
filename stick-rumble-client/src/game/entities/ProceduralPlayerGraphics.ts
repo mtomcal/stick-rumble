@@ -1,5 +1,31 @@
 import Phaser from 'phaser';
-import { COLORS } from '../../shared/constants';
+import { COLORS, PLAYER } from '../../shared/constants';
+
+export interface CanonicalPlayerBodyBounds {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  width: number;
+  height: number;
+  centerX: number;
+  centerY: number;
+}
+
+export function getCanonicalPlayerBodyBounds(centerX: number, centerY: number): CanonicalPlayerBodyBounds {
+  const halfWidth = PLAYER.WIDTH / 2;
+  const halfHeight = PLAYER.HEIGHT / 2;
+  return {
+    left: centerX - halfWidth,
+    right: centerX + halfWidth,
+    top: centerY - halfHeight,
+    bottom: centerY + halfHeight,
+    width: PLAYER.WIDTH,
+    height: PLAYER.HEIGHT,
+    centerX,
+    centerY,
+  };
+}
 
 /**
  * ProceduralPlayerGraphics renders stick figure characters using procedural graphics
@@ -14,6 +40,11 @@ import { COLORS } from '../../shared/constants';
  * - Spawn invulnerability ring rendering
  */
 export class ProceduralPlayerGraphics {
+  private static readonly BODY_MASS_ALPHA = 0.14;
+  private static readonly BODY_MASS_WIDTH = PLAYER.WIDTH - 2;
+  private static readonly BODY_MASS_HEIGHT = PLAYER.HEIGHT - 2;
+  private static readonly HEAD_OUTLINE_COLOR = 0x444444;
+  private static readonly HEAD_OUTLINE_ALPHA = 0.18;
   private scene: Phaser.Scene;
   private graphics: Phaser.GameObjects.Graphics;
   private x: number;
@@ -27,10 +58,14 @@ export class ProceduralPlayerGraphics {
   private nameLabel: Phaser.GameObjects.Text | null = null;
 
   // Head radius (used for label positioning)
-  private static readonly HEAD_RADIUS = 13;
+  private static readonly HEAD_RADIUS = 11;
+  private static readonly HEAD_CENTER_Y = -6;
+  private static readonly SHOULDER_Y = 5;
+  private static readonly HIP_Y = 13;
+  private static readonly FOOT_Y = PLAYER.HEIGHT / 2 - 3;
 
-  private static readonly WEAPON_GRIP_OFFSET = 12;
-  private static readonly HAND_SPREAD = 3;
+  private static readonly WEAPON_GRIP_OFFSET = 16;
+  private static readonly HAND_SPREAD = 4;
   private static readonly BARREL_X = 20;
 
   // Animation constants (from prototype)
@@ -46,6 +81,8 @@ export class ProceduralPlayerGraphics {
     // Create graphics object
     this.graphics = scene.add.graphics();
     this.graphics.setDepth(50); // Render below UI but above background
+    this.graphics.x = Math.round(x);
+    this.graphics.y = Math.round(y);
 
     // Initial draw
     this.draw();
@@ -67,7 +104,7 @@ export class ProceduralPlayerGraphics {
 
     const isYou = label === 'YOU';
     if (!this.nameLabel) {
-      this.nameLabel = this.scene.add.text(this.x, this.y - ProceduralPlayerGraphics.HEAD_RADIUS - 5, label, {
+      this.nameLabel = this.scene.add.text(this.x, this.getLabelY(), label, {
         fontSize: isYou ? '14px' : '12px',
         fontStyle: isYou ? 'bold' : 'normal',
         color: isYou ? '#FFFFFF' : '#AAAAAA',
@@ -97,54 +134,68 @@ export class ProceduralPlayerGraphics {
   private draw(): void {
     this.graphics.clear();
 
-    // Use local coordinates since Graphics transform is set in setPosition()
-    const cx = 0;
-    const cy = 0;
-    const rot = this.rotation;
-
-    // Helper to rotate points around center
-    const calcPoint = (localX: number, localY: number) => {
-      return {
-        x: cx + (localX * Math.cos(rot) - localY * Math.sin(rot)),
-        y: cy + (localX * Math.sin(rot) + localY * Math.cos(rot)),
-      };
-    };
-
     const weaponAim = this.aimAngle ?? this.rotation;
+    const cx = 0;
+    const headCenterY = ProceduralPlayerGraphics.HEAD_CENTER_Y;
+    const shoulderY = ProceduralPlayerGraphics.SHOULDER_Y;
+    const hipY = ProceduralPlayerGraphics.HIP_Y;
+    const footY = ProceduralPlayerGraphics.FOOT_Y;
     const calcAimPoint = (distance: number, sideOffset: number) => {
       return {
         x: cx + (distance * Math.cos(weaponAim) - sideOffset * Math.sin(weaponAim)),
-        y: cy + (distance * Math.sin(weaponAim) + sideOffset * Math.cos(weaponAim)),
+        y: shoulderY + (distance * Math.sin(weaponAim) + sideOffset * Math.cos(weaponAim)),
       };
     };
 
     // --- SPAWN INVULNERABILITY RING ---
     if (this.isInvulnerable) {
       this.graphics.lineStyle(2, COLORS.SPAWN_RING, 1);
-      this.graphics.strokeCircle(cx, cy, 25);
+      this.graphics.strokeCircle(cx, 0, 25);
     }
+
+    // Subtle overhead body mass keeps wall contact readable without reverting to a box.
+    this.graphics.fillStyle(this.bodyColor, ProceduralPlayerGraphics.BODY_MASS_ALPHA);
+    this.graphics.fillEllipse(
+      cx,
+      0,
+      ProceduralPlayerGraphics.BODY_MASS_WIDTH,
+      ProceduralPlayerGraphics.BODY_MASS_HEIGHT
+    );
+
+    // --- TORSO ---
+    this.graphics.lineStyle(3, this.bodyColor, 1);
+    this.graphics.beginPath();
+    this.graphics.moveTo(cx, shoulderY);
+    this.graphics.lineTo(cx, hipY);
+    this.graphics.strokePath();
 
     // --- LEGS ---
     this.graphics.lineStyle(3, this.bodyColor, 1);
 
-    const stride = 16;
-    const footSideOffset = 8;
+    const stride = 8;
+    const footSideOffset = 7;
 
     const leftLegProgress = Math.sin(this.walkCycle);
     const rightLegProgress = Math.sin(this.walkCycle + Math.PI);
 
-    const leftFootPos = calcPoint(leftLegProgress * stride, -footSideOffset);
-    const rightFootPos = calcPoint(rightLegProgress * stride, footSideOffset);
+    const leftFootPos = {
+      x: cx - footSideOffset + leftLegProgress * stride,
+      y: footY,
+    };
+    const rightFootPos = {
+      x: cx + footSideOffset + rightLegProgress * stride,
+      y: footY,
+    };
 
     // Draw left leg
     this.graphics.beginPath();
-    this.graphics.moveTo(cx, cy);
+    this.graphics.moveTo(cx, hipY);
     this.graphics.lineTo(leftFootPos.x, leftFootPos.y);
     this.graphics.strokePath();
 
     // Draw right leg
     this.graphics.beginPath();
-    this.graphics.moveTo(cx, cy);
+    this.graphics.moveTo(cx, hipY);
     this.graphics.lineTo(rightFootPos.x, rightFootPos.y);
     this.graphics.strokePath();
 
@@ -162,13 +213,13 @@ export class ProceduralPlayerGraphics {
 
     // Draw left arm
     this.graphics.beginPath();
-    this.graphics.moveTo(cx, cy);
+    this.graphics.moveTo(cx, shoulderY);
     this.graphics.lineTo(leftHandPos.x, leftHandPos.y);
     this.graphics.strokePath();
 
     // Draw right arm
     this.graphics.beginPath();
-    this.graphics.moveTo(cx, cy);
+    this.graphics.moveTo(cx, shoulderY);
     this.graphics.lineTo(rightHandPos.x, rightHandPos.y);
     this.graphics.strokePath();
 
@@ -178,16 +229,24 @@ export class ProceduralPlayerGraphics {
 
     // --- HEAD ---
     this.graphics.fillStyle(this.headColor, 1);
-    this.graphics.fillCircle(cx, cy, ProceduralPlayerGraphics.HEAD_RADIUS);
-    this.graphics.lineStyle(1, 0x000000, 0.3);
-    this.graphics.strokeCircle(cx, cy, ProceduralPlayerGraphics.HEAD_RADIUS);
+    this.graphics.fillCircle(cx, headCenterY, ProceduralPlayerGraphics.HEAD_RADIUS);
+    this.graphics.lineStyle(
+      1,
+      ProceduralPlayerGraphics.HEAD_OUTLINE_COLOR,
+      ProceduralPlayerGraphics.HEAD_OUTLINE_ALPHA
+    );
+    this.graphics.strokeCircle(cx, headCenterY, ProceduralPlayerGraphics.HEAD_RADIUS);
   }
 
   private updateLabelPosition(): void {
     if (this.nameLabel) {
       this.nameLabel.x = this.x;
-      this.nameLabel.y = this.y - ProceduralPlayerGraphics.HEAD_RADIUS - 5;
+      this.nameLabel.y = this.getLabelY();
     }
+  }
+
+  private getLabelY(): number {
+    return this.y + ProceduralPlayerGraphics.HEAD_CENTER_Y - ProceduralPlayerGraphics.HEAD_RADIUS - 5;
   }
 
   /**
@@ -225,8 +284,8 @@ export class ProceduralPlayerGraphics {
     this.x = x;
     this.y = y;
     // Update Graphics transform for camera follow
-    this.graphics.x = x;
-    this.graphics.y = y;
+    this.graphics.x = Math.round(x);
+    this.graphics.y = Math.round(y);
     this.updateLabelPosition();
     this.draw();
   }
@@ -249,6 +308,10 @@ export class ProceduralPlayerGraphics {
   setAimAngle(aimAngle: number): void {
     this.aimAngle = aimAngle;
     this.draw();
+  }
+
+  getCanonicalBodyBounds(): CanonicalPlayerBodyBounds {
+    return getCanonicalPlayerBodyBounds(Math.round(this.x), Math.round(this.y));
   }
 
   /**

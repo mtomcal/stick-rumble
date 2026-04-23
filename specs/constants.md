@@ -1,7 +1,7 @@
 # Constants
 
-> **Spec Version**: 1.4.0
-> **Last Updated**: 2026-04-07
+> **Spec Version**: 1.4.2
+> **Last Updated**: 2026-04-22
 > **Depends On**: None (foundational spec)
 > **Depended By**: [arena.md](arena.md), [player.md](player.md), [movement.md](movement.md), [dodge-roll.md](dodge-roll.md), [weapons.md](weapons.md), [shooting.md](shooting.md), [melee.md](melee.md), [hit-detection.md](hit-detection.md), [match.md](match.md), [rooms.md](rooms.md), [networking.md](networking.md), [audio.md](audio.md), [ui.md](ui.md), [graphics.md](graphics.md)
 
@@ -76,10 +76,10 @@ const (
 
 | Constant | Value | Unit | Why |
 |----------|-------|------|-----|
-| PLAYER_WIDTH | 32 | px | Small enough for tight movement in combat, large enough for reliable hit detection. 1/60th of arena width. |
-| PLAYER_HEIGHT | 64 | px | 2:1 aspect ratio for stick figure; tall silhouette makes headshots meaningful. |
+| PLAYER_WIDTH | 48 | px | Mid-sized overhead footprint gives the player enough physical presence on the map without feeling bulky in cover. |
+| PLAYER_HEIGHT | 48 | px | Square top-down footprint matches the overhead camera language and avoids the side-view silhouette problem. |
 
-**Why these values**: A 32x64 hitbox is ~3.3% of arena width, meaning ~30 player widths across the screen. This allows tactical positioning without feeling cramped.
+**Why these values**: A 48x48 hitbox is the pragmatic midpoint between the too-small 32x32 overhead footprint and an overly bulky 64x64 square. It gives the player enough presence for readable combat and collision while still supporting a true top-down character render.
 
 ### Health & Status
 
@@ -848,6 +848,8 @@ if (distance > maxRange * 0.5):
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.4.2 | 2026-04-22 | Updated the authoritative player footprint from 32x32 to 48x48 as the pragmatic top-down midpoint. |
+| 1.4.1 | 2026-04-22 | Changed `PLAYER_HEIGHT` from 64 to 32 so the authoritative player footprint is now 32x32. Updated the rationale to match true top-down player rendering rather than a tall stick-figure silhouette. |
 | 2.1.1 | 2026-04-09 | Updated movement tuning constants to ACCELERATION=6000 and DECELERATION=6000 for prototype-faithful immediate response. Corrected minimap Y constant to bottom-left derived positioning (`viewportHeight - MINIMAP_SIZE - 20`). |
 | 2.1.0 | 2026-02-23 | Removed reticle center dot and tick constants (reticle is now fixed ~20px, no bloom). Added Hit Confirmation Trail constants (HIT_TRAIL_*). Added Reload Arc constants (RELOAD_ARC_*). Added MINIMAP_BORDER_COLOR and MINIMAP_BORDER_STROKE. Updated minimap shape language from circular to square. Added COLORS.HIT_TRAIL, COLORS.MINIMAP_BORDER, COLORS.RELOAD_ARC. |
 | 1.4.0 | 2026-02-18 | Added COLORS constant group (22 visual color constants). Renamed HEALTH_BAR_WIDTH to PLAYER_HEALTH_BAR_WIDTH, added HUD_HEALTH_BAR_WIDTH=200. Updated MINIMAP_SIZE to 170 and MINIMAP_SCALE to 0.106. Updated BLOOD_COLOR to 0xCC3333. Updated FLOOR_GRID_COLOR to 0xD8DCD8. |

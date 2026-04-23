@@ -16,6 +16,7 @@ const createMockScene = () => {
           y,
           text,
           setOrigin: vi.fn().mockReturnThis(),
+          setDepth: vi.fn().mockReturnThis(),
           setPosition: vi.fn(),
           setVisible: vi.fn(),
           setText: vi.fn(),
@@ -64,6 +65,7 @@ const createMockScene = () => {
         clear: vi.fn().mockReturnThis(),
         lineStyle: vi.fn().mockReturnThis(),
         fillStyle: vi.fn().mockReturnThis(),
+        fillEllipse: vi.fn().mockReturnThis(),
         fillRect: vi.fn().mockReturnThis(),
         beginPath: vi.fn().mockReturnThis(),
         moveTo: vi.fn().mockReturnThis(),
@@ -72,9 +74,13 @@ const createMockScene = () => {
         fillCircle: vi.fn().mockReturnThis(),
         strokeCircle: vi.fn().mockReturnThis(),
         setDepth: vi.fn().mockReturnThis(),
-        setVisible: vi.fn().mockReturnThis(),
+        setVisible: vi.fn(function (this: any, visible: boolean) {
+          this.visible = visible
+          return this
+        }),
         setPosition: vi.fn().mockReturnThis(),
         destroy: vi.fn(),
+        visible: true,
       })),
     },
     tweens: {
@@ -102,7 +108,15 @@ describe('PlayerManager', () => {
 
     manager.updatePlayers(players)
 
-    expect(mockScene.add.text).toHaveBeenCalledWith(100, 158, 'YOU', expect.any(Object))
+    expect(mockScene.add.text).toHaveBeenCalledWith(
+      100,
+      166,
+      'YOU',
+      expect.objectContaining({
+        fontSize: '14px',
+        color: '#ffffff',
+      })
+    )
   })
 
   it('falls back to Guest for unnamed remote players', () => {
@@ -114,7 +128,15 @@ describe('PlayerManager', () => {
 
     manager.updatePlayers(players)
 
-    expect(mockScene.add.text).toHaveBeenCalledWith(100, 150, 'Guest', expect.any(Object))
+    expect(mockScene.add.text).toHaveBeenCalledWith(
+      100,
+      158,
+      'Guest',
+      expect.objectContaining({
+        fontSize: '14px',
+        color: '#ffffff',
+      })
+    )
   })
 
   it('does not create a local overhead health bar but does create one for remote players', () => {

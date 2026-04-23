@@ -7,6 +7,11 @@ import (
 	"testing"
 )
 
+const (
+	testPlayerWidth  = 48.0
+	testPlayerHeight = 48.0
+)
+
 func TestLoadMapRegistryFromDir_LoadsDefaultOffice(t *testing.T) {
 	registry, err := LoadMapRegistryFromDir("../../../maps")
 	if err != nil {
@@ -103,6 +108,64 @@ func TestDefaultOffice_BoundaryWallsSealOuterCorners(t *testing.T) {
 			leftBoundary.Y+leftBoundary.Height,
 			rightBoundary.Y+rightBoundary.Height,
 		)
+	}
+}
+
+func TestDefaultOffice_IncludesExplicitBlockerContactCoverageForWallsAndDesks(t *testing.T) {
+	registry, err := LoadMapRegistryFromDir("../../../maps")
+	if err != nil {
+		t.Fatalf("LoadMapRegistryFromDir returned error: %v", err)
+	}
+
+	mapConfig, ok := registry.Get(DefaultMapID)
+	if !ok {
+		t.Fatalf("expected %q to exist in registry", DefaultMapID)
+	}
+
+	wall := findObstacleByID(t, mapConfig, "wall_upper_horizontal")
+	desk := findObstacleByID(t, mapConfig, "desk_north_east")
+	viewpoints := make(map[string]MapVisualAcceptanceViewpoint, len(mapConfig.VisualAcceptanceViewpoints))
+	for _, viewpoint := range mapConfig.VisualAcceptanceViewpoints {
+		viewpoints[viewpoint.ID] = viewpoint
+	}
+
+	expected := map[string]MapVector2{
+		"vp_blocker_contact_wall_north": {X: 960, Y: wall.Y - testPlayerHeight/2},
+		"vp_blocker_contact_wall_east":  {X: wall.X + wall.Width + testPlayerWidth/2, Y: 364},
+		"vp_blocker_contact_wall_south": {X: 960, Y: wall.Y + wall.Height + testPlayerHeight/2},
+		"vp_blocker_contact_wall_west":  {X: wall.X - testPlayerWidth/2, Y: 364},
+		"vp_blocker_contact_desk_north": {X: 1580, Y: desk.Y - testPlayerHeight/2},
+		"vp_blocker_contact_desk_east":  {X: desk.X + desk.Width + testPlayerWidth/2, Y: 208},
+		"vp_blocker_contact_desk_south": {X: 1580, Y: desk.Y + desk.Height + testPlayerHeight/2},
+		"vp_blocker_contact_desk_west":  {X: desk.X - testPlayerWidth/2, Y: 208},
+	}
+
+	for requiredID, expectedPos := range expected {
+		viewpoint, exists := viewpoints[requiredID]
+		if !exists {
+			t.Fatalf("expected visual acceptance viewpoint %q to exist", requiredID)
+		}
+		if viewpoint.ExpectedOutcome != "reads_blocked" {
+			t.Fatalf("viewpoint %q expectedOutcome = %q, want reads_blocked", requiredID, viewpoint.ExpectedOutcome)
+		}
+		if viewpoint.PlayerPosition != expectedPos {
+			t.Fatalf("viewpoint %q position = %+v, want %+v", requiredID, viewpoint.PlayerPosition, expectedPos)
+		}
+	}
+
+	for _, requiredID := range []string{
+		"vp_blocker_contact_wall_north",
+		"vp_blocker_contact_wall_east",
+		"vp_blocker_contact_wall_south",
+		"vp_blocker_contact_wall_west",
+		"vp_blocker_contact_desk_north",
+		"vp_blocker_contact_desk_east",
+		"vp_blocker_contact_desk_south",
+		"vp_blocker_contact_desk_west",
+	} {
+		if _, exists := viewpoints[requiredID]; !exists {
+			t.Fatalf("missing blocker-contact viewpoint %q", requiredID)
+		}
 	}
 }
 

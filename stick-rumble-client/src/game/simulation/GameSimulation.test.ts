@@ -253,8 +253,8 @@ describe('GameSimulation', () => {
       }
 
       const state = sim.getPlayerState('p1')!;
-      expect(state.position.x).toBeGreaterThanOrEqual(16); // PLAYER.WIDTH / 2
-      expect(state.position.x).toBeLessThanOrEqual(20); // Some tolerance for clamping
+      expect(state.position.x).toBeGreaterThanOrEqual(24); // PLAYER.WIDTH / 2
+      expect(state.position.x).toBeLessThanOrEqual(28); // Some tolerance for clamping
     });
 
     it('should clamp player position to right boundary', () => {
@@ -268,8 +268,8 @@ describe('GameSimulation', () => {
       }
 
       const state = sim.getPlayerState('p1')!;
-      expect(state.position.x).toBeLessThanOrEqual(1904); // ARENA.WIDTH - PLAYER.WIDTH / 2
-      expect(state.position.x).toBeGreaterThanOrEqual(1900);
+      expect(state.position.x).toBeLessThanOrEqual(1896); // ARENA.WIDTH - PLAYER.WIDTH / 2
+      expect(state.position.x).toBeGreaterThanOrEqual(1892);
     });
 
     it('should clamp player position to top boundary', () => {
@@ -283,8 +283,8 @@ describe('GameSimulation', () => {
       }
 
       const state = sim.getPlayerState('p1')!;
-      expect(state.position.y).toBeGreaterThanOrEqual(32); // PLAYER.HEIGHT / 2
-      expect(state.position.y).toBeLessThanOrEqual(36);
+      expect(state.position.y).toBeGreaterThanOrEqual(24); // PLAYER.HEIGHT / 2
+      expect(state.position.y).toBeLessThanOrEqual(28);
     });
 
     it('should clamp player position to bottom boundary', () => {
@@ -298,8 +298,8 @@ describe('GameSimulation', () => {
       }
 
       const state = sim.getPlayerState('p1')!;
-      expect(state.position.y).toBeLessThanOrEqual(1048); // ARENA.HEIGHT - PLAYER.HEIGHT / 2
-      expect(state.position.y).toBeGreaterThanOrEqual(1044);
+      expect(state.position.y).toBeLessThanOrEqual(1056); // ARENA.HEIGHT - PLAYER.HEIGHT / 2
+      expect(state.position.y).toBeGreaterThanOrEqual(1052);
     });
   });
 

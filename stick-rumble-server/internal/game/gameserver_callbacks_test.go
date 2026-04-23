@@ -372,6 +372,7 @@ func TestCheckWeaponRespawns_AllAvailable(t *testing.T) {
 
 func TestPlayerMeleeAttack_Success(t *testing.T) {
 	gs := NewGameServer(noBroadcast)
+	setGameServerOpenMap(gs)
 
 	// Add two players
 	gs.AddPlayer("player1")
@@ -381,12 +382,12 @@ func TestPlayerMeleeAttack_Success(t *testing.T) {
 	batWeapon := NewBat()
 	gs.SetWeaponState("player1", NewWeaponState(batWeapon))
 
-	// Position players close together
+	// Position players with the victim fully in front so a majority of hitbox samples remain in arc.
 	player1, _ := gs.world.GetPlayer("player1")
 	player2, _ := gs.world.GetPlayer("player2")
 
 	player1.Position = Vector2{X: 100, Y: 100}
-	player2.Position = Vector2{X: 110, Y: 100} // 10 units away
+	player2.Position = Vector2{X: 150, Y: 100}
 
 	// Perform melee attack
 	result := gs.PlayerMeleeAttack("player1", 0.0)
@@ -457,6 +458,7 @@ func TestPlayerMeleeAttack_NotMeleeWeapon(t *testing.T) {
 
 func TestPlayerMeleeAttack_NoVictims(t *testing.T) {
 	gs := NewGameServer(noBroadcast)
+	setGameServerOpenMap(gs)
 
 	// Add player with melee weapon
 	gs.AddPlayer("player1")
@@ -470,6 +472,62 @@ func TestPlayerMeleeAttack_NoVictims(t *testing.T) {
 	// Should succeed but with no victims
 	assert.True(t, result.Success, "Attack should succeed")
 	assert.Empty(t, result.HitPlayers, "Should have no victims")
+}
+
+func TestPlayerMeleeAttack_WallBlockedStillConsumesCooldown(t *testing.T) {
+	gs := NewGameServer(noBroadcast)
+	mapConfig := openTestMapConfig()
+	mapConfig.Obstacles = []MapObstacle{
+		{ID: "wall", X: 130, Y: 80, Width: 20, Height: 40, BlocksMovement: true, BlocksProjectiles: true, BlocksLineOfSight: true},
+	}
+	gs.world.mapConfig = mapConfig
+	gs.physics = NewPhysics(mapConfig)
+	gs.projectileManager = NewProjectileManager(mapConfig)
+
+	gs.AddPlayer("player1")
+	gs.AddPlayer("player2")
+
+	batWeapon := NewBat()
+	gs.SetWeaponState("player1", NewWeaponState(batWeapon))
+
+	player1, _ := gs.world.GetPlayer("player1")
+	player2, _ := gs.world.GetPlayer("player2")
+	player1.Position = Vector2{X: 100, Y: 100}
+	player2.Position = Vector2{X: 170, Y: 100}
+
+	result := gs.PlayerMeleeAttack("player1", 0.0)
+	assert.True(t, result.Success, "Blocked swing should still execute")
+	assert.Empty(t, result.HitPlayers, "Wall-blocked swing should not hit")
+
+	cooldownResult := gs.PlayerMeleeAttack("player1", 0.0)
+	assert.False(t, cooldownResult.Success, "Immediate second swing should be on cooldown")
+	assert.Equal(t, MeleeFailedCooldown, cooldownResult.Reason)
+}
+
+func TestPlayerMeleeAttack_UsesWorldMapConfigForWallBlocking(t *testing.T) {
+	gs := NewGameServer(noBroadcast)
+	mapConfig := openTestMapConfig()
+	mapConfig.Obstacles = []MapObstacle{
+		{ID: "wall", X: 130, Y: 80, Width: 20, Height: 40, BlocksMovement: true, BlocksProjectiles: true, BlocksLineOfSight: true},
+	}
+	gs.world.mapConfig = mapConfig
+	gs.physics = NewPhysics(mapConfig)
+	gs.projectileManager = NewProjectileManager(mapConfig)
+
+	gs.AddPlayer("player1")
+	gs.AddPlayer("player2")
+
+	batWeapon := NewBat()
+	gs.SetWeaponState("player1", NewWeaponState(batWeapon))
+
+	player1, _ := gs.world.GetPlayer("player1")
+	player2, _ := gs.world.GetPlayer("player2")
+	player1.Position = Vector2{X: 100, Y: 100}
+	player2.Position = Vector2{X: 170, Y: 100}
+
+	result := gs.PlayerMeleeAttack("player1", 0.0)
+	assert.True(t, result.Success, "Blocked melee attempt should still resolve as a swing")
+	assert.Empty(t, result.HitPlayers, "World map blocker should prevent helper bypass")
 }
 
 func TestGetWorld(t *testing.T) {

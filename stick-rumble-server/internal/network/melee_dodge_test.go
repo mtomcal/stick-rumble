@@ -28,16 +28,16 @@ func TestHandlePlayerMeleeAttack_Success(t *testing.T) {
 	batWeapon := game.NewBat()
 	ts.handler.gameServer.SetWeaponState(player1ID, game.NewWeaponState(batWeapon))
 
-	// Position players close together for melee range
+	// Position players so the victim is clearly in front and exposes a majority of hitbox samples.
 	world := ts.handler.gameServer.GetWorld()
 	attacker, exists := world.GetPlayer(player1ID)
 	require.True(t, exists)
 	victim, exists := world.GetPlayer(player2ID)
 	require.True(t, exists)
 
-	// Set positions within melee range (30 units)
+	// Keep the victim comfortably inside bat range while preserving the new 5-of-9 reach requirement.
 	attacker.Position = game.Vector2{X: 100, Y: 100}
-	victim.Position = game.Vector2{X: 110, Y: 100} // 10 units away
+	victim.Position = game.Vector2{X: 150, Y: 100}
 
 	// Prepare melee attack data
 	attackData := map[string]interface{}{
@@ -242,7 +242,7 @@ func TestHandlePlayerMeleeAttack_WithKill(t *testing.T) {
 	require.True(t, exists)
 
 	attacker.Position = game.Vector2{X: 100, Y: 100}
-	victim.Position = game.Vector2{X: 110, Y: 100}
+	victim.Position = game.Vector2{X: 150, Y: 100}
 
 	// Damage victim to near-death
 	ts.handler.gameServer.DamagePlayer(player2ID, game.PlayerMaxHealth-10)

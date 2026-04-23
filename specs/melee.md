@@ -1,7 +1,7 @@
 # Melee Combat
 
-> **Spec Version**: 1.2.0
-> **Last Updated**: 2026-04-17
+> **Spec Version**: 1.2.2
+> **Last Updated**: 2026-04-22
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [hit-detection.md](hit-detection.md)
 > **Depended By**: [messages.md](messages.md), [graphics.md](graphics.md)
 
@@ -9,7 +9,7 @@
 
 ## Overview
 
-Melee combat provides close-range weapons (Bat and Katana) as alternatives to ranged weapons. Unlike projectile-based attacks, melee attacks instantly hit all targets within a cone-shaped area in front of the attacker, enabling area-of-effect (AoE) damage.
+Melee combat provides close-range weapons (Bat and Katana) as alternatives to ranged weapons. Unlike projectile-based attacks, melee attacks threaten targets within a cone-shaped area in front of the attacker only when those targets are fully visible and reachable through open space. A strict line-of-sight requirement ensures walls and barriers completely block melee attacks—enabling area-of-effect (AoE) damage only against exposed targets without allowing swords or bats to damage through solid barriers.
 
 **Why melee weapons exist:**
 1. **Risk/reward gameplay**: Higher damage per hit compensates for the danger of close-range engagement
@@ -242,9 +242,9 @@ func (gs *GameServer) PlayerMeleeAttack(playerID string, aimAngle float64) Melee
 
 ---
 
-### Hit Detection (Range + Arc Check)
+### Hit Detection (Range + Arc + Occlusion Check)
 
-Melee attacks use a cone-shaped hit area defined by range (distance) and arc (angle).
+Melee attacks use a cone-shaped hit area defined by range (distance) and arc (angle), but range and arc alone are not sufficient for a valid hit.
 
 **Pseudocode:**
 ```
@@ -277,7 +277,12 @@ function isInMeleeRange(attacker, target, weapon):
 
     // Check if within arc (half on each side)
     halfArc = weapon.arcDegrees / 2
-    return angleDiff <= halfArc
+    if angleDiff > halfArc:
+        return false
+
+    // Range + arc are necessary but not sufficient
+    // The target must also be reachable before any blocking barrier
+    return hasUnobstructedMeleePath(attacker, target)
 ```
 
 **Go Implementation:**
@@ -317,7 +322,12 @@ func isInMeleeRange(attacker *PlayerState, target *PlayerState, weapon *Weapon) 
 
     // Arc check
     halfArc := weapon.ArcDegrees / 2
-    return angleDiff <= halfArc
+    if angleDiff > halfArc {
+        return false
+    }
+
+    // Target must still be reachable without blocking geometry in between.
+    return hasUnobstructedMeleePath(attacker, target)
 }
 ```
 
@@ -325,6 +335,21 @@ func isInMeleeRange(attacker *PlayerState, target *PlayerState, weapon *Weapon) 
 - **Intuitive**: Players aim with mouse, cone naturally extends from character
 - **Balanced**: Wide enough to catch nearby enemies, requires directional aim
 - **Visual match**: Swing animation draws a stroke-only arc that matches hitbox
+
+### Barrier Occlusion
+
+Range and arc are necessary but not sufficient. A melee hit is only valid if the target is fully reachable without a blocking barrier in between, using strict line-of-sight requirements.
+
+**Strict Line-of-Sight Requirements:**
+1. **Center point must be clear**: The target's center point must have an unobstructed path from the attacker. If blocked, the attack fails immediately (no hit).
+2. **Majority of hitbox must be exposed**: At least 5 of 9 sample points on the target hitbox must be reachable (center + at least 4 of 8 edge/corner points).
+3. **Segment geometry**: The path is evaluated as a finite line segment from the attacker's center position to each target sample point.
+4. **Boundary-inclusive intersection**: If the segment touches or crosses any wall boundary, that target point is considered blocked (first-contact resolution applies).
+5. **First-contact resolution**: When multiple obstacles exist, the closest obstacle along the segment blocks the path.
+
+- the obstruction check uses authoritative gameplay geometry, not rendered sprite pixels
+- the path is evaluated from the attacker center toward the victim's authoritative hit volume
+- if a wall or other blocking barrier is reached first, the target is not hit
 
 ---
 
@@ -334,9 +359,12 @@ A single melee swing can hit multiple players within the cone.
 
 **Pseudocode:**
 ```
-function PerformMeleeAttack(attacker, allPlayers, weapon):
+function PerformMeleeAttack(attacker, allPlayers, weapon, mapConfig):
     if weapon == null OR !weapon.IsMelee():
         return { HitPlayers: [], KnockbackApplied: false }
+
+    // Resolve a default map configuration if one is not provided
+    mapConfig = resolveMapConfig(mapConfig)
 
     hitPlayers = []
     knockbackApplied = false
@@ -350,17 +378,64 @@ function PerformMeleeAttack(attacker, allPlayers, weapon):
         if !target.IsAlive():
             continue
 
-        // Check range and arc
-        if isInMeleeRange(attacker, target, weapon):
+        // Check range, arc, and strict line-of-sight
+        if isInMeleeRange(attacker, target, weapon) && hasMeleeReach(attacker, target, weapon, mapConfig):
             hitPlayers.append(target)
             target.TakeDamage(weapon.damage)
 
             // Apply knockback (Bat only)
             if weapon.knockbackDistance > 0:
-                applyKnockback(attacker, target, weapon.knockbackDistance)
+                applyKnockback(attacker, target, weapon.knockbackDistance, mapConfig)
                 knockbackApplied = true
 
     return { HitPlayers: hitPlayers, KnockbackApplied: knockbackApplied }
+
+function hasMeleeReach(attacker, target, weapon, mapConfig):
+    // Sample 9 points on target hitbox (center, edges, corners)
+    samplePoints = getTargetHitboxSamplePoints(target.position)
+    
+    // Check center point first (short-circuit if blocked)
+    centerPoint = samplePoints[0] // center
+    if segmentBlockedByObstacle(attacker.position, centerPoint, mapConfig.obstacles):
+        return false
+    
+    // Center is clear, check remaining points
+    reachableCount = 1 // center counts as 1
+    for i = 1 to 8: // remaining edge and corner points
+        // Occlusion is checked here only for points that are already valid
+        // melee candidates under the range/arc gate.
+        if pointWithinRangeAndArc(attacker.position, samplePoints[i], attacker.aimAngle, weapon) &&
+           !segmentBlockedByObstacle(attacker.position, samplePoints[i], mapConfig.obstacles):
+            reachableCount++
+        // Short-circuit: stop if we already have 5 reachable points
+        if reachableCount >= 5:
+            return true
+    
+    // Return true if majority (5/9) or more points are reachable
+    return reachableCount >= 5
+
+function segmentBlockedByObstacle(start, end, obstacles):
+    // Find closest obstacle along segment (first-contact resolution)
+    closestObstacle = null
+    closestDistance = infinity
+    
+    for each obstacle in obstacles:
+        if !obstacle.blocksMovement && !obstacle.blocksProjectiles && !obstacle.blocksLineOfSight:
+            continue // Skip non-blocking obstacles
+        
+        // Check if segment intersects obstacle (boundary-inclusive)
+        if segmentIntersectsRectangle(start, end, obstacle):
+            distance = distanceToIntersection(start, end, obstacle)
+            if distance < closestDistance:
+                closestDistance = distance
+                closestObstacle = obstacle
+    
+    // If any obstacle found, check if it's closer than target
+    if closestObstacle != null:
+        targetDistance = distance(start, end)
+        return closestDistance <= targetDistance
+    
+    return false // No obstacle blocks the path
 ```
 
 **Go Implementation:**
@@ -406,7 +481,7 @@ func PerformMeleeAttack(attacker *PlayerState, allPlayers []*PlayerState, weapon
 
 ### Knockback Application
 
-The Bat applies 40px knockback to all hit targets, pushing them away from the attacker.
+The Bat applies 40px knockback to all hit targets, pushing them away from the attacker until the first blocking contact.
 
 **Pseudocode:**
 ```
@@ -425,14 +500,16 @@ function applyKnockback(attacker, target, knockbackDistance):
     dirY = dy / distance
 
     // Apply knockback displacement
-    newX = target.x + dirX * knockbackDistance
-    newY = target.y + dirY * knockbackDistance
+    candidateX = target.x + dirX * knockbackDistance
+    candidateY = target.y + dirY * knockbackDistance
 
-    // Clamp to arena bounds
-    newX = clamp(newX, 0, ArenaWidth)
-    newY = clamp(newY, 0, ArenaHeight)
+    // Stop at first blocking contact; do not tunnel or slide through the barrier
+    resolvedPosition = resolveFirstBlockingContact(target.position, (candidateX, candidateY))
 
-    target.SetPosition(newX, newY)
+    // Clamp to arena bounds after obstacle resolution
+    resolvedPosition = clampToArena(resolvedPosition)
+
+    target.SetPosition(resolvedPosition)
 ```
 
 **Go Implementation:**
@@ -452,24 +529,18 @@ func applyKnockback(attacker *PlayerState, target *PlayerState, knockbackDistanc
     // Normalize direction and apply displacement
     dirX := dx / distance
     dirY := dy / distance
-    newX := targetPos.X + dirX*knockbackDistance
-    newY := targetPos.Y + dirY*knockbackDistance
-
-    // Clamp to arena bounds
-    if newX < 0 {
-        newX = 0
-    }
-    if newX > ArenaWidth {
-        newX = ArenaWidth
-    }
-    if newY < 0 {
-        newY = 0
-    }
-    if newY > ArenaHeight {
-        newY = ArenaHeight
+    candidate := Vector2{
+        X: targetPos.X + dirX*knockbackDistance,
+        Y: targetPos.Y + dirY*knockbackDistance,
     }
 
-    target.SetPosition(Vector2{X: newX, Y: newY})
+    // Stop at the first blocking contact rather than tunneling or sliding.
+    resolved := resolveKnockbackAgainstBarriers(targetPos, candidate)
+
+    // Arena bounds are still authoritative after obstacle resolution.
+    resolved = clampToArena(resolved)
+
+    target.SetPosition(resolved)
 }
 ```
 
@@ -483,6 +554,8 @@ func applyKnockback(attacker *PlayerState, target *PlayerState, knockbackDistanc
 - Higher base damage (45 vs 25) is the trade-off
 - Longer range (110px vs 90px) provides inherent safety
 - Design choice: two distinct melee playstyles
+
+**Hard-stop rule:** When knockback would push a victim into a solid barrier, the victim stops at the first blocking contact. The wall remains a hard stop. Knockback does not tunnel through the barrier and does not side-slide along it unless a future spec explicitly adds that behavior.
 
 ---
 
@@ -596,12 +669,23 @@ if !result.Success {
 }
 ```
 
+### Barrier-Blocked Swing
+
+**Trigger**: A valid melee swing reaches blocking geometry before any reachable victim, or the swing origin is already obstructed by nearby blocking geometry
+**Detection**: Range/arc checks succeed, but authoritative occlusion resolution finds a blocking barrier first
+**Response**:
+- the swing still executes and consumes its normal cooldown
+- no victim damage, hit confirmation, or victim effects occur
+- blocked-impact feedback may be shown at the barrier contact point
+**Recovery**: Reposition and swing again
+
 ### Knockback Edge Cases
 
 | Case | Handling | Reason |
 |------|----------|--------|
 | Players at same position | Skip knockback | Avoid divide-by-zero |
 | Target at arena edge | Clamp to bounds | Prevent out-of-bounds |
+| Knockback path crosses blocking geometry | Stop at first blocking contact | Preserve walls as hard stops |
 | Multiple targets near edge | Each clamped independently | Fair positioning |
 
 ---
@@ -948,7 +1032,47 @@ func TestPerformMeleeAttack_BatHitsSingleTarget(t *testing.T) {
 - Overlap protection prevents stacked unreadable swings
 - Camera shakes on melee hit (50ms, 0.001 intensity)
 
----
+### TS-MELEE-016: melee cannot damage through blocking geometry
+
+**Category**: Integration
+**Priority**: Critical
+
+**Preconditions:**
+- Attacker and target are within melee range and arc
+- A visible blocking wall lies between them
+
+**Expected Output:**
+- Target takes no damage
+- Swing still executes
+- Barrier remains authoritative hard stop for melee reachability
+
+### TS-MELEE-017: bat knockback stops at first wall contact
+
+**Category**: Integration
+**Priority**: Critical
+
+**Preconditions:**
+- Bat hit is valid
+- Knockback path from victim intersects blocking geometry before the full 40px displacement
+
+**Expected Output:**
+- Victim stops at the first blocking contact
+- Victim is not moved through the wall
+- No surprise sideways slide occurs
+
+### TS-MELEE-018: blocked swing still consumes cooldown
+
+**Category**: Integration
+**Priority**: High
+
+**Preconditions:**
+- Attacker performs a melee swing into blocking geometry
+- No reachable victim is available
+
+**Expected Output:**
+- Swing cooldown still applies
+- Repeated wall probing is not free
+- No victim damage occurs
 
 ---
 
@@ -956,7 +1080,9 @@ func TestPerformMeleeAttack_BatHitsSingleTarget(t *testing.T) {
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.2.0 | 2026-04-17 | Reframed melee presentation around weapon-following swing motion instead of a visible AoE arc. Added hybrid local-preview/server-confirmed swing behavior, per-victim weapon-specific contact effects, whiff-vs-hit visual grammar, and updated TS-MELEE-013 / TS-MELEE-015 to validate the new motion language. |
+| 1.2.2 | 2026-04-22 | Merged the melee presentation and wall-occlusion updates: swings use weapon-following motion with per-victim contact effects, while authoritative hit validation still requires strict boundary-inclusive line of sight and stops bat knockback at the first blocking contact. |
+| 1.2.1 | 2026-04-21 | Clarified strict line-of-sight requirements for melee wall blocking: (1) target's center point must have unobstructed path or attack fails immediately, (2) majority of hitbox points (5/9) must be reachable including center + at least 4 of 8 edge/corner points, (3) segment geometry from attacker center to target points, (4) boundary-inclusive intersection (touching wall = blocked), (5) first-contact resolution for multiple obstacles, (6) short-circuit at majority for efficiency. |
+| 1.2.0 | 2026-04-17 | Reframed melee presentation around weapon-following swing motion instead of a visible AoE arc. Added hybrid local-preview/server-confirmed swing behavior, per-victim weapon-specific contact effects, whiff-vs-hit visual grammar, wall-blocked melee validation, barrier-stopped bat knockback, and blocked-swing cooldown consumption. |
 | 1.0.0 | 2026-02-02 | Initial specification |
 | 1.0.1 | 2026-02-16 | Fixed thread safety note — `world.players` accessed directly under `world.mu.RLock()`, not via `GetAllPlayers()` |
 | 1.1.0 | 2026-02-16 | Updated Bat range (64→90px), Katana range (80→110px), melee arc (90°→80°). Replaced pie-slice arc with white stroke-only arc. Added weapon container rotation tween. Removed per-weapon color table. Added TS-MELEE-015. Ported from pre-BMM prototype. |

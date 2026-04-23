@@ -243,19 +243,8 @@ export class PlayerManager {
       // This prevents flickering caused by dual position writers competing
       // Position updates happen in update() via interpolation or server state
 
-      // Apply dodge roll visual effects (rotation during roll)
-      if (state.isRolling) {
-        // Apply 360° rotation animation (simulated with angle update)
-        const rollAngle = ((this._clock.now() % 400) / 400) * Math.PI * 2; // 360° rotation over 0.4s
-        playerGraphics.setRotation(rollAngle);
-
-        // Apply transparency during invincibility frames (first 0.2s)
-        // Note: Server tracks actual i-frame timing, this is visual only
-        playerGraphics.setVisible(this._clock.now() % 200 < 100); // Flicker effect
-      } else if (state.deathTime === undefined) {
-        // Clear rotation when not rolling and alive
-        // Skip setVisible(true) for dead players to prevent flicker on respawn
-        playerGraphics.setRotation(0);
+      // Live-body footprint stays stable through dodge roll.
+      if (state.deathTime === undefined) {
         playerGraphics.setVisible(true);
       }
 

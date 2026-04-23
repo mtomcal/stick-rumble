@@ -1,6 +1,10 @@
 import Phaser from 'phaser';
 import { EFFECTS, WEAPON } from '../../shared/constants';
-import { getDefaultMatchMapContext } from '../../shared/maps';
+import {
+  getDefaultMatchMapContext,
+  getFirstBlockingObstacleContact,
+  type MapObstacle,
+} from '../../shared/maps';
 import type { Clock } from '../utils/Clock';
 import { RealClock } from '../utils/Clock';
 import { getWeaponConfigSync, parseHexColor } from '../../shared/weaponConfig';
@@ -47,11 +51,12 @@ export class ProjectileManager {
     this.clock = clock;
   }
 
-  setWorldBounds(width: number, height: number): void {
+  setWorldBounds(width: number, height: number, obstacles?: MapObstacle[]): void {
     this.worldBounds = {
       ...this.worldBounds,
       width,
       height,
+      obstacles: obstacles ? [...obstacles] : this.worldBounds.obstacles,
     };
   }
 
@@ -221,9 +226,24 @@ export class ProjectileManager {
     const toRemove: string[] = [];
 
     for (const [id, projectile] of this.projectiles) {
+      const previousPosition = { ...projectile.position };
+
       // Update position based on velocity
       projectile.position.x += projectile.velocity.x * deltaTime;
       projectile.position.y += projectile.velocity.y * deltaTime;
+
+      const wallContact = getFirstBlockingObstacleContact(
+        previousPosition,
+        projectile.position,
+        this.worldBounds.obstacles
+      );
+      if (wallContact) {
+        projectile.position.x = wallContact.x;
+        projectile.position.y = wallContact.y;
+        projectile.sprite.setPosition(projectile.position.x, projectile.position.y);
+        toRemove.push(id);
+        continue;
+      }
 
       // Update sprite position
       projectile.sprite.setPosition(projectile.position.x, projectile.position.y);

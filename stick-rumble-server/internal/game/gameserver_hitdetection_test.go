@@ -19,6 +19,7 @@ func TestGameServerHitDetection(t *testing.T) {
 	}
 
 	gs := NewGameServer(nil)
+	setGameServerOpenMap(gs)
 	gs.SetOnHit(onHit)
 
 	// Add two players
@@ -91,6 +92,7 @@ func TestGameServerHitDetection_NoHit(t *testing.T) {
 	}
 
 	gs := NewGameServer(nil)
+	setGameServerOpenMap(gs)
 	gs.SetOnHit(onHit)
 
 	// Add two players far apart
@@ -138,6 +140,7 @@ func TestGameServerHitDetection_MultipleHits(t *testing.T) {
 	}
 
 	gs := NewGameServer(nil)
+	setGameServerOpenMap(gs)
 	gs.SetOnHit(onHit)
 
 	// Add two players
@@ -201,6 +204,7 @@ func TestGameServerHitDetection_DeadPlayerNoHit(t *testing.T) {
 	}
 
 	gs := NewGameServer(nil)
+	setGameServerOpenMap(gs)
 	gs.SetOnHit(onHit)
 
 	// Add two players

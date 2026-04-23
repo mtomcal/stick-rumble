@@ -21,17 +21,40 @@ import { GameSceneEventHandlers } from './GameSceneEventHandlers';
 import { ScreenShake } from '../effects/ScreenShake';
 import { AudioManager } from '../audio/AudioManager';
 import { AimLine } from '../entities/AimLine';
+import { getWeaponBarrelLength } from '../entities/WeaponGeometry';
 import { ScoreDisplayUI } from '../ui/ScoreDisplayUI';
 import { KillCounterUI } from '../ui/KillCounterUI';
 import { PickupNotificationUI } from '../ui/PickupNotificationUI';
 import { COLORS } from '../../shared/constants';
 import {
   getDefaultMatchMapContext,
+  getFirstBlockingObstacleContact,
   getMatchMapContext,
   isPointInsideBlockingObstacle,
+  type MapObstacle,
   type MatchMapContext,
 } from '../../shared/maps';
 import { getActiveMatchBootstrap } from '../sessionRuntime';
+
+const OBSTACLE_EDGE_INSET_PX = 1;
+
+export function getObstacleReadableEdgeStrokeRect(obstacle: MapObstacle): {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+} | null {
+  if (obstacle.width <= OBSTACLE_EDGE_INSET_PX * 2 || obstacle.height <= OBSTACLE_EDGE_INSET_PX * 2) {
+    return null;
+  }
+
+  return {
+    x: obstacle.x + OBSTACLE_EDGE_INSET_PX,
+    y: obstacle.y + OBSTACLE_EDGE_INSET_PX,
+    width: obstacle.width - OBSTACLE_EDGE_INSET_PX * 2,
+    height: obstacle.height - OBSTACLE_EDGE_INSET_PX * 2,
+  };
+}
 
 export class GameScene extends Phaser.Scene {
   private wsClient!: WebSocketClient;
@@ -253,10 +276,9 @@ export class GameScene extends Phaser.Scene {
       if (this.isPointerHeld && this.shootingManager && !this.shootingManager.isMeleeWeapon() && this.shootingManager.isAutomatic()) {
         this.shootingManager.setAimAngle(currentAimAngle);
         const obstructed = this.getObstructedBarrelPosition(currentAimAngle);
-        if (obstructed) {
+        const didShoot = this.shootingManager.shoot();
+        if (didShoot && obstructed) {
           this.ui.showWallSpark(obstructed.x, obstructed.y);
-        } else {
-          this.shootingManager.shoot();
         }
       }
 
@@ -368,10 +390,9 @@ export class GameScene extends Phaser.Scene {
       }
 
       const obstructed = this.getObstructedBarrelPosition(aimAngle);
-      if (obstructed) {
+      const didShoot = this.shootingManager.shoot();
+      if (didShoot && obstructed) {
         this.ui.showWallSpark(obstructed.x, obstructed.y);
-      } else {
-        this.shootingManager.shoot();
       }
     });
 
@@ -486,7 +507,7 @@ export class GameScene extends Phaser.Scene {
       this.predictionEngine.setMapContext(mapContext);
     }
     if (this.projectileManager) {
-      this.projectileManager.setWorldBounds(mapContext.width, mapContext.height);
+      this.projectileManager.setWorldBounds(mapContext.width, mapContext.height, mapContext.obstacles);
     }
     if (this.weaponCrateManager) {
       this.weaponCrateManager.initializeFromMapWeaponSpawns(mapContext.weaponSpawns);
@@ -524,8 +545,16 @@ export class GameScene extends Phaser.Scene {
       const fillColor = obstacle.type === 'desk' ? 0x8f948f : 0x646864;
       this.obstacleGraphics.fillStyle(fillColor, 1);
       this.obstacleGraphics.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
-      this.obstacleGraphics.lineStyle(2, 0x2f3330, 1);
-      this.obstacleGraphics.strokeRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+      const readableEdgeStroke = getObstacleReadableEdgeStrokeRect(obstacle);
+      if (readableEdgeStroke) {
+        this.obstacleGraphics.lineStyle(1, 0x2f3330, 1);
+        this.obstacleGraphics.strokeRect(
+          readableEdgeStroke.x,
+          readableEdgeStroke.y,
+          readableEdgeStroke.width,
+          readableEdgeStroke.height
+        );
+      }
     }
   }
 
@@ -539,6 +568,18 @@ export class GameScene extends Phaser.Scene {
       : null;
     const barrelX = barrel?.x ?? (playerPos.x + Math.cos(aimAngle) * 35);
     const barrelY = barrel?.y ?? (playerPos.y + Math.sin(aimAngle) * 35);
+    const weaponType = this.shootingManager?.getWeaponState().weaponType ?? 'Pistol';
+    const barrelLength = getWeaponBarrelLength(weaponType);
+    const muzzleOriginX = barrelX - Math.cos(aimAngle) * barrelLength;
+    const muzzleOriginY = barrelY - Math.sin(aimAngle) * barrelLength;
+    const wallContact = getFirstBlockingObstacleContact(
+      { x: muzzleOriginX, y: muzzleOriginY },
+      { x: barrelX, y: barrelY },
+      this.matchMapContext.obstacles
+    );
+    if (wallContact) {
+      return { x: wallContact.x, y: wallContact.y };
+    }
 
     if (
       barrelX < 0 ||
