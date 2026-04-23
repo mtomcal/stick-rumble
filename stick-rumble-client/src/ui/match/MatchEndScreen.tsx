@@ -10,7 +10,7 @@ export interface MatchEndScreenProps {
   onPlayAgain: () => void;
 }
 
-export function MatchEndScreen({ matchData, localPlayerId, onClose, onPlayAgain }: MatchEndScreenProps) {
+export function MatchEndScreen({ matchData, localPlayerId, onPlayAgain }: MatchEndScreenProps) {
   const [countdown, setCountdown] = useState(10);
   const hasCalledPlayAgainRef = useRef(false);
 
@@ -25,24 +25,12 @@ export function MatchEndScreen({ matchData, localPlayerId, onClose, onPlayAgain 
   // Find local player data
   const localPlayer = matchData.finalScores.find(p => p.playerId === localPlayerId);
   const localPlayerRank = rankedPlayers.findIndex(p => p.playerId === localPlayerId) + 1;
-  const isWinner = matchData.winners.includes(localPlayerId);
+  const isWinner = matchData.winners.some((winner) => winner.playerId === localPlayerId);
   const isTopThree = localPlayerRank > 0 && localPlayerRank <= 3;
 
   // Calculate XP breakdown
   const localPlayerKills = localPlayer?.kills ?? 0;
   const xpData = calculateXP(localPlayerKills, isWinner, isTopThree);
-
-  // Handle ESC key
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
 
   // Countdown timer
   useEffect(() => {
@@ -65,12 +53,6 @@ export function MatchEndScreen({ matchData, localPlayerId, onClose, onPlayAgain 
     }
   }, [countdown, onPlayAgain]);
 
-  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.target === e.currentTarget) {
-      onClose();
-    }
-  };
-
   const handlePlayAgain = () => {
     onPlayAgain();
   };
@@ -83,34 +65,25 @@ export function MatchEndScreen({ matchData, localPlayerId, onClose, onPlayAgain 
     if (matchData.winners.length === 1) {
       return (
         <h2 className="match-end-title">
-          Winner: <span className="winner-name">{matchData.winners[0]}</span>
+          Winner: <span className="winner-name">{matchData.winners[0].displayName}</span>
         </h2>
       );
     }
 
     return (
       <h2 className="match-end-title">
-        Winners: <span className="winner-name">{matchData.winners.join(', ')}</span>
+        Winners: <span className="winner-name">{matchData.winners.map((winner) => winner.displayName).join(', ')}</span>
       </h2>
     );
   };
 
   return (
-    <div className="match-end-backdrop" onClick={handleBackdropClick}>
+    <div className="match-end-backdrop">
       <div
         className="match-end-modal"
         role="dialog"
         aria-label="Match End Results"
-        onClick={(e) => e.stopPropagation()}
       >
-        <button
-          className="close-button"
-          onClick={onClose}
-          aria-label="Close"
-        >
-          ×
-        </button>
-
         {renderWinners()}
 
         <div className="match-end-content">
@@ -133,7 +106,7 @@ export function MatchEndScreen({ matchData, localPlayerId, onClose, onPlayAgain 
                     className={player.playerId === localPlayerId ? 'local-player' : ''}
                   >
                     <td>{index + 1}</td>
-                    <td>{player.playerId}</td>
+                    <td>{player.displayName}</td>
                     <td>{player.kills}</td>
                     <td>{player.deaths}</td>
                   </tr>

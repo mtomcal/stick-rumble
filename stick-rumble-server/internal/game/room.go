@@ -30,6 +30,14 @@ const (
 
 type RoomCodeErrorReason string
 
+type SessionStatusState string
+
+const (
+	SessionStatusSearchingForMatch SessionStatusState = "searching_for_match"
+	SessionStatusWaitingForPlayers SessionStatusState = "waiting_for_players"
+	SessionStatusMatchReady        SessionStatusState = "match_ready"
+)
+
 const (
 	RoomCodeMissing  RoomCodeErrorReason = "missing"
 	RoomCodeTooShort RoomCodeErrorReason = "too_short"
@@ -209,6 +217,18 @@ type RoomManager struct {
 	mu             sync.RWMutex
 }
 
+type SessionStatusData struct {
+	State       SessionStatusState `json:"state"`
+	PlayerID    string             `json:"playerId"`
+	DisplayName string             `json:"displayName"`
+	JoinMode    string             `json:"joinMode"`
+	RoomID      string             `json:"roomId,omitempty"`
+	Code        string             `json:"code,omitempty"`
+	RosterSize  int                `json:"rosterSize,omitempty"`
+	MinPlayers  int                `json:"minPlayers,omitempty"`
+	MapID       string             `json:"mapId,omitempty"`
+}
+
 func NewRoomManager(defaultMapIDs ...string) *RoomManager {
 	defaultMapID := DefaultMapID
 	if len(defaultMapIDs) > 0 && defaultMapIDs[0] != "" {
@@ -279,12 +299,15 @@ func (rm *RoomManager) AddPublicPlayer(player *Player) *Room {
 			if room.PlayerCount() >= MinPlayersToStart && !room.Match.IsStarted() {
 				room.Match.Start()
 			}
-			rm.sendRoomJoinedMessage(player, room)
+			for _, roomPlayer := range room.GetPlayers() {
+				rm.sendSessionStatus(roomPlayer, room, SessionStatusMatchReady)
+			}
 			return room
 		}
 	}
 
 	rm.waitingPlayers = append(rm.waitingPlayers, player)
+	rm.sendSessionStatus(player, nil, SessionStatusSearchingForMatch)
 	if len(rm.waitingPlayers) < MinPlayersToStart {
 		return nil
 	}
@@ -304,8 +327,8 @@ func (rm *RoomManager) AddPublicPlayer(player *Player) *Room {
 	rm.playerToRoom[player1.ID] = room.ID
 	rm.playerToRoom[player2.ID] = room.ID
 
-	rm.sendRoomJoinedMessage(player1, room)
-	rm.sendRoomJoinedMessage(player2, room)
+	rm.sendSessionStatus(player1, room, SessionStatusMatchReady)
+	rm.sendSessionStatus(player2, room, SessionStatusMatchReady)
 
 	return room
 }
@@ -334,8 +357,14 @@ func (rm *RoomManager) AddCodePlayer(player *Player, normalizedCode string) (*Ro
 				existingRoom.Match.RegisterPlayer(player.ID)
 				if existingRoom.PlayerCount() >= MinPlayersToStart && !existingRoom.Match.IsStarted() {
 					existingRoom.Match.Start()
+					for _, roomPlayer := range existingRoom.GetPlayers() {
+						rm.sendSessionStatus(roomPlayer, existingRoom, SessionStatusMatchReady)
+					}
+				} else if existingRoom.Match.IsStarted() {
+					rm.sendSessionStatus(player, existingRoom, SessionStatusMatchReady)
+				} else {
+					rm.sendSessionStatus(player, existingRoom, SessionStatusWaitingForPlayers)
 				}
-				rm.sendRoomJoinedMessage(player, existingRoom)
 				return existingRoom, true
 			}
 		}
@@ -347,46 +376,106 @@ func (rm *RoomManager) AddCodePlayer(player *Player, normalizedCode string) (*Ro
 	rm.rooms[room.ID] = room
 	rm.playerToRoom[player.ID] = room.ID
 	rm.codeIndex[normalizedCode] = room.ID
-	rm.sendRoomJoinedMessage(player, room)
+	rm.sendSessionStatus(player, room, SessionStatusWaitingForPlayers)
 	return room, true
 }
 
-func (rm *RoomManager) sendRoomJoinedMessage(player *Player, room *Room) {
-	data := map[string]any{
-		"roomId":      room.ID,
-		"playerId":    player.ID,
-		"mapId":       room.MapID,
-		"displayName": player.DisplayName,
-	}
-	if room.Kind == RoomKindCode && room.Code != "" {
-		data["code"] = room.Code
+func (rm *RoomManager) buildSessionStatusData(player *Player, room *Room, state SessionStatusState) SessionStatusData {
+	data := SessionStatusData{
+		State:       state,
+		PlayerID:    player.ID,
+		DisplayName: player.DisplayName,
+		MinPlayers:  MinPlayersToStart,
 	}
 
+	if room == nil {
+		data.JoinMode = string(RoomKindPublic)
+		return data
+	}
+
+	data.JoinMode = string(room.Kind)
+	data.RoomID = room.ID
+	data.RosterSize = room.PlayerCount()
+
+	if room.Kind == RoomKindCode && room.Code != "" {
+		data.Code = room.Code
+	}
+	if state == SessionStatusMatchReady {
+		data.MapID = room.MapID
+	}
+
+	return data
+}
+
+func (rm *RoomManager) sendSessionStatus(player *Player, room *Room, state SessionStatusState) {
+	data := rm.buildSessionStatusData(player, room, state)
 	message := map[string]any{
-		"type":      "room:joined",
+		"type":      "session:status",
 		"timestamp": time.Now().UnixMilli(),
 		"data":      data,
 	}
 
 	msgBytes, err := json.Marshal(message)
 	if err != nil {
-		log.Printf("Error marshaling room:joined message: %v", err)
+		log.Printf("Error marshaling session:status message: %v", err)
 		return
 	}
 
 	func() {
 		defer func() {
 			if rec := recover(); rec != nil {
-				log.Printf("Warning: Could not send room:joined message to player %s (channel closed)", player.ID)
+				log.Printf("Warning: Could not send session:status message to player %s (channel closed)", player.ID)
 			}
 		}()
 
 		select {
 		case player.SendChan <- msgBytes:
 		default:
-			log.Printf("Warning: Could not send room:joined message to player %s (channel full)", player.ID)
+			log.Printf("Warning: Could not send session:status message to player %s (channel full)", player.ID)
 		}
 	}()
+}
+
+func (rm *RoomManager) LeaveSession(playerID string) bool {
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+
+	for i, player := range rm.waitingPlayers {
+		if player.ID != playerID {
+			continue
+		}
+		rm.waitingPlayers = append(rm.waitingPlayers[:i], rm.waitingPlayers[i+1:]...)
+		return true
+	}
+
+	roomID, exists := rm.playerToRoom[playerID]
+	if !exists {
+		return false
+	}
+
+	room, exists := rm.rooms[roomID]
+	if !exists || room.Match.IsStarted() {
+		return false
+	}
+
+	room.RemovePlayer(playerID)
+	delete(rm.playerToRoom, playerID)
+
+	if room.IsEmpty() {
+		delete(rm.rooms, roomID)
+		if room.Kind == RoomKindCode && room.Code != "" {
+			if indexedID, ok := rm.codeIndex[room.Code]; ok && indexedID == room.ID {
+				delete(rm.codeIndex, room.Code)
+			}
+		}
+		return true
+	}
+
+	for _, remainingPlayer := range room.GetPlayers() {
+		rm.sendSessionStatus(remainingPlayer, room, SessionStatusWaitingForPlayers)
+	}
+
+	return true
 }
 
 func (rm *RoomManager) RemovePlayer(playerID string) {

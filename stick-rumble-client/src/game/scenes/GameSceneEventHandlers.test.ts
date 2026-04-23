@@ -142,7 +142,7 @@ describe('GameSceneEventHandlers', () => {
 
       // Verify all event types are registered
       expect(mockWsClient.on).toHaveBeenCalledWith('player:move', expect.any(Function));
-      expect(mockWsClient.on).toHaveBeenCalledWith('room:joined', expect.any(Function));
+      expect(mockWsClient.on).toHaveBeenCalledWith('session:status', expect.any(Function));
       expect(mockWsClient.on).toHaveBeenCalledWith('player:left', expect.any(Function));
       expect(mockWsClient.on).toHaveBeenCalledWith('projectile:spawn', expect.any(Function));
       expect(mockWsClient.on).toHaveBeenCalledWith('projectile:destroy', expect.any(Function));
@@ -204,7 +204,7 @@ describe('GameSceneEventHandlers', () => {
       // Verify all handlers were removed
       expect(mockWsClient.off).toHaveBeenCalledTimes(20);
       expect(mockWsClient.off).toHaveBeenCalledWith('player:move', expect.any(Function));
-      expect(mockWsClient.off).toHaveBeenCalledWith('room:joined', expect.any(Function));
+      expect(mockWsClient.off).toHaveBeenCalledWith('session:status', expect.any(Function));
       expect(mockWsClient.off).toHaveBeenCalledWith('player:left', expect.any(Function));
       expect(mockWsClient.off).toHaveBeenCalledWith('projectile:spawn', expect.any(Function));
       expect(mockWsClient.off).toHaveBeenCalledWith('projectile:destroy', expect.any(Function));
@@ -279,7 +279,7 @@ describe('GameSceneEventHandlers', () => {
       // Verify all 20 event types have stored references
       expect(handlerRefs.size).toBe(20);
       expect(handlerRefs.has('player:move')).toBe(true);
-      expect(handlerRefs.has('room:joined')).toBe(true);
+      expect(handlerRefs.has('session:status')).toBe(true);
       expect(handlerRefs.has('player:left')).toBe(true);
       expect(handlerRefs.has('projectile:spawn')).toBe(true);
       expect(handlerRefs.has('projectile:destroy')).toBe(true);
@@ -838,25 +838,21 @@ describe('GameSceneEventHandlers', () => {
       expect(mockPlayerManager.updatePlayers).not.toHaveBeenCalled();
     });
 
-    it('should handle room:joined when playerId is falsy', () => {
+    it('should ignore non-match-ready session:status payloads', () => {
       const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
-      const roomJoinedHandler = handlerRefs.get('room:joined');
+      const roomJoinedHandler = handlerRefs.get('session:status');
 
-      const data = { playerId: '' };
+      const data = { state: 'waiting_for_players', playerId: 'player-1', displayName: 'Alice', joinMode: 'code' };
 
-      // Should not throw when playerId is empty
       expect(() => {
         roomJoinedHandler?.(data);
       }).not.toThrow();
 
-      // Should still destroy old players
-      expect(mockPlayerManager.destroy).toHaveBeenCalled();
-
-      // Should not set local player ID or update health bar
+      expect(mockPlayerManager.destroy).not.toHaveBeenCalled();
       expect(mockPlayerManager.setLocalPlayerId).not.toHaveBeenCalled();
     });
 
-    it('should forward room:joined mapId to the map bootstrap callback', () => {
+    it('should forward match-ready mapId to the map bootstrap callback', () => {
       const onMatchMapChanged = vi.fn();
       const mapAwareHandlers = new GameSceneEventHandlers(
         mockWsClient,
@@ -877,26 +873,26 @@ describe('GameSceneEventHandlers', () => {
       mapAwareHandlers.setupEventHandlers();
 
       const handlerRefs = (mapAwareHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
-      const roomJoinedHandler = handlerRefs.get('room:joined');
+      const roomJoinedHandler = handlerRefs.get('session:status');
 
-      roomJoinedHandler?.({ playerId: 'player-1', roomId: 'room-1', mapId: 'default_office', displayName: 'Alice' });
+      roomJoinedHandler?.({ state: 'match_ready', playerId: 'player-1', roomId: 'room-1', mapId: 'default_office', displayName: 'Alice', joinMode: 'public' });
 
       expect(onMatchMapChanged).toHaveBeenCalledWith('default_office');
     });
 
-    it('should treat room:joined without displayName as a fatal version mismatch', () => {
+    it('should treat match-ready session:status without displayName as a fatal version mismatch', () => {
       const onRoomJoined = vi.fn();
       const onJoinError = vi.fn();
       eventHandlers.setJoinCallbacks(onRoomJoined, onJoinError, vi.fn());
 
       const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
-      const roomJoinedHandler = handlerRefs.get('room:joined');
+      const roomJoinedHandler = handlerRefs.get('session:status');
 
-      roomJoinedHandler?.({ playerId: 'player-1', roomId: 'room-1', mapId: 'default_office' });
+      roomJoinedHandler?.({ state: 'match_ready', playerId: 'player-1', roomId: 'room-1', mapId: 'default_office', joinMode: 'public' });
 
       expect(onJoinError).toHaveBeenCalledWith({
         type: 'error:no_hello',
-        offendingType: 'room:joined:missing_display_name',
+        offendingType: 'session:status:missing_display_name',
       });
       expect(onRoomJoined).not.toHaveBeenCalled();
       expect(mockPlayerManager.setLocalPlayerId).not.toHaveBeenCalled();
@@ -949,13 +945,13 @@ describe('GameSceneEventHandlers', () => {
       eventHandlers.setupEventHandlers();
 
       const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
-      const roomJoinedHandler = handlerRefs.get('room:joined');
+      const roomJoinedHandler = handlerRefs.get('session:status');
       const playerMoveHandler = handlerRefs.get('player:move');
 
       // First, join the room to set local player ID
-      roomJoinedHandler?.({ playerId: 'player-1', roomId: 'room-1', mapId: 'default_office' });
+      roomJoinedHandler?.({ state: 'match_ready', playerId: 'player-1', roomId: 'room-1', mapId: 'default_office', displayName: 'Alice', joinMode: 'public' });
 
-      // Clear the initial health bar update from room:joined
+      // Clear the initial health bar update from session:status(match_ready)
       vi.clearAllMocks();
 
       const data = {
@@ -1477,14 +1473,14 @@ describe('GameSceneEventHandlers', () => {
       expect(mockWeaponCrateManager.spawnCrate).not.toHaveBeenCalled();
     });
 
-    it('should process pending weapon spawns when room:joined with empty queue', () => {
+    it('should process pending weapon spawns when session:status(match_ready) arrives with empty queue', () => {
       eventHandlers.setupEventHandlers();
 
       const handlerRefs = (eventHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
-      const roomJoinedHandler = handlerRefs.get('room:joined');
+      const roomJoinedHandler = handlerRefs.get('session:status');
 
       // Join room with empty pending queue (nothing queued before)
-      roomJoinedHandler?.({ playerId: 'player-1', roomId: 'room-1', mapId: 'default_office' });
+      roomJoinedHandler?.({ state: 'match_ready', playerId: 'player-1', roomId: 'room-1', mapId: 'default_office', displayName: 'Alice', joinMode: 'public' });
 
       // Should not crash with empty queue
       const pendingSpawns = (eventHandlers as any).pendingWeaponSpawns;
@@ -1936,7 +1932,7 @@ describe('GameSceneEventHandlers', () => {
       expect(mockAimLine.showTrail).toHaveBeenCalledWith(160, 200, 100, 200);
     });
 
-    it('should process queued weapon spawns on room:joined', () => {
+    it('should process queued weapon spawns on session:status(match_ready)', () => {
       // Create event handlers without local player initially
       let localPlayerId: string | null = null;
       const dynamicPlayerManager = {
@@ -1964,7 +1960,7 @@ describe('GameSceneEventHandlers', () => {
 
       const handlerRefs = (testHandlers as any).handlerRefs as Map<string, (data: unknown) => void>;
       const weaponSpawnedHandler = handlerRefs.get('weapon:spawned');
-      const roomJoinedHandler = handlerRefs.get('room:joined');
+      const roomJoinedHandler = handlerRefs.get('session:status');
 
       (mockPlayerManager.getLocalPlayerId as Mock).mockReturnValue(null);
 
@@ -1979,7 +1975,7 @@ describe('GameSceneEventHandlers', () => {
 
       // Now join the room
       (mockPlayerManager.getLocalPlayerId as Mock).mockReturnValue('player-1');
-      roomJoinedHandler?.({ playerId: 'player-1', roomId: 'room-1', mapId: 'default_office', displayName: 'Alice' });
+      roomJoinedHandler?.({ state: 'match_ready', playerId: 'player-1', roomId: 'room-1', mapId: 'default_office', displayName: 'Alice', joinMode: 'public' });
 
       // Queued weapon spawns should have been processed
       expect(mockWeaponCrateManager.spawnCrate).toHaveBeenCalledWith(

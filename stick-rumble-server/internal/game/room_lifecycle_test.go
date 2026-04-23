@@ -3,10 +3,45 @@ package game
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func readSessionStatusFromChan(t *testing.T, ch <-chan []byte, expectedState string) map[string]interface{} {
+	deadline := time.After(2 * time.Second)
+	for {
+		select {
+		case msgBytes := <-ch:
+			var msg map[string]interface{}
+			err := json.Unmarshal(msgBytes, &msg)
+			require.NoError(t, err)
+
+			if msg["type"] != "session:status" {
+				continue
+			}
+
+			data, ok := msg["data"].(map[string]interface{})
+			require.True(t, ok)
+			if data["state"] == expectedState {
+				return msg
+			}
+		case <-deadline:
+			t.Fatalf("timed out waiting for session:status(%s)", expectedState)
+		}
+	}
+}
+
+func drainLifecycleChannel(ch <-chan []byte) {
+	for {
+		select {
+		case <-ch:
+		default:
+			return
+		}
+	}
+}
 
 // TestRoomCreation tests basic room creation
 func TestRoomCreation(t *testing.T) {
@@ -111,7 +146,7 @@ func TestAutoCreateRoomWithTwoPlayers(t *testing.T) {
 	assert.Contains(t, manager.rooms, room2.ID)
 }
 
-// TestRoomJoinedMessage tests that players receive room:joined message
+// TestRoomJoinedMessage tests that players receive session:status(match_ready)
 func TestRoomJoinedMessage(t *testing.T) {
 	manager := NewRoomManager()
 
@@ -127,35 +162,27 @@ func TestRoomJoinedMessage(t *testing.T) {
 
 	require.NotNil(t, room)
 
-	// Both players should receive room:joined messages
-	msg1Bytes := <-player1Chan
-	msg2Bytes := <-player2Chan
-
-	// Parse and verify player 1's message
-	var msg1 map[string]interface{}
-	err := json.Unmarshal(msg1Bytes, &msg1)
-	require.NoError(t, err, "Should unmarshal player 1's room:joined message")
-
-	assert.Equal(t, "room:joined", msg1["type"])
+	msg1 := readSessionStatusFromChan(t, player1Chan, string(SessionStatusMatchReady))
+	assert.Equal(t, "session:status", msg1["type"])
 	assert.NotNil(t, msg1["timestamp"])
 
 	data1, ok := msg1["data"].(map[string]interface{})
 	require.True(t, ok, "Data should be a map")
+	assert.Equal(t, string(SessionStatusMatchReady), data1["state"])
 	assert.Equal(t, player1.ID, data1["playerId"])
 	assert.Equal(t, room.ID, data1["roomId"])
+	assert.Equal(t, room.MapID, data1["mapId"])
 
-	// Parse and verify player 2's message
-	var msg2 map[string]interface{}
-	err = json.Unmarshal(msg2Bytes, &msg2)
-	require.NoError(t, err, "Should unmarshal player 2's room:joined message")
-
-	assert.Equal(t, "room:joined", msg2["type"])
+	msg2 := readSessionStatusFromChan(t, player2Chan, string(SessionStatusMatchReady))
+	assert.Equal(t, "session:status", msg2["type"])
 	assert.NotNil(t, msg2["timestamp"])
 
 	data2, ok := msg2["data"].(map[string]interface{})
 	require.True(t, ok, "Data should be a map")
+	assert.Equal(t, string(SessionStatusMatchReady), data2["state"])
 	assert.Equal(t, player2.ID, data2["playerId"])
 	assert.Equal(t, room.ID, data2["roomId"])
+	assert.Equal(t, room.MapID, data2["mapId"])
 }
 
 // TestPlayerDisconnection tests player:left event on disconnection
@@ -173,9 +200,8 @@ func TestPlayerDisconnection(t *testing.T) {
 	room := manager.AddPlayer(player2)
 	require.NotNil(t, room)
 
-	// Clear the room:joined messages
-	<-player1Chan
-	<-player2Chan
+	_ = readSessionStatusFromChan(t, player1Chan, string(SessionStatusMatchReady))
+	_ = readSessionStatusFromChan(t, player2Chan, string(SessionStatusMatchReady))
 
 	// Remove player1
 	manager.RemovePlayer("player1")
@@ -315,9 +341,8 @@ func TestRemovePlayerWithJSONMarshalError(t *testing.T) {
 	room := manager.AddPlayer(player2)
 	require.NotNil(t, room)
 
-	// Clear room:joined messages
-	<-player1Chan
-	<-player2Chan
+	drainLifecycleChannel(player1Chan)
+	drainLifecycleChannel(player2Chan)
 
 	// Remove player - this should successfully broadcast player:left
 	// Even if there were a JSON marshal error, it would log and continue

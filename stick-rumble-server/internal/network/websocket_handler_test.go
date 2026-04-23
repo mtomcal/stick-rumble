@@ -3,6 +3,7 @@ package network
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -189,13 +190,31 @@ func sendReloadMessage(t *testing.T, conn *websocket.Conn) {
 	sendMessage(t, conn, msg)
 }
 
-// consumeRoomJoinedAndGetPlayerID reads room:joined and weapon:spawned, returns player ID
-func consumeRoomJoinedAndGetPlayerID(t *testing.T, conn *websocket.Conn) string {
-	msg, err := readMessageOfType(t, conn, "room:joined", 2*time.Second)
-	require.NoError(t, err, "Should receive room:joined message")
+func readSessionStatus(t *testing.T, conn *websocket.Conn, expectedState string, timeout time.Duration) (*Message, map[string]interface{}, error) {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		msg, err := readMessageOfType(t, conn, "session:status", time.Until(deadline))
+		if err != nil {
+			return nil, nil, err
+		}
 
-	data, ok := msg.Data.(map[string]interface{})
-	require.True(t, ok, "Message data should be a map")
+		data, ok := msg.Data.(map[string]interface{})
+		require.True(t, ok, "session:status data should be a map")
+		state, ok := data["state"].(string)
+		require.True(t, ok, "session:status state should be a string")
+		if state == expectedState {
+			return msg, data, nil
+		}
+	}
+
+	return nil, nil, fmt.Errorf("timed out waiting for session:status(%s)", expectedState)
+}
+
+// consumeRoomJoinedAndGetPlayerID reads session:status(match_ready) and weapon:spawned, returns player ID
+func consumeRoomJoinedAndGetPlayerID(t *testing.T, conn *websocket.Conn) string {
+	_, data, err := readSessionStatus(t, conn, "match_ready", 2*time.Second)
+	require.NoError(t, err, "Should receive session:status(match_ready) message")
+
 	playerID, ok := data["playerId"].(string)
 	require.True(t, ok, "playerId should be a string")
 
@@ -238,6 +257,22 @@ func TestGameplayMessageBeforeHelloReturnsError(t *testing.T) {
 	assert.Equal(t, "input:state", data["offendingType"])
 }
 
+func TestPublicHelloReturnsSearchingForMatchStatus(t *testing.T) {
+	ts := newTestServer()
+	defer ts.Close()
+
+	conn := ts.connectRawClient(t)
+	defer conn.Close()
+
+	sendHelloMessage(t, conn, "Queue Player", "public", "")
+
+	_, data, err := readSessionStatus(t, conn, "searching_for_match", 2*time.Second)
+	require.NoError(t, err, "Should receive searching_for_match status")
+	assert.Equal(t, "Queue Player", data["displayName"])
+	assert.Equal(t, "public", data["joinMode"])
+	assert.Nil(t, data["mapId"])
+}
+
 func TestCodeHelloReturnsNormalizedCodeAndSanitizedDisplayName(t *testing.T) {
 	ts := newTestServer()
 	defer ts.Close()
@@ -247,11 +282,9 @@ func TestCodeHelloReturnsNormalizedCodeAndSanitizedDisplayName(t *testing.T) {
 
 	sendHelloMessage(t, conn, "  Sanitized   Player Name  ", "code", " p.i z z a!!! ")
 
-	msg, err := readMessageOfType(t, conn, "room:joined", 2*time.Second)
-	require.NoError(t, err, "Should receive room:joined for valid code hello")
+	_, data, err := readSessionStatus(t, conn, "waiting_for_players", 2*time.Second)
+	require.NoError(t, err, "Should receive waiting_for_players for valid code hello")
 
-	data, ok := msg.Data.(map[string]interface{})
-	require.True(t, ok)
 	assert.Equal(t, "PIZZA", data["code"])
 	assert.Equal(t, "Sanitized Player", data["displayName"])
 }
@@ -274,11 +307,8 @@ func TestBadCodeHelloCanRetryOnSameSocket(t *testing.T) {
 
 	sendHelloMessage(t, conn, "Retry Player", "code", " PIZZA ")
 
-	roomJoinedMsg, err := readMessageOfType(t, conn, "room:joined", 2*time.Second)
+	_, joinedData, err := readSessionStatus(t, conn, "waiting_for_players", 2*time.Second)
 	require.NoError(t, err, "Should allow corrected hello on same socket")
-
-	joinedData, ok := roomJoinedMsg.Data.(map[string]interface{})
-	require.True(t, ok)
 	assert.Equal(t, "PIZZA", joinedData["code"])
 }
 
@@ -292,8 +322,13 @@ func TestFullCodeRoomReturnsRoomFullAndKeepsSocketOpen(t *testing.T) {
 		conn := ts.connectRawClient(t)
 		conns = append(conns, conn)
 		sendHelloMessage(t, conn, "Packed Player", "code", fullCode)
-		_, err := readMessageOfType(t, conn, "room:joined", 2*time.Second)
+		state := "waiting_for_players"
+		if i >= 1 {
+			state = "match_ready"
+		}
+		msg, _, err := readSessionStatus(t, conn, state, 2*time.Second)
 		require.NoError(t, err)
+		require.NotNil(t, msg)
 	}
 	defer func() {
 		for _, conn := range conns {
@@ -314,11 +349,8 @@ func TestFullCodeRoomReturnsRoomFullAndKeepsSocketOpen(t *testing.T) {
 	assert.Equal(t, fullCode, data["code"])
 
 	sendHelloMessage(t, recoveryConn, "Recovery Player", "code", "SAFE")
-	recoveryJoined, err := readMessageOfType(t, recoveryConn, "room:joined", 2*time.Second)
+	_, joinedData, err := readSessionStatus(t, recoveryConn, "waiting_for_players", 2*time.Second)
 	require.NoError(t, err, "Should allow a different code on the same socket after room_full")
-
-	joinedData, ok := recoveryJoined.Data.(map[string]interface{})
-	require.True(t, ok)
 	assert.Equal(t, "SAFE", joinedData["code"])
 }
 
@@ -330,21 +362,10 @@ func TestTwoClientRoomCreation(t *testing.T) {
 	defer conn1.Close()
 	defer conn2.Close()
 
-	// Read room:joined messages from both clients
-	msg1, err := readMessageOfType(t, conn1, "room:joined", 2*time.Second)
-	require.NoError(t, err, "Client 1 should receive room:joined")
-	msg2, err := readMessageOfType(t, conn2, "room:joined", 2*time.Second)
-	require.NoError(t, err, "Client 2 should receive room:joined")
-
-	// Verify message type
-	assert.Equal(t, "room:joined", msg1.Type)
-	assert.Equal(t, "room:joined", msg2.Type)
-
-	// Extract room and player IDs
-	data1, ok := msg1.Data.(map[string]interface{})
-	require.True(t, ok)
-	data2, ok := msg2.Data.(map[string]interface{})
-	require.True(t, ok)
+	_, data1, err := readSessionStatus(t, conn1, "match_ready", 2*time.Second)
+	require.NoError(t, err, "Client 1 should receive session:status(match_ready)")
+	_, data2, err := readSessionStatus(t, conn2, "match_ready", 2*time.Second)
+	require.NoError(t, err, "Client 2 should receive session:status(match_ready)")
 
 	roomID1 := data1["roomId"].(string)
 	roomID2 := data2["roomId"].(string)
@@ -356,6 +377,85 @@ func TestTwoClientRoomCreation(t *testing.T) {
 	assert.NotEmpty(t, playerID1)
 	assert.NotEmpty(t, playerID2)
 	assert.NotEqual(t, playerID1, playerID2, "Players should have different IDs")
+}
+
+func TestSessionLeaveRemovesWaitingPublicPlayerAndAllowsRetry(t *testing.T) {
+	ts := newTestServer()
+	defer ts.Close()
+
+	conn := ts.connectRawClient(t)
+	defer conn.Close()
+
+	sendHelloMessage(t, conn, "Queue Player", "public", "")
+	_, data, err := readSessionStatus(t, conn, "searching_for_match", 2*time.Second)
+	require.NoError(t, err)
+	playerID := data["playerId"].(string)
+
+	sendMessage(t, conn, Message{
+		Type:      "session:leave",
+		Timestamp: time.Now().UnixMilli(),
+	})
+
+	assert.Nil(t, ts.handler.roomManager.GetRoomByPlayerID(playerID))
+	require.Eventually(t, func() bool {
+		_, exists := ts.handler.gameServer.GetPlayerState(playerID)
+		return !exists
+	}, time.Second, 10*time.Millisecond, "session:leave should remove waiting public player from game state")
+
+	sendHelloMessage(t, conn, "Queue Player", "public", "")
+	msg, _, err := readSessionStatus(t, conn, "searching_for_match", 2*time.Second)
+	require.NoError(t, err, "Should allow a fresh hello after session:leave")
+	require.NotNil(t, msg)
+}
+
+func TestSessionLeaveRemovesWaitingCodePlayer(t *testing.T) {
+	ts := newTestServer()
+	defer ts.Close()
+
+	conn := ts.connectRawClient(t)
+	defer conn.Close()
+
+	sendHelloMessage(t, conn, "Code Player", "code", "PIZZA")
+	_, data, err := readSessionStatus(t, conn, "waiting_for_players", 2*time.Second)
+	require.NoError(t, err)
+	roomID := data["roomId"].(string)
+	playerID := data["playerId"].(string)
+
+	sendMessage(t, conn, Message{
+		Type:      "session:leave",
+		Timestamp: time.Now().UnixMilli(),
+	})
+
+	assert.False(t, ts.handler.roomManager.RemoveRoomIfIdle(roomID), "waiting code room should already be removed by session:leave")
+	require.Eventually(t, func() bool {
+		_, exists := ts.handler.gameServer.GetPlayerState(playerID)
+		return !exists
+	}, time.Second, 10*time.Millisecond, "session:leave should remove waiting code player from game state")
+}
+
+func TestSessionLeaveIgnoredAfterMatchStart(t *testing.T) {
+	ts := newTestServer()
+	defer ts.Close()
+
+	conn1, conn2 := ts.connectTwoClients(t)
+	defer conn1.Close()
+	defer conn2.Close()
+
+	player1ID := consumeRoomJoinedAndGetPlayerID(t, conn1)
+	_ = consumeRoomJoinedAndGetPlayerID(t, conn2)
+
+	sendMessage(t, conn1, Message{
+		Type:      "session:leave",
+		Timestamp: time.Now().UnixMilli(),
+	})
+
+	sendHelloMessage(t, conn1, "Queue Jumper", "public", "")
+
+	room := ts.handler.roomManager.GetRoomByPlayerID(player1ID)
+	require.NotNil(t, room, "active player should remain in room after session:leave")
+	assert.NotNil(t, room.GetPlayer(player1ID))
+	_, _, err := readSessionStatus(t, conn1, "searching_for_match", 250*time.Millisecond)
+	require.Error(t, err, "active player should not be able to re-hello after ignored session:leave")
 }
 
 func TestPlayerDisconnection(t *testing.T) {

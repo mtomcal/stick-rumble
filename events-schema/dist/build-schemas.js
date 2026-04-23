@@ -8,8 +8,8 @@ import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 // Import schemas
 import { PositionSchema, VelocitySchema, MessageSchema } from './schemas/common.js';
-import { InputStateDataSchema, InputStateMessageSchema, PlayerShootDataSchema, PlayerShootMessageSchema, PlayerReloadMessageSchema, WeaponPickupAttemptDataSchema, WeaponPickupAttemptMessageSchema, PlayerMeleeAttackDataSchema, PlayerMeleeAttackMessageSchema, PlayerDodgeRollMessageSchema, } from './schemas/client-to-server.js';
-import { RoomJoinedDataSchema, RoomJoinedMessageSchema, PlayerLeftDataSchema, PlayerLeftMessageSchema, PlayerStateSchema, PlayerMoveDataSchema, PlayerMoveMessageSchema, ProjectileSpawnDataSchema, ProjectileSpawnMessageSchema, ProjectileDestroyDataSchema, ProjectileDestroyMessageSchema, WeaponStateDataSchema, WeaponStateMessageSchema, ShootFailedDataSchema, ShootFailedMessageSchema, PlayerDamagedDataSchema, PlayerDamagedMessageSchema, HitConfirmedDataSchema, HitConfirmedMessageSchema, PlayerDeathDataSchema, PlayerDeathMessageSchema, PlayerKillCreditDataSchema, PlayerKillCreditMessageSchema, PlayerRespawnDataSchema, PlayerRespawnMessageSchema, MatchTimerDataSchema, MatchTimerMessageSchema, MatchEndedDataSchema, MatchEndedMessageSchema, WeaponCrateSchema, WeaponSpawnedDataSchema, WeaponSpawnedMessageSchema, WeaponPickupConfirmedDataSchema, WeaponPickupConfirmedMessageSchema, WeaponRespawnedDataSchema, WeaponRespawnedMessageSchema, MeleeHitDataSchema, MeleeHitMessageSchema, RollStartDataSchema, RollStartMessageSchema, RollEndDataSchema, RollEndMessageSchema, ProjectileSnapshotSchema, WeaponCrateSnapshotSchema, StateSnapshotDataSchema, StateSnapshotMessageSchema, StateDeltaDataSchema, StateDeltaMessageSchema, } from './schemas/server-to-client.js';
+import { PlayerHelloPublicDataSchema, PlayerHelloCodeDataSchema, PlayerHelloDataSchema, PlayerHelloMessageSchema, SessionLeaveMessageSchema, InputStateDataSchema, InputStateMessageSchema, PlayerShootDataSchema, PlayerShootMessageSchema, PlayerReloadMessageSchema, WeaponPickupAttemptDataSchema, WeaponPickupAttemptMessageSchema, PlayerMeleeAttackDataSchema, PlayerMeleeAttackMessageSchema, PlayerDodgeRollMessageSchema, } from './schemas/client-to-server.js';
+import { RoomJoinedDataSchema, RoomJoinedMessageSchema, ErrorNoHelloDataSchema, ErrorNoHelloMessageSchema, ErrorBadRoomCodeDataSchema, ErrorBadRoomCodeMessageSchema, ErrorRoomFullDataSchema, ErrorRoomFullMessageSchema, PlayerLeftDataSchema, PlayerLeftMessageSchema, PlayerStateSchema, PlayerMoveDataSchema, PlayerMoveMessageSchema, ProjectileSpawnDataSchema, ProjectileSpawnMessageSchema, ProjectileDestroyDataSchema, ProjectileDestroyMessageSchema, WeaponStateDataSchema, WeaponStateMessageSchema, ShootFailedDataSchema, ShootFailedMessageSchema, PlayerDamagedDataSchema, PlayerDamagedMessageSchema, HitConfirmedDataSchema, HitConfirmedMessageSchema, PlayerDeathDataSchema, PlayerDeathMessageSchema, PlayerKillCreditDataSchema, PlayerKillCreditMessageSchema, PlayerRespawnDataSchema, PlayerRespawnMessageSchema, MatchTimerDataSchema, MatchTimerMessageSchema, MatchEndedDataSchema, MatchEndedMessageSchema, WeaponCrateSchema, WeaponSpawnedDataSchema, WeaponSpawnedMessageSchema, WeaponPickupConfirmedDataSchema, WeaponPickupConfirmedMessageSchema, WeaponRespawnedDataSchema, WeaponRespawnedMessageSchema, MeleeHitDataSchema, MeleeHitMessageSchema, RollStartDataSchema, RollStartMessageSchema, RollEndDataSchema, RollEndMessageSchema, ProjectileSnapshotSchema, WeaponCrateSnapshotSchema, StateSnapshotDataSchema, StateSnapshotMessageSchema, StateDeltaDataSchema, StateDeltaMessageSchema, SessionStatusDataSchema, SessionStatusMessageSchema, WinnerSummarySchema, } from './schemas/server-to-client.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const rootDir = join(__dirname, '..');
@@ -27,6 +27,26 @@ const schemas = [
         outputPath: 'schemas/common/message.json',
     },
     // Client-to-server schemas
+    {
+        schema: PlayerHelloPublicDataSchema,
+        outputPath: 'schemas/client-to-server/player-hello-public-data.json',
+    },
+    {
+        schema: PlayerHelloCodeDataSchema,
+        outputPath: 'schemas/client-to-server/player-hello-code-data.json',
+    },
+    {
+        schema: PlayerHelloDataSchema,
+        outputPath: 'schemas/client-to-server/player-hello-data.json',
+    },
+    {
+        schema: PlayerHelloMessageSchema,
+        outputPath: 'schemas/client-to-server/player-hello-message.json',
+    },
+    {
+        schema: SessionLeaveMessageSchema,
+        outputPath: 'schemas/client-to-server/session-leave-message.json',
+    },
     {
         schema: InputStateDataSchema,
         outputPath: 'schemas/client-to-server/input-state-data.json',
@@ -69,12 +89,44 @@ const schemas = [
     },
     // Server-to-client schemas
     {
+        schema: SessionStatusDataSchema,
+        outputPath: 'schemas/server-to-client/session-status-data.json',
+    },
+    {
+        schema: SessionStatusMessageSchema,
+        outputPath: 'schemas/server-to-client/session-status-message.json',
+    },
+    {
         schema: RoomJoinedDataSchema,
         outputPath: 'schemas/server-to-client/room-joined-data.json',
     },
     {
         schema: RoomJoinedMessageSchema,
         outputPath: 'schemas/server-to-client/room-joined-message.json',
+    },
+    {
+        schema: ErrorNoHelloDataSchema,
+        outputPath: 'schemas/server-to-client/error-no-hello-data.json',
+    },
+    {
+        schema: ErrorNoHelloMessageSchema,
+        outputPath: 'schemas/server-to-client/error-no-hello-message.json',
+    },
+    {
+        schema: ErrorBadRoomCodeDataSchema,
+        outputPath: 'schemas/server-to-client/error-bad-room-code-data.json',
+    },
+    {
+        schema: ErrorBadRoomCodeMessageSchema,
+        outputPath: 'schemas/server-to-client/error-bad-room-code-message.json',
+    },
+    {
+        schema: ErrorRoomFullDataSchema,
+        outputPath: 'schemas/server-to-client/error-room-full-data.json',
+    },
+    {
+        schema: ErrorRoomFullMessageSchema,
+        outputPath: 'schemas/server-to-client/error-room-full-message.json',
     },
     {
         schema: PlayerLeftDataSchema,
@@ -175,6 +227,10 @@ const schemas = [
     {
         schema: MatchTimerMessageSchema,
         outputPath: 'schemas/server-to-client/match-timer-message.json',
+    },
+    {
+        schema: WinnerSummarySchema,
+        outputPath: 'schemas/server-to-client/winner-summary.json',
     },
     {
         schema: MatchEndedDataSchema,

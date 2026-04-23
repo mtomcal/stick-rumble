@@ -1,7 +1,7 @@
 # Messages
 
-> **Spec Version**: 1.3.1
-> **Last Updated**: 2026-04-11
+> **Spec Version**: 1.4.1
+> **Last Updated**: 2026-04-23
 > **Depends On**: [constants.md](constants.md), [player.md](player.md)
 > **Depended By**: [networking.md](networking.md), [rooms.md](rooms.md), [weapons.md](weapons.md), [shooting.md](shooting.md), [melee.md](melee.md), [hit-detection.md](hit-detection.md), [match.md](match.md), [client-architecture.md](client-architecture.md), [server-architecture.md](server-architecture.md)
 
@@ -84,11 +84,12 @@ type Message struct {
 
 ## Message Summary
 
-### Client → Server (8 types)
+### Client → Server (9 types)
 
 | Type | Description | Frequency |
 |------|-------------|-----------|
 | `player:hello` | Join intent (display name + room assignment) | Exactly once per connection, before any gameplay message |
+| `session:leave` | Leave queue or pre-match waiting state | On-demand (user presses Back/Cancel) |
 | `input:state` | WASD movement and aim | Every input change (~60 Hz max) |
 | `player:shoot` | Fire weapon request | On-demand (player clicks) |
 | `player:reload` | Reload weapon request | On-demand (player presses R) |
@@ -101,7 +102,7 @@ type Message struct {
 
 | Type | Description | Recipients |
 |------|-------------|------------|
-| `room:joined` | Player assigned to room | Joining player |
+| `session:status` | Authoritative pre-match session snapshot | Joining / waiting / ready player |
 | `error:no_hello` | Gameplay message received before `player:hello` | Offending player |
 | `error:bad_room_code` | `player:hello` room code failed normalization | Offending player |
 | `error:room_full` | Named-room join rejected because room has 8 players | Offending player |
@@ -126,6 +127,17 @@ type Message struct {
 | `roll:end` | Dodge roll ended | Room broadcast |
 | `state:snapshot` | Full state (delta compression) | Per-client (1 Hz) |
 | `state:delta` | Incremental state changes | Per-client (20 Hz) |
+
+### Session Lifecycle Contract
+
+`session:status` is the authoritative readiness signal for both production clients and automated tests.
+
+- A successful `player:hello` does **not** guarantee the player can immediately enter gameplay.
+- Consumers that need a playable match session must wait for `session:status.state == "match_ready"`.
+- Consumers that only need to confirm the player has joined a pre-match session may wait for a non-error `session:status` state such as `searching_for_match` or `waiting_for_players`.
+- `room:joined` remains a legacy compatibility event only. New client flows, app bootstrap logic, and integration tests must not rely on it as the primary synchronization point.
+
+**Why make this explicit?** The session-first flow separates "the server accepted my join intent" from "the match is ready to bootstrap." Tests that wait for a ready-room event when the player is still waiting can leak sockets, stall teardown, and misdiagnose correct waiting behavior as a networking failure.
 
 ---
 
@@ -208,7 +220,12 @@ Request to fire the current weapon.
 
 **Why server validation?** Prevents rapid-fire hacks. Server enforces fire rate, ammo, and reload state.
 
-**When Sent:** Player clicks fire button (left mouse)
+**When Sent:** Player activates the primary fire input (left mouse on desktop, touch-equivalent primary fire on future supported platforms)
+
+**Input Contract Amendment (2026-04-17):**
+- Only primary fire input may produce `player:shoot`
+- Right mouse / secondary click must be ignored for gameplay firing
+- The browser context menu must be suppressed over the gameplay surface so secondary click does not interrupt play
 
 **Data Schema:**
 
@@ -480,7 +497,35 @@ type PlayerHelloData struct {
 2. Sanitize `displayName` per [rooms.md → Display Name Sanitization](rooms.md#display-name-sanitization); store on `Player.DisplayName`
 3. If `mode == "public"`: route to public auto-matchmaking (`AddPublicPlayer`)
 4. If `mode == "code"`: normalize code per [rooms.md → Room Code Normalization](rooms.md#room-code-normalization) and route to `JoinCodedRoom`. On normalization failure, send `error:bad_room_code` and leave the player unrouted
-5. On successful room assignment, set `Player.HelloSeen = true` and send `room:joined`
+5. On successful room assignment, set `Player.HelloSeen = true` and send `session:status`
+
+---
+
+### `session:leave`
+
+Request to leave the current pre-match session without disconnecting the socket. This message exists so the React app shell can offer an explicit `Back/Cancel` action from `searching_for_match` and `waiting_for_players` instead of forcing a browser refresh.
+
+**When Sent:** On-demand while the client is still in a pre-match state and the user explicitly abandons the current join attempt.
+
+**Rate Limit:** User-driven. Repeated `session:leave` messages when the player is already back at the join form are ignored.
+
+**Data Schema:** No payload.
+
+**Example:**
+```json
+{
+  "type": "session:leave",
+  "timestamp": 1704067200500
+}
+```
+
+**Server Processing:**
+1. If the player is in the public queue, remove them from the queue
+2. If the player is alone in a named room that has not started, remove them from that room
+3. If the player is in a pre-match waiting state that still allows clean exit, release that waiting state
+4. Clear the connection's pre-match hello latch so the same socket may send a fresh `player:hello`
+5. Send no gameplay bootstrap message afterward; the client returns to `join_form`
+6. If the match is already active, ignore `session:leave` and require a normal disconnect/reconnect instead
 
 ---
 
@@ -509,7 +554,130 @@ Echo test message for connection verification.
 
 ## Server → Client Messages
 
+### `session:status`
+
+Authoritative pre-match session snapshot for the React app shell. This message replaces `room:joined` as the client-facing bootstrap contract for join, waiting, match-ready, replay, and reconnect recovery flows.
+
+**Why a full snapshot instead of several smaller lifecycle messages?**
+- The client can replace its entire pre-match state atomically instead of inferring meaning from message order
+- Public queue waiting and named-room waiting become explicit, testable states
+- Phaser does not need to mount before the session is actually playable
+- Replay and reconnect flows can reuse the same shape as normal join flow
+
+**When Sent:** Any time the authoritative pre-match session state changes for a player after a successful `player:hello`
+
+**Recipients:** The affected player only
+
+**Data Schema:**
+
+**TypeScript:**
+```typescript
+type SessionStatusState =
+  | 'searching_for_match'
+  | 'waiting_for_players'
+  | 'match_ready';
+
+interface SessionStatusData {
+  state: SessionStatusState;
+  playerId: string;
+  displayName: string;
+  joinMode: 'public' | 'code';
+  roomId?: string;
+  code?: string;
+  rosterSize?: number;
+  minPlayers?: number;
+  mapId?: string;
+}
+```
+
+**Go:**
+```go
+type SessionStatusData struct {
+    State       string `json:"state"`
+    PlayerID    string `json:"playerId"`
+    DisplayName string `json:"displayName"`
+    JoinMode    string `json:"joinMode"`
+    RoomID      string `json:"roomId,omitempty"`
+    Code        string `json:"code,omitempty"`
+    RosterSize  int    `json:"rosterSize,omitempty"`
+    MinPlayers  int    `json:"minPlayers,omitempty"`
+    MapID       string `json:"mapId,omitempty"`
+}
+```
+
+**State Semantics:**
+- `searching_for_match`: successful public join intent, still in the public queue, no playable room yet
+- `waiting_for_players`: successful named-room join intent, room exists, but roster is below `MIN_PLAYERS_TO_START`
+- `match_ready`: the player now has the full bootstrap context required to mount Phaser and enter gameplay
+
+**Examples:**
+```json
+{
+  "type": "session:status",
+  "timestamp": 1704067200100,
+  "data": {
+    "state": "searching_for_match",
+    "playerId": "550e8400-e29b-41d4-a716-446655440000",
+    "displayName": "Alice",
+    "joinMode": "public",
+    "minPlayers": 2
+  }
+}
+```
+
+```json
+{
+  "type": "session:status",
+  "timestamp": 1704067200200,
+  "data": {
+    "state": "waiting_for_players",
+    "playerId": "550e8400-e29b-41d4-a716-446655440000",
+    "displayName": "Alice",
+    "joinMode": "code",
+    "roomId": "6d64957a-5330-4bca-a668-e2f9f8df7970",
+    "code": "PIZZA",
+    "rosterSize": 1,
+    "minPlayers": 2
+  }
+}
+```
+
+```json
+{
+  "type": "session:status",
+  "timestamp": 1704067201200,
+  "data": {
+    "state": "match_ready",
+    "playerId": "550e8400-e29b-41d4-a716-446655440000",
+    "displayName": "Alice",
+    "joinMode": "code",
+    "roomId": "6d64957a-5330-4bca-a668-e2f9f8df7970",
+    "code": "PIZZA",
+    "rosterSize": 2,
+    "minPlayers": 2,
+    "mapId": "default_office"
+  }
+}
+```
+
+**Field Rules:**
+- `session:status` is a full snapshot. The client replaces its previous pre-match session state rather than merging incremental fields.
+- `displayName` is always the server-authoritative sanitized form and may be persisted locally by the client.
+- `mapId` is omitted until `state == "match_ready"`. Clients MUST NOT mount gameplay before they have a `match_ready` snapshot.
+- `code` is omitted for public sessions.
+
+**Client Handling:**
+1. Replace the app shell's previous session snapshot with the new payload
+2. Render the corresponding React screen state
+3. Persist `displayName` as the last authoritative local name
+4. Create the gameplay bootstrap object and mount Phaser only after `match_ready`
+5. Never render raw UUIDs in player-facing session UI; if display-ready text is unexpectedly unavailable, render a safe placeholder such as `Guest`
+
+---
+
 ### `room:joined`
+
+> **Deprecated client bootstrap note (2026-04-17):** `session:status` is now the sole authoritative pre-match lifecycle contract for the app shell. This `room:joined` section is retained only as historical context for the old Phaser-owned bootstrap flow and must not be used as the primary join/search/wait contract in new client work.
 
 Confirms player successfully joined a room and provides the authoritative room and map context needed to initialize gameplay.
 
@@ -829,7 +997,7 @@ type PlayerStateSnapshot struct {
 ```
 
 **Client Handling:**
-1. Wait for `room:joined` before processing
+1. Wait for `session:status { state: "match_ready" }` before processing
 2. For each player in array:
    - Create sprite if new player
    - Update position, `aimAngle`, health
@@ -1312,15 +1480,21 @@ Announces match completion with final results.
 
 **TypeScript:**
 ```typescript
+interface WinnerSummary {
+  playerId: string;
+  displayName: string;
+}
+
 interface PlayerScore {
   playerId: string;
+  displayName: string;
   kills: number;
   deaths: number;
   xp: number;
 }
 
 interface MatchEndedData {
-  winners: string[];            // Array of winner player IDs
+  winners: WinnerSummary[];     // Display-ready winner identities
   finalScores: PlayerScore[];   // All player stats
   reason: 'kill_target' | 'time_limit';
 }
@@ -1328,8 +1502,13 @@ interface MatchEndedData {
 
 **Go:**
 ```go
+type WinnerSummary struct {
+    PlayerID    string `json:"playerId"`
+    DisplayName string `json:"displayName"`
+}
+
 type MatchEndedData struct {
-    Winners     []string       `json:"winners"`
+    Winners     []WinnerSummary `json:"winners"`
     FinalScores []PlayerScore  `json:"finalScores"`
     Reason      string         `json:"reason"`
 }
@@ -1341,16 +1520,23 @@ type MatchEndedData struct {
   "type": "match:ended",
   "timestamp": 1704067201300,
   "data": {
-    "winners": ["660e8400-e29b-41d4-a716-446655440111"],
+    "winners": [
+      {
+        "playerId": "660e8400-e29b-41d4-a716-446655440111",
+        "displayName": "Alice"
+      }
+    ],
     "finalScores": [
       {
         "playerId": "660e8400-e29b-41d4-a716-446655440111",
+        "displayName": "Alice",
         "kills": 20,
         "deaths": 5,
         "xp": 2000
       },
       {
         "playerId": "550e8400-e29b-41d4-a716-446655440000",
+        "displayName": "Bob",
         "kills": 15,
         "deaths": 12,
         "xp": 1500
@@ -1366,7 +1552,8 @@ type MatchEndedData struct {
 2. Disable player input
 3. Stop processing `player:move` and `match:timer`
 4. Show match results screen
-5. Display winner announcement
+5. Display winner announcement and rankings using `displayName`
+6. Use `playerId` only for non-visible identity logic such as local-player highlighting
 
 ---
 
@@ -1437,7 +1624,7 @@ interface WeaponSpawnedData {
 ```
 
 **Client Handling:**
-1. Queue if `room:joined` not yet received
+1. Queue if `session:status { state: "match_ready" }` not yet received
 2. Create crate sprites at positions
 3. Initialize crate manager
 
@@ -1752,7 +1939,8 @@ Client                          Server
   |                                |
   |--- WebSocket Connect --------->|
   |                                | Create player
-  |<------ room:joined ------------|
+  |--- player:hello ------------->|
+  |<------ session:status ---------|
   |<------ weapon:spawned ---------|
   |                                |
   |<------ player:move (20Hz) -----|
@@ -1855,7 +2043,7 @@ Client                          Server
 ### TypeScript (Client)
 
 1. **Event Registration**: Use typed event handlers with TypeBox-generated types
-2. **Queue Management**: Queue `weapon:spawned` until `room:joined`
+2. **Queue Management**: Queue `weapon:spawned` until `session:status { state: "match_ready" }`
 3. **Match State**: Track `matchEnded` flag to ignore stale messages
 
 ### Go (Server)
@@ -2007,7 +2195,7 @@ Client                          Server
 - Receive `melee:hit` with 2 victims
 - Receive 2 `player:damaged` messages
 
-### TS-MSG-010: room:joined provides valid UUID
+### TS-MSG-010: session:status provides valid UUID
 
 **Category**: Unit
 **Priority**: High
@@ -2019,7 +2207,7 @@ Client                          Server
 - Connect to server
 
 **Expected Output:**
-- Receive `room:joined` with valid UUID format playerId
+- Receive `session:status` with valid UUID format `playerId`
 
 ---
 
@@ -2027,6 +2215,7 @@ Client                          Server
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.4.0 | 2026-04-17 | Session-first join flow: added `session:leave` and `session:status`, made `session:status` the sole authoritative app-shell bootstrap for join/search/wait/match-ready flow, deprecated `room:joined` as the primary client bootstrap contract, and made `match:ended` display-ready by adding `displayName` to winners and final scores while preserving `playerId` for identity logic. |
 | 1.3.1 | 2026-04-11 | Friends-MVP pre-mortem fixes: (1) `player:hello` latching tightened — only **successful** hellos set `HelloSeen`; failed hellos (`error:bad_room_code`, `error:room_full`) leave the connection free to send another hello; (2) reconnection contract made explicit — every new connection must begin with a fresh `player:hello`, in-progress match resume is out of scope for MVP; (3) `room:joined` compatibility posture documented as breaking (no pre-MVP client support, atomic client+server deploy required); (4) `error:no_hello` / `error:bad_room_code` / `error:room_full` server-behavior blocks updated to explicitly state `HelloSeen` stays `false`. |
 | 1.3.0 | 2026-04-11 | Friends-MVP: added `player:hello` (required join intent), `error:no_hello`, `error:bad_room_code`, `error:room_full`. Extended `room:joined` with authoritative `displayName` and optional `code`. Client-to-server count: 7→8; server-to-client: 22→25. |
 | 1.2.0 | 2026-02-18 | Art style alignment: Added isInvulnerable and invulnerabilityEndTime to TypeScript PlayerState. Documented reload progress tracking (client-side timestamp approach). Documented score=XP mapping. Added Go-to-TypeScript field name mapping table for player:move. |

@@ -1,6 +1,7 @@
 import Ajv, { type ValidateFunction } from 'ajv';
 import {
   PlayerHelloDataSchema,
+  SessionLeaveMessageSchema,
   InputStateDataSchema,
   PlayerShootDataSchema,
   WeaponPickupAttemptDataSchema,
@@ -10,7 +11,7 @@ import {
   type WeaponPickupAttemptData,
 } from '../../../../events-schema/src/index.js';
 import { NetworkSimulator } from './NetworkSimulator';
-import type { JoinIntent } from '../../shared/types';
+import type { JoinIntent, SessionStatusData } from '../../shared/types';
 
 export interface Message {
   type: string;
@@ -20,20 +21,16 @@ export interface Message {
 
 export interface PlayerScore {
   playerId: string;
+  displayName: string;
   kills: number;
   deaths: number;
   xp: number;
 }
 
-export interface MatchEndedData {
-  winners: string[];
-  finalScores: PlayerScore[];
-  reason: 'kill_target' | 'time_limit';
-}
-
 // Initialize AJV validators at module load (compiled once for performance)
 const ajv = new Ajv();
 const validatePlayerHello: ValidateFunction<PlayerHelloData> = ajv.compile(PlayerHelloDataSchema);
+const validateSessionLeave = ajv.compile(SessionLeaveMessageSchema);
 const validateInputState: ValidateFunction<InputStateData> = ajv.compile(InputStateDataSchema);
 const validatePlayerShoot: ValidateFunction<PlayerShootData> = ajv.compile(PlayerShootDataSchema);
 const validateWeaponPickupAttempt: ValidateFunction<WeaponPickupAttemptData> = ajv.compile(
@@ -58,6 +55,9 @@ export class WebSocketClient {
   private lastSuccessfulHello: JoinIntent | null = null;
   private reconnectReplayPending = false;
   private onReconnectReplayFailed?: (intent: JoinIntent) => void;
+  private onConnectionStateChange?: (connected: boolean) => void;
+  private gameplayReady = true;
+  private queuedGameplayMessages: Message[] = [];
 
   constructor(url: string, debugMode = false, networkSimulator?: NetworkSimulator) {
     this.url = url;
@@ -133,6 +133,7 @@ export class WebSocketClient {
         this.ws.onopen = () => {
           console.log('WebSocket connected');
           this.reconnectAttempts = 0;
+          this.onConnectionStateChange?.(true);
           if (this.reconnectReplayPending && this.lastSuccessfulHello) {
             this.sendHello(this.lastSuccessfulHello);
           }
@@ -153,14 +154,17 @@ export class WebSocketClient {
 
         this.ws.onerror = (error) => {
           console.error('WebSocket error:', error);
+          this.onConnectionStateChange?.(false);
           reject(error);
         };
 
         this.ws.onclose = (event) => {
           console.log('WebSocket closed:', event.code, event.reason);
+          this.onConnectionStateChange?.(false);
           this.attemptReconnect();
         };
       } catch (err) {
+        this.onConnectionStateChange?.(false);
         reject(err);
       }
     });
@@ -197,8 +201,63 @@ export class WebSocketClient {
     });
   }
 
+  sendSessionLeave(): void {
+    const message = {
+      type: 'session:leave',
+      timestamp: Date.now(),
+    };
+
+    if (!validateSessionLeave(message)) {
+      console.error('Validation failed for session:leave:', validateSessionLeave.errors);
+      return;
+    }
+
+    this.gameplayReady = false;
+    this.queuedGameplayMessages = [];
+    this.send(message);
+  }
+
   setReconnectReplayFailedHandler(handler: (intent: JoinIntent) => void): void {
     this.onReconnectReplayFailed = handler;
+  }
+
+  setConnectionStateHandler(handler?: (connected: boolean) => void): void {
+    this.onConnectionStateChange = handler;
+    handler?.(this.ws?.readyState === WebSocket.OPEN);
+  }
+
+  setGameplayReady(ready: boolean): void {
+    this.gameplayReady = ready;
+
+    if (!ready) {
+      return;
+    }
+
+    const pendingMessages = [...this.queuedGameplayMessages];
+    this.queuedGameplayMessages = [];
+    pendingMessages.forEach((message) => {
+      this.dispatchMessage(message);
+    });
+  }
+
+  restartSession(intent: JoinIntent): void {
+    this.lastRequestedHello = { ...intent };
+    this.lastSuccessfulHello = { ...intent };
+    this.reconnectReplayPending = true;
+    this.gameplayReady = false;
+    this.queuedGameplayMessages = [];
+    this.shouldReconnect = true;
+
+    if (this.ws) {
+      this.ws.close(1000, 'Replay requested');
+      return;
+    }
+
+    this.connect().catch((err) => {
+      console.error('Replay connection failed:', err);
+      this.reconnectReplayPending = false;
+      this.onReconnectReplayFailed?.({ ...intent });
+    });
   }
 
   on(messageType: string, handler: (data: unknown) => void): void {
@@ -226,9 +285,12 @@ export class WebSocketClient {
   }
 
   private handleMessage(message: Message): void {
-    if (message.type === 'room:joined' && this.lastRequestedHello) {
-      this.lastSuccessfulHello = { ...this.lastRequestedHello };
-      this.reconnectReplayPending = false;
+    if (message.type === 'session:status') {
+      const sessionStatus = message.data as SessionStatusData | undefined;
+      if (sessionStatus && this.lastRequestedHello) {
+        this.lastSuccessfulHello = { ...this.lastRequestedHello };
+        this.reconnectReplayPending = false;
+      }
     }
 
     if ((message.type === 'error:bad_room_code' || message.type === 'error:room_full') && this.reconnectReplayPending) {
@@ -236,6 +298,35 @@ export class WebSocketClient {
       if (this.lastSuccessfulHello && this.onReconnectReplayFailed) {
         this.onReconnectReplayFailed({ ...this.lastSuccessfulHello });
       }
+    }
+
+    if (this.shouldQueueGameplayMessage(message)) {
+      this.queuedGameplayMessages.push(message);
+      return;
+    }
+
+    this.dispatchMessage(message);
+  }
+
+  private shouldQueueGameplayMessage(message: Message): boolean {
+    if (this.gameplayReady) {
+      return false;
+    }
+
+    const immediateTypes = new Set([
+      'session:status',
+      'error:bad_room_code',
+      'error:room_full',
+      'error:no_hello',
+    ]);
+
+    return !immediateTypes.has(message.type);
+  }
+
+  private dispatchMessage(message: Message): void {
+    if (message.type === 'room:joined' && this.lastRequestedHello) {
+      this.lastSuccessfulHello = { ...this.lastRequestedHello };
+      this.reconnectReplayPending = false;
     }
 
     const handlers = this.messageHandlers.get(message.type);
@@ -299,6 +390,9 @@ export class WebSocketClient {
 
   disconnect(): void {
     this.shouldReconnect = false; // Prevent reconnection attempts
+    this.gameplayReady = false;
+    this.queuedGameplayMessages = [];
+    this.onConnectionStateChange?.(false);
     if (this.ws) {
       this.ws.close(1000, 'Client disconnect');
       this.ws = null;

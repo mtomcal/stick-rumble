@@ -3,6 +3,45 @@
  * These define the messages sent from the TypeScript client to the Go server.
  */
 import { type Static } from '@sinclair/typebox';
+export declare const PlayerHelloPublicDataSchema: import("@sinclair/typebox").TObject<{
+    displayName: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TString>;
+    mode: import("@sinclair/typebox").TLiteral<"public">;
+}>;
+export declare const PlayerHelloCodeDataSchema: import("@sinclair/typebox").TObject<{
+    displayName: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TString>;
+    mode: import("@sinclair/typebox").TLiteral<"code">;
+    code: import("@sinclair/typebox").TString;
+}>;
+export declare const PlayerHelloDataSchema: import("@sinclair/typebox").TUnion<[import("@sinclair/typebox").TObject<{
+    displayName: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TString>;
+    mode: import("@sinclair/typebox").TLiteral<"public">;
+}>, import("@sinclair/typebox").TObject<{
+    displayName: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TString>;
+    mode: import("@sinclair/typebox").TLiteral<"code">;
+    code: import("@sinclair/typebox").TString;
+}>]>;
+export type PlayerHelloData = Static<typeof PlayerHelloDataSchema>;
+export declare const PlayerHelloMessageSchema: import("@sinclair/typebox").TObject<{
+    type: import("@sinclair/typebox").TLiteral<"player:hello">;
+    timestamp: import("@sinclair/typebox").TNumber;
+    data: import("@sinclair/typebox").TUnion<[import("@sinclair/typebox").TObject<{
+        displayName: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TString>;
+        mode: import("@sinclair/typebox").TLiteral<"public">;
+    }>, import("@sinclair/typebox").TObject<{
+        displayName: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TString>;
+        mode: import("@sinclair/typebox").TLiteral<"code">;
+        code: import("@sinclair/typebox").TString;
+    }>]>;
+}>;
+export type PlayerHelloMessage = Static<typeof PlayerHelloMessageSchema>;
+/**
+ * Complete session:leave message schema (no data payload)
+ */
+export declare const SessionLeaveMessageSchema: import("@sinclair/typebox").TObject<{
+    type: import("@sinclair/typebox").TLiteral<string>;
+    timestamp: import("@sinclair/typebox").TInteger;
+}>;
+export type SessionLeaveMessage = Static<typeof SessionLeaveMessageSchema>;
 /**
  * Input state data payload.
  * Represents keyboard input state for player movement and aim.
