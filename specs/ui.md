@@ -200,6 +200,7 @@ The top-left survival/combat cluster is anchored with fixed viewport padding:
 - no element in the cluster may render left of `20px` from the left edge
 - health occupies the first row
 - ammo occupies the second row, directly underneath health with a stable gap
+- the cluster must be laid out from one shared top-left anchor using measured row sizes and configured gaps; it may not depend on separate hardcoded x/y offsets for health, icon, and ammo elements
 
 ---
 
@@ -215,6 +216,7 @@ The top-left survival/combat cluster is anchored with fixed viewport padding:
 - the full health cluster, including the EKG icon, must stay within a `20px` top-left padding box
 - the health row is the top row of the cluster
 - no part of the health cluster may be inset farther than necessary just to preserve historical spacing
+- row-internal placement should come from the shared HUD layout system rather than negative-coordinate icon hacks or one-off text offsets
 
 **Visual Specification:**
 - Dimensions: 200×30 px
@@ -222,6 +224,7 @@ The top-left survival/combat cluster is anchored with fixed viewport padding:
 - Background (depleted portion): Dark gray (#333333 / COLORS.HEALTH_DEPLETED_BG), 0.7 alpha
 - Foreground: Dynamic color based on health percentage
 - Text: "N%" format to the right of the bar, white (#ffffff), 18px bold (e.g., "100%", "76%")
+- Internal spacing: compact; the EKG icon and the right-side percentage should sit close enough to read as one row rather than three floating islands
 - Depth: 1000
 
 **Color Thresholds (2-tier):**
@@ -456,16 +459,25 @@ export class KillCounterUI {
 - Icon (left of text): Yellow/orange target/crosshair icon (#E0A030 / COLORS.AMMO_READY) when ready; red rotating spinner icon when reloading
 - Equipped weapon label: text-first label adjacent to the ammo count (e.g. `PISTOL`, `AK47`, `SHOTGUN`, `BAT`)
 - Text format: "{current}/{max}" (e.g., "15/15")
+- Left-to-right row order: icon, equipped weapon label, then ammo count (e.g. `[icon] SHOTGUN 6/6`)
 - Text color: Yellow/orange (#E0A030 / COLORS.AMMO_READY) when ready
 - Font: 16px
 - Fist/infinite-ammo weapons: Display "INF" instead of ammo count (no max shown)
 - Visibility: Hidden for melee weapons (Bat, Katana)
+- Spacing: the ammo row should sit tightly underneath the health row as part of the same compact combat cluster, not as a detached second block
 - Depth: 1000
 
 **Anchoring Rule:**
 - the ammo row must remain below the health row at a fixed vertical offset
 - the icon and text are one anchored unit; the icon may not drift to the viewport origin or any unrelated corner
 - the ammo row shares the same top-left cluster padding contract as the health row
+- the ammo row should be positioned by the same measured cluster layout that places the health row, so weapon-label width changes cannot collapse the vertical spacing
+- the ammo text column should align with the health-bar left edge; the ammo icon may remain in the gutter to the left of that column
+
+**Cluster Backing Plate:**
+- A subtle translucent backing plate may sit behind the full top-left combat cluster
+- The plate must be measured from the same shared layout as the rows it contains
+- The plate is present to preserve HUD legibility against bright floor tiles and world geometry, not to create a separate panel UI
 
 **Why hide for melee?** Melee weapons have unlimited attacks (magazineSize = 0). Showing "0/0" is confusing.
 
@@ -484,11 +496,9 @@ updateAmmoDisplay(shootingManager: ShootingManager): void {
       this.ammoIcon.setVisible(true);
       const [current, max] = shootingManager.getAmmoInfo();
 
-      if (max === Infinity || max === 0) {
-        this.ammoText.setText('INF');
-      } else {
-        this.ammoText.setText(`${current}/${max}`);
-      }
+      const weaponLabel = shootingManager.getWeaponState().weaponType.toUpperCase();
+      const ammoValue = max === Infinity || max === 0 ? 'INF' : `${current}/${max}`;
+      this.ammoText.setText(`${weaponLabel} ${ammoValue}`);
       this.ammoText.setColor('#E0A030'); // COLORS.AMMO_READY
 
       // Icon state: ready vs reloading
@@ -1770,6 +1780,10 @@ it('should use shared rank for equal-kill players', () => {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.5.4 | 2026-04-23 | Clarified the compact top-left ammo row alignment: the icon stays in the left gutter, while the ammo text column aligns with the health-bar left edge. |
+| 2.5.3 | 2026-04-23 | Tightened the top-left combat HUD visual contract: the health and ammo rows must read as one compact cluster, and a subtle measured backing plate is allowed behind the full cluster for legibility. |
+| 2.5.2 | 2026-04-23 | Clarified that the top-left combat HUD must use one shared measured layout system anchored at 20px padding, rather than independent hardcoded offsets for the health row, ammo row, or their icons/text. |
+| 2.5.1 | 2026-04-23 | Clarified the top-left ammo row reading order: the anchored row is `[icon] [weapon label] [ammo count]`, so the equipped weapon label no longer occupies the health row and the ammo icon/count remain a single unit. |
 | 2.5.0 | 2026-04-23 | Merged the April UI contract updates: the app shell is session-first with no mounted canvas before `match_ready`, the ammo cluster owns the equipped-weapon label and reload arc-only presentation, local score and kill HUD values remain server-authoritative and freeze on `match:ended`, and the match-end screen uses display-ready names plus shared placement for kill ties without deaths as a hidden tiebreaker. |
 | 2.3.3 | 2026-04-13 | Kill feed now requires authoritative display names for killer and victim; internal player IDs remain UI-internal and are only an emergency fallback if no display name is known locally. |
 | 2.3.2 | 2026-04-10 | Re-anchored the top-left survival HUD contract: the health cluster now owns the first row at 20px viewport padding, ammo is explicitly stacked underneath it, and the ammo icon/text are required to stay anchored as one unit instead of drifting independently. |

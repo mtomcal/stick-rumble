@@ -4,6 +4,7 @@ import type { PlayerManager } from '../entities/PlayerManager';
 import { Crosshair } from '../entities/Crosshair';
 import { COLORS, MINIMAP, RELOAD_ARC } from '../../shared/constants';
 import { getDefaultMatchMapContext } from '../../shared/maps';
+import { HudFlexLayout, createHudLayoutItem, type HudLayoutItem } from '../ui/HudFlexLayout';
 
 /**
  * GameSceneUI - Manages all UI elements for the game scene
@@ -13,19 +14,22 @@ export class GameSceneUI {
   static readonly HUD_LAYOUT = {
     TOP_LEFT_PADDING_X: 20,
     TOP_LEFT_PADDING_Y: 20,
-    HEALTH_CLUSTER_X: 48,
-    HEALTH_CLUSTER_Y: 20,
-    AMMO_TEXT_X: 48,
-    AMMO_TEXT_Y: 58,
+    TOP_LEFT_CLUSTER_GAP: 6,
+    TOP_LEFT_CLUSTER_BG_ALPHA: 0.22,
+    TOP_LEFT_TEXT_COLUMN_X: 28,
     MINIMAP_X: 20,
     MINIMAP_MARGIN_BOTTOM: 20,
   } as const;
 
   private scene: Phaser.Scene;
-  private weaponLabelText!: Phaser.GameObjects.Text;
   private ammoText!: Phaser.GameObjects.Text;
   private ammoIcon: Phaser.GameObjects.Graphics | null = null;
   private matchTimerText: Phaser.GameObjects.Text | null = null;
+  private ammoTextValue: string = 'PISTOL 15/15';
+  private ammoRowX: number = 0;
+  private ammoRowY: number = 0;
+  private topLeftClusterLayout: HudFlexLayout | null = null;
+  private topLeftClusterBackground: Phaser.GameObjects.Rectangle | null = null;
 
   /**
    * Check if scene is valid and active for rendering
@@ -126,31 +130,27 @@ export class GameSceneUI {
   }
 
   /**
-   * Create ammo text display with icon and weapon label.
+   * Create ammo text display with icon and inline weapon label.
    */
   createAmmoDisplay(x: number, y: number): void {
-    this.weaponLabelText = this.scene.add.text(x, y - 18, 'PISTOL', {
-      fontSize: '12px',
-      color: '#ffffff',
-      fontStyle: 'bold',
-    });
-    this.weaponLabelText.setScrollFactor(0);
-    this.weaponLabelText.setDepth(1000);
+    this.ammoRowX = x;
+    this.ammoRowY = y;
 
     // Ammo icon (small bullet/crosshair graphic)
     this.ammoIcon = this.scene.add.graphics();
-    this.ammoIcon.setPosition(x - 28, y + 8);
     this.ammoIcon.setScrollFactor(0);
     this.ammoIcon.setDepth(1000);
     this.drawAmmoIcon(COLORS.AMMO_READY);
 
-    // Ammo count text
-    this.ammoText = this.scene.add.text(x, y, '15/15', {
+    // Ammo row reads: [icon] [weapon label] [ammo count]
+    this.ammoText = this.scene.add.text(x, y, this.ammoTextValue, {
       fontSize: '16px',
       color: `#${COLORS.AMMO_READY.toString(16).padStart(6, '0')}`
     });
+    this.ammoText.setOrigin(0, 0.5);
     this.ammoText.setScrollFactor(0);
     this.ammoText.setDepth(1000);
+    this.placeAmmoRow(this.ammoRowX, this.ammoRowY);
   }
 
   /**
@@ -172,22 +172,19 @@ export class GameSceneUI {
 
       // Hide ammo display for melee weapons, show for ranged
       if (isMelee) {
-        this.weaponLabelText.setVisible(false);
         this.ammoText.setVisible(false);
         if (this.ammoIcon) this.ammoIcon.setVisible(false);
       } else {
-        this.weaponLabelText.setVisible(true);
-        this.weaponLabelText.setText(shootingManager.getWeaponState().weaponType.toUpperCase());
         this.ammoText.setVisible(true);
         if (this.ammoIcon) this.ammoIcon.setVisible(true);
         const [current, max] = shootingManager.getAmmoInfo();
+        const weaponLabel = shootingManager.getWeaponState().weaponType.toUpperCase();
+        const ammoValue = max === 0 || max === Infinity ? 'INF' : `${current}/${max}`;
 
-        // Show "INF" for fist/infinite-ammo weapons (max === 0 or Infinity)
-        if (max === 0 || max === Infinity) {
-          this.ammoText.setText('INF');
-        } else {
-          this.ammoText.setText(`${current}/${max}`);
-        }
+        this.ammoTextValue = `${weaponLabel} ${ammoValue}`;
+        this.ammoText.setText(this.ammoTextValue);
+        this.placeAmmoRow(this.ammoRowX, this.ammoRowY);
+        this.applyTopLeftClusterLayout();
 
         // Color ammo text based on reload state
         const isReloading = shootingManager.isReloading();
@@ -219,6 +216,20 @@ export class GameSceneUI {
         this.hideEmptyMagazineIndicator();
       }
     }
+  }
+
+  layoutTopLeftCluster(healthRow: HudLayoutItem): void {
+    if (!this.topLeftClusterBackground) {
+      this.topLeftClusterBackground = this.scene.add.rectangle(0, 0, 0, 0, 0x000000, GameSceneUI.HUD_LAYOUT.TOP_LEFT_CLUSTER_BG_ALPHA);
+      this.topLeftClusterBackground.setOrigin(0, 0);
+      this.topLeftClusterBackground.setScrollFactor(0);
+      this.topLeftClusterBackground.setDepth(999);
+    }
+
+    this.topLeftClusterLayout = new HudFlexLayout('column', GameSceneUI.HUD_LAYOUT.TOP_LEFT_CLUSTER_GAP, 'start');
+    this.topLeftClusterLayout.add(healthRow);
+    this.topLeftClusterLayout.add(this.getAmmoDisplayLayoutItem());
+    this.applyTopLeftClusterLayout();
   }
 
   /**
@@ -693,9 +704,6 @@ export class GameSceneUI {
    */
   destroy(): void {
     // Destroy UI elements if they exist
-    if (this.weaponLabelText) {
-      this.weaponLabelText.destroy();
-    }
     if (this.ammoText) {
       this.ammoText.destroy();
     }
@@ -707,6 +715,9 @@ export class GameSceneUI {
     }
     if (this.damageFlashOverlay) {
       this.damageFlashOverlay.destroy();
+    }
+    if (this.topLeftClusterBackground) {
+      this.topLeftClusterBackground.destroy();
     }
     if (this.reloadProgressBar) {
       this.reloadProgressBar.destroy();
@@ -729,5 +740,50 @@ export class GameSceneUI {
     if (this.minimapDynamicGraphics) {
       this.minimapDynamicGraphics.destroy();
     }
+  }
+
+  private getAmmoDisplayLayoutItem(): HudLayoutItem {
+    return createHudLayoutItem(
+      () => ({
+        width: GameSceneUI.HUD_LAYOUT.TOP_LEFT_TEXT_COLUMN_X + this.measureAmmoTextWidth(),
+        height: 18,
+      }),
+      (layoutX, layoutY) => {
+        this.ammoRowX = layoutX;
+        this.ammoRowY = layoutY;
+        this.placeAmmoRow(layoutX, layoutY);
+      }
+    )
+  }
+
+  private measureAmmoTextWidth(): number {
+    const liveWidth = (this.ammoText as { width?: number }).width;
+    if (typeof liveWidth === 'number' && liveWidth > 0) {
+      return liveWidth;
+    }
+
+    return this.ammoTextValue.length * 10;
+  }
+
+  private placeAmmoRow(x: number, y: number): void {
+    this.ammoIcon?.setPosition(x, y + 3)
+    this.ammoText.setPosition(x + GameSceneUI.HUD_LAYOUT.TOP_LEFT_TEXT_COLUMN_X, y + 9)
+  }
+
+  private applyTopLeftClusterLayout(): void {
+    if (!this.topLeftClusterLayout || !this.topLeftClusterBackground) {
+      return;
+    }
+
+    const clusterSize = this.topLeftClusterLayout.measure();
+    this.topLeftClusterBackground.setPosition(
+      GameSceneUI.HUD_LAYOUT.TOP_LEFT_PADDING_X,
+      GameSceneUI.HUD_LAYOUT.TOP_LEFT_PADDING_Y
+    );
+    this.topLeftClusterBackground.setDisplaySize(clusterSize.width, clusterSize.height);
+    this.topLeftClusterLayout.setPosition(
+      GameSceneUI.HUD_LAYOUT.TOP_LEFT_PADDING_X,
+      GameSceneUI.HUD_LAYOUT.TOP_LEFT_PADDING_Y
+    );
   }
 }

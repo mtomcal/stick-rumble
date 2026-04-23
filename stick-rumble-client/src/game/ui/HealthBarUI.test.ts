@@ -22,16 +22,19 @@ describe('HealthBarUI', () => {
     mockHealthText = {
       setText: vi.fn().mockReturnThis(),
       setOrigin: vi.fn().mockReturnThis(),
+      setPosition: vi.fn().mockReturnThis(),
     } as unknown as Phaser.GameObjects.Text;
 
     mockHealthBar = {
       setDisplaySize: vi.fn().mockReturnThis(),
       setOrigin: vi.fn().mockReturnThis(),
       setAlpha: vi.fn().mockReturnThis(),
+      setPosition: vi.fn().mockReturnThis(),
     } as unknown as Phaser.GameObjects.Rectangle;
 
     mockBackground = {
       setOrigin: vi.fn().mockReturnThis(),
+      setPosition: vi.fn().mockReturnThis(),
     } as unknown as Phaser.GameObjects.Rectangle;
 
     mockEkgIcon = {
@@ -41,12 +44,14 @@ describe('HealthBarUI', () => {
       moveTo: vi.fn().mockReturnThis(),
       lineTo: vi.fn().mockReturnThis(),
       strokePath: vi.fn().mockReturnThis(),
+      setPosition: vi.fn().mockReturnThis(),
     } as unknown as Phaser.GameObjects.Graphics;
 
     mockContainer = {
       add: vi.fn().mockReturnThis(),
       setScrollFactor: vi.fn().mockReturnThis(),
       setDepth: vi.fn().mockReturnThis(),
+      setPosition: vi.fn().mockReturnThis(),
     } as unknown as Phaser.GameObjects.Container;
 
     mockScene = {
@@ -70,10 +75,26 @@ describe('HealthBarUI', () => {
     expect(mockScene.add.container).toHaveBeenCalledWith(10, 70);
     expect(mockScene.add.rectangle).toHaveBeenCalledTimes(2);
     expect(mockScene.add.graphics).toHaveBeenCalled();
-    expect(mockScene.add.text).toHaveBeenCalledWith(5, 5, '100%', expect.any(Object));
+    expect(mockScene.add.text).toHaveBeenCalledWith(0, 0, '100%', expect.any(Object));
     expect(mockContainer.setScrollFactor).toHaveBeenCalledWith(0);
     expect(mockContainer.setDepth).toHaveBeenCalledWith(1000);
   });
+
+  it('should place the health percentage to the right of the health bar', () => {
+    new HealthBarUI(mockScene, 10, 70);
+
+    expect(mockScene.add.text).toHaveBeenCalledWith(0, 0, '100%', expect.any(Object));
+    expect(mockHealthText.setPosition).toHaveBeenCalledWith(236, 17);
+    expect(mockHealthText.setOrigin).toHaveBeenCalledWith(0, 0.5);
+  });
+
+  it('should position the health row from a shared row layout instead of fixed text coordinates', () => {
+    new HealthBarUI(mockScene, 10, 70);
+
+    expect(mockBackground.setPosition).toHaveBeenCalledWith(28, 0)
+    expect(mockHealthBar.setPosition).toHaveBeenCalledWith(30, 2)
+    expect(mockEkgIcon.setPosition).toHaveBeenCalledWith(0, 2)
+  })
 
   it('should create background rectangle with correct dimensions', () => {
     new HealthBarUI(mockScene, 10, 70);

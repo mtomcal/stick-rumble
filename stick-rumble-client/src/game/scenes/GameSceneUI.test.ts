@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import Phaser from 'phaser'
 import { GameSceneUI } from './GameSceneUI'
+import { createHudLayoutItem } from '../ui/HudFlexLayout'
 
 vi.mock('phaser', () => ({
   default: {
@@ -19,12 +20,16 @@ vi.mock('phaser', () => ({
 describe('GameSceneUI', () => {
   let ui: GameSceneUI
   let createdTextCalls: Array<[number, number, string]>
+  let createdTextObjects: Array<{ text: string; object: any }>
   let createdGraphics: any[]
+  let createdRectangles: any[]
   let mockScene: Phaser.Scene
 
   beforeEach(() => {
     createdTextCalls = []
+    createdTextObjects = []
     createdGraphics = []
+    createdRectangles = []
 
     mockScene = {
       sys: {
@@ -33,8 +38,9 @@ describe('GameSceneUI', () => {
       add: {
         text: vi.fn((x: number, y: number, text: string) => {
           createdTextCalls.push([x, y, text])
-          return {
+          const textObject = {
             setOrigin: vi.fn().mockReturnThis(),
+            setPosition: vi.fn().mockReturnThis(),
             setScrollFactor: vi.fn().mockReturnThis(),
             setText: vi.fn().mockReturnThis(),
             setColor: vi.fn().mockReturnThis(),
@@ -44,12 +50,21 @@ describe('GameSceneUI', () => {
             setAlpha: vi.fn().mockReturnThis(),
             destroy: vi.fn(),
           }
+          createdTextObjects.push({ text, object: textObject })
+          return textObject
         }),
-        rectangle: vi.fn().mockReturnValue({
-          setScrollFactor: vi.fn().mockReturnThis(),
-          setDepth: vi.fn().mockReturnThis(),
-          setAlpha: vi.fn().mockReturnThis(),
-          destroy: vi.fn(),
+        rectangle: vi.fn().mockImplementation(() => {
+          const rectangle = {
+            setOrigin: vi.fn().mockReturnThis(),
+            setScrollFactor: vi.fn().mockReturnThis(),
+            setDepth: vi.fn().mockReturnThis(),
+            setAlpha: vi.fn().mockReturnThis(),
+            setPosition: vi.fn().mockReturnThis(),
+            setDisplaySize: vi.fn().mockReturnThis(),
+            destroy: vi.fn(),
+          }
+          createdRectangles.push(rectangle)
+          return rectangle
         }),
         line: vi.fn(),
         sprite: vi.fn().mockReturnValue({
@@ -126,16 +141,17 @@ describe('GameSceneUI', () => {
     vi.clearAllMocks()
   })
 
-  it('creates a weapon label and ammo text without a RELOADING banner', () => {
+  it('creates a single ammo-row text on the combat row without a RELOADING banner', () => {
     ui.createAmmoDisplay(48, 58)
 
-    expect(createdTextCalls).toContainEqual([48, 40, 'PISTOL'])
-    expect(createdTextCalls).toContainEqual([48, 58, '15/15'])
+    expect(createdTextCalls).toContainEqual([48, 58, 'PISTOL 15/15'])
+    expect(createdTextCalls).not.toContainEqual([48, 40, 'PISTOL'])
     expect(createdTextCalls.some(([, , text]) => text.includes('RELOADING'))).toBe(false)
   })
 
-  it('updates the ammo cluster using the current weapon label', () => {
+  it('updates the ammo row in icon-label-count order on one baseline', () => {
     ui.createAmmoDisplay(48, 58)
+    const ammoRowText = createdTextObjects.find(({ text }) => text === 'PISTOL 15/15')?.object
 
     const shootingManager = {
       getAmmoInfo: vi.fn().mockReturnValue([10, 15]),
@@ -147,6 +163,68 @@ describe('GameSceneUI', () => {
 
     expect(() => ui.updateAmmoDisplay(shootingManager)).not.toThrow()
     expect(shootingManager.getWeaponState).toHaveBeenCalled()
+    expect(ammoRowText).toBeDefined()
+    expect(ammoRowText.setText).toHaveBeenCalledWith('SHOTGUN 10/15')
+  })
+
+  it('formats infinite ammo as weapon plus INF on the same row', () => {
+    ui.createAmmoDisplay(48, 58)
+    const ammoRowText = createdTextObjects.find(({ text }) => text === 'PISTOL 15/15')?.object
+
+    const shootingManager = {
+      getAmmoInfo: vi.fn().mockReturnValue([0, Infinity]),
+      isReloading: vi.fn().mockReturnValue(false),
+      isEmpty: vi.fn().mockReturnValue(false),
+      isMeleeWeapon: vi.fn().mockReturnValue(false),
+      getWeaponState: vi.fn().mockReturnValue({ weaponType: 'Pistol' }),
+    } as any
+
+    expect(() => ui.updateAmmoDisplay(shootingManager)).not.toThrow()
+    expect(ammoRowText).toBeDefined()
+    expect(ammoRowText.setText).toHaveBeenCalledWith('PISTOL INF')
+  })
+
+  it('hides the inline ammo row for melee weapons', () => {
+    ui.createAmmoDisplay(48, 58)
+    const ammoRowText = createdTextObjects.find(({ text }) => text === 'PISTOL 15/15')?.object
+    const ammoIcon = createdGraphics[0]
+
+    const shootingManager = {
+      getAmmoInfo: vi.fn(),
+      isReloading: vi.fn().mockReturnValue(false),
+      isEmpty: vi.fn().mockReturnValue(false),
+      isMeleeWeapon: vi.fn().mockReturnValue(true),
+      getWeaponState: vi.fn(),
+    } as any
+
+    expect(() => ui.updateAmmoDisplay(shootingManager)).not.toThrow()
+    expect(ammoRowText).toBeDefined()
+    expect(ammoRowText.setVisible).toHaveBeenCalledWith(false)
+    expect(ammoIcon.setVisible).toHaveBeenCalledWith(false)
+  })
+
+  it('stacks the ammo row underneath the health row using measured layout height', () => {
+    ui.createAmmoDisplay(0, 0)
+    const ammoRowText = createdTextObjects.find(({ text }) => text === 'PISTOL 15/15')?.object
+    const ammoIcon = createdGraphics[0]
+    const healthRow = createHudLayoutItem({ width: 240, height: 34 }, vi.fn())
+
+    ui.layoutTopLeftCluster(healthRow)
+
+    expect(ammoRowText).toBeDefined()
+    expect(ammoRowText.setPosition).toHaveBeenCalledWith(48, 69)
+    expect(ammoIcon.setPosition).toHaveBeenCalledWith(20, 63)
+  })
+
+  it('creates a subtle backing plate measured from the stacked cluster', () => {
+    ui.createAmmoDisplay(0, 0)
+    const healthRow = createHudLayoutItem({ width: 240, height: 34 }, vi.fn())
+
+    ui.layoutTopLeftCluster(healthRow)
+
+    expect(createdRectangles).toHaveLength(1)
+    expect(createdRectangles[0].setPosition).toHaveBeenCalledWith(20, 20)
+    expect(createdRectangles[0].setDisplaySize).toHaveBeenCalledWith(240, 58)
   })
 
   it('retains the reload bar helpers as hidden compatibility-only elements', () => {

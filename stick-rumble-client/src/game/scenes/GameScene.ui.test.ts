@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GameScene } from './GameScene'
+import { GameSceneUI } from './GameSceneUI'
 import { createMockScene } from './GameScene.test.setup'
 import { setActiveMatchBootstrap } from '../sessionRuntime'
 
@@ -56,6 +57,8 @@ describe('GameScene UI flow', () => {
   it('creates gameplay HUD from the bootstrap and enables gameplay readiness', () => {
     const scene = new GameScene()
     const mockSceneContext = createMockScene()
+    const updateAmmoDisplaySpy = vi.spyOn(GameSceneUI.prototype, 'updateAmmoDisplay')
+    const layoutTopLeftClusterSpy = vi.spyOn(GameSceneUI.prototype, 'layoutTopLeftCluster')
     const disableContextMenu = vi.fn()
     mockSceneContext.input = {
       ...mockSceneContext.input,
@@ -72,8 +75,10 @@ describe('GameScene UI flow', () => {
 
     expect(disableContextMenu).toHaveBeenCalledTimes(1)
     expect(bootstrap.wsClient.setGameplayReady).toHaveBeenCalledWith(true)
-    expect(mockSceneContext.add.text).toHaveBeenCalledWith(48, 40, 'PISTOL', expect.any(Object))
-    expect(mockSceneContext.add.text).toHaveBeenCalledWith(48, 58, '15/15', expect.any(Object))
+    expect(layoutTopLeftClusterSpy).toHaveBeenCalledWith(scene['healthBarUI'])
+    expect(updateAmmoDisplaySpy).toHaveBeenCalledWith(scene['shootingManager'])
+    expect(mockSceneContext.add.text).toHaveBeenCalledWith(0, 0, 'PISTOL 15/15', expect.any(Object))
+    expect(mockSceneContext.add.text).not.toHaveBeenCalledWith(48, 40, 'PISTOL', expect.any(Object))
   })
 
   it('updates only the reload arc during reloads', () => {

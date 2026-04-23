@@ -1,5 +1,6 @@
 import type Phaser from 'phaser';
 import { COLORS } from '../../shared/constants';
+import { HudFlexLayout, createHudLayoutItem, type HudLayoutItem, type HudLayoutSize } from './HudFlexLayout';
 
 /**
  * HealthBarUI displays the player's current health in the top-left corner
@@ -11,14 +12,20 @@ import { COLORS } from '../../shared/constants';
  * - Real-time health updates
  * - Fixed to screen (doesn't scroll with camera)
  */
-export class HealthBarUI {
+export class HealthBarUI implements HudLayoutItem {
   private scene: Phaser.Scene;
   private container: Phaser.GameObjects.Container;
   private healthBar: Phaser.GameObjects.Rectangle;
   private healthText: Phaser.GameObjects.Text;
   private ekgIcon: Phaser.GameObjects.Graphics;
+  private readonly healthRowLayout = new HudFlexLayout('row', 4, 'center');
   private readonly BAR_WIDTH = 200;
   private readonly BAR_HEIGHT = 30;
+  private readonly BAR_BORDER = 2;
+  private readonly EKG_SLOT_WIDTH = 24;
+  private readonly EKG_SLOT_HEIGHT = 30;
+  private readonly HEALTH_ROW_HEIGHT = this.BAR_HEIGHT + this.BAR_BORDER * 2;
+  private healthTextValue: string = '100%';
   private isRegenerating: boolean = false;
   private pulseTween: Phaser.Tweens.Tween | null = null;
 
@@ -31,8 +38,8 @@ export class HealthBarUI {
     const background = scene.add.rectangle(
       0,
       0,
-      this.BAR_WIDTH + 4,
-      this.BAR_HEIGHT + 4,
+      this.BAR_WIDTH + this.BAR_BORDER * 2,
+      this.BAR_HEIGHT + this.BAR_BORDER * 2,
       0x000000,
       0.7
     );
@@ -40,8 +47,8 @@ export class HealthBarUI {
 
     // Add health bar (green by default)
     this.healthBar = scene.add.rectangle(
-      2,
-      2,
+      this.BAR_BORDER,
+      this.BAR_BORDER,
       this.BAR_WIDTH,
       this.BAR_HEIGHT,
       COLORS.HEALTH_FULL
@@ -53,15 +60,37 @@ export class HealthBarUI {
     this.drawEKGIcon();
 
     // Add health text (percentage format)
-    this.healthText = scene.add.text(5, 5, '100%', {
+    this.healthText = scene.add.text(0, 0, this.healthTextValue, {
       fontSize: '18px',
       color: '#ffffff',
       fontStyle: 'bold',
     });
-    this.healthText.setOrigin(0, 0);
+    this.healthText.setOrigin(0, 0.5);
 
     // Add components to container
     this.container.add([background, this.healthBar, this.ekgIcon, this.healthText]);
+    this.healthRowLayout.add(
+      createHudLayoutItem(
+        { width: this.EKG_SLOT_WIDTH, height: this.EKG_SLOT_HEIGHT },
+        (layoutX, layoutY) => this.ekgIcon.setPosition(layoutX, layoutY)
+      )
+    );
+    this.healthRowLayout.add(
+      createHudLayoutItem(
+        { width: this.BAR_WIDTH + this.BAR_BORDER * 2, height: this.HEALTH_ROW_HEIGHT },
+        (layoutX, layoutY) => {
+          background.setPosition(layoutX, layoutY);
+          this.healthBar.setPosition(layoutX + this.BAR_BORDER, layoutY + this.BAR_BORDER);
+        }
+      )
+    );
+    this.healthRowLayout.add(
+      createHudLayoutItem(
+        () => ({ width: this.measureHealthTextWidth(), height: this.HEALTH_ROW_HEIGHT }),
+        (layoutX, layoutY) => this.healthText.setPosition(layoutX, layoutY + this.HEALTH_ROW_HEIGHT / 2)
+      )
+    );
+    this.healthRowLayout.setPosition(0, 0);
 
     // Make health bar fixed to screen (doesn't scroll with camera)
     this.container.setScrollFactor(0);
@@ -76,16 +105,14 @@ export class HealthBarUI {
   private drawEKGIcon(): void {
     this.ekgIcon.clear();
     this.ekgIcon.lineStyle(2, COLORS.HEALTH_FULL, 1);
-    // Simple EKG waveform: flat, spike up, spike down, flat
-    // Positioned to the left of the bar (negative x offset)
     this.ekgIcon.beginPath();
-    this.ekgIcon.moveTo(-28, 17);
-    this.ekgIcon.lineTo(-22, 17);
-    this.ekgIcon.lineTo(-19, 8);
-    this.ekgIcon.lineTo(-16, 26);
-    this.ekgIcon.lineTo(-13, 5);
-    this.ekgIcon.lineTo(-10, 17);
-    this.ekgIcon.lineTo(-4, 17);
+    this.ekgIcon.moveTo(0, 15);
+    this.ekgIcon.lineTo(6, 15);
+    this.ekgIcon.lineTo(9, 6);
+    this.ekgIcon.lineTo(12, 24);
+    this.ekgIcon.lineTo(15, 3);
+    this.ekgIcon.lineTo(18, 15);
+    this.ekgIcon.lineTo(24, 15);
     this.ekgIcon.strokePath();
   }
 
@@ -112,7 +139,9 @@ export class HealthBarUI {
     }
 
     // Update text in percentage format
-    this.healthText.setText(`${Math.round(ratio * 100)}%`);
+    this.healthTextValue = `${Math.round(ratio * 100)}%`;
+    this.healthText.setText(this.healthTextValue);
+    this.healthRowLayout.setPosition(0, 0);
 
     // Handle regeneration visual feedback
     if (isRegenerating && !this.isRegenerating) {
@@ -164,5 +193,22 @@ export class HealthBarUI {
 
     // Destroy container (automatically destroys all children)
     this.container.destroy();
+  }
+
+  setPosition(x: number, y: number): void {
+    this.container.setPosition(x, y);
+  }
+
+  measure(): HudLayoutSize {
+    return this.healthRowLayout.measure();
+  }
+
+  private measureHealthTextWidth(): number {
+    const liveWidth = (this.healthText as { width?: number }).width;
+    if (typeof liveWidth === 'number' && liveWidth > 0) {
+      return liveWidth;
+    }
+
+    return this.healthTextValue.length * 12;
   }
 }

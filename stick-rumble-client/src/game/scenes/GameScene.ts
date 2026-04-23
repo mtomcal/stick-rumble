@@ -133,8 +133,8 @@ export class GameScene extends Phaser.Scene {
     // Initialize health bar UI (top-left corner)
     this.healthBarUI = new HealthBarUI(
       this,
-      GameSceneUI.HUD_LAYOUT.HEALTH_CLUSTER_X,
-      GameSceneUI.HUD_LAYOUT.HEALTH_CLUSTER_Y
+      0,
+      0
     );
 
     const camera = this.cameras.main;
@@ -450,9 +450,10 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.ui.createAmmoDisplay(
-      GameSceneUI.HUD_LAYOUT.AMMO_TEXT_X,
-      GameSceneUI.HUD_LAYOUT.AMMO_TEXT_Y
+      0,
+      0
     );
+    this.ui.layoutTopLeftCluster(this.healthBarUI);
     this.ui.updateAmmoDisplay(this.shootingManager);
     this.ui.createReloadCircleIndicator();
     this.ui.createCrosshair();
