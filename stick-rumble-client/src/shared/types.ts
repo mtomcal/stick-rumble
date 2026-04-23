@@ -51,6 +51,32 @@ export interface MatchSession {
   code?: string;
 }
 
+export type StageMode = 'desktop' | 'mobile-landscape' | 'mobile-portrait-blocked'
+
+export interface GameplayIntentState {
+  up: boolean;
+  down: boolean;
+  left: boolean;
+  right: boolean;
+  aimAngle: number | null;
+  isSprinting: boolean;
+  fireActive: boolean;
+}
+
+export interface ViewportInsets {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+export interface GameplayViewportLayout {
+  mode: StageMode;
+  width: number;
+  height: number;
+  insets: ViewportInsets;
+}
+
 export interface JoinErrorPayload {
   type: 'error:bad_room_code' | 'error:room_full' | 'error:no_hello';
   reason?: string;

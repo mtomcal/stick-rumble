@@ -1,18 +1,24 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { PhaserGame } from './ui/common/PhaserGame'
+import { GameConfig } from './game/config/GameConfig'
 import { MatchEndScreen } from './ui/match/MatchEndScreen'
 import { DebugNetworkPanel } from './ui/debug/DebugNetworkPanel'
 import { WebSocketClient } from './game/network/WebSocketClient'
 import type { MatchBootstrap } from './game/sessionRuntime'
 import type {
+  GameplayViewportLayout,
   JoinErrorPayload,
   JoinIntent,
   MatchEndData,
   MatchSession,
+  StageMode,
   SessionStatusData,
 } from './shared/types'
 import type { NetworkSimulatorStats } from './game/network/NetworkSimulator'
 import { buildInviteLink, formatReconnectLabel, getInviteCodeFromLocation, getWebSocketUrl } from './game/config/runtimeConfig'
+import { useStageMode } from './ui/common/mobileMode'
+import { MobileControls } from './ui/mobile/MobileControls'
+import { RotateDeviceGate } from './ui/mobile/RotateDeviceGate'
 import './App.css'
 
 const DEFAULT_STATS: NetworkSimulatorStats = {
@@ -24,6 +30,8 @@ const DEFAULT_STATS: NetworkSimulatorStats = {
 const DISPLAY_NAME_STORAGE_KEY = 'stick-rumble.display-name'
 const DUPLICATE_TAB_TTL_MS = 5000
 const DUPLICATE_TAB_HEARTBEAT_MS = 2000
+const STAGE_VIEWPORT_WIDTH = typeof GameConfig.width === 'number' ? GameConfig.width : 1280
+const STAGE_VIEWPORT_HEIGHT = typeof GameConfig.height === 'number' ? GameConfig.height : 720
 
 type AppViewState =
   | 'join_form'
@@ -84,7 +92,39 @@ function formatJoinError(error: JoinErrorPayload | null, currentCode: string): s
   return `Server rejected ${error.offendingType ?? 'message'} before hello.`
 }
 
+function readPixelValue(value: string): number {
+  const parsed = Number.parseFloat(value)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function buildViewportLayout(stageElement: HTMLElement, stageMode: StageMode): GameplayViewportLayout {
+  const style = window.getComputedStyle(stageElement)
+  const paddingTop = readPixelValue(style.paddingTop)
+  const paddingRight = readPixelValue(style.paddingRight)
+  const paddingBottom = readPixelValue(style.paddingBottom)
+  const paddingLeft = readPixelValue(style.paddingLeft)
+  const contentWidth = Math.max(stageElement.clientWidth - paddingLeft - paddingRight, 1)
+  const contentHeight = Math.max(stageElement.clientHeight - paddingTop - paddingBottom, 1)
+  const viewportScale = Math.min(
+    STAGE_VIEWPORT_WIDTH / contentWidth,
+    STAGE_VIEWPORT_HEIGHT / contentHeight
+  )
+
+  return {
+    mode: stageMode,
+    width: STAGE_VIEWPORT_WIDTH,
+    height: STAGE_VIEWPORT_HEIGHT,
+    insets: {
+      top: Math.round(paddingTop * viewportScale),
+      right: Math.round(paddingRight * viewportScale),
+      bottom: Math.round(paddingBottom * viewportScale),
+      left: Math.round(paddingLeft * viewportScale),
+    },
+  }
+}
+
 function App() {
+  const stageShellRef = useRef<HTMLDivElement | null>(null)
   const inviteCode = useMemo(() => getInviteCodeFromLocation(), [])
   const initialSavedDisplayName = useMemo(
     () => getBrowserStorage()?.getItem(DISPLAY_NAME_STORAGE_KEY) ?? '',
@@ -110,6 +150,13 @@ function App() {
   const [reconnectIntent, setReconnectIntent] = useState<JoinIntent | null>(null)
   const [debugPanelVisible, setDebugPanelVisible] = useState(false)
   const [networkStats, setNetworkStats] = useState<NetworkSimulatorStats>(DEFAULT_STATS)
+  const { stageMode } = useStageMode()
+  const [viewportLayout, setViewportLayoutState] = useState<GameplayViewportLayout>({
+    mode: 'desktop',
+    width: STAGE_VIEWPORT_WIDTH,
+    height: STAGE_VIEWPORT_HEIGHT,
+    insets: { top: 0, right: 0, bottom: 0, left: 0 },
+  })
   const [joinForm, setJoinForm] = useState(() => ({
     displayName: initialSavedDisplayName,
     code: inviteCode ?? '',
@@ -447,20 +494,56 @@ function App() {
 
   const errorText = formatJoinError(joinError, joinForm.code)
   const shouldRenderPhaser = viewState === 'in_match' && matchBootstrap
+  const inMobileStage = shouldRenderPhaser && stageMode !== 'desktop'
+
+  useEffect(() => {
+    if (!shouldRenderPhaser || !stageShellRef.current) {
+      return undefined
+    }
+
+    const updateViewportLayout = () => {
+      if (!stageShellRef.current) {
+        return
+      }
+      setViewportLayoutState(buildViewportLayout(stageShellRef.current, stageMode))
+    }
+
+    updateViewportLayout()
+    window.addEventListener('resize', updateViewportLayout)
+
+    const resizeObserver =
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => updateViewportLayout())
+        : null
+    resizeObserver?.observe(stageShellRef.current)
+
+    return () => {
+      window.removeEventListener('resize', updateViewportLayout)
+      resizeObserver?.disconnect()
+    }
+  }, [shouldRenderPhaser, stageMode])
 
   return (
-    <div className="app-shell">
-      <div className="app-header">
+    <div className={`app-shell${inMobileStage ? ' app-shell--mobile-stage' : ''}`}>
+      <div className={`app-header${inMobileStage ? ' app-header--hidden' : ''}`}>
         <h1>Stick Rumble - Multiplayer Arena Shooter</h1>
       </div>
 
       <div className="app-container">
         {shouldRenderPhaser && matchBootstrap && (
-          <div className="game-frame">
+          <div
+            ref={stageShellRef}
+            className={`game-frame game-frame--${stageMode}`}
+            data-testid="stage-shell"
+            data-stage-mode={stageMode}
+          >
             <PhaserGame
               bootstrap={matchBootstrap}
+              layout={viewportLayout.mode === stageMode ? viewportLayout : { ...viewportLayout, mode: stageMode }}
               onMatchEnd={handleMatchEnd}
             />
+            {stageMode === 'mobile-landscape' ? <MobileControls /> : null}
+            {stageMode === 'mobile-portrait-blocked' ? <RotateDeviceGate /> : null}
           </div>
         )}
 

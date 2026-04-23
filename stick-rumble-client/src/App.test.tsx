@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
@@ -6,6 +7,8 @@ import type { JoinIntent, MatchEndData, SessionStatusData } from './shared/types
 
 const testState = vi.hoisted(() => ({
   phaserRenderSpy: vi.fn(),
+  phaserMountSpy: vi.fn(),
+  phaserUnmountSpy: vi.fn(),
   capturedOnMatchEnd: undefined as PhaserGameProps['onMatchEnd'],
   autoConnectReady: true,
   clientInstances: [] as Array<{
@@ -29,6 +32,14 @@ vi.mock('./ui/common/PhaserGame', () => ({
   PhaserGame: (props: PhaserGameProps) => {
     testState.phaserRenderSpy(props)
     testState.capturedOnMatchEnd = props.onMatchEnd
+
+    useEffect(() => {
+      testState.phaserMountSpy()
+      return () => {
+        testState.phaserUnmountSpy()
+      }
+    }, [])
+
     return <div data-testid="phaser-game">Phaser</div>
   },
 }))
@@ -92,14 +103,47 @@ function emitSessionStatus(status: SessionStatusData): void {
   })
 }
 
+function setViewportSize(width: number, height: number): void {
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: width })
+  Object.defineProperty(window, 'innerHeight', { configurable: true, value: height })
+}
+
+function dispatchResize(width: number, height: number): void {
+  setViewportSize(width, height)
+  act(() => {
+    window.dispatchEvent(new Event('resize'))
+  })
+}
+
+function setTouchPhoneLayout(enabled: boolean): void {
+  Object.defineProperty(navigator, 'maxTouchPoints', {
+    configurable: true,
+    value: enabled ? 5 : 0,
+  })
+  window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+    matches: enabled && query === '(pointer: coarse)',
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  })) as typeof window.matchMedia
+}
+
 describe('App', () => {
   beforeEach(() => {
     testState.clientInstances.length = 0
     testState.phaserRenderSpy.mockReset()
+    testState.phaserMountSpy.mockReset()
+    testState.phaserUnmountSpy.mockReset()
     testState.capturedOnMatchEnd = undefined
     testState.autoConnectReady = true
     window.localStorage.clear()
     window.history.replaceState({}, '', '/')
+    setViewportSize(1280, 720)
+    setTouchPhoneLayout(false)
   })
 
   afterEach(() => {
@@ -270,6 +314,111 @@ describe('App', () => {
         },
       }),
     )
+  })
+
+  it('keeps the default desktop stage after match_ready on non-phone layouts', async () => {
+    render(<App />)
+    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
+
+    emitSessionStatus({
+      state: 'match_ready',
+      playerId: 'player-1',
+      displayName: 'Alice',
+      joinMode: 'public',
+      roomId: 'room-1',
+      mapId: 'default_office',
+    })
+
+    expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'desktop')
+    expect(screen.queryByTestId('mobile-controls')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('rotate-device-gate')).not.toBeInTheDocument()
+  })
+
+  it('auto-detects mobile landscape mode on phone-sized touch layouts', async () => {
+    setViewportSize(844, 390)
+    setTouchPhoneLayout(true)
+
+    render(<App />)
+    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
+
+    emitSessionStatus({
+      state: 'match_ready',
+      playerId: 'player-1',
+      displayName: 'Alice',
+      joinMode: 'public',
+      roomId: 'room-1',
+      mapId: 'default_office',
+    })
+
+    await waitFor(() =>
+      expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'mobile-landscape')
+    )
+    expect(screen.getByTestId('mobile-controls')).toBeInTheDocument()
+    expect(screen.queryByTestId('rotate-device-gate')).not.toBeInTheDocument()
+  })
+
+  it('shows a rotate-device gate in portrait while keeping Phaser mounted', async () => {
+    setViewportSize(390, 844)
+    setTouchPhoneLayout(true)
+
+    render(<App />)
+    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
+
+    emitSessionStatus({
+      state: 'match_ready',
+      playerId: 'player-1',
+      displayName: 'Alice',
+      joinMode: 'public',
+      roomId: 'room-1',
+      mapId: 'default_office',
+    })
+
+    await waitFor(() =>
+      expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'mobile-portrait-blocked')
+    )
+    expect(screen.getByTestId('rotate-device-gate')).toBeInTheDocument()
+    expect(screen.getByTestId('phaser-game')).toBeInTheDocument()
+  })
+
+  it('preserves the mounted gameplay surface across landscape, portrait gate, and desktop transitions', async () => {
+    setViewportSize(844, 390)
+    setTouchPhoneLayout(true)
+
+    render(<App />)
+    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
+
+    emitSessionStatus({
+      state: 'match_ready',
+      playerId: 'player-1',
+      displayName: 'Alice',
+      joinMode: 'public',
+      roomId: 'room-1',
+      mapId: 'default_office',
+    })
+
+    await waitFor(() =>
+      expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'mobile-landscape')
+    )
+    expect(testState.phaserMountSpy).toHaveBeenCalledTimes(1)
+
+    dispatchResize(390, 844)
+    await waitFor(() =>
+      expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'mobile-portrait-blocked')
+    )
+    expect(screen.getByTestId('phaser-game')).toBeInTheDocument()
+
+    setTouchPhoneLayout(false)
+    dispatchResize(1280, 720)
+    await waitFor(() =>
+      expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'desktop')
+    )
+
+    expect(screen.getByTestId('phaser-game')).toBeInTheDocument()
+    expect(testState.phaserMountSpy).toHaveBeenCalledTimes(1)
+    expect(testState.phaserUnmountSpy).not.toHaveBeenCalled()
+    expect(testState.clientInstances).toHaveLength(1)
+    expect(getClient().sendSessionLeave).not.toHaveBeenCalled()
+    expect(getClient().restartSession).not.toHaveBeenCalled()
   })
 
   it('replaces gameplay with the match-end screen when Phaser reports match end', async () => {

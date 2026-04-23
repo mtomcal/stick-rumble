@@ -59,6 +59,7 @@ Stick Rumble is a top-down multiplayer shooter where stick figure characters bat
 - **Fast-paced**: Instant respawns (3 seconds), high mobility
 - **Competitive**: Kill-based scoring with time limits
 - **Accessible**: Existing desktop keyboard/mouse play plus optional mobile touch mode
+- **Session-stable**: Device-layout changes may alter stage chrome locally, but may not restart or churn an active match session
 
 ### Win Conditions
 

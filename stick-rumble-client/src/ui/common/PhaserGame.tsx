@@ -1,15 +1,20 @@
 import { useEffect, useRef } from 'react';
 import Phaser from 'phaser';
 import { GameConfig } from '../../game/config/GameConfig';
-import { setActiveMatchBootstrap, type MatchBootstrap } from '../../game/sessionRuntime';
-import type { MatchEndData } from '../../shared/types';
+import {
+  setActiveMatchBootstrap,
+  setViewportLayout,
+  type MatchBootstrap,
+} from '../../game/sessionRuntime';
+import type { GameplayViewportLayout, MatchEndData } from '../../shared/types';
 
 export interface PhaserGameProps {
   bootstrap: MatchBootstrap;
+  layout: GameplayViewportLayout;
   onMatchEnd?: (data: MatchEndData, playerId: string) => void;
 }
 
-export function PhaserGame({ bootstrap, onMatchEnd }: PhaserGameProps) {
+export function PhaserGame({ bootstrap, layout, onMatchEnd }: PhaserGameProps) {
   const gameRef = useRef<Phaser.Game | null>(null);
   const onMatchEndRef = useRef(onMatchEnd);
 
@@ -29,7 +34,13 @@ export function PhaserGame({ bootstrap, onMatchEnd }: PhaserGameProps) {
 
   useEffect(() => {
     setActiveMatchBootstrap(bootstrap);
+  }, [bootstrap]);
 
+  useEffect(() => {
+    setViewportLayout(layout);
+  }, [layout]);
+
+  useEffect(() => {
     // Initialize Phaser game
     if (!gameRef.current) {
       gameRef.current = new Phaser.Game(GameConfig);
@@ -45,7 +56,7 @@ export function PhaserGame({ bootstrap, onMatchEnd }: PhaserGameProps) {
 
       setActiveMatchBootstrap(null);
     };
-  }, [bootstrap]);
+  }, [bootstrap.wsClient]);
 
   return <div id="game-container" />;
 }

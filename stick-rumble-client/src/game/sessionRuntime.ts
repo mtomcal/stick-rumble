@@ -1,5 +1,9 @@
 import type { WebSocketClient } from './network/WebSocketClient'
-import type { MatchSession } from '../shared/types'
+import type {
+  GameplayIntentState,
+  GameplayViewportLayout,
+  MatchSession,
+} from '../shared/types'
 
 export interface MatchBootstrap {
   session: MatchSession
@@ -7,6 +11,21 @@ export interface MatchBootstrap {
 }
 
 let activeMatchBootstrap: MatchBootstrap | null = null
+let mobileGameplayIntent: GameplayIntentState | null = null
+let viewportLayout: GameplayViewportLayout = {
+  mode: 'desktop',
+  width: 1280,
+  height: 720,
+  insets: {
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+  },
+}
+const mobileIntentListeners = new Set<(intent: GameplayIntentState | null) => void>()
+const viewportLayoutListeners = new Set<(layout: GameplayViewportLayout) => void>()
+const runtimeActionListeners = new Set<(action: 'reload' | 'dodge') => void>()
 
 export function setActiveMatchBootstrap(bootstrap: MatchBootstrap | null): void {
   activeMatchBootstrap = bootstrap
@@ -14,4 +33,65 @@ export function setActiveMatchBootstrap(bootstrap: MatchBootstrap | null): void 
 
 export function getActiveMatchBootstrap(): MatchBootstrap | null {
   return activeMatchBootstrap
+}
+
+export function setMobileGameplayIntent(intent: GameplayIntentState | null): void {
+  mobileGameplayIntent = intent ? { ...intent } : null
+  mobileIntentListeners.forEach((listener) => listener(mobileGameplayIntent ? { ...mobileGameplayIntent } : null))
+}
+
+export function getMobileGameplayIntent(): GameplayIntentState | null {
+  return mobileGameplayIntent ? { ...mobileGameplayIntent } : null
+}
+
+export function subscribeMobileGameplayIntent(
+  listener: (intent: GameplayIntentState | null) => void
+): () => void {
+  mobileIntentListeners.add(listener)
+  listener(getMobileGameplayIntent())
+  return () => {
+    mobileIntentListeners.delete(listener)
+  }
+}
+
+export function triggerRuntimeAction(action: 'reload' | 'dodge'): void {
+  runtimeActionListeners.forEach((listener) => listener(action))
+}
+
+export function subscribeRuntimeAction(
+  listener: (action: 'reload' | 'dodge') => void
+): () => void {
+  runtimeActionListeners.add(listener)
+  return () => {
+    runtimeActionListeners.delete(listener)
+  }
+}
+
+export function setViewportLayout(layout: GameplayViewportLayout): void {
+  viewportLayout = {
+    mode: layout.mode,
+    width: layout.width,
+    height: layout.height,
+    insets: { ...layout.insets },
+  }
+  viewportLayoutListeners.forEach((listener) => listener(getViewportLayout()))
+}
+
+export function getViewportLayout(): GameplayViewportLayout {
+  return {
+    mode: viewportLayout.mode,
+    width: viewportLayout.width,
+    height: viewportLayout.height,
+    insets: { ...viewportLayout.insets },
+  }
+}
+
+export function subscribeViewportLayout(
+  listener: (layout: GameplayViewportLayout) => void
+): () => void {
+  viewportLayoutListeners.add(listener)
+  listener(getViewportLayout())
+  return () => {
+    viewportLayoutListeners.delete(listener)
+  }
 }

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { WebSocketClient } from '../network/WebSocketClient';
+import type { GameplayIntentState } from '../../shared/types';
 
 /**
  * Input state matching server-side InputState structure
@@ -52,6 +53,7 @@ export class InputManager {
   private isEnabled: boolean = true;
   private sequence: number = 0; // Monotonically increasing sequence number
   private inputHistory: InputHistoryEntry[] = []; // Store pending inputs for reconciliation
+  private externalIntent: GameplayIntentState | null = null;
 
   constructor(scene: Phaser.Scene, wsClient: WebSocketClient) {
     this.scene = scene;
@@ -95,16 +97,17 @@ export class InputManager {
 
     // Calculate aim angle from mouse position
     this.updateAimAngle();
+    const resolvedAimAngle = this.externalIntent?.aimAngle ?? this.aimAngle;
 
     // Update current state from keyboard
     // aimAngle includes sway offset so server receives sway-affected angle
     this.currentState = {
-      up: this.keys.W.isDown,
-      down: this.keys.S.isDown,
-      left: this.keys.A.isDown,
-      right: this.keys.D.isDown,
-      aimAngle: this.aimAngle + this.aimSwayOffset,
-      isSprinting: this.keys.SHIFT.isDown,
+      up: this.externalIntent?.up ?? this.keys.W.isDown,
+      down: this.externalIntent?.down ?? this.keys.S.isDown,
+      left: this.externalIntent?.left ?? this.keys.A.isDown,
+      right: this.externalIntent?.right ?? this.keys.D.isDown,
+      aimAngle: resolvedAimAngle + this.aimSwayOffset,
+      isSprinting: this.externalIntent?.isSprinting ?? this.keys.SHIFT.isDown,
       sequence: this.sequence,
     };
 
@@ -160,7 +163,7 @@ export class InputManager {
    * Get current aim angle in radians (includes sway offset)
    */
   getAimAngle(): number {
-    return this.aimAngle + this.aimSwayOffset;
+    return (this.externalIntent?.aimAngle ?? this.aimAngle) + this.aimSwayOffset;
   }
 
   /**
@@ -243,6 +246,10 @@ export class InputManager {
    */
   clearInputHistoryUpTo(sequence: number): void {
     this.inputHistory = this.inputHistory.filter(entry => entry.sequence > sequence);
+  }
+
+  setExternalIntent(intent: GameplayIntentState | null): void {
+    this.externalIntent = intent ? { ...intent } : null;
   }
 
   /**

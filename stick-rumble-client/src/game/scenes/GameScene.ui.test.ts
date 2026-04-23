@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GameScene } from './GameScene'
 import { GameSceneUI } from './GameSceneUI'
 import { createMockScene } from './GameScene.test.setup'
-import { setActiveMatchBootstrap } from '../sessionRuntime'
+import { setActiveMatchBootstrap, setViewportLayout } from '../sessionRuntime'
 
 vi.mock('phaser', () => ({
   default: {
@@ -51,6 +51,12 @@ describe('GameScene UI flow', () => {
 
   afterEach(() => {
     setActiveMatchBootstrap(null)
+    setViewportLayout({
+      mode: 'desktop',
+      width: 1280,
+      height: 720,
+      insets: { top: 0, right: 0, bottom: 0, left: 0 },
+    })
     vi.clearAllMocks()
   })
 
@@ -107,5 +113,47 @@ describe('GameScene UI flow', () => {
 
     expect(updateReloadProgressSpy).not.toHaveBeenCalled()
     expect(updateReloadCircleSpy).toHaveBeenCalledWith(0.5, 320, 240)
+  })
+
+  it('repositions HUD ownership zones when viewport insets change', () => {
+    const scene = new GameScene()
+    const mockSceneContext = createMockScene()
+    mockSceneContext.input = {
+      ...mockSceneContext.input,
+      mouse: {
+        disableContextMenu: vi.fn(),
+      },
+    } as any
+    Object.assign(scene, mockSceneContext)
+
+    const bootstrap = createBootstrap()
+    setActiveMatchBootstrap(bootstrap)
+    scene.create()
+
+    const setViewportLayoutSpy = vi.spyOn(scene['ui'], 'setViewportLayout')
+    const scorePositionSpy = vi.spyOn(scene['scoreDisplayUI'], 'setPosition')
+    const killCounterPositionSpy = vi.spyOn(scene['killCounterUI'], 'setPosition')
+    const dodgePositionSpy = vi.spyOn(scene['dodgeRollCooldownUI'], 'setPosition')
+    const clusterBackgroundPositionSpy = vi.spyOn(scene['ui']['topLeftClusterBackground'] as any, 'setPosition')
+    const minimapFillRectSpy = vi.spyOn(scene['ui']['minimapStaticGraphics'] as any, 'fillRect')
+
+    setViewportLayout({
+      mode: 'mobile-landscape',
+      width: 1920,
+      height: 1080,
+      insets: { top: 24, right: 30, bottom: 48, left: 18 },
+    })
+
+    expect(setViewportLayoutSpy).toHaveBeenCalledWith({
+      mode: 'mobile-landscape',
+      width: 1920,
+      height: 1080,
+      insets: { top: 24, right: 30, bottom: 48, left: 18 },
+    })
+    expect(scorePositionSpy).toHaveBeenCalledWith(1880, 34)
+    expect(killCounterPositionSpy).toHaveBeenCalledWith(1880, 66)
+    expect(dodgePositionSpy).toHaveBeenCalledWith(1840, 802)
+    expect(clusterBackgroundPositionSpy).toHaveBeenCalledWith(38, 44)
+    expect(minimapFillRectSpy).toHaveBeenCalledWith(38, 662, 170, 170)
   })
 })

@@ -51,6 +51,10 @@ export class PickupNotificationUI {
     });
   }
 
+  setPosition(x: number, y: number): void {
+    this.text.setPosition(x, y);
+  }
+
   /**
    * Cleanup all resources
    */

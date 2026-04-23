@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { setupBootstrappedGameScene } from './GameScene.bootstrap-test-helpers'
-import { setActiveMatchBootstrap } from '../sessionRuntime'
+import { setActiveMatchBootstrap, setViewportLayout } from '../sessionRuntime'
 
 vi.mock('phaser', () => ({
   default: {
@@ -27,18 +27,49 @@ vi.mock('phaser', () => ({
 describe('GameScene cleanup', () => {
   afterEach(() => {
     setActiveMatchBootstrap(null)
+    setViewportLayout({
+      mode: 'desktop',
+      width: 1280,
+      height: 720,
+      insets: { top: 0, right: 0, bottom: 0, left: 0 },
+    })
     vi.clearAllMocks()
   })
 
   it('destroys managers and marks gameplay not ready on cleanup', () => {
-    const { scene, wsClient } = setupBootstrappedGameScene()
+    const { scene, wsClient, mockSceneContext } = setupBootstrappedGameScene()
     const destroyEventHandlersSpy = vi.spyOn(scene['eventHandlers'], 'destroy')
     const destroyPlayersSpy = vi.spyOn(scene['playerManager'], 'destroy')
+    const destroyUiSpy = vi.spyOn(scene['ui'], 'destroy')
 
-    scene['cleanup']()
+    const shutdownHandler = mockSceneContext.events.once.mock.calls.find(
+      (call: unknown[]) => call[0] === 'shutdown'
+    )?.[1] as (() => void) | undefined
+    shutdownHandler?.()
 
     expect(destroyEventHandlersSpy).toHaveBeenCalledTimes(1)
     expect(destroyPlayersSpy).toHaveBeenCalledTimes(1)
+    expect(destroyUiSpy).toHaveBeenCalledTimes(1)
     expect(wsClient.setGameplayReady).toHaveBeenCalledWith(false)
+  })
+
+  it('stops reacting to viewport bridge updates after cleanup', () => {
+    const { scene, mockSceneContext } = setupBootstrappedGameScene()
+    const scorePositionSpy = vi.spyOn(scene['scoreDisplayUI'], 'setPosition')
+
+    const shutdownHandler = mockSceneContext.events.once.mock.calls.find(
+      (call: unknown[]) => call[0] === 'shutdown'
+    )?.[1] as (() => void) | undefined
+    shutdownHandler?.()
+    scorePositionSpy.mockClear()
+
+    setViewportLayout({
+      mode: 'mobile-landscape',
+      width: 1600,
+      height: 900,
+      insets: { top: 20, right: 24, bottom: 28, left: 16 },
+    })
+
+    expect(scorePositionSpy).not.toHaveBeenCalled()
   })
 })

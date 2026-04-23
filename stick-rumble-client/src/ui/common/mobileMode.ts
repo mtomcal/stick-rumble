@@ -1,0 +1,78 @@
+import { useEffect, useState } from 'react'
+import type { StageMode } from '../../shared/types'
+
+const MAX_PHONE_SHORT_EDGE = 540
+const MAX_PHONE_LONG_EDGE = 960
+
+export interface DeviceViewportSnapshot {
+  width: number
+  height: number
+  stageMode: StageMode
+  isTouchPhoneLayout: boolean
+}
+
+function getViewportWidth(): number {
+  return window.visualViewport?.width ?? window.innerWidth
+}
+
+function getViewportHeight(): number {
+  return window.visualViewport?.height ?? window.innerHeight
+}
+
+export function detectStageMode(width: number, height: number): StageMode {
+  const shortEdge = Math.min(width, height)
+  const longEdge = Math.max(width, height)
+  const coarsePointer = window.matchMedia?.('(pointer: coarse)').matches ?? false
+  const touchCapable =
+    coarsePointer ||
+    (navigator.maxTouchPoints ?? 0) > 0 ||
+    'ontouchstart' in window
+  const isPhoneSized = shortEdge <= MAX_PHONE_SHORT_EDGE && longEdge <= MAX_PHONE_LONG_EDGE
+
+  if (!touchCapable || !isPhoneSized) {
+    return 'desktop'
+  }
+
+  return width >= height ? 'mobile-landscape' : 'mobile-portrait-blocked'
+}
+
+function readSnapshot(): DeviceViewportSnapshot {
+  const width = getViewportWidth()
+  const height = getViewportHeight()
+  const stageMode = detectStageMode(width, height)
+
+  return {
+    width,
+    height,
+    stageMode,
+    isTouchPhoneLayout: stageMode !== 'desktop',
+  }
+}
+
+export function useStageMode(): DeviceViewportSnapshot {
+  const [snapshot, setSnapshot] = useState<DeviceViewportSnapshot>(() =>
+    typeof window === 'undefined'
+      ? { width: 1280, height: 720, stageMode: 'desktop', isTouchPhoneLayout: false }
+      : readSnapshot()
+  )
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined
+    }
+
+    const updateSnapshot = () => {
+      setSnapshot(readSnapshot())
+    }
+
+    window.addEventListener('resize', updateSnapshot)
+    window.visualViewport?.addEventListener('resize', updateSnapshot)
+
+    return () => {
+      window.removeEventListener('resize', updateSnapshot)
+      window.visualViewport?.removeEventListener('resize', updateSnapshot)
+    }
+  }, [])
+
+  return snapshot
+}

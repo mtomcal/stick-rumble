@@ -1,6 +1,7 @@
 #root {
   width: 100%;
   min-height: 100vh;
+  min-height: 100dvh;
   margin: 0;
   background:
     radial-gradient(circle at top, rgba(255, 196, 120, 0.18), transparent 28%),
@@ -11,14 +12,28 @@
 .app-shell {
   display: flex;
   min-height: 100vh;
+  min-height: 100dvh;
   flex-direction: column;
   align-items: center;
   gap: 1.5rem;
   padding: 1.5rem;
 }
 
+.app-shell--mobile-stage {
+  min-height: 100dvh;
+  padding:
+    max(0.5rem, env(safe-area-inset-top))
+    max(0.5rem, env(safe-area-inset-right))
+    max(0.75rem, env(safe-area-inset-bottom))
+    max(0.5rem, env(safe-area-inset-left));
+}
+
 .app-header {
   text-align: center;
+}
+
+.app-header--hidden {
+  display: none;
 }
 
 .app-header h1 {
@@ -33,9 +48,36 @@
   color: #c6bca4;
 }
 
+.app-container {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex: 1;
+}
+
 .game-frame {
   position: relative;
   width: min(100%, 1280px);
+}
+
+.game-frame--desktop {
+  aspect-ratio: 16 / 9;
+}
+
+.game-frame--mobile-landscape,
+.game-frame--mobile-portrait-blocked {
+  width: 100%;
+  min-height: 0;
+  flex: 1;
+  align-self: stretch;
+  padding:
+    max(16px, env(safe-area-inset-top))
+    max(16px, env(safe-area-inset-right))
+    max(16px, env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-left));
+  box-sizing: border-box;
+  touch-action: none;
 }
 
 .overlay-layer {
@@ -48,12 +90,28 @@
   display: flex;
   justify-content: center;
   align-items: center;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
 }
 
 #game-container canvas {
   width: 100%;
+  height: auto;
   border-radius: 14px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+}
+
+.game-frame--mobile-landscape #game-container,
+.game-frame--mobile-portrait-blocked #game-container {
+  min-height: 100%;
+}
+
+.game-frame--mobile-landscape #game-container canvas,
+.game-frame--mobile-portrait-blocked #game-container canvas {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 18px;
 }
 
 .overlay-card {
@@ -119,6 +177,95 @@
   color: #c6bca4;
 }
 
+.mobile-controls {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding:
+    max(20px, env(safe-area-inset-top))
+    max(20px, env(safe-area-inset-right))
+    max(20px, env(safe-area-inset-bottom))
+    max(20px, env(safe-area-inset-left));
+  pointer-events: none;
+}
+
+.mobile-controls__column {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  min-width: 140px;
+}
+
+.mobile-controls__column--right {
+  align-items: flex-end;
+}
+
+.mobile-controls__actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+
+.mobile-stick {
+  position: relative;
+  width: 136px;
+  height: 136px;
+  border: 1px solid rgba(243, 239, 227, 0.2);
+  border-radius: 999px;
+  background: rgba(12, 14, 16, 0.35);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.mobile-stick__thumb {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 56px;
+  height: 56px;
+  margin-top: -28px;
+  margin-left: -28px;
+  border-radius: 999px;
+  background: rgba(227, 168, 78, 0.88);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.28);
+}
+
+.mobile-action-button {
+  border: 1px solid rgba(255, 235, 188, 0.2);
+  border-radius: 999px;
+  background: rgba(13, 15, 18, 0.84);
+  color: #f3efe3;
+  font-weight: 700;
+  min-width: 86px;
+  padding: 0.7rem 1rem;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+
+.rotate-device-gate {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(7, 8, 10, 0.78);
+  backdrop-filter: blur(12px);
+}
+
+.rotate-device-gate__card {
+  width: min(320px, 100%);
+  border: 1px solid rgba(255, 235, 188, 0.2);
+  border-radius: 18px;
+  background: rgba(13, 15, 18, 0.92);
+  padding: 1.25rem;
+  text-align: center;
+}
+
 @media (max-width: 720px) {
   .app-shell {
     padding: 1rem;
@@ -130,6 +277,10 @@
   }
 
   .overlay-actions {
+    flex-direction: column;
+  }
+
+  .mobile-controls__actions {
     flex-direction: column;
   }
 }

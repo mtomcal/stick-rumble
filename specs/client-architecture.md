@@ -122,7 +122,19 @@ interface MatchSession {
 - Enabling mobile mode must not alter the WebSocket handshake, room assignment, or authoritative server simulation.
 - Mobile mode is automatically detected; the gameplay flow may not require a user-facing enable button to enter it.
 - Detection should target phone-sized touch play using local device/layout signals rather than server state.
+- Detection must be conservative: touch-capable laptops and larger tablet-class layouts should remain on the desktop presentation unless the local viewport also matches the phone-sized heuristic.
 - Automatic detection and any live layout transitions must preserve the current session and may not tear down the socket or re-bootstrap the match as a side effect.
+
+### Runtime Bridge Contract
+
+- React and Phaser share one active match runtime bridge for the current `match_ready` session.
+- That bridge owns only presentation-local state:
+  - active match bootstrap
+  - mobile touch intent
+  - viewport layout metadata such as stage mode and safe-area-aware insets
+- The bridge may not become a second source of truth for authoritative gameplay state.
+- React publishes normalized mobile gameplay intent into the bridge, and Phaser consumes that intent through the same movement, aim, shoot, reload, and dodge pathways already used by desktop controls.
+- Updating bridge state during resize, orientation changes, or mobile-control interaction must not recreate the Phaser game instance.
 
 ---
 

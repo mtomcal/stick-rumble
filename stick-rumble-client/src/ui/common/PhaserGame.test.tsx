@@ -43,6 +43,18 @@ const bootstrap = {
   } as any,
 }
 
+const layout = {
+  mode: 'desktop' as const,
+  width: 1280,
+  height: 720,
+  insets: {
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+  },
+}
+
 describe('PhaserGame', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -56,14 +68,14 @@ describe('PhaserGame', () => {
   })
 
   it('renders the game container and creates one Phaser instance', () => {
-    const { container } = render(<PhaserGame bootstrap={bootstrap} />)
+    const { container } = render(<PhaserGame bootstrap={bootstrap} layout={layout} />)
 
     expect(container.querySelector('#game-container')).not.toBeNull()
     expect(mockGameInstances).toHaveLength(1)
   })
 
   it('stores and clears the active bootstrap around the component lifecycle', () => {
-    const { unmount } = render(<PhaserGame bootstrap={bootstrap} />)
+    const { unmount } = render(<PhaserGame bootstrap={bootstrap} layout={layout} />)
 
     expect(sessionRuntime.getActiveMatchBootstrap()).toEqual(bootstrap)
 
@@ -76,8 +88,8 @@ describe('PhaserGame', () => {
     const firstHandler = vi.fn()
     const secondHandler = vi.fn()
 
-    const { rerender } = render(<PhaserGame bootstrap={bootstrap} onMatchEnd={firstHandler} />)
-    rerender(<PhaserGame bootstrap={bootstrap} onMatchEnd={secondHandler} />)
+    const { rerender } = render(<PhaserGame bootstrap={bootstrap} layout={layout} onMatchEnd={firstHandler} />)
+    rerender(<PhaserGame bootstrap={bootstrap} layout={layout} onMatchEnd={secondHandler} />)
 
     expect(mockGameInstances).toHaveLength(1)
     window.onMatchEnd?.({ winners: [], finalScores: [], reason: 'test' }, 'player-1')
@@ -85,9 +97,39 @@ describe('PhaserGame', () => {
     expect(secondHandler).toHaveBeenCalledTimes(1)
   })
 
+  it('does not recreate Phaser or clear the active bootstrap when only layout changes', () => {
+    const { rerender } = render(<PhaserGame bootstrap={bootstrap} layout={layout} />)
+
+    rerender(
+      <PhaserGame
+        bootstrap={bootstrap}
+        layout={{
+          ...layout,
+          mode: 'mobile-landscape',
+          insets: { top: 12, right: 16, bottom: 20, left: 16 },
+        }}
+      />
+    )
+    rerender(
+      <PhaserGame
+        bootstrap={bootstrap}
+        layout={{
+          ...layout,
+          mode: 'mobile-portrait-blocked',
+          insets: { top: 18, right: 16, bottom: 20, left: 16 },
+        }}
+      />
+    )
+    rerender(<PhaserGame bootstrap={bootstrap} layout={layout} />)
+
+    expect(mockGameInstances).toHaveLength(1)
+    expect(sessionRuntime.getActiveMatchBootstrap()).toEqual(bootstrap)
+    expect(mockSetGameplayReady).not.toHaveBeenCalledWith(false)
+  })
+
   it('cleans up the match-end bridge and marks gameplay not ready on unmount', () => {
     const onMatchEnd = vi.fn()
-    const { unmount } = render(<PhaserGame bootstrap={bootstrap} onMatchEnd={onMatchEnd} />)
+    const { unmount } = render(<PhaserGame bootstrap={bootstrap} layout={layout} onMatchEnd={onMatchEnd} />)
 
     expect(window.onMatchEnd).toBeDefined()
 

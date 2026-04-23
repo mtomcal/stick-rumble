@@ -143,6 +143,7 @@ interface UIElementPosition {
 - The client should use a phone-oriented heuristic such as: coarse pointer or touch capability, small viewport class, and active landscape gameplay layout.
 - Desktop-capable users and larger non-phone layouts must continue to receive the existing centered stage and keyboard/mouse presentation by default.
 - Detection changes must preserve the existing session and may not remount the match or disconnect the socket as a side effect.
+- The gameplay stage chrome may switch between desktop and mobile presentation while the underlying Phaser runtime remains mounted for the active match.
 
 ### `join_form`
 
@@ -225,6 +226,16 @@ The HUD must remain spatially stable during gameplay. It may be redesigned, but 
 - bottom-left: minimap/navigation on desktop; minimap plus movement-control zone on touch mobile
 - top-right: score, kills, timer, kill feed
 - bottom-right: action-state widgets on desktop; aim/fire plus action widgets on touch mobile
+
+### Viewport Insets
+
+- The HUD layout system must accept viewport inset inputs rather than assuming one immutable screen rectangle.
+- Zero insets are the desktop baseline and must preserve the current HUD positions.
+- Non-zero insets move the existing HUD ownership zones inward without changing which cluster owns each corner.
+- Top-left inset handling applies to the health/ammo cluster and minimap stack.
+- Top-right inset handling applies to score, kills, timer, and kill feed.
+- Bottom-right inset handling applies to the dodge/action cluster in desktop mode and to aim/fire plus action controls in mobile mode.
+- Bottom-left inset handling must leave space for the movement control zone in mobile mode.
 
 The title banner, connection hint text, gameplay chat log, and Phaser debug overlay are not part of the normal in-match HUD contract.
 

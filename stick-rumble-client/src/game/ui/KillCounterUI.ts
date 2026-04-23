@@ -50,6 +50,10 @@ export class KillCounterUI {
     return this.kills;
   }
 
+  setPosition(x: number, y: number): void {
+    this.killText.setPosition(x, y);
+  }
+
   /**
    * Cleanup all resources
    */

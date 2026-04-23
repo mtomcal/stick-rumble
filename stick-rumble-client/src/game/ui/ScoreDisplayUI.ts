@@ -51,6 +51,10 @@ export class ScoreDisplayUI {
     return this.score;
   }
 
+  setPosition(x: number, y: number): void {
+    this.scoreText.setPosition(x, y);
+  }
+
   /**
    * Cleanup all resources
    */

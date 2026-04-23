@@ -67,6 +67,11 @@ export class DodgeRollCooldownUI {
     }
   }
 
+  setPosition(x: number, y: number): void {
+    this.x = x;
+    this.y = y;
+  }
+
   /**
    * Cleanup graphics object
    */
