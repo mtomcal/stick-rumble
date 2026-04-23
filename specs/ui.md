@@ -1,6 +1,6 @@
 # UI System
 
-> **Spec Version**: 2.5.0
+> **Spec Version**: 2.6.0
 > **Last Updated**: 2026-04-23
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [match.md](match.md), [client-architecture.md](client-architecture.md), [graphics.md](graphics.md)
 > **Depended By**: [test-index.md](test-index.md)
@@ -9,9 +9,9 @@
 
 ## Overview
 
-The UI system provides all heads-up display (HUD) elements, feedback indicators, and application screens that communicate game state to the player. The system is divided between Phaser-rendered in-game UI (health bars, ammo, timers, crosshair) and React-rendered application states (join form, waiting screens, recoverable errors, match end).
+The UI system provides all heads-up display (HUD) elements, feedback indicators, and application screens that communicate game state to the player. The system is divided between Phaser-rendered in-game UI (health bars, ammo, timers, crosshair) and React-rendered application states and touch overlays (join form, waiting screens, recoverable errors, match end, mobile control chrome).
 
-**Why this architecture?** Phaser handles real-time, frame-synced UI that must update at 60 FPS. React handles session and screen transitions where accessibility, deterministic state transitions, and standard form patterns matter more than frame-locked rendering.
+**Why this architecture?** Phaser handles real-time, frame-synced UI that must update at 60 FPS. React handles session transitions, orientation handling, safe-area adaptation, and mobile control overlays where DOM layout and accessibility primitives are a better fit than frame-owned scene code.
 
 All in-game HUD elements are screen-fixed (scroll factor 0) and render above world entities. The player-facing contract is stronger than a depth number: fixed HUD pixels are sacrosanct and may never be visually overlapped by world-space entities at any camera position.
 
@@ -122,12 +122,17 @@ interface UIElementPosition {
 
 **2026-04-17 Amendment:** The app now uses explicit React screen states instead of rendering pre-match dialogs on top of an already-mounted Phaser canvas. This section supersedes older assumptions that join, waiting-for-friend, reconnect failure, and match end are primarily modal overlays.
 
-### Centered Stage Contract
+### Gameplay Stage Contract
 
 - React owns the canonical gameplay stage container.
-- When gameplay is active, the Phaser canvas is centered inside that stage.
-- Below-stage content must align to the same stage width.
 - During pre-match states there is no mounted gameplay canvas and no reserved blank fake-canvas placeholder.
+- Desktop gameplay remains the baseline experience and must continue to work as-is.
+- Mobile gameplay is an optional alternate mode, not a replacement for the desktop presentation or desktop input path.
+- When mobile mode is not enabled, gameplay continues to use the existing centered stage behavior.
+- When mobile mode is enabled on a phone-sized touch layout, gameplay uses a full-bleed landscape stage that may consume the entire visible app area.
+- Mobile mode must respect `env(safe-area-inset-*)` padding and dynamic viewport height; browser chrome may not cover touch controls or crop HUD elements.
+- Portrait phone gameplay is out of contract only for mobile mode. In that mode, the app must present a rotate-device screen instead of an active gameplay layout until landscape is restored.
+- The gameplay stage may visually switch between centered and full-bleed presentation by mode, but the match camera and core HUD contract must remain recognizable across both.
 
 ### `join_form`
 
@@ -184,14 +189,30 @@ interface UIElementPosition {
 └─────────────────────────────────────────────────────────────┘
 ```
 
+### Mobile Gameplay Mode
+
+The multiplayer mobile mode follows the prototype's phone presentation closely: the same core gameplay view and top HUD remain recognizable, while touch controls are layered above the stage in the bottom corners.
+
+- Mobile mode is an explicit optional mode layered on top of the existing desktop functionality.
+- The default desktop HUD and keyboard/mouse flow remain authoritative for non-mobile-mode play.
+- Mobile mode is landscape-only.
+- The gameplay surface is full-bleed within the phone-safe area rather than a desktop-style framed card.
+- Top-left HUD ownership remains the same as desktop: minimap plus the survival/combat cluster.
+- Top-right HUD ownership remains the same as desktop: score, kills, timer, and kill feed.
+- Bottom-left becomes a movement control zone in touch mode. The minimap remains in the upper portion of the corner, and the movement stick occupies the lower safe-area-respecting portion.
+- Bottom-right becomes an aim/fire control zone in touch mode. The aim stick owns the lower corner, and any touch buttons such as dodge or reload must stack above or alongside it without covering score-critical HUD.
+- Touch controls are rendered as semi-transparent overlays inside the gameplay stage, not as separate below-stage UI.
+- The aim stick drives the same player-facing reticle/facing contract as desktop aim. Mobile is not a hidden-angle mode.
+- Multiplayer chat is not part of the active product and must not claim screen space in mobile mode.
+
 ### Corner Ownership
 
 The HUD must remain spatially stable during gameplay. It may be redesigned, but it must not dynamically reflow based on state.
 
 - top-left: immediate survival/combat state only
-- bottom-left: minimap/navigation only
+- bottom-left: minimap/navigation on desktop; minimap plus movement-control zone on touch mobile
 - top-right: score, kills, timer, kill feed
-- bottom-right: action-state widgets such as cooldowns
+- bottom-right: action-state widgets on desktop; aim/fire plus action widgets on touch mobile
 
 The title banner, connection hint text, gameplay chat log, and Phaser debug overlay are not part of the normal in-match HUD contract.
 
@@ -201,6 +222,7 @@ The top-left survival/combat cluster is anchored with fixed viewport padding:
 - health occupies the first row
 - ammo occupies the second row, directly underneath health with a stable gap
 - the cluster must be laid out from one shared top-left anchor using measured row sizes and configured gaps; it may not depend on separate hardcoded x/y offsets for health, icon, and ammo elements
+- measured layout helpers such as `HudFlexLayout` are the intended pattern for keeping this cluster stable across desktop and mobile-safe-area variants
 
 ---
 

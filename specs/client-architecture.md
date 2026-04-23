@@ -102,12 +102,17 @@ interface MatchSession {
 - Phaser is mounted only after the app shell receives `session:status { state: "match_ready" }` and constructs a `MatchSession`.
 - The `searching_for_match` and `waiting_for_players` screens are app states, not hidden Phaser phases.
 - `match_end` is a full React screen state, not a modal layered over the active canvas.
-- The architecture MUST remain compatible with future React-owned mobile touch controls, but those controls are out of scope for this effort.
+- React also owns phone-orientation gating, safe-area-aware stage sizing, and mobile touch control overlays.
+- The existing desktop keyboard/mouse runtime remains the baseline path and may not regress when mobile mode is added.
+- Phaser remains the owner of the match camera, in-canvas HUD, and world rendering; React-owned touch controls feed normalized gameplay intents into that runtime rather than replacing it.
 
 **Rendering Rules:**
 - `join_form`, `joining`, `searching_for_match`, `waiting_for_players`, and `recoverable_error` render with no Phaser canvas mounted.
 - `match_loading` is the handoff phase where React prepares the centered stage and mounts Phaser with the completed `MatchSession`.
-- `in_match` renders the centered stage container and any app-shell-owned below-stage content.
+- `in_match` continues to render the existing centered desktop stage unless mobile mode is explicitly enabled.
+- When mobile mode is enabled on a phone-sized touch layout, `in_match` uses a full-bleed landscape stage with React-owned touch controls in the bottom corners.
+- Mobile mode must use safe-area-aware layout, suppress scrolling/zoom gestures that interfere with play, and reserve the bottom corners for React-owned touch controls.
+- Portrait phone gameplay is blocked by a rotate-device screen only while mobile mode is active, rather than silently degrading the match layout.
 - `match_end` replaces the gameplay surface with a full-screen React results experience.
 
 ---
@@ -147,7 +152,7 @@ const GameConfig: Phaser.Types.Core.GameConfig = {
 **Why:**
 - `Phaser.AUTO` uses WebGL if available, Canvas fallback for compatibility
 - `physics.arcade` with zero gravity enables top-down 2D gameplay
-- `scale.FIT` maintains aspect ratio while filling browser window
+- `scale.FIT` preserves a consistent 16:9 gameplay aperture across desktop and mobile presentations
 - Light gray background (#C8CCC8) matches the arena floor color
 
 ### InputState
@@ -1039,16 +1044,11 @@ showBulletImpact(x: number, y: number): void {
 
 #### ChatLogUI (`game/ui/ChatLogUI.ts`)
 
-**Purpose:** Render a chat log panel for system and player messages.
+**Status:** Legacy prototype carry-over, not part of the active multiplayer product contract.
 
-- Dimensions: ~300x120px
-- Position: bottom-left of viewport, screen-fixed (scroll factor 0)
-- Background: `#808080` at 70% opacity
-- System messages: `COLORS.CHAT_SYSTEM` / `#BBA840` (yellow), prefixed `[SYSTEM]`
-- Player messages: name in red/orange, message text in white
-- Font: sans-serif, 14px
-- Max visible lines with scroll behavior
-- Depth: 1000 (fixed UI layer)
+- The active multiplayer message schema defines no client chat or server chat message types.
+- The in-match HUD may not reserve space for chat on desktop or mobile.
+- If this file remains in the repository during transition work, it must be treated as inactive and unmapped from the authoritative gameplay surface.
 
 ---
 
