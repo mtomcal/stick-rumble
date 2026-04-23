@@ -8,6 +8,7 @@ const testState = vi.hoisted(() => ({
   phaserRenderSpy: vi.fn(),
   capturedOnMatchEnd: undefined as PhaserGameProps['onMatchEnd'],
   autoConnectReady: true,
+  connectImplementation: undefined as (() => Promise<void>) | undefined,
   clientInstances: [] as Array<{
     emit: (event: string, payload: unknown) => void
     connect: ReturnType<typeof vi.fn>
@@ -42,7 +43,7 @@ type Handler = (payload: unknown) => void
 vi.mock('./game/network/WebSocketClient', () => ({
   WebSocketClient: class {
     readonly handlers = new Map<string, Set<Handler>>()
-    readonly connect = vi.fn().mockResolvedValue(undefined)
+    readonly connect = vi.fn(() => testState.connectImplementation?.() ?? Promise.resolve(undefined))
     readonly disconnect = vi.fn()
     readonly on = vi.fn((event: string, handler: Handler) => {
       const handlers = this.handlers.get(event) ?? new Set<Handler>()
@@ -98,6 +99,7 @@ describe('App', () => {
     testState.phaserRenderSpy.mockReset()
     testState.capturedOnMatchEnd = undefined
     testState.autoConnectReady = true
+    testState.connectImplementation = undefined
     window.localStorage.clear()
     window.history.replaceState({}, '', '/')
   })
@@ -236,6 +238,36 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: 'Play Public' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Join with Code' })).toBeDisabled()
     expect(screen.getByText('Connecting to game...')).toBeInTheDocument()
+  })
+
+  it('does not show a synthetic no_hello error when the initial socket connect fails', async () => {
+    testState.autoConnectReady = false
+    testState.connectImplementation = () => Promise.reject(new Error('socket failed'))
+
+    render(<App />)
+
+    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
+
+    expect(screen.getByText('Connecting to game...')).toBeInTheDocument()
+    expect(screen.queryByText(/Server rejected .* before hello\./i)).not.toBeInTheDocument()
+
+    act(() => {
+      getClient().connectionStateHandler?.(true)
+    })
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Play Public' })).toBeEnabled())
+    expect(screen.queryByText(/Server rejected .* before hello\./i)).not.toBeInTheDocument()
+  })
+
+  it('shows a real no_hello error when the server reports gameplay before hello', async () => {
+    render(<App />)
+    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
+
+    act(() => {
+      getClient().emit('error:no_hello', { offendingType: 'input:state' })
+    })
+
+    expect(screen.getByText('Server rejected input:state before hello.')).toBeInTheDocument()
   })
 
   it('mounts Phaser only when match_ready arrives and passes a bootstrap session', async () => {

@@ -793,7 +793,7 @@ interface ErrorNoHelloData {
 
 **Server Behavior:** The offending message is dropped. `HelloSeen` is unchanged (still `false`). The connection stays open; the client can still send a valid `player:hello`.
 
-**Client Handling:** If this fires unexpectedly it usually means a bug in the client's hello sequencing — most commonly, gameplay input racing the hello after a reconnect. Clients should log it, send a fresh `player:hello`, and retry the dropped intent.
+**Client Handling:** If this fires unexpectedly it usually means a bug in the client's hello sequencing — most commonly, gameplay input racing the hello after a reconnect. Clients should log it, send a fresh `player:hello`, and retry the dropped intent. Transport failures such as "WebSocket could not connect" or "reconnect attempt still in progress" are a separate client-state concern and MUST NOT be surfaced by fabricating an `error:no_hello` payload.
 
 ---
 
@@ -2237,6 +2237,7 @@ Client                          Server
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.5.1 | 2026-04-23 | Clarified client handling for `error:no_hello`: it remains a real server protocol rejection only, and clients must not fabricate it to represent local WebSocket connect/reconnect transport failures. |
 | 1.5.0 | 2026-04-23 | Merged the April contract changes: `session:leave` and `session:status` define the session-first bootstrap flow, `match:ended` winners and final scores are display-ready with `displayName` while `playerId` remains non-visible identity data, `player:move` documents authoritative per-player `weaponType` for remote held-weapon presentation, `weapon:pickup_confirmed` is room feedback rather than equip authority, `player:kill_credit` only updates local HUD stats for the local killer, and `match:ended` freezes later stat-facing UI updates. |
 | 1.3.1 | 2026-04-11 | Friends-MVP pre-mortem fixes: (1) `player:hello` latching tightened — only **successful** hellos set `HelloSeen`; failed hellos (`error:bad_room_code`, `error:room_full`) leave the connection free to send another hello; (2) reconnection contract made explicit — every new connection must begin with a fresh `player:hello`, in-progress match resume is out of scope for MVP; (3) `room:joined` compatibility posture documented as breaking (no pre-MVP client support, atomic client+server deploy required); (4) `error:no_hello` / `error:bad_room_code` / `error:room_full` server-behavior blocks updated to explicitly state `HelloSeen` stays `false`. |
 | 1.3.0 | 2026-04-11 | Friends-MVP: added `player:hello` (required join intent), `error:no_hello`, `error:bad_room_code`, `error:room_full`. Extended `room:joined` with authoritative `displayName` and optional `code`. Client-to-server count: 7→8; server-to-client: 22→25. |

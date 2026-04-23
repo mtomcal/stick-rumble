@@ -1497,6 +1497,7 @@ See [networking.md](networking.md#network-simulator) for server-side counterpart
 - React owns the WebSocket session lifecycle and the app-session state machine. Phaser no longer installs the primary join bridge.
 - `PhaserGame` mounts only after the app shell has already resolved a `MatchSession` from `session:status { state: "match_ready" }`.
 - Join errors, queue states, named-room waiting, replay failures, and post-match results are React screen states and MUST NOT depend on a hidden Phaser instance.
+- Transport-state notifications (initial socket connect, reconnect in progress, exhausted reconnect attempts) are separate from join-protocol errors. The app shell MUST NOT synthesize `error:no_hello` or any other server message type to represent a local socket-connect failure.
 - Replay of the last successful join intent is initiated by the app shell. If replay fails, the client transitions to `recoverable_error` instead of silently dropping back to the join form.
 - Invite links prefill the room code only. They do not auto-submit; the user confirms explicitly from the join form.
 
@@ -1725,7 +1726,7 @@ Depth 0:     Background, arena floor, grid
 **Trigger:** WebSocket fails to connect or loses connection
 **Detection:** ws.onerror or ws.onclose events
 **Response:** Attempt reconnect (3 attempts, 1s delay)
-**Client Notification:** "Reconnecting... (attempt X/3)" UI
+**Client Notification:** "Connecting to game..." / "Reconnecting... (attempt X/3)" style status UI while recovery is still in progress. These transport notices are not rendered as join-validation errors and must clear immediately when the socket becomes ready again.
 **Recovery:** Full scene restart on successful reconnect
 
 ### Invalid Server Message
@@ -2071,6 +2072,7 @@ it('should follow local player with camera', () => {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.4.1 | 2026-04-23 | Clarified that socket transport failures and reconnect-in-progress notices are app-level connection status, not synthetic join errors; React must not fabricate `error:no_hello` to represent a local connect failure, and transient connection notices must clear when the socket becomes ready again. |
 | 1.4.0 | 2026-04-17 | Session-first app shell: React now owns the WebSocket/session lifecycle, explicit app-session states (`join_form`, `searching_for_match`, `waiting_for_players`, `match_loading`, `in_match`, `match_end`, `recoverable_error`) were introduced, and Phaser bootstrap is deferred until an authoritative `match_ready` session snapshot exists. |
 | 1.3.2 | 2026-04-13 | Friends-MVP invite polish: invite auto-submit now only fires when a cached display name already exists before user interaction; typing into an empty display-name field no longer submits on the first character. |
 | 1.3.1 | 2026-04-13 | Friends-MVP join-flow bridge hardening: specified that React overlay state must not remount Phaser or disconnect the active WebSocket, and that join controls expose explicit bridge-ready / joining states instead of silently dropping input before `window.submitJoinIntent` is installed. |
