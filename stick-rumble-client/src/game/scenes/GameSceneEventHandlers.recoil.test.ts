@@ -160,6 +160,7 @@ describe('GameSceneEventHandlers - Recoil Visual Feedback', () => {
       projectileSpawnHandler!({
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'uzi',
         position: { x: 100, y: 100 },
         velocity: { x: 10, y: 0 },
       });
@@ -184,6 +185,7 @@ describe('GameSceneEventHandlers - Recoil Visual Feedback', () => {
       projectileSpawnHandler!({
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'ak47',
         position: { x: 100, y: 100 },
         velocity: { x: 10, y: 0 },
       });
@@ -208,6 +210,7 @@ describe('GameSceneEventHandlers - Recoil Visual Feedback', () => {
       projectileSpawnHandler!({
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'shotgun',
         position: { x: 100, y: 100 },
         velocity: { x: 10, y: 0 },
       });
@@ -232,6 +235,7 @@ describe('GameSceneEventHandlers - Recoil Visual Feedback', () => {
       projectileSpawnHandler!({
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'pistol',
         position: { x: 100, y: 100 },
         velocity: { x: 10, y: 0 },
       });
@@ -265,6 +269,7 @@ describe('GameSceneEventHandlers - Recoil Visual Feedback', () => {
       projectileSpawnHandler!({
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'shotgun',
         position: { x: 100, y: 100 },
         velocity: { x: 10, y: 0 },
       });
@@ -294,6 +299,7 @@ describe('GameSceneEventHandlers - Recoil Visual Feedback', () => {
       projectileSpawnHandler!({
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'uzi',
         position: { x: 100, y: 100 },
         velocity: { x: 10, y: 0 },
       });
@@ -317,6 +323,7 @@ describe('GameSceneEventHandlers - Recoil Visual Feedback', () => {
       projectileSpawnHandler!({
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'ak47',
         position: { x: 100, y: 100 },
         velocity: { x: 10, y: 0 },
       });
@@ -340,6 +347,7 @@ describe('GameSceneEventHandlers - Recoil Visual Feedback', () => {
       projectileSpawnHandler!({
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'shotgun',
         position: { x: 100, y: 100 },
         velocity: { x: 10, y: 0 },
       });
@@ -363,6 +371,7 @@ describe('GameSceneEventHandlers - Recoil Visual Feedback', () => {
       projectileSpawnHandler!({
         id: 'proj-1',
         ownerId: 'player-2', // Different player
+        weaponType: 'uzi',
         position: { x: 100, y: 100 },
         velocity: { x: 10, y: 0 },
       });
@@ -379,6 +388,7 @@ describe('GameSceneEventHandlers - Recoil Visual Feedback', () => {
       projectileSpawnHandler!({
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'pistol',
         position: { x: 100, y: 100 },
         velocity: { x: 10, y: 0 },
       });
@@ -402,6 +412,7 @@ describe('GameSceneEventHandlers - Recoil Visual Feedback', () => {
       projectileSpawnHandler!({
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'bat',
         position: { x: 100, y: 100 },
         velocity: { x: 10, y: 0 },
       });
@@ -425,6 +436,7 @@ describe('GameSceneEventHandlers - Recoil Visual Feedback', () => {
       projectileSpawnHandler!({
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'katana',
         position: { x: 100, y: 100 },
         velocity: { x: 10, y: 0 },
       });
@@ -448,6 +460,7 @@ describe('GameSceneEventHandlers - Recoil Visual Feedback', () => {
       projectileSpawnHandler!({
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'uzi',
         position: { x: 100, y: 100 },
         velocity: { x: 10, y: 0 },
       });
@@ -469,6 +482,7 @@ describe('GameSceneEventHandlers - Recoil Visual Feedback', () => {
       projectileSpawnHandler!({
         id: 'proj-2',
         ownerId: 'player-1',
+        weaponType: 'shotgun',
         position: { x: 200, y: 200 },
         velocity: { x: 10, y: 0 },
       });
@@ -493,18 +507,21 @@ describe('GameSceneEventHandlers - Recoil Visual Feedback', () => {
       projectileSpawnHandler!({
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'uzi',
         position: { x: 100, y: 100 },
         velocity: { x: 10, y: 0 },
       });
       projectileSpawnHandler!({
         id: 'proj-2',
         ownerId: 'player-1',
+        weaponType: 'uzi',
         position: { x: 101, y: 100 },
         velocity: { x: 10, y: 0 },
       });
       projectileSpawnHandler!({
         id: 'proj-3',
         ownerId: 'player-1',
+        weaponType: 'uzi',
         position: { x: 102, y: 100 },
         velocity: { x: 10, y: 0 },
       });
@@ -538,6 +555,7 @@ describe('GameSceneEventHandlers - Recoil Visual Feedback', () => {
       projectileSpawnHandler!({
         id: 'proj-1',
         ownerId: 'player-1',
+        weaponType: 'ak47',
         position: { x: 100, y: 100 },
         velocity: { x: 10, y: 0 },
       });

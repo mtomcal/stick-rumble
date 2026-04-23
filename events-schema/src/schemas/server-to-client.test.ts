@@ -4,6 +4,8 @@
 import { describe, it, expect } from 'vitest';
 import { Value } from '@sinclair/typebox/value';
 import {
+  SessionStatusDataSchema,
+  SessionStatusMessageSchema,
   RoomJoinedDataSchema,
   RoomJoinedMessageSchema,
   PlayerLeftDataSchema,
@@ -37,6 +39,7 @@ import {
   PlayerRespawnMessageSchema,
   MatchTimerDataSchema,
   MatchTimerMessageSchema,
+  WinnerSummarySchema,
   PlayerScoreSchema,
   MatchEndedDataSchema,
   MatchEndedMessageSchema,
@@ -67,6 +70,7 @@ describe('Server-to-Client Schemas', () => {
     position: { x: 100, y: 200 },
     velocity: { x: 5, y: -3 },
     aimAngle: 1.57,
+    weaponType: 'Pistol',
     health: 100,
     isInvulnerable: false,
     invulnerabilityEnd: '2026-04-10T16:00:00Z',
@@ -131,6 +135,77 @@ describe('Server-to-Client Schemas', () => {
     });
   });
 
+  describe('SessionStatusDataSchema', () => {
+    it('should validate a searching_for_match snapshot without mapId', () => {
+      expect(Value.Check(SessionStatusDataSchema, {
+        state: 'searching_for_match',
+        playerId: 'player-123',
+        displayName: 'Alice',
+        joinMode: 'public',
+        minPlayers: 2,
+      })).toBe(true);
+    });
+
+    it('should validate a waiting_for_players snapshot for named rooms', () => {
+      expect(Value.Check(SessionStatusDataSchema, {
+        state: 'waiting_for_players',
+        playerId: 'player-123',
+        displayName: 'Alice',
+        joinMode: 'code',
+        roomId: 'room-123',
+        code: 'PIZZA',
+        rosterSize: 1,
+        minPlayers: 2,
+      })).toBe(true);
+    });
+
+    it('should validate a match_ready snapshot with mapId', () => {
+      expect(Value.Check(SessionStatusDataSchema, {
+        state: 'match_ready',
+        playerId: 'player-123',
+        displayName: 'Alice',
+        joinMode: 'code',
+        roomId: 'room-123',
+        code: 'PIZZA',
+        rosterSize: 2,
+        minPlayers: 2,
+        mapId: 'default_office',
+      })).toBe(true);
+    });
+
+    it('should allow public sessions to omit code', () => {
+      expect(Value.Check(SessionStatusDataSchema, {
+        state: 'match_ready',
+        playerId: 'player-123',
+        displayName: 'Alice',
+        joinMode: 'public',
+        roomId: 'room-123',
+        rosterSize: 2,
+        minPlayers: 2,
+        mapId: 'default_office',
+      })).toBe(true);
+    });
+  });
+
+  describe('SessionStatusMessageSchema', () => {
+    it('should validate a complete session:status message', () => {
+      expect(Value.Check(SessionStatusMessageSchema, {
+        type: 'session:status',
+        timestamp: Date.now(),
+        data: {
+          state: 'match_ready',
+          playerId: 'player-123',
+          displayName: 'Alice',
+          joinMode: 'public',
+          roomId: 'room-123',
+          rosterSize: 2,
+          minPlayers: 2,
+          mapId: 'default_office',
+        },
+      })).toBe(true);
+    });
+  });
+
   describe('RoomJoinedMessageSchema', () => {
     it('should validate complete room:joined message', () => {
       const message = {
@@ -172,6 +247,7 @@ describe('Server-to-Client Schemas', () => {
             position: { x: 300, y: 400 },
             velocity: { x: 0, y: 0 },
             aimAngle: 0,
+            weaponType: 'Bat',
             health: 75,
             isInvulnerable: false,
             invulnerabilityEnd: '2026-04-10T16:00:00Z',
@@ -227,6 +303,18 @@ describe('Server-to-Client Schemas', () => {
       const data = {
         players: [basePlayerState],
         correctedPlayers: [''],
+      };
+      expect(Value.Check(PlayerMoveDataSchema, data)).toBe(false);
+    });
+
+    it('should reject player move data without weaponType', () => {
+      const data = {
+        players: [
+          {
+            ...basePlayerState,
+            weaponType: undefined,
+          },
+        ],
       };
       expect(Value.Check(PlayerMoveDataSchema, data)).toBe(false);
     });
@@ -560,6 +648,7 @@ describe('Server-to-Client Schemas', () => {
     it('should validate valid player score', () => {
       const data = {
         playerId: 'player-1',
+        displayName: 'Alice',
         kills: 10,
         deaths: 2,
         xp: 500,
@@ -570,6 +659,7 @@ describe('Server-to-Client Schemas', () => {
     it('should accept zero kills and deaths', () => {
       const data = {
         playerId: 'player-1',
+        displayName: 'Alice',
         kills: 0,
         deaths: 0,
         xp: 50,
@@ -577,8 +667,20 @@ describe('Server-to-Client Schemas', () => {
       expect(Value.Check(PlayerScoreSchema, data)).toBe(true);
     });
 
+    it('should reject empty displayName when provided', () => {
+      const data = {
+        playerId: 'player-1',
+        displayName: '',
+        kills: 5,
+        deaths: 2,
+        xp: 100,
+      };
+      expect(Value.Check(PlayerScoreSchema, data)).toBe(false);
+    });
+
     it('should reject missing playerId', () => {
       const data = {
+        displayName: 'Alice',
         kills: 5,
         deaths: 2,
         xp: 100,
@@ -589,6 +691,7 @@ describe('Server-to-Client Schemas', () => {
     it('should reject negative kills', () => {
       const data = {
         playerId: 'player-1',
+        displayName: 'Alice',
         kills: -1,
         deaths: 0,
         xp: 100,
@@ -599,6 +702,7 @@ describe('Server-to-Client Schemas', () => {
     it('should reject negative deaths', () => {
       const data = {
         playerId: 'player-1',
+        displayName: 'Alice',
         kills: 5,
         deaths: -1,
         xp: 100,
@@ -609,6 +713,7 @@ describe('Server-to-Client Schemas', () => {
     it('should reject negative xp', () => {
       const data = {
         playerId: 'player-1',
+        displayName: 'Alice',
         kills: 5,
         deaths: 2,
         xp: -50,
@@ -619,6 +724,7 @@ describe('Server-to-Client Schemas', () => {
     it('should reject non-integer kills', () => {
       const data = {
         playerId: 'player-1',
+        displayName: 'Alice',
         kills: 5.5,
         deaths: 2,
         xp: 100,
@@ -629,6 +735,17 @@ describe('Server-to-Client Schemas', () => {
     it('should reject empty playerId', () => {
       const data = {
         playerId: '',
+        displayName: 'Alice',
+        kills: 5,
+        deaths: 2,
+        xp: 100,
+      };
+      expect(Value.Check(PlayerScoreSchema, data)).toBe(false);
+    });
+
+    it('should reject missing displayName', () => {
+      const data = {
+        playerId: 'player-1',
         kills: 5,
         deaths: 2,
         xp: 100,
@@ -637,14 +754,29 @@ describe('Server-to-Client Schemas', () => {
     });
   });
 
+  describe('WinnerSummarySchema', () => {
+    it('should require display-ready winner names', () => {
+      expect(Value.Check(WinnerSummarySchema, {
+        playerId: 'player-1',
+        displayName: 'Alice',
+      })).toBe(true);
+      expect(Value.Check(WinnerSummarySchema, {
+        playerId: 'player-1',
+      })).toBe(false);
+    });
+  });
+
   describe('MatchEndedDataSchema', () => {
     it('should validate valid match ended data with winners', () => {
       const data = {
-        winners: ['player-1', 'player-2'],
+        winners: [
+          { playerId: 'player-1', displayName: 'Alice' },
+          { playerId: 'player-2', displayName: 'Bob' },
+        ],
         finalScores: [
-          { playerId: 'player-1', kills: 10, deaths: 2, xp: 100 },
-          { playerId: 'player-2', kills: 8, deaths: 3, xp: 90 },
-          { playerId: 'player-3', kills: 5, deaths: 5, xp: 50 },
+          { playerId: 'player-1', displayName: 'Alice', kills: 10, deaths: 2, xp: 100 },
+          { playerId: 'player-2', displayName: 'Bob', kills: 8, deaths: 3, xp: 90 },
+          { playerId: 'player-3', displayName: 'Carol', kills: 5, deaths: 5, xp: 50 },
         ],
         reason: 'time_limit',
       };
@@ -662,8 +794,8 @@ describe('Server-to-Client Schemas', () => {
 
     it('should reject empty reason', () => {
       const data = {
-        winners: ['player-1'],
-        finalScores: [{ playerId: 'player-1', kills: 5, deaths: 0, xp: 100 }],
+        winners: [{ playerId: 'player-1', displayName: 'Alice' }],
+        finalScores: [{ playerId: 'player-1', displayName: 'Alice', kills: 5, deaths: 0, xp: 100 }],
         reason: '',
       };
       expect(Value.Check(MatchEndedDataSchema, data)).toBe(false);
@@ -671,8 +803,8 @@ describe('Server-to-Client Schemas', () => {
 
     it('should reject negative kills', () => {
       const data = {
-        winners: ['player-1'],
-        finalScores: [{ playerId: 'player-1', kills: -1, deaths: 0, xp: 100 }],
+        winners: [{ playerId: 'player-1', displayName: 'Alice' }],
+        finalScores: [{ playerId: 'player-1', displayName: 'Alice', kills: -1, deaths: 0, xp: 100 }],
         reason: 'elimination',
       };
       expect(Value.Check(MatchEndedDataSchema, data)).toBe(false);
@@ -680,8 +812,8 @@ describe('Server-to-Client Schemas', () => {
 
     it('should reject missing playerId in score', () => {
       const data = {
-        winners: ['player-1'],
-        finalScores: [{ kills: 5, deaths: 0, xp: 100 }],
+        winners: [{ playerId: 'player-1', displayName: 'Alice' }],
+        finalScores: [{ displayName: 'Alice', kills: 5, deaths: 0, xp: 100 }],
         reason: 'elimination',
       };
       expect(Value.Check(MatchEndedDataSchema, data)).toBe(false);
@@ -689,9 +821,36 @@ describe('Server-to-Client Schemas', () => {
 
     it('should reject non-integer kills', () => {
       const data = {
-        winners: ['player-1'],
-        finalScores: [{ playerId: 'player-1', kills: 5.5, deaths: 0, xp: 100 }],
+        winners: [{ playerId: 'player-1', displayName: 'Alice' }],
+        finalScores: [{ playerId: 'player-1', displayName: 'Alice', kills: 5.5, deaths: 0, xp: 100 }],
         reason: 'elimination',
+      };
+      expect(Value.Check(MatchEndedDataSchema, data)).toBe(false);
+    });
+
+    it('should reject negative lastProcessedSequence values in state snapshots', () => {
+      const data = {
+        players: [],
+        projectiles: [],
+        weaponCrates: [],
+        lastProcessedSequence: { 'player-1': -1 },
+      };
+      expect(Value.Check(StateSnapshotDataSchema, data)).toBe(false);
+    });
+
+    it('should reject negative lastProcessedSequence values in state deltas', () => {
+      const data = {
+        players: [],
+        lastProcessedSequence: { 'player-1': -1 },
+      };
+      expect(Value.Check(StateDeltaDataSchema, data)).toBe(false);
+    });
+
+    it('should reject final score rows without displayName', () => {
+      const data = {
+        winners: [{ playerId: 'player-1', displayName: 'Alice' }],
+        finalScores: [{ playerId: 'player-1', kills: 5, deaths: 0, xp: 100 }],
+        reason: 'kill_target',
       };
       expect(Value.Check(MatchEndedDataSchema, data)).toBe(false);
     });
@@ -975,13 +1134,30 @@ describe('Server-to-Client Schemas', () => {
           },
         },
         {
+          schema: SessionStatusMessageSchema,
+          message: {
+            type: 'session:status',
+            timestamp,
+            data: {
+              state: 'match_ready',
+              roomId: 'room-1',
+              playerId: 'p1',
+              displayName: 'Alice',
+              joinMode: 'public',
+              rosterSize: 2,
+              minPlayers: 2,
+              mapId: 'default_office',
+            },
+          },
+        },
+        {
           schema: MatchEndedMessageSchema,
           message: {
             type: 'match:ended',
             timestamp,
             data: {
-              winners: ['p1'],
-              finalScores: [{ playerId: 'p1', kills: 5, deaths: 0, xp: 100 }],
+              winners: [{ playerId: 'p1', displayName: 'Alice' }],
+              finalScores: [{ playerId: 'p1', displayName: 'Alice', kills: 5, deaths: 0, xp: 100 }],
               reason: 'elimination',
             },
           },

@@ -1,7 +1,7 @@
 # Test Index
 
-> **Spec Version**: 1.4.0
-> **Last Updated**: 2026-04-17
+> **Spec Version**: 1.4.1
+> **Last Updated**: 2026-04-22
 > **Depends On**: All specs (cross-reference document)
 > **Depended By**: None (reference document)
 
@@ -240,9 +240,9 @@ When implementing from scratch, AI agents need to:
 | TS-MELEE-010 | Unit | Medium | Target at arc edge (45°) |
 | TS-MELEE-011 | Unit | Medium | Target just outside arc (50°) |
 | TS-MELEE-012 | Integration | High | melee:hit broadcast includes all victims |
-| TS-MELEE-013 | Visual | Medium | Swing animation renders 90° arc |
+| TS-MELEE-013 | Visual | Medium | Weapon-following swing trail renders correctly |
 | TS-MELEE-014 | Unit | Medium | Non-melee weapon returns empty result |
-| TS-MELEE-015 | Visual | High | Weapon container rotation tween on swing |
+| TS-MELEE-015 | Visual | High | Swing motion includes anticipation, readable follow-through, and overlap protection |
 | TS-MELEE-016 | Integration | Critical | Melee cannot damage through blocking geometry |
 | TS-MELEE-017 | Integration | Critical | Bat knockback stops at first wall contact |
 | TS-MELEE-018 | Integration | High | Blocked swing still consumes cooldown |
@@ -256,7 +256,7 @@ When implementing from scratch, AI agents need to:
 | TS-MSG-003 | Unit | High | shoot:failed sent on empty magazine |
 | TS-MSG-004 | Integration | Critical | player:damaged sent on hit |
 | TS-MSG-005 | Integration | High | player:death triggers respawn after 3 seconds |
-| TS-MSG-006 | Integration | High | match:ended stops game processing |
+| TS-MSG-006 | Integration | High | match:ended freezes gameplay and stat processing |
 | TS-MSG-007 | Integration | Medium | weapon:pickup_confirmed marks crate unavailable |
 | TS-MSG-008 | Integration | Medium | roll:start and roll:end sequence |
 | TS-MSG-009 | Integration | Medium | melee:hit includes all victims |
@@ -404,11 +404,11 @@ When implementing from scratch, AI agents need to:
 | TS-UI-005 | Integration | High | Reload indicator shows during reload |
 | TS-UI-006 | Integration | Critical | Timer counts down correctly |
 | TS-UI-007 | Unit | Medium | Timer turns red under 60 seconds |
-| TS-UI-008 | Integration | High | Score updates on kill |
+| TS-UI-008 | Integration | High | Score updates on local kill only |
 | TS-UI-009 | Integration | High | Pickup prompt appears near crates |
 | TS-UI-010 | Unit | Medium | Dodge cooldown shows progress |
-| TS-UI-011 | Integration | Critical | Match end screen shows winner |
-| TS-UI-012 | Unit | High | Scoreboard sorted correctly |
+| TS-UI-011 | Integration | Critical | Match end screen shows winner display names |
+| TS-UI-012 | Unit | High | Scoreboard uses shared ranks for kill ties |
 | TS-UI-013 | Visual | High | Camera flash on damage received |
 | TS-UI-014 | Visual | High | Hit marker normal variant |
 | TS-UI-015 | Visual | High | Hit marker kill variant |
@@ -593,8 +593,8 @@ Tests that verify rendering output using Playwright screenshots.
 - TS-GFX-022: Directional hit indicator (incoming)
 - TS-GFX-023: Crosshair reticle texture
 - TS-GFX-024: Death corpse fade timing
-- TS-MELEE-013: Swing animation renders 90° arc
-- TS-MELEE-015: Weapon container rotation tween on swing
+- TS-MELEE-013: Weapon-following swing trail renders correctly
+- TS-MELEE-015: Swing motion includes anticipation, readable follow-through, and overlap protection
 - TS-UI-013: Camera flash on damage received
 - TS-UI-014: Hit marker normal variant
 - TS-UI-015: Hit marker kill variant
@@ -698,4 +698,6 @@ Use this checklist to track test implementation progress:
 | 1.1.1 | 2026-02-16 | Fixed test priorities/categories for shooting.md, rooms.md, server-architecture.md, match.md, and messages.md to match source spec definitions. Corrected systematically inflated Critical counts. Removed phantom Low priority count (0 Low tests exist). Flagged 15 netcode test IDs as index-only (no source spec entries). |
 | 1.1.2 | 2026-02-16 | Fixed priority counts and categories for all 19 specs in By Spec table to match source spec definitions. Fixed detailed catalog entries for arena, audio, client-architecture (added 009/010), constants, dodge-roll, graphics, hit-detection, melee, messages, movement, networking, overview, player, ui, and weapons. Updated implementation checklist client-architecture count from 8 to 10. |
 | 1.2.0 | 2026-02-16 | Added 20 pre-BMM visual port test scenarios. Graphics: 10 new tests (TS-GFX-015 to 024) for blood/healing particles, wall sparks, gun recoil, aim sway, reload pulse, hit indicators, crosshair, corpse fade. UI: 7 new tests (TS-UI-013 to 019) for camera flash/shake, hit markers, damage numbers, minimap. Melee: TS-MELEE-015 (weapon rotation tween). Shooting: TS-SHOOT-013 (aim sway trajectory). Arena: TS-ARENA-013 (floor grid). Updated TS-GFX-011 description (corpse with splayed limbs) and TS-GFX-013 (white stroke-only arc). Total tests: 224 → 244. Visual tests: 13 → 32. High priority: 102 → 111. Medium priority: 51 → 62. |
+| 1.4.1 | 2026-04-22 | Merged the latest cross-references: retained the wall-barrier acceptance scenarios (TS-ARENA-006, TS-HIT-015/016/017, TS-MELEE-016/017/018, TS-SHOOT-014/015) while updating melee swing readability, match-end freezing, local-only HUD stat updates, display-name winners, and shared-rank kill ties. |
 | 1.4.0 | 2026-04-17 | Indexed the new wall-barrier acceptance scenarios: TS-ARENA-006, TS-HIT-015/016/017, TS-MELEE-016/017/018, and TS-SHOOT-014/015. Updated summary counts, combat phase ranges, and implementation checklist totals to match the tightened first-contact barrier contract. |
+| 1.3.1 | 2026-04-17 | Updated cross-references for melee swing readability, authoritative match-end freezing, local-only HUD stat updates, display-name winners, and shared-rank kill ties. |

@@ -19,6 +19,7 @@
           "position",
           "velocity",
           "aimAngle",
+          "weaponType",
           "health",
           "isInvulnerable",
           "invulnerabilityEnd",
@@ -78,6 +79,11 @@
           "aimAngle": {
             "description": "Player aim angle in radians",
             "type": "number"
+          },
+          "weaponType": {
+            "description": "Authoritative equipped weapon type for this player",
+            "minLength": 1,
+            "type": "string"
           },
           "health": {
             "description": "Current health",

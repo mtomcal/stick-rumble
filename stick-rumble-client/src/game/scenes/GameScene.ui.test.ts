@@ -1,23 +1,20 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { GameScene } from './GameScene';
-import { createMockScene, createMockWebSocket } from './GameScene.test.setup';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { GameScene } from './GameScene'
+import { createMockScene } from './GameScene.test.setup'
+import { setActiveMatchBootstrap } from '../sessionRuntime'
 
-// Mock Phaser for InputManager - MUST BE AT TOP LEVEL
 vi.mock('phaser', () => ({
   default: {
     Scene: class {
-      scene = { key: '' };
+      scene = { key: '' }
       constructor(config: { key: string }) {
-        this.scene.key = config.key;
+        this.scene.key = config.key
       }
     },
     Input: {
       Keyboard: {
         KeyCodes: {
-          W: 87,
-          A: 65,
-          S: 83,
-          D: 68,
+          SPACE: 32,
         },
       },
     },
@@ -25,680 +22,85 @@ vi.mock('phaser', () => ({
       DegToRad: (degrees: number) => degrees * (Math.PI / 180),
     },
   },
-}));
+}))
 
-describe('GameScene - UI', () => {
-  let scene: GameScene;
-  let mockWebSocketInstance: ReturnType<typeof createMockWebSocket>['mockWebSocketInstance'];
-  let originalWebSocket: typeof WebSocket;
+function createBootstrap() {
+  return {
+    session: {
+      roomId: 'room-1',
+      playerId: 'player-1',
+      mapId: 'default_office',
+      displayName: 'Alice',
+      joinMode: 'public' as const,
+    },
+    wsClient: {
+      on: vi.fn(),
+      off: vi.fn(),
+      send: vi.fn(),
+      getTotalHandlerCount: vi.fn().mockReturnValue(0),
+      setGameplayReady: vi.fn(),
+    } as any,
+  }
+}
 
+describe('GameScene UI flow', () => {
   beforeEach(() => {
-    originalWebSocket = globalThis.WebSocket;
-    const { MockWebSocket, mockWebSocketInstance: wsInstance } = createMockWebSocket();
-    mockWebSocketInstance = wsInstance;
-    globalThis.WebSocket = MockWebSocket as unknown as typeof WebSocket;
-
-    vi.stubGlobal('import.meta', {
-      env: {
-        VITE_WS_URL: 'ws://localhost:8080/ws',
-      },
-    });
-
-    scene = new GameScene();
-  });
+    setActiveMatchBootstrap(null)
+  })
 
   afterEach(() => {
-    globalThis.WebSocket = originalWebSocket;
-    vi.clearAllMocks();
-    vi.unstubAllGlobals();
-  });
-
-  describe('ammo display', () => {
-    it('should anchor the health bar cluster to the top-left survival HUD padding', () => {
-      const mockSceneContext = createMockScene();
-      Object.assign(scene, mockSceneContext);
-
-      scene.create();
-
-      expect(mockSceneContext.add.container).toHaveBeenCalledWith(48, 20);
-    });
-
-    it('should create ammo text display after connection', async () => {
-      const mockSceneContext = createMockScene();
-      mockSceneContext.input = {
-        ...mockSceneContext.input,
-        on: vi.fn(),
-        keyboard: {
-          addKey: vi.fn().mockReturnValue({ on: vi.fn() }),
-          addKeys: mockSceneContext.input.keyboard.addKeys,
-        },
-      };
-      Object.assign(scene, mockSceneContext);
-
-      scene.create();
-
-      // Trigger the delayed callback to start connection
-      if (mockSceneContext.delayedCallCallbacks.length > 0) {
-        mockSceneContext.delayedCallCallbacks[0]();
-      }
-
-      // Set readyState to OPEN and trigger onopen
-      mockWebSocketInstance.readyState = 1;
-      if (mockWebSocketInstance.onopen) {
-        mockWebSocketInstance.onopen(new Event('open'));
-      }
-
-      await new Promise(resolve => setTimeout(resolve, 10));
-
-      // Verify ammo text was created (multiple text calls: title, connection status, ammo)
-      const textCalls = mockSceneContext.add.text.mock.calls;
-      expect(textCalls.length).toBeGreaterThanOrEqual(3);
-
-      // Check ammo text specifically (anchored underneath the health bar)
-      const ammoTextCall = textCalls.find((call: unknown[]) => call[0] === 48 && call[1] === 58);
-      expect(ammoTextCall).toBeDefined();
-    });
-
-    it('should update ammo display when weapon:state received', async () => {
-      const mockSceneContext = createMockScene();
-      const ammoTexts: any[] = [];
-      mockSceneContext.add.text = vi.fn().mockImplementation(() => {
-        const t = { setOrigin: vi.fn().mockReturnThis(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), setVisible: vi.fn().mockReturnThis(), setAlpha: vi.fn().mockReturnThis(), visible: false, destroy: vi.fn() };
-        ammoTexts.push(t);
-        return t;
-      });
-      mockSceneContext.input = {
-        ...mockSceneContext.input,
-        on: vi.fn(),
-        keyboard: {
-          addKey: vi.fn().mockReturnValue({ on: vi.fn() }),
-          addKeys: mockSceneContext.input.keyboard.addKeys,
-        },
-      };
-      Object.assign(scene, mockSceneContext);
-
-      scene.create();
-
-      // Trigger the delayed callback to start connection
-      if (mockSceneContext.delayedCallCallbacks.length > 0) {
-        mockSceneContext.delayedCallCallbacks[0]();
-      }
-
-      // Set readyState to OPEN and trigger onopen
-      mockWebSocketInstance.readyState = 1;
-      if (mockWebSocketInstance.onopen) {
-        mockWebSocketInstance.onopen(new Event('open'));
-      }
-
-      await new Promise(resolve => setTimeout(resolve, 10));
-
-      // Now send weapon:state message
-      const weaponStateMessage = {
-        data: JSON.stringify({
-          type: 'weapon:state',
-          timestamp: Date.now(),
-          data: {
-            currentAmmo: 10,
-            maxAmmo: 15,
-            isReloading: false,
-            canShoot: true
-          }
-        })
-      };
-
-      if (mockWebSocketInstance.onmessage) {
-        mockWebSocketInstance.onmessage(weaponStateMessage as MessageEvent);
-      }
-
-      // Verify ammo text was updated (check any text object had setText called with ammo format)
-      const hasAmmoUpdate = ammoTexts.some(t => t.setText.mock.calls.some((c: any[]) => c[0] === '10/15'));
-      expect(hasAmmoUpdate).toBe(true);
-    });
-
-    it('should display RELOADING indicator when reloading', async () => {
-      const mockSceneContext = createMockScene();
-      const reloadTexts: any[] = [];
-      mockSceneContext.add.text = vi.fn().mockImplementation(() => {
-        const t = { setOrigin: vi.fn().mockReturnThis(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), setVisible: vi.fn().mockReturnThis(), setAlpha: vi.fn().mockReturnThis(), visible: false, destroy: vi.fn() };
-        reloadTexts.push(t);
-        return t;
-      });
-      mockSceneContext.input = {
-        ...mockSceneContext.input,
-        on: vi.fn(),
-        keyboard: {
-          addKey: vi.fn().mockReturnValue({ on: vi.fn() }),
-          addKeys: mockSceneContext.input.keyboard.addKeys,
-        },
-      };
-      Object.assign(scene, mockSceneContext);
-
-      scene.create();
-
-      // Trigger the delayed callback to start connection
-      if (mockSceneContext.delayedCallCallbacks.length > 0) {
-        mockSceneContext.delayedCallCallbacks[0]();
-      }
-
-      // Set readyState to OPEN and trigger onopen
-      mockWebSocketInstance.readyState = 1;
-      if (mockWebSocketInstance.onopen) {
-        mockWebSocketInstance.onopen(new Event('open'));
-      }
-
-      await new Promise(resolve => setTimeout(resolve, 10));
-
-      // Send weapon:state with isReloading true
-      const weaponStateMessage = {
-        data: JSON.stringify({
-          type: 'weapon:state',
-          timestamp: Date.now(),
-          data: {
-            currentAmmo: 5,
-            maxAmmo: 15,
-            isReloading: true,
-            canShoot: false
-          }
-        })
-      };
-
-      if (mockWebSocketInstance.onmessage) {
-        mockWebSocketInstance.onmessage(weaponStateMessage as MessageEvent);
-      }
-
-      // Verify ammo text no longer shows [RELOADING] text (uses progress bars instead)
-      const hasAmmoUpdate = reloadTexts.some(t => t.setText.mock.calls.some((c: any[]) => c[0] === '5/15'));
-      expect(hasAmmoUpdate).toBe(true);
-    });
-  });
-
-  describe('message handling', () => {
-    it('should handle match:timer messages and update timer display', async () => {
-      const mockSceneContext = createMockScene();
-      const mockTimerText = {
-        setText: vi.fn(),
-        setColor: vi.fn(),
-        setOrigin: vi.fn().mockReturnThis(),
-        setScrollFactor: vi.fn().mockReturnThis(),
-        setDepth: vi.fn().mockReturnThis(),
-        setVisible: vi.fn().mockReturnThis(),
-        visible: false,
-        destroy: vi.fn(),
-      };
-
-      mockSceneContext.add.text = vi.fn().mockImplementation((...args: unknown[]) => {
-        const [x, y, text] = args as [number, number, string];
-        if (x === 960 && y === 10 && text === '7:00') {
-          return mockTimerText;
-        }
-        return { setOrigin: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), setVisible: vi.fn().mockReturnThis(), visible: false, destroy: vi.fn() };
-      });
-
-      Object.assign(scene, mockSceneContext);
-
-      scene.create();
-
-      // Trigger the delayed callback to create WebSocket
-      if (mockSceneContext.delayedCallCallbacks.length > 0) {
-        mockSceneContext.delayedCallCallbacks[0]();
-      }
-
-      // Simulate match:timer message with 420 seconds (7:00)
-      const timerMessage = {
-        data: JSON.stringify({
-          type: 'match:timer',
-          timestamp: Date.now(),
-          data: {
-            remainingSeconds: 420
-          }
-        })
-      };
-
-      if (mockWebSocketInstance.onmessage) {
-        mockWebSocketInstance.onmessage(timerMessage as MessageEvent);
-      }
-
-      // Verify timer text was updated with formatted time
-      expect(mockTimerText.setText).toHaveBeenCalledWith('7:00');
-
-      // Verify color is white for > 2 minutes
-      expect(mockTimerText.setColor).toHaveBeenCalledWith('#ffffff');
-    });
-
-    it('should update timer color to yellow when under 2 minutes', async () => {
-      const mockSceneContext = createMockScene();
-      const mockTimerText = {
-        setText: vi.fn(),
-        setColor: vi.fn(),
-        setOrigin: vi.fn().mockReturnThis(),
-        setScrollFactor: vi.fn().mockReturnThis(),
-        setDepth: vi.fn().mockReturnThis(),
-        setVisible: vi.fn().mockReturnThis(),
-        visible: false,
-        destroy: vi.fn(),
-      };
-
-      mockSceneContext.add.text = vi.fn().mockImplementation((...args: unknown[]) => {
-        const [x, y, text] = args as [number, number, string];
-        if (x === 960 && y === 10 && text === '7:00') {
-          return mockTimerText;
-        }
-        return { setOrigin: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), setVisible: vi.fn().mockReturnThis(), visible: false, destroy: vi.fn() };
-      });
-
-      Object.assign(scene, mockSceneContext);
-
-      scene.create();
-
-      if (mockSceneContext.delayedCallCallbacks.length > 0) {
-        mockSceneContext.delayedCallCallbacks[0]();
-      }
-
-      // Simulate match:timer message with 90 seconds (1:30)
-      const timerMessage = {
-        data: JSON.stringify({
-          type: 'match:timer',
-          timestamp: Date.now(),
-          data: {
-            remainingSeconds: 90
-          }
-        })
-      };
-
-      if (mockWebSocketInstance.onmessage) {
-        mockWebSocketInstance.onmessage(timerMessage as MessageEvent);
-      }
-
-      expect(mockTimerText.setText).toHaveBeenCalledWith('1:30');
-      expect(mockTimerText.setColor).toHaveBeenCalledWith('#ffff00'); // Yellow
-    });
-
-    it('should update timer color to red when under 1 minute', async () => {
-      const mockSceneContext = createMockScene();
-      const mockTimerText = {
-        setText: vi.fn(),
-        setColor: vi.fn(),
-        setOrigin: vi.fn().mockReturnThis(),
-        setScrollFactor: vi.fn().mockReturnThis(),
-        setDepth: vi.fn().mockReturnThis(),
-        setVisible: vi.fn().mockReturnThis(),
-        visible: false,
-        destroy: vi.fn(),
-      };
-
-      mockSceneContext.add.text = vi.fn().mockImplementation((...args: unknown[]) => {
-        const [x, y, text] = args as [number, number, string];
-        if (x === 960 && y === 10 && text === '7:00') {
-          return mockTimerText;
-        }
-        return { setOrigin: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), setVisible: vi.fn().mockReturnThis(), visible: false, destroy: vi.fn() };
-      });
-
-      Object.assign(scene, mockSceneContext);
-
-      scene.create();
-
-      if (mockSceneContext.delayedCallCallbacks.length > 0) {
-        mockSceneContext.delayedCallCallbacks[0]();
-      }
-
-      // Simulate match:timer message with 30 seconds (0:30)
-      const timerMessage = {
-        data: JSON.stringify({
-          type: 'match:timer',
-          timestamp: Date.now(),
-          data: {
-            remainingSeconds: 30
-          }
-        })
-      };
-
-      if (mockWebSocketInstance.onmessage) {
-        mockWebSocketInstance.onmessage(timerMessage as MessageEvent);
-      }
-
-      expect(mockTimerText.setText).toHaveBeenCalledWith('0:30');
-      expect(mockTimerText.setColor).toHaveBeenCalledWith('#ff0000'); // Red
-    });
-
-    it('should format timer correctly at 0:00', async () => {
-      const mockSceneContext = createMockScene();
-      const mockTimerText = {
-        setText: vi.fn(),
-        setColor: vi.fn(),
-        setOrigin: vi.fn().mockReturnThis(),
-        setScrollFactor: vi.fn().mockReturnThis(),
-        setDepth: vi.fn().mockReturnThis(),
-        setVisible: vi.fn().mockReturnThis(),
-        visible: false,
-        destroy: vi.fn(),
-      };
-
-      mockSceneContext.add.text = vi.fn().mockImplementation((...args: unknown[]) => {
-        const [x, y, text] = args as [number, number, string];
-        if (x === 960 && y === 10 && text === '7:00') {
-          return mockTimerText;
-        }
-        return { setOrigin: vi.fn().mockReturnThis(), setText: vi.fn(), setColor: vi.fn(), setScrollFactor: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), setVisible: vi.fn().mockReturnThis(), visible: false, destroy: vi.fn() };
-      });
-
-      Object.assign(scene, mockSceneContext);
-
-      scene.create();
-
-      if (mockSceneContext.delayedCallCallbacks.length > 0) {
-        mockSceneContext.delayedCallCallbacks[0]();
-      }
-
-      // Simulate match:timer message with 0 seconds
-      const timerMessage = {
-        data: JSON.stringify({
-          type: 'match:timer',
-          timestamp: Date.now(),
-          data: {
-            remainingSeconds: 0
-          }
-        })
-      };
-
-      if (mockWebSocketInstance.onmessage) {
-        mockWebSocketInstance.onmessage(timerMessage as MessageEvent);
-      }
-
-      expect(mockTimerText.setText).toHaveBeenCalledWith('0:00');
-      expect(mockTimerText.setColor).toHaveBeenCalledWith('#ff0000'); // Red
-    });
-  });
-
-  describe('Health Bar UI', () => {
-    it('should create health bar UI on scene creation', () => {
-      const mockSceneContext = createMockScene();
-      Object.assign(scene, mockSceneContext);
-
-      scene.create();
-
-      // Verify container was created (health bar uses container)
-      expect(mockSceneContext.add.container).toHaveBeenCalled();
-    });
-
-    it('should update health bar when local player takes damage', async () => {
-      const mockSceneContext = createMockScene();
-      Object.assign(scene, mockSceneContext);
-
-      // Create a mock updateHealth method
-      const mockUpdateHealth = vi.fn();
-
-      scene.create();
-
-      // Trigger the delayed callback to create WebSocket
-      if (mockSceneContext.delayedCallCallbacks.length > 0) {
-        mockSceneContext.delayedCallCallbacks[0]();
-      }
-
-      // Wait for connection
-      await vi.waitFor(() => {
-        return mockWebSocketInstance !== null;
-      });
-
-      // Mock the health bar updateHealth method
-      (scene as any).healthBarUI = { updateHealth: mockUpdateHealth };
-
-      // Set local player ID
-      const roomJoinedMessage = {
-        data: JSON.stringify({
-          type: 'room:joined',
-          timestamp: Date.now(),
-          data: { playerId: 'local-player', roomId: 'room-1', mapId: 'default_office', displayName: 'Local Player' }
-        })
-      };
-
-      if (mockWebSocketInstance.onmessage) {
-        mockWebSocketInstance.onmessage(roomJoinedMessage as MessageEvent);
-      }
-
-      // Simulate local player taking damage
-      const damagedMessage = {
-        data: JSON.stringify({
-          type: 'player:damaged',
-          timestamp: Date.now(),
-          data: {
-            victimId: 'local-player',
-            attackerId: 'attacker-1',
-            damage: 25,
-            newHealth: 75,
-            projectileId: 'proj-1'
-          }
-        })
-      };
-
-      if (mockWebSocketInstance.onmessage) {
-        mockWebSocketInstance.onmessage(damagedMessage as MessageEvent);
-      }
-
-      // Verify health bar was updated
-      expect(mockUpdateHealth).toHaveBeenCalledWith(75, 100, false);
-    });
-
-    it('should not update health bar when other player takes damage', async () => {
-      const mockSceneContext = createMockScene();
-      Object.assign(scene, mockSceneContext);
-
-      // Create a mock updateHealth method
-      const mockUpdateHealth = vi.fn();
-
-      scene.create();
-
-      // Trigger the delayed callback to create WebSocket
-      if (mockSceneContext.delayedCallCallbacks.length > 0) {
-        mockSceneContext.delayedCallCallbacks[0]();
-      }
-
-      // Wait for connection
-      await vi.waitFor(() => {
-        return mockWebSocketInstance !== null;
-      });
-
-      // Mock the health bar updateHealth method
-      (scene as any).healthBarUI = { updateHealth: mockUpdateHealth };
-
-      // Set local player ID (this now triggers health bar initialization)
-      const roomJoinedMessage = {
-        data: JSON.stringify({
-          type: 'room:joined',
-          timestamp: Date.now(),
-          data: { playerId: 'local-player', roomId: 'room-1', mapId: 'default_office', displayName: 'Local Player' }
-        })
-      };
-
-      if (mockWebSocketInstance.onmessage) {
-        mockWebSocketInstance.onmessage(roomJoinedMessage as MessageEvent);
-      }
-
-      // Verify room:joined initialized health bar to 100/100
-      expect(mockUpdateHealth).toHaveBeenCalledWith(100, 100, false);
-      expect(mockUpdateHealth).toHaveBeenCalledTimes(1);
-
-      // Reset mock to check damage message behavior
-      mockUpdateHealth.mockClear();
-
-      // Simulate other player taking damage
-      const damagedMessage = {
-        data: JSON.stringify({
-          type: 'player:damaged',
-          timestamp: Date.now(),
-          data: {
-            victimId: 'other-player',
-            attackerId: 'attacker-1',
-            damage: 25,
-            newHealth: 75,
-            projectileId: 'proj-1'
-          }
-        })
-      };
-
-      if (mockWebSocketInstance.onmessage) {
-        mockWebSocketInstance.onmessage(damagedMessage as MessageEvent);
-      }
-
-      // Verify health bar was NOT updated by the damage message (other player's damage)
-      expect(mockUpdateHealth).not.toHaveBeenCalled();
-    });
-
-    it('should reset health bar to full on respawn', async () => {
-      const mockSceneContext = createMockScene();
-      Object.assign(scene, mockSceneContext);
-
-      // Create a mock updateHealth method
-      const mockUpdateHealth = vi.fn();
-
-      scene.create();
-
-      // Trigger the delayed callback to create WebSocket
-      if (mockSceneContext.delayedCallCallbacks.length > 0) {
-        mockSceneContext.delayedCallCallbacks[0]();
-      }
-
-      // Wait for connection
-      await vi.waitFor(() => {
-        return mockWebSocketInstance !== null;
-      });
-
-      // Mock the health bar updateHealth method
-      (scene as any).healthBarUI = { updateHealth: mockUpdateHealth };
-
-      // Set local player ID
-      const roomJoinedMessage = {
-        data: JSON.stringify({
-          type: 'room:joined',
-          timestamp: Date.now(),
-          data: { playerId: 'local-player', roomId: 'room-1', mapId: 'default_office', displayName: 'Local Player' }
-        })
-      };
-
-      if (mockWebSocketInstance.onmessage) {
-        mockWebSocketInstance.onmessage(roomJoinedMessage as MessageEvent);
-      }
-
-      // Simulate local player respawn
-      const respawnMessage = {
-        data: JSON.stringify({
-          type: 'player:respawn',
-          timestamp: Date.now(),
-          data: {
-            playerId: 'local-player',
-            position: { x: 500, y: 300 },
-            health: 100
-          }
-        })
-      };
-
-      if (mockWebSocketInstance.onmessage) {
-        mockWebSocketInstance.onmessage(respawnMessage as MessageEvent);
-      }
-
-      // Verify health bar was updated to full health
-      expect(mockUpdateHealth).toHaveBeenCalledWith(100, 100, false);
-    });
-  });
-
-  describe('reload progress UI', () => {
-    it('should update reload progress UI when shooting manager is reloading', async () => {
-      const mockSceneContext = createMockScene();
-      mockSceneContext.input = {
-        ...mockSceneContext.input,
-        on: vi.fn(),
-        keyboard: {
-          addKey: vi.fn().mockReturnValue({
-            on: vi.fn(),
-          }),
-          addKeys: mockSceneContext.input.keyboard.addKeys,
-        },
-      };
-      Object.assign(scene, mockSceneContext);
-
-      scene.create();
-
-      // Trigger the delayed callback to start connection
-      if (mockSceneContext.delayedCallCallbacks.length > 0) {
-        mockSceneContext.delayedCallCallbacks[0]();
-      }
-
-      // Set readyState to OPEN and trigger onopen
-      mockWebSocketInstance.readyState = 1;
-      if (mockWebSocketInstance.onopen) {
-        mockWebSocketInstance.onopen(new Event('open'));
-      }
-
-      await new Promise(resolve => setTimeout(resolve, 10));
-
-      // Mock shooting manager to be reloading
-      vi.spyOn(scene['shootingManager'], 'isReloading').mockReturnValue(true);
-      vi.spyOn(scene['shootingManager'], 'getReloadProgress').mockReturnValue(0.5);
-
-      // Spy on UI update methods
-      const updateReloadProgressSpy = vi.spyOn(scene['ui'], 'updateReloadProgress');
-      const updateReloadCircleSpy = vi.spyOn(scene['ui'], 'updateReloadCircle');
-
-      // Call update to trigger reload UI updates
-      scene.update(0, 16);
-
-      // Verify reload UI was updated (world-space: player pos + 60px wide, 4px tall)
-      expect(updateReloadProgressSpy).toHaveBeenCalledWith(
-        0.5,
-        expect.any(Number), // playerX (world-space)
-        expect.any(Number), // playerY (world-space)
-        60,
-        4
-      );
-      expect(updateReloadCircleSpy).toHaveBeenCalledWith(
-        0.5,
-        expect.any(Number), // playerX (world-space)
-        expect.any(Number), // playerY (world-space)
-      );
-    });
-
-    it('should not update reload progress UI when shooting manager is not reloading', async () => {
-      const mockSceneContext = createMockScene();
-      mockSceneContext.input = {
-        ...mockSceneContext.input,
-        on: vi.fn(),
-        keyboard: {
-          addKey: vi.fn().mockReturnValue({
-            on: vi.fn(),
-          }),
-          addKeys: mockSceneContext.input.keyboard.addKeys,
-        },
-      };
-      Object.assign(scene, mockSceneContext);
-
-      scene.create();
-
-      // Trigger the delayed callback to start connection
-      if (mockSceneContext.delayedCallCallbacks.length > 0) {
-        mockSceneContext.delayedCallCallbacks[0]();
-      }
-
-      // Set readyState to OPEN and trigger onopen
-      mockWebSocketInstance.readyState = 1;
-      if (mockWebSocketInstance.onopen) {
-        mockWebSocketInstance.onopen(new Event('open'));
-      }
-
-      await new Promise(resolve => setTimeout(resolve, 10));
-
-      // Mock shooting manager to NOT be reloading
-      vi.spyOn(scene['shootingManager'], 'isReloading').mockReturnValue(false);
-
-      // Spy on UI update methods
-      const updateReloadProgressSpy = vi.spyOn(scene['ui'], 'updateReloadProgress');
-      const updateReloadCircleSpy = vi.spyOn(scene['ui'], 'updateReloadCircle');
-
-      // Call update
-      scene.update(0, 16);
-
-      // Verify reload UI was NOT updated
-      expect(updateReloadProgressSpy).not.toHaveBeenCalled();
-      expect(updateReloadCircleSpy).not.toHaveBeenCalled();
-    });
-  });
-});
+    setActiveMatchBootstrap(null)
+    vi.clearAllMocks()
+  })
+
+  it('creates gameplay HUD from the bootstrap and enables gameplay readiness', () => {
+    const scene = new GameScene()
+    const mockSceneContext = createMockScene()
+    const disableContextMenu = vi.fn()
+    mockSceneContext.input = {
+      ...mockSceneContext.input,
+      mouse: {
+        disableContextMenu,
+      },
+    } as any
+    Object.assign(scene, mockSceneContext)
+
+    const bootstrap = createBootstrap()
+    setActiveMatchBootstrap(bootstrap)
+
+    scene.create()
+
+    expect(disableContextMenu).toHaveBeenCalledTimes(1)
+    expect(bootstrap.wsClient.setGameplayReady).toHaveBeenCalledWith(true)
+    expect(mockSceneContext.add.text).toHaveBeenCalledWith(48, 40, 'PISTOL', expect.any(Object))
+    expect(mockSceneContext.add.text).toHaveBeenCalledWith(48, 58, '15/15', expect.any(Object))
+  })
+
+  it('updates only the reload arc during reloads', () => {
+    const scene = new GameScene()
+    const mockSceneContext = createMockScene()
+    mockSceneContext.input = {
+      ...mockSceneContext.input,
+      mouse: {
+        disableContextMenu: vi.fn(),
+      },
+    } as any
+    Object.assign(scene, mockSceneContext)
+
+    const bootstrap = createBootstrap()
+    setActiveMatchBootstrap(bootstrap)
+    scene.create()
+
+    const updateReloadProgressSpy = vi.spyOn(scene['ui'], 'updateReloadProgress')
+    const updateReloadCircleSpy = vi.spyOn(scene['ui'], 'updateReloadCircle')
+
+    scene['shootingManager'].isReloading = vi.fn().mockReturnValue(true)
+    scene['shootingManager'].getReloadProgress = vi.fn().mockReturnValue(0.5)
+    scene['playerManager'].getLocalPlayerPosition = vi.fn().mockReturnValue({ x: 320, y: 240 })
+
+    scene.update(0, 16)
+
+    expect(updateReloadProgressSpy).not.toHaveBeenCalled()
+    expect(updateReloadCircleSpy).toHaveBeenCalledWith(0.5, 320, 240)
+  })
+})

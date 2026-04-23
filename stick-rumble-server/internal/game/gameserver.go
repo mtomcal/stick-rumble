@@ -189,7 +189,7 @@ func (gs *GameServer) broadcastLoop(ctx context.Context) {
 		case <-ticker.C:
 			// Get all player states and broadcast
 			if gs.broadcastFunc != nil {
-				playerStates := gs.world.GetAllPlayers()
+				playerStates := gs.GetAllPlayerStates()
 				if len(playerStates) > 0 {
 					gs.broadcastFunc(playerStates)
 				}
@@ -303,7 +303,31 @@ func (gs *GameServer) GetPlayerState(playerID string) (PlayerStateSnapshot, bool
 	if !exists {
 		return PlayerStateSnapshot{}, false
 	}
-	return player.Snapshot(), true
+	return gs.applyWeaponType(playerID, player.Snapshot()), true
+}
+
+func (gs *GameServer) GetAllPlayerStates() []PlayerStateSnapshot {
+	playerStates := gs.world.GetAllPlayers()
+	for i := range playerStates {
+		playerStates[i] = gs.applyWeaponType(playerStates[i].ID, playerStates[i])
+	}
+	return playerStates
+}
+
+func (gs *GameServer) applyWeaponType(playerID string, snapshot PlayerStateSnapshot) PlayerStateSnapshot {
+	gs.weaponMu.RLock()
+	defer gs.weaponMu.RUnlock()
+
+	if weaponState, exists := gs.weaponStates[playerID]; exists && weaponState != nil && weaponState.Weapon != nil {
+		snapshot.WeaponType = weaponState.Weapon.Name
+		return snapshot
+	}
+
+	if snapshot.WeaponType == "" {
+		snapshot.WeaponType = "Pistol"
+	}
+
+	return snapshot
 }
 
 // IsRunning returns whether the game server is currently running
@@ -677,9 +701,9 @@ func (gs *GameServer) checkRespawns() {
 			player.Respawn(spawnPos)
 
 			// Reset weapon state to default pistol (AC: "respawn with default pistol")
-			gs.mu.Lock()
+			gs.weaponMu.Lock()
 			gs.weaponStates[player.ID] = NewWeaponStateWithClock(NewPistol(), gs.clock)
-			gs.mu.Unlock()
+			gs.weaponMu.Unlock()
 
 			// Notify via callback
 			if gs.onRespawn != nil {

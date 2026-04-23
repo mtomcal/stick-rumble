@@ -126,7 +126,14 @@ func stateChanged(current, last game.PlayerStateSnapshot) bool {
 
 	// Check aim angle change
 	da := math.Abs(current.AimAngle - last.AimAngle)
+	if da > math.Pi {
+		da = (2 * math.Pi) - da
+	}
 	if da > RotationDeltaThreshold {
+		return true
+	}
+
+	if current.WeaponType != last.WeaponType {
 		return true
 	}
 

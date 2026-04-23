@@ -1,7 +1,7 @@
 /**
  * Tests for MeleeWeapon entity
  *
- * Validates: white stroke-only arc, alpha fade tween, weapon container rotation tween
+ * Validates: preview/confirmed swing state, per-weapon arc styling, fade tween lifecycle
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import Phaser from 'phaser';
@@ -84,6 +84,25 @@ describe('MeleeWeapon', () => {
       const result = weapon.startSwing(Math.PI);
       expect(result).toBe(true);
     });
+
+    it('should use preview styling for startSwing and heavier styling when confirmed', () => {
+      const graphics = (weapon as any).graphics;
+
+      weapon.startSwing(0);
+      expect(graphics.lineStyle).toHaveBeenLastCalledWith(4, 0xf6d365, 0.4);
+
+      weapon.confirmSwing(0);
+      expect(graphics.lineStyle).toHaveBeenLastCalledWith(7, 0xfff2bf, 0.85);
+    });
+
+    it('should use katana-specific preview styling', () => {
+      const katana = new MeleeWeapon(scene, 100, 100, 'Katana');
+      const graphics = (katana as any).graphics;
+
+      katana.startSwing(0);
+
+      expect(graphics.lineStyle).toHaveBeenLastCalledWith(3, 0xb8f2ff, 0.35);
+    });
   });
 
   describe('Position updates', () => {
@@ -95,6 +114,23 @@ describe('MeleeWeapon', () => {
       weapon.setPosition(200, 300);
       expect((weapon as any).x).toBe(200);
       expect((weapon as any).y).toBe(300);
+    });
+
+    it('should redraw an active swing at the new position', () => {
+      const graphics = (weapon as any).graphics;
+      weapon.startSwing(0);
+      graphics.arc.mockClear();
+
+      weapon.setPosition(200, 300);
+
+      expect(graphics.arc).toHaveBeenCalledWith(
+        200,
+        300,
+        expect.any(Number),
+        expect.any(Number),
+        expect.any(Number),
+        false
+      );
     });
   });
 
@@ -121,22 +157,22 @@ describe('MeleeWeapon', () => {
     });
   });
 
-  describe('TS-MELEE-013: White stroke-only arc renders correctly', () => {
+  describe('TS-MELEE-013: Confirmed swing grammar renders correctly', () => {
     beforeEach(() => {
       weapon = new MeleeWeapon(scene, 100, 100, 'Bat');
     });
 
-    it('should use white color (0xFFFFFF) with 2px stroke and 0.8 alpha for all weapons', () => {
+    it('should use a heavier bat-confirmed trail style', () => {
       const graphics = (weapon as any).graphics;
       weapon.showSwingAnimation(0);
-      expect(graphics.lineStyle).toHaveBeenCalledWith(2, 0xFFFFFF, 0.8);
+      expect(graphics.lineStyle).toHaveBeenCalledWith(7, 0xfff2bf, 0.85);
     });
 
-    it('should use same white color for Katana (no per-weapon colors)', () => {
+    it('should use a distinct katana-confirmed trail style', () => {
       const katana = new MeleeWeapon(scene, 100, 100, 'Katana');
       const graphics = (katana as any).graphics;
       katana.showSwingAnimation(0);
-      expect(graphics.lineStyle).toHaveBeenCalledWith(2, 0xFFFFFF, 0.8);
+      expect(graphics.lineStyle).toHaveBeenCalledWith(5, 0xf4fbff, 0.92);
     });
 
     it('should render stroke path only (no fill)', () => {
@@ -148,14 +184,15 @@ describe('MeleeWeapon', () => {
       expect(graphics.fillStyle).not.toHaveBeenCalled();
     });
 
-    it('should render 80-degree arc at Bat range (90px)', () => {
+    it('should render the full 80-degree bat-confirmed arc', () => {
       const graphics = (weapon as any).graphics;
       weapon.showSwingAnimation(0);
+      expect(graphics.setVisible).toHaveBeenCalledWith(true);
 
       expect(graphics.arc).toHaveBeenCalledWith(
         100, // x position
         100, // y position
-        90,  // Bat range
+        90,  // Bat confirmed radius
         expect.any(Number),
         expect.any(Number),
         false
@@ -169,21 +206,16 @@ describe('MeleeWeapon', () => {
       expect(arcSpan).toBeCloseTo(80 * Math.PI / 180, 5);
     });
 
-    it('should render 80-degree arc at Katana range (110px)', () => {
+    it('should render the full 80-degree katana-confirmed arc with extended radius', () => {
       const katana = new MeleeWeapon(scene, 100, 100, 'Katana');
       const graphics = (katana as any).graphics;
       katana.showSwingAnimation(Math.PI / 4);
 
-      expect(graphics.arc).toHaveBeenCalledWith(
-        100,
-        100,
-        110, // Katana range
-        expect.any(Number),
-        expect.any(Number),
-        false
-      );
-
       const arcCall = graphics.arc.mock.calls[0];
+      expect(arcCall[0]).toBe(100);
+      expect(arcCall[1]).toBe(100);
+      expect(arcCall[2]).toBeCloseTo(118.8, 5);
+      expect(arcCall[5]).toBe(false);
       const arcSpan = arcCall[4] - arcCall[3];
       expect(arcSpan).toBeCloseTo(80 * Math.PI / 180, 5);
     });
@@ -203,13 +235,13 @@ describe('MeleeWeapon', () => {
     });
   });
 
-  describe('TS-GFX-013: Melee arc renders as white stroke-only', () => {
-    it('should render Bat arc with exact stroke params (2px, 0xFFFFFF, 0.8)', () => {
+  describe('TS-GFX-013: Melee arc renders with weapon-specific readability styling', () => {
+    it('should render Bat arc with confirmed bat stroke params', () => {
       const bat = new MeleeWeapon(scene, 50, 75, 'Bat');
       const graphics = (bat as any).graphics;
       bat.showSwingAnimation(Math.PI);
 
-      expect(graphics.lineStyle).toHaveBeenCalledWith(2, 0xFFFFFF, 0.8);
+      expect(graphics.lineStyle).toHaveBeenCalledWith(7, 0xfff2bf, 0.85);
       expect(graphics.arc).toHaveBeenCalledWith(
         50, 75, 90,
         expect.any(Number), expect.any(Number), false
@@ -218,16 +250,17 @@ describe('MeleeWeapon', () => {
       expect(graphics.fillPath).not.toHaveBeenCalled();
     });
 
-    it('should render Katana arc with exact stroke params (2px, 0xFFFFFF, 0.8)', () => {
+    it('should render Katana arc with confirmed katana stroke params', () => {
       const katana = new MeleeWeapon(scene, 200, 150, 'Katana');
       const graphics = (katana as any).graphics;
       katana.showSwingAnimation(0);
 
-      expect(graphics.lineStyle).toHaveBeenCalledWith(2, 0xFFFFFF, 0.8);
-      expect(graphics.arc).toHaveBeenCalledWith(
-        200, 150, 110,
-        expect.any(Number), expect.any(Number), false
-      );
+      expect(graphics.lineStyle).toHaveBeenCalledWith(5, 0xf4fbff, 0.92);
+      const arcCall = graphics.arc.mock.calls[0];
+      expect(arcCall[0]).toBe(200);
+      expect(arcCall[1]).toBe(150);
+      expect(arcCall[2]).toBeCloseTo(118.8, 5);
+      expect(arcCall[5]).toBe(false);
       expect(graphics.strokePath).toHaveBeenCalledTimes(1);
       expect(graphics.fillPath).not.toHaveBeenCalled();
     });
@@ -238,14 +271,14 @@ describe('MeleeWeapon', () => {
       weapon = new MeleeWeapon(scene, 100, 100, 'Bat');
     });
 
-    it('should create alpha fade tween with duration=200 targeting graphics', () => {
+    it('should create preview fade tween targeting graphics', () => {
       weapon.startSwing(0);
 
       expect(scene.tweens.add).toHaveBeenCalledWith(
         expect.objectContaining({
           targets: (weapon as any).graphics,
           alpha: 0,
-          duration: 200,
+          duration: 90,
           onComplete: expect.any(Function),
         })
       );
@@ -260,39 +293,39 @@ describe('MeleeWeapon', () => {
     });
   });
 
-  describe('TS-MELEE-015: Weapon container rotation tween', () => {
+  describe('TS-MELEE-015: Preview/confirm overlap protection', () => {
     beforeEach(() => {
       weapon = new MeleeWeapon(scene, 100, 100, 'Bat');
     });
 
-    it('should create rotation tween when weaponContainer is provided', () => {
-      const container = { angle: 0 } as Phaser.GameObjects.Container;
-      weapon.startSwing(0, container);
-
-      // Should have 2 tweens: arc fade + container rotation
-      expect(scene.tweens.add).toHaveBeenCalledTimes(2);
-
-      // Second call should be the container rotation tween
-      const rotationCall = (scene.tweens.add as ReturnType<typeof import('vitest').vi.fn>).mock.calls[1][0];
-      expect(rotationCall.targets).toBe(container);
-      expect(rotationCall.angle).toEqual({ from: -45, to: 60 });
-      expect(rotationCall.duration).toBe(100);
-      expect(rotationCall.yoyo).toBe(true);
+    it('should allow preview then upgrade into confirmed swing', () => {
+      expect(weapon.startPreviewSwing(0)).toBe(true);
+      expect(weapon.confirmSwing(0)).toBe(true);
     });
 
-    it('should not create rotation tween when no weaponContainer', () => {
-      weapon.startSwing(0);
-
-      // Only 1 tween (arc fade), no container rotation
+    it('should not stack multiple confirmed swings on top of each other', () => {
+      weapon.confirmSwing(0);
+      expect(weapon.confirmSwing(0)).toBe(false);
       expect(scene.tweens.add).toHaveBeenCalledTimes(1);
     });
 
-    it('should offset rotation from container current angle', () => {
-      const container = { angle: 30 } as Phaser.GameObjects.Container;
-      weapon.startSwing(0, container);
+    it('should keep a harmless preview to a single tween', () => {
+      weapon.startPreviewSwing(0);
+      expect(scene.tweens.add).toHaveBeenCalledTimes(1);
+    });
 
-      const rotationCall = (scene.tweens.add as ReturnType<typeof import('vitest').vi.fn>).mock.calls[1][0];
-      expect(rotationCall.angle).toEqual({ from: 30 + (-45), to: 30 + 60 });
+    it('should not let preview completion clear a later confirmed swing', () => {
+      weapon.startPreviewSwing(0);
+      const previewTween = (scene.tweens.add as ReturnType<typeof import('vitest').vi.fn>).mock.calls[0][0];
+
+      weapon.confirmSwing(0);
+      const graphics = (weapon as any).graphics;
+      const setVisibleCallsBeforePreviewCompletion = graphics.setVisible.mock.calls.length;
+
+      previewTween.onComplete();
+
+      expect(weapon.isSwinging()).toBe(true);
+      expect(graphics.setVisible.mock.calls.length).toBe(setVisibleCallsBeforePreviewCompletion);
     });
   });
 

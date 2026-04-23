@@ -4,6 +4,8 @@
 import { describe, it, expect } from 'vitest';
 import Ajv from 'ajv';
 import {
+  PlayerHelloMessageSchema,
+  SessionLeaveMessageSchema,
   InputStateDataSchema,
   InputStateMessageSchema,
   PlayerShootDataSchema,
@@ -17,6 +19,7 @@ import {
   type InputStateMessage,
   type PlayerShootData,
   type PlayerShootMessage,
+  type SessionLeaveMessage,
   type PlayerReloadMessage,
   type WeaponPickupAttemptData,
   type WeaponPickupAttemptMessage,
@@ -27,6 +30,42 @@ import {
 const ajv = new Ajv();
 
 describe('Client-to-Server Schemas', () => {
+  describe('SessionLeaveMessageSchema', () => {
+    const validate = ajv.compile(SessionLeaveMessageSchema);
+
+    it('should validate a session:leave message without data', () => {
+      const validMessage: SessionLeaveMessage = {
+        type: 'session:leave',
+        timestamp: Date.now(),
+      };
+
+      expect(validate(validMessage)).toBe(true);
+      expect(validate.errors).toBeNull();
+    });
+
+    it('should reject a session:leave message with the wrong type', () => {
+      expect(validate({
+        type: 'player:reload',
+        timestamp: Date.now(),
+      })).toBe(false);
+    });
+  });
+
+  describe('PlayerHelloMessageSchema', () => {
+    const validate = ajv.compile(PlayerHelloMessageSchema);
+
+    it('should continue validating player:hello without treating room:joined as a required response type', () => {
+      expect(validate({
+        type: 'player:hello',
+        timestamp: Date.now(),
+        data: {
+          displayName: 'Alice',
+          mode: 'public',
+        },
+      })).toBe(true);
+    });
+  });
+
   describe('InputStateDataSchema', () => {
     const validate = ajv.compile(InputStateDataSchema);
 

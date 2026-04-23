@@ -102,6 +102,10 @@ func TestPlayerStateSnapshot(t *testing.T) {
 	if snapshot.Velocity != vel {
 		t.Errorf("Snapshot Velocity = %+v, want %+v", snapshot.Velocity, vel)
 	}
+
+	if snapshot.WeaponType != "" {
+		t.Errorf("Snapshot WeaponType = %q, want empty string before GameServer enrichment", snapshot.WeaponType)
+	}
 }
 
 func TestPlayerStateThreadSafety(t *testing.T) {

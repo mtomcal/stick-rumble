@@ -1,8 +1,27 @@
 import { vi } from 'vitest';
+import type { WebSocketClient } from '../network/WebSocketClient';
+import { setActiveMatchBootstrap } from '../sessionRuntime';
 
 // Mock Phaser scene context for the new arena-based implementation
 // Note: vi.mock('phaser') must be in each test file, not in this shared setup
 export const createMockScene = () => {
+  setActiveMatchBootstrap({
+    session: {
+      roomId: 'room-1',
+      playerId: 'player-1',
+      mapId: 'default_office',
+      displayName: 'Guest',
+      joinMode: 'public',
+    },
+    wsClient: {
+      on: vi.fn(),
+      off: vi.fn(),
+      send: vi.fn(),
+      getTotalHandlerCount: vi.fn().mockReturnValue(0),
+      setGameplayReady: vi.fn(),
+    } as unknown as WebSocketClient,
+  });
+
   const mockRectangle = {
     setOrigin: vi.fn().mockReturnThis(),
     setStrokeStyle: vi.fn().mockReturnThis(),

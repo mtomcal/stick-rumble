@@ -22,6 +22,7 @@ export interface PlayerState {
     y: number;
   };
   aimAngle?: number; // Aim angle in radians (optional for backward compatibility)
+  weaponType?: string; // Authoritative equipped weapon type from server state stream
   deathTime?: number; // Timestamp when player died (ms since epoch), undefined if alive
   health?: number; // Current health (0-100)
   isRegenerating?: boolean; // Whether health is currently regenerating
@@ -55,6 +56,15 @@ export class PlayerManager {
     position: { x: number; y: number };
     velocity: { x: number; y: number };
   } | null = null;
+
+  private getDisplayLabel(state: PlayerState): string {
+    if (state.id === this.localPlayerId) {
+      return 'YOU';
+    }
+
+    const displayName = state.displayName?.trim();
+    return displayName && displayName.length > 0 ? displayName : 'Guest';
+  }
 
   constructor(scene: Phaser.Scene, clock: Clock = new RealClock()) {
     this.scene = scene;
@@ -190,8 +200,8 @@ export class PlayerManager {
         // Add label
         const label = this.scene.add.text(
           state.position.x,
-          state.position.y - PLAYER.HEIGHT / 2 - 10,
-          state.displayName ?? (isLocal ? 'You' : 'Player'),
+          state.position.y - PLAYER.HEIGHT / 2 - (isLocal ? 10 : 18),
+          this.getDisplayLabel(state),
           {
             fontSize: '14px',
             color: '#ffffff',
@@ -202,7 +212,8 @@ export class PlayerManager {
 
         // Create weapon graphics (default to Pistol)
         const aimAngle = state.aimAngle ?? 0;
-        const weaponType = this.weaponTypes.get(state.id) ?? 'Pistol';
+        const weaponType = state.weaponType ?? this.weaponTypes.get(state.id) ?? 'Pistol';
+        this.weaponTypes.set(state.id, weaponType);
         const weaponOffsetX = Math.cos(aimAngle) * 10;
         const weaponOffsetY = Math.sin(aimAngle) * 10;
         const weaponGraphics = new ProceduralWeaponGraphics(
@@ -214,16 +225,18 @@ export class PlayerManager {
         weaponGraphics.setRotation(aimAngle);
         this.weaponGraphics.set(state.id, weaponGraphics);
 
-        // Create health bar (positioned 8 pixels above player head)
-        const healthBarY = state.position.y - PLAYER.HEIGHT / 2 - 8;
-        const healthBar = new HealthBar(this.scene, state.position.x, healthBarY);
-        healthBar.setHealth(state.health ?? 100); // Default to 100 health if undefined
-        this.healthBars.set(state.id, healthBar);
+        if (!isLocal) {
+          // Remote players keep a readable name/health stack above the avatar.
+          const healthBarY = state.position.y - PLAYER.HEIGHT / 2 - 6;
+          const healthBar = new HealthBar(this.scene, state.position.x, healthBarY);
+          healthBar.setHealth(state.health ?? 100); // Default to 100 health if undefined
+          this.healthBars.set(state.id, healthBar);
+        }
       }
 
       const label = this.playerLabels.get(state.id);
       if (label && 'setText' in label) {
-        label.setText(state.displayName ?? (state.id === this.localPlayerId ? 'You' : 'Player'));
+        label.setText(this.getDisplayLabel(state));
       }
 
       // DO NOT set position here - update() is the sole position writer
@@ -298,6 +311,15 @@ export class PlayerManager {
       // Position updates are handled in update() loop as the sole position writer
 
       // Only update non-positional properties here:
+
+      const authoritativeWeaponType = state.weaponType ?? this.weaponTypes.get(state.id) ?? 'Pistol';
+      if (this.weaponTypes.get(state.id) !== authoritativeWeaponType) {
+        this.weaponTypes.set(state.id, authoritativeWeaponType);
+        const weaponGraphics = this.weaponGraphics.get(state.id);
+        if (weaponGraphics) {
+          weaponGraphics.setWeapon(authoritativeWeaponType);
+        }
+      }
 
       // Update walk cycle animation based on movement (non-positional)
       const isMoving = Math.sqrt(state.velocity.x ** 2 + state.velocity.y ** 2) > 0.1;
@@ -395,7 +417,7 @@ export class PlayerManager {
       if (label) {
         label.setPosition(
           renderPosition.x,
-          renderPosition.y - PLAYER.HEIGHT / 2 - 10
+          renderPosition.y - PLAYER.HEIGHT / 2 - (playerId === this.localPlayerId ? 10 : 18)
         );
       }
 
@@ -417,7 +439,7 @@ export class PlayerManager {
       // Update health bar position
       const healthBar = this.healthBars.get(playerId);
       if (healthBar) {
-        const healthBarY = renderPosition.y - PLAYER.HEIGHT / 2 - 8;
+        const healthBarY = renderPosition.y - PLAYER.HEIGHT / 2 - 6;
         healthBar.setPosition(renderPosition.x, healthBarY);
       }
 

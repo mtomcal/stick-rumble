@@ -307,6 +307,9 @@ func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Reques
 
 		// Handle different message types
 		switch msg.Type {
+		case "session:leave":
+			h.handleSessionLeave(player)
+
 		case "input:state":
 			// Handle player input
 			h.handleInputState(playerID, msg.Data)
@@ -412,6 +415,21 @@ func (h *WebSocketHandler) handlePlayerHello(player *game.Player, data any) {
 	for _, p := range room.GetPlayers() {
 		h.sendWeaponSpawns(p.ID)
 	}
+}
+
+func (h *WebSocketHandler) handleSessionLeave(player *game.Player) {
+	if !player.HelloSeen {
+		return
+	}
+
+	if !h.roomManager.LeaveSession(player.ID) {
+		return
+	}
+
+	h.gameServer.RemovePlayer(player.ID)
+	h.deltaTracker.RemoveClient(player.ID)
+	player.HelloSeen = false
+	player.DisplayName = game.FallbackDisplayName
 }
 
 func (h *WebSocketHandler) staleRoomSweepLoop(ctx context.Context) {

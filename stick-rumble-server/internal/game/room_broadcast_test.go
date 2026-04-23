@@ -7,6 +7,16 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func drainChannel(ch <-chan []byte) {
+	for {
+		select {
+		case <-ch:
+		default:
+			return
+		}
+	}
+}
+
 // TestBroadcast tests broadcasting messages to all players in a room
 func TestBroadcast(t *testing.T) {
 	room := NewRoom()
@@ -121,6 +131,7 @@ func TestSendToWaitingPlayer(t *testing.T) {
 	// Add player to waiting list
 	manager.AddPlayer(player)
 	assert.Len(t, manager.waitingPlayers, 1)
+	drainChannel(playerChan)
 
 	// Send message to waiting player
 	testMsg := []byte(`{"type":"test","data":"hello"}`)
@@ -155,6 +166,7 @@ func TestSendToWaitingPlayerWithClosedChannel(t *testing.T) {
 
 	// Add player to waiting list
 	manager.AddPlayer(player)
+	drainChannel(playerChan)
 
 	// Close the player's channel to simulate disconnection
 	close(playerChan)
@@ -176,6 +188,7 @@ func TestSendToWaitingPlayerWithFullChannel(t *testing.T) {
 
 	// Add player to waiting list
 	manager.AddPlayer(player)
+	drainChannel(playerChan)
 
 	// Fill the channel
 	playerChan <- []byte("filling")
@@ -206,9 +219,8 @@ func TestSendToPlayer(t *testing.T) {
 		manager.AddPlayer(player1)
 		manager.AddPlayer(player2)
 
-		// Clear room:joined messages
-		<-player1Chan
-		<-player2Chan
+		drainChannel(player1Chan)
+		drainChannel(player2Chan)
 
 		// Send message to player1 who is in the room
 		testMsg := []byte(`{"type":"hit:confirmed","data":"test"}`)
@@ -242,6 +254,7 @@ func TestSendToPlayer(t *testing.T) {
 		// Add single player (will be waiting)
 		manager.AddPlayer(player)
 		assert.Len(t, manager.waitingPlayers, 1)
+		drainChannel(playerChan)
 
 		// Send message to waiting player
 		testMsg := []byte(`{"type":"test","data":"hello"}`)
@@ -280,9 +293,8 @@ func TestSendToPlayer(t *testing.T) {
 		manager.AddPlayer(player1)
 		manager.AddPlayer(player2)
 
-		// Clear room:joined messages
-		<-player1Chan
-		<-player2Chan
+		drainChannel(player1Chan)
+		drainChannel(player2Chan)
 
 		// Close player1's channel
 		close(player1Chan)
@@ -307,11 +319,7 @@ func TestSendToPlayer(t *testing.T) {
 		manager.AddPlayer(player1)
 		manager.AddPlayer(player2)
 
-		// Clear room:joined message from player2
-		<-player2Chan
-
-		// Player1's channel has room:joined (1 msg), now fill it
-		// Channel is already full with room:joined message
+		drainChannel(player2Chan)
 
 		// Send should not block
 		testMsg := []byte(`{"type":"test","data":"test"}`)
@@ -319,7 +327,7 @@ func TestSendToPlayer(t *testing.T) {
 			manager.SendToPlayer("player1", testMsg)
 		}, "SendToPlayer should handle full channel gracefully")
 
-		// Channel should still only have the room:joined message
+		// Channel should still only have the first message
 		assert.Len(t, player1Chan, 1)
 	})
 }
@@ -338,9 +346,8 @@ func TestBroadcastToAll(t *testing.T) {
 		manager.AddPlayer(player1)
 		manager.AddPlayer(player2)
 
-		// Clear room:joined messages
-		<-player1Chan
-		<-player2Chan
+		drainChannel(player1Chan)
+		drainChannel(player2Chan)
 
 		// Broadcast to all
 		testMsg := []byte(`{"type":"test","data":"broadcast to all"}`)
@@ -371,6 +378,7 @@ func TestBroadcastToAll(t *testing.T) {
 		// Add single player (will be waiting)
 		manager.AddPlayer(player)
 		assert.Len(t, manager.waitingPlayers, 1)
+		drainChannel(playerChan)
 
 		// Broadcast to all
 		testMsg := []byte(`{"type":"test","data":"broadcast to waiting"}`)
@@ -396,14 +404,14 @@ func TestBroadcastToAll(t *testing.T) {
 		manager.AddPlayer(player1)
 		manager.AddPlayer(player2)
 
-		// Clear room:joined messages
-		<-player1Chan
-		<-player2Chan
+		drainChannel(player1Chan)
+		drainChannel(player2Chan)
 
 		// Add waiting player
 		waitingChan := make(chan []byte, 10)
 		waitingPlayer := &Player{ID: "waiting", SendChan: waitingChan}
 		manager.AddPlayer(waitingPlayer)
+		drainChannel(waitingChan)
 
 		// Broadcast to all
 		testMsg := []byte(`{"type":"test","data":"broadcast to everyone"}`)
@@ -440,6 +448,7 @@ func TestBroadcastToAll(t *testing.T) {
 
 		// Add player to waiting
 		manager.AddPlayer(player)
+		drainChannel(playerChan)
 
 		// Close the channel
 		close(playerChan)
@@ -460,6 +469,7 @@ func TestBroadcastToAll(t *testing.T) {
 
 		// Add player to waiting
 		manager.AddPlayer(player)
+		drainChannel(playerChan)
 
 		// Fill the channel
 		playerChan <- []byte("filling")

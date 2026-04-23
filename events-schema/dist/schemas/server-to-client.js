@@ -17,6 +17,29 @@ const VelocityRef = Type.Object({
     y: Type.Number({ description: 'Y velocity component' }),
 }, { description: 'A 2D velocity vector' });
 // ============================================================================
+// session:status
+// ============================================================================
+export const SessionStatusStateSchema = Type.Union([
+    Type.Literal('searching_for_match'),
+    Type.Literal('waiting_for_players'),
+    Type.Literal('match_ready'),
+], { description: 'Authoritative pre-match session lifecycle state' });
+export const SessionStatusDataSchema = Type.Object({
+    state: SessionStatusStateSchema,
+    playerId: Type.String({ description: 'Unique identifier for the player', minLength: 1 }),
+    displayName: Type.String({ description: 'Server-sanitized display name for the local player', minLength: 1 }),
+    joinMode: Type.Union([
+        Type.Literal('public'),
+        Type.Literal('code'),
+    ], { description: 'Join intent mode for the current session' }),
+    roomId: Type.Optional(Type.String({ description: 'Assigned room identifier when available', minLength: 1 })),
+    code: Type.Optional(Type.String({ description: 'Normalized named-room code', minLength: 1 })),
+    rosterSize: Type.Optional(Type.Integer({ description: 'Current room roster size', minimum: 0 })),
+    minPlayers: Type.Optional(Type.Integer({ description: 'Minimum players required to start', minimum: 1 })),
+    mapId: Type.Optional(Type.String({ description: 'Selected shared map identifier once the match is ready', minLength: 1 })),
+}, { $id: 'SessionStatusData', description: 'Authoritative pre-match session snapshot' });
+export const SessionStatusMessageSchema = createTypedMessageSchema('session:status', SessionStatusDataSchema);
+// ============================================================================
 // room:joined
 // ============================================================================
 /**
@@ -24,7 +47,11 @@ const VelocityRef = Type.Object({
  * Sent when a player successfully joins a room.
  */
 export const RoomJoinedDataSchema = Type.Object({
+    roomId: Type.String({ description: 'Unique identifier for the room', minLength: 1 }),
     playerId: Type.String({ description: 'Unique identifier for the player', minLength: 1 }),
+    mapId: Type.String({ description: 'Selected shared map identifier for the room', minLength: 1 }),
+    displayName: Type.String({ description: 'Server-sanitized display name for the local player', minLength: 1 }),
+    code: Type.Optional(Type.String({ description: 'Normalized named-room code', minLength: 1 })),
 }, { $id: 'RoomJoinedData', description: 'Room joined event payload' });
 /**
  * Complete room:joined message schema
@@ -49,6 +76,22 @@ export const PlayerLeftDataSchema = Type.Object({
  * Complete player:left message schema
  */
 export const PlayerLeftMessageSchema = createTypedMessageSchema('player:left', PlayerLeftDataSchema);
+export const ErrorNoHelloDataSchema = Type.Object({
+    offendingType: Type.String({ description: 'Gameplay message type that arrived before hello', minLength: 1 }),
+}, { $id: 'ErrorNoHelloData', description: 'No-hello rejection payload' });
+export const ErrorNoHelloMessageSchema = createTypedMessageSchema('error:no_hello', ErrorNoHelloDataSchema);
+export const ErrorBadRoomCodeDataSchema = Type.Object({
+    reason: Type.Union([
+        Type.Literal('missing'),
+        Type.Literal('too_short'),
+        Type.Literal('too_long'),
+    ], { description: 'Normalization failure reason' }),
+}, { $id: 'ErrorBadRoomCodeData', description: 'Bad room code rejection payload' });
+export const ErrorBadRoomCodeMessageSchema = createTypedMessageSchema('error:bad_room_code', ErrorBadRoomCodeDataSchema);
+export const ErrorRoomFullDataSchema = Type.Object({
+    code: Type.String({ description: 'Normalized room code that is already full', minLength: 1 }),
+}, { $id: 'ErrorRoomFullData', description: 'Room full rejection payload' });
+export const ErrorRoomFullMessageSchema = createTypedMessageSchema('error:room_full', ErrorRoomFullDataSchema);
 // ============================================================================
 // player:move
 // ============================================================================
@@ -57,13 +100,19 @@ export const PlayerLeftMessageSchema = createTypedMessageSchema('player:left', P
  */
 export const PlayerStateSchema = Type.Object({
     id: Type.String({ description: 'Player unique identifier', minLength: 1 }),
+    displayName: Type.String({ description: 'Authoritative display name for rendering', minLength: 1 }),
     position: PositionRef,
     velocity: VelocityRef,
+    aimAngle: Type.Number({ description: 'Player aim angle in radians' }),
+    weaponType: Type.String({ description: 'Authoritative equipped weapon type for this player', minLength: 1 }),
     health: Type.Number({ description: 'Current health', minimum: 0 }),
-    maxHealth: Type.Number({ description: 'Maximum health', minimum: 0 }),
-    rotation: Type.Number({ description: 'Player rotation in radians' }),
-    isDead: Type.Boolean({ description: 'Whether the player is dead' }),
-    isSprinting: Type.Boolean({ description: 'Whether the player is currently sprinting' }),
+    isInvulnerable: Type.Boolean({ description: 'Whether spawn invulnerability is active' }),
+    invulnerabilityEnd: Type.String({ description: 'RFC3339 timestamp when invulnerability ends' }),
+    deathTime: Type.Optional(Type.String({ description: 'RFC3339 timestamp when the player died' })),
+    kills: Type.Integer({ description: 'Current kill count', minimum: 0 }),
+    deaths: Type.Integer({ description: 'Current death count', minimum: 0 }),
+    xp: Type.Integer({ description: 'Current XP total', minimum: 0 }),
+    isRegenerating: Type.Boolean({ description: 'Whether the player is currently regenerating health' }),
     isRolling: Type.Boolean({ description: 'Whether the player is currently dodge rolling' }),
 }, { $id: 'PlayerState', description: 'Player state for movement updates' });
 /**
@@ -245,12 +294,17 @@ export const MatchTimerMessageSchema = createTypedMessageSchema('match:timer', M
 // ============================================================================
 // match:ended
 // ============================================================================
+export const WinnerSummarySchema = Type.Object({
+    playerId: Type.String({ description: 'Winner player identifier', minLength: 1 }),
+    displayName: Type.String({ description: 'Display-ready winner name', minLength: 1 }),
+}, { $id: 'WinnerSummary', description: 'Display-ready winner identity summary' });
 /**
  * Player score schema for match end results.
  * Contains individual player statistics from the match.
  */
 export const PlayerScoreSchema = Type.Object({
     playerId: Type.String({ description: 'Player unique identifier', minLength: 1 }),
+    displayName: Type.String({ description: 'Display-ready player name', minLength: 1 }),
     kills: Type.Integer({ description: 'Number of kills', minimum: 0 }),
     deaths: Type.Integer({ description: 'Number of deaths', minimum: 0 }),
     xp: Type.Integer({ description: 'Total XP earned', minimum: 0 }),
@@ -260,7 +314,7 @@ export const PlayerScoreSchema = Type.Object({
  * Sent when the match concludes.
  */
 export const MatchEndedDataSchema = Type.Object({
-    winners: Type.Array(Type.String(), { description: 'Array of winner player IDs' }),
+    winners: Type.Array(WinnerSummarySchema, { description: 'Array of display-ready winner summaries' }),
     finalScores: Type.Array(PlayerScoreSchema, {
         description: 'Array of final player scores',
     }),
@@ -409,7 +463,7 @@ export const StateSnapshotDataSchema = Type.Object({
     players: Type.Array(PlayerStateSchema, { description: 'Complete state of all players' }),
     projectiles: Type.Array(ProjectileSnapshotSchema, { description: 'Complete state of all projectiles' }),
     weaponCrates: Type.Array(WeaponCrateSnapshotSchema, { description: 'Complete state of all weapon crates' }),
-    lastProcessedSequence: Type.Optional(Type.Record(Type.String(), Type.Number(), {
+    lastProcessedSequence: Type.Optional(Type.Record(Type.String(), Type.Number({ minimum: 0 }), {
         description: 'Map of player IDs to their last processed input sequence number for client-side prediction reconciliation',
     })),
     correctedPlayers: Type.Optional(Type.Array(Type.String({ minLength: 1 }), {
@@ -432,7 +486,7 @@ export const StateDeltaDataSchema = Type.Object({
     players: Type.Optional(Type.Array(PlayerStateSchema, { description: 'Players that changed state' })),
     projectilesAdded: Type.Optional(Type.Array(ProjectileSnapshotSchema, { description: 'New projectiles spawned' })),
     projectilesRemoved: Type.Optional(Type.Array(Type.String(), { description: 'IDs of destroyed projectiles' })),
-    lastProcessedSequence: Type.Optional(Type.Record(Type.String(), Type.Number(), {
+    lastProcessedSequence: Type.Optional(Type.Record(Type.String(), Type.Number({ minimum: 0 }), {
         description: 'Map of player IDs to their last processed input sequence number for client-side prediction reconciliation',
     })),
     correctedPlayers: Type.Optional(Type.Array(Type.String({ minLength: 1 }), {

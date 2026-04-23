@@ -22,9 +22,9 @@ export class GameSceneUI {
   } as const;
 
   private scene: Phaser.Scene;
+  private weaponLabelText!: Phaser.GameObjects.Text;
   private ammoText!: Phaser.GameObjects.Text;
   private ammoIcon: Phaser.GameObjects.Graphics | null = null;
-  private reloadingText: Phaser.GameObjects.Text | null = null;
   private matchTimerText: Phaser.GameObjects.Text | null = null;
 
   /**
@@ -126,9 +126,17 @@ export class GameSceneUI {
   }
 
   /**
-   * Create ammo text display with icon and reloading text
+   * Create ammo text display with icon and weapon label.
    */
   createAmmoDisplay(x: number, y: number): void {
+    this.weaponLabelText = this.scene.add.text(x, y - 18, 'PISTOL', {
+      fontSize: '12px',
+      color: '#ffffff',
+      fontStyle: 'bold',
+    });
+    this.weaponLabelText.setScrollFactor(0);
+    this.weaponLabelText.setDepth(1000);
+
     // Ammo icon (small bullet/crosshair graphic)
     this.ammoIcon = this.scene.add.graphics();
     this.ammoIcon.setPosition(x - 28, y + 8);
@@ -143,15 +151,6 @@ export class GameSceneUI {
     });
     this.ammoText.setScrollFactor(0);
     this.ammoText.setDepth(1000);
-
-    // "RELOADING..." text shown during reload
-    this.reloadingText = this.scene.add.text(x + 60, y, 'RELOADING...', {
-      fontSize: '16px',
-      color: `#${COLORS.AMMO_RELOADING.toString(16).padStart(6, '0')}`
-    });
-    this.reloadingText.setScrollFactor(0);
-    this.reloadingText.setDepth(1000);
-    this.reloadingText.setVisible(false);
   }
 
   /**
@@ -173,10 +172,12 @@ export class GameSceneUI {
 
       // Hide ammo display for melee weapons, show for ranged
       if (isMelee) {
+        this.weaponLabelText.setVisible(false);
         this.ammoText.setVisible(false);
         if (this.ammoIcon) this.ammoIcon.setVisible(false);
-        if (this.reloadingText) this.reloadingText.setVisible(false);
       } else {
+        this.weaponLabelText.setVisible(true);
+        this.weaponLabelText.setText(shootingManager.getWeaponState().weaponType.toUpperCase());
         this.ammoText.setVisible(true);
         if (this.ammoIcon) this.ammoIcon.setVisible(true);
         const [current, max] = shootingManager.getAmmoInfo();
@@ -193,25 +194,20 @@ export class GameSceneUI {
         if (isReloading) {
           this.ammoText.setColor(`#${COLORS.AMMO_RELOADING.toString(16).padStart(6, '0')}`);
           this.drawAmmoIcon(COLORS.AMMO_RELOADING);
-          if (this.reloadingText) this.reloadingText.setVisible(true);
         } else {
           this.ammoText.setColor(`#${COLORS.AMMO_READY.toString(16).padStart(6, '0')}`);
           this.drawAmmoIcon(COLORS.AMMO_READY);
-          if (this.reloadingText) this.reloadingText.setVisible(false);
         }
       }
 
-      // Show/hide reload UI elements based on state
       const isReloading = shootingManager.isReloading();
       const isEmpty = shootingManager.isEmpty();
 
-      // Update reload progress bar visibility (hide for melee)
       if (this.reloadProgressBar && this.reloadProgressBarBg) {
-        this.reloadProgressBar.setVisible(!isMelee && isReloading);
-        this.reloadProgressBarBg.setVisible(!isMelee && isReloading);
+        this.reloadProgressBar.setVisible(false);
+        this.reloadProgressBarBg.setVisible(false);
       }
 
-      // Update circular reload indicator visibility (hide for melee)
       if (this.reloadCircle) {
         this.reloadCircle.setVisible(!isMelee && isReloading);
       }
@@ -226,45 +222,41 @@ export class GameSceneUI {
   }
 
   /**
-   * Create world-space reload progress bar graphics objects.
-   * Positioned above the local player in world coordinates.
+   * Compatibility-only helper retained for tests and old call sites.
+   * Gameplay no longer mounts the world-space reload bar.
    */
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   createReloadProgressBar(_x: number, _y: number, _width: number, _height: number): void {
-    // Background bar (world-space — no scroll factor)
     this.reloadProgressBarBg = this.scene.add.graphics();
     this.reloadProgressBarBg.setDepth(1000);
     this.reloadProgressBarBg.setVisible(false);
 
-    // Foreground progress bar (world-space — no scroll factor)
     this.reloadProgressBar = this.scene.add.graphics();
     this.reloadProgressBar.setDepth(1001);
     this.reloadProgressBar.setVisible(false);
   }
 
   /**
-   * Update world-space reload progress bar above local player.
-   * playerX/playerY are the player's world coordinates.
-   * barWidth ~60px, white fill per spec.
+   * Compatibility-only helper retained for tests and old call sites.
+   * Gameplay no longer mounts the world-space reload bar.
    */
   updateReloadProgress(progress: number, playerX: number, playerY: number, barWidth: number, barHeight: number): void {
     if (!this.reloadProgressBar || !this.reloadProgressBarBg) {
       return;
     }
 
-    // Position bar centered above player
     const barX = playerX - barWidth / 2;
     const barY = playerY - 30;
 
-    // Redraw background
     this.reloadProgressBarBg.clear();
     this.reloadProgressBarBg.fillStyle(0x333333, 0.8);
     this.reloadProgressBarBg.fillRect(barX, barY, barWidth, barHeight);
+    this.reloadProgressBarBg.setVisible(false);
 
-    // Redraw foreground progress (white fill per spec)
     this.reloadProgressBar.clear();
     this.reloadProgressBar.fillStyle(0xffffff, 1.0);
     this.reloadProgressBar.fillRect(barX, barY, barWidth * progress, barHeight);
+    this.reloadProgressBar.setVisible(false);
   }
 
   /**
@@ -701,14 +693,14 @@ export class GameSceneUI {
    */
   destroy(): void {
     // Destroy UI elements if they exist
+    if (this.weaponLabelText) {
+      this.weaponLabelText.destroy();
+    }
     if (this.ammoText) {
       this.ammoText.destroy();
     }
     if (this.ammoIcon) {
       this.ammoIcon.destroy();
-    }
-    if (this.reloadingText) {
-      this.reloadingText.destroy();
     }
     if (this.matchTimerText) {
       this.matchTimerText.destroy();

@@ -91,6 +91,27 @@ describe('WebSocketClient', () => {
 
       await expect(connectPromise).rejects.toThrow();
     });
+
+    it('should notify connection state changes on open and close', async () => {
+      const client = new WebSocketClient('ws://localhost:8080/ws');
+      const handler = vi.fn();
+      client.setConnectionStateHandler(handler);
+
+      const connectPromise = client.connect();
+
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen({});
+      }
+      await connectPromise;
+
+      if (mockWebSocketInstance.onclose) {
+        mockWebSocketInstance.onclose({ code: 1006, reason: '' });
+      }
+
+      expect(handler).toHaveBeenCalledWith(false);
+      expect(handler).toHaveBeenCalledWith(true);
+      expect(handler).toHaveBeenLastCalledWith(false);
+    });
   });
 
   describe('send', () => {
@@ -421,6 +442,85 @@ describe('WebSocketClient', () => {
       );
       consoleSpy.mockRestore();
     });
+
+    it('should treat waiting_for_players session:status as a successful hello for reconnect replay', async () => {
+      const client = new WebSocketClient('ws://localhost:8080/ws');
+
+      const connectPromise = client.connect();
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen({});
+      }
+      await connectPromise;
+
+      client.sendHello({
+        mode: 'code',
+        code: 'PIZZA',
+        displayName: 'Reconnect Player',
+      });
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage({
+          data: JSON.stringify({
+            type: 'session:status',
+            timestamp: Date.now(),
+            data: {
+              state: 'waiting_for_players',
+              playerId: 'player-1',
+              displayName: 'Reconnect Player',
+              joinMode: 'code',
+              roomId: 'room-1',
+              code: 'PIZZA',
+              rosterSize: 1,
+              minPlayers: 2,
+            },
+          }),
+        });
+      }
+
+      expect((client as any).lastSuccessfulHello).toEqual({
+        mode: 'code',
+        code: 'PIZZA',
+        displayName: 'Reconnect Player',
+      });
+      expect((client as any).reconnectReplayPending).toBe(false);
+    });
+
+    it('should treat searching_for_match session:status as a successful hello for reconnect replay', async () => {
+      const client = new WebSocketClient('ws://localhost:8080/ws');
+
+      const connectPromise = client.connect();
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen({});
+      }
+      await connectPromise;
+
+      client.sendHello({
+        mode: 'public',
+        displayName: 'Queue Player',
+      });
+
+      if (mockWebSocketInstance.onmessage) {
+        mockWebSocketInstance.onmessage({
+          data: JSON.stringify({
+            type: 'session:status',
+            timestamp: Date.now(),
+            data: {
+              state: 'searching_for_match',
+              playerId: 'player-1',
+              displayName: 'Queue Player',
+              joinMode: 'public',
+              minPlayers: 2,
+            },
+          }),
+        });
+      }
+
+      expect((client as any).lastSuccessfulHello).toEqual({
+        mode: 'public',
+        displayName: 'Queue Player',
+      });
+      expect((client as any).reconnectReplayPending).toBe(false);
+    });
   });
 
   describe('reconnection logic', () => {
@@ -509,6 +609,147 @@ describe('WebSocketClient', () => {
 
       expect(consoleSpy).toHaveBeenCalledWith('Max reconnection attempts reached');
       consoleSpy.mockRestore();
+    });
+
+    it('should replay the last successful hello after reconnect', async () => {
+      const instances: any[] = [];
+      const MockWebSocket = vi.fn(function(this: any) {
+        const instance = {
+          readyState: 1,
+          send: vi.fn(),
+          close: vi.fn(),
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+          onopen: null,
+          onmessage: null,
+          onerror: null,
+          onclose: null,
+        };
+        instances.push(instance);
+        return instance;
+      });
+      (MockWebSocket as any).OPEN = 1;
+      (MockWebSocket as any).CONNECTING = 0;
+      (MockWebSocket as any).CLOSING = 2;
+      (MockWebSocket as any).CLOSED = 3;
+      globalThis.WebSocket = MockWebSocket as any;
+
+      const client = new WebSocketClient('ws://localhost:8080/ws');
+
+      const connectPromise = client.connect();
+      instances[0].onopen?.({});
+      await connectPromise;
+
+      client.sendHello({
+        mode: 'code',
+        code: 'PIZZA',
+        displayName: 'Reconnect Player',
+      });
+
+      instances[0].onmessage?.({
+        data: JSON.stringify({
+          type: 'session:status',
+          timestamp: Date.now(),
+          data: {
+            state: 'waiting_for_players',
+            playerId: 'player-1',
+            displayName: 'Reconnect Player',
+            joinMode: 'code',
+            roomId: 'room-1',
+            code: 'PIZZA',
+            rosterSize: 1,
+            minPlayers: 2,
+          },
+        }),
+      });
+
+      instances[0].onclose?.({ code: 1006, reason: '' });
+      vi.advanceTimersByTime(1000);
+      instances[1].onopen?.({});
+
+      expect(instances[1].send).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(instances[1].send.mock.calls[0][0])).toMatchObject({
+        type: 'player:hello',
+        timestamp: expect.any(Number),
+        data: {
+          displayName: 'Reconnect Player',
+          mode: 'code',
+          code: 'PIZZA',
+        },
+      });
+    });
+
+    it('should invoke replay failed callback with preserved intent when replayed hello is rejected', async () => {
+      const instances: any[] = [];
+      const MockWebSocket = vi.fn(function(this: any) {
+        const instance = {
+          readyState: 1,
+          send: vi.fn(),
+          close: vi.fn(),
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+          onopen: null,
+          onmessage: null,
+          onerror: null,
+          onclose: null,
+        };
+        instances.push(instance);
+        return instance;
+      });
+      (MockWebSocket as any).OPEN = 1;
+      (MockWebSocket as any).CONNECTING = 0;
+      (MockWebSocket as any).CLOSING = 2;
+      (MockWebSocket as any).CLOSED = 3;
+      globalThis.WebSocket = MockWebSocket as any;
+
+      const client = new WebSocketClient('ws://localhost:8080/ws');
+      const failureHandler = vi.fn();
+      client.setReconnectReplayFailedHandler(failureHandler);
+
+      const connectPromise = client.connect();
+      instances[0].onopen?.({});
+      await connectPromise;
+
+      client.sendHello({
+        mode: 'code',
+        code: 'PIZZA',
+        displayName: 'Reconnect Player',
+      });
+
+      instances[0].onmessage?.({
+        data: JSON.stringify({
+          type: 'session:status',
+          timestamp: Date.now(),
+          data: {
+            state: 'waiting_for_players',
+            playerId: 'player-1',
+            displayName: 'Reconnect Player',
+            joinMode: 'code',
+            roomId: 'room-1',
+            code: 'PIZZA',
+            rosterSize: 1,
+            minPlayers: 2,
+          },
+        }),
+      });
+
+      instances[0].onclose?.({ code: 1006, reason: '' });
+      vi.advanceTimersByTime(1000);
+      instances[1].onopen?.({});
+
+      instances[1].onmessage?.({
+        data: JSON.stringify({
+          type: 'error:room_full',
+          timestamp: Date.now(),
+          data: { code: 'PIZZA' },
+        }),
+      });
+
+      expect(failureHandler).toHaveBeenCalledWith({
+        mode: 'code',
+        code: 'PIZZA',
+        displayName: 'Reconnect Player',
+      });
     });
   });
 

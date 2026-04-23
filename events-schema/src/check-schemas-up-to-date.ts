@@ -9,6 +9,11 @@ import { fileURLToPath } from 'url';
 // Import schemas
 import { PositionSchema, VelocitySchema, MessageSchema } from './schemas/common.js';
 import {
+  PlayerHelloPublicDataSchema,
+  PlayerHelloCodeDataSchema,
+  PlayerHelloDataSchema,
+  PlayerHelloMessageSchema,
+  SessionLeaveMessageSchema,
   InputStateDataSchema,
   InputStateMessageSchema,
   PlayerShootDataSchema,
@@ -18,6 +23,8 @@ import {
   WeaponPickupAttemptMessageSchema,
 } from './schemas/client-to-server.js';
 import {
+  SessionStatusDataSchema,
+  SessionStatusMessageSchema,
   RoomJoinedDataSchema,
   RoomJoinedMessageSchema,
   PlayerStateSchema,
@@ -43,6 +50,7 @@ import {
   PlayerRespawnMessageSchema,
   MatchTimerDataSchema,
   MatchTimerMessageSchema,
+  WinnerSummarySchema,
   MatchEndedDataSchema,
   MatchEndedMessageSchema,
   WeaponCrateSchema,
@@ -67,6 +75,11 @@ const schemas: SchemaExport[] = [
   { schema: PositionSchema, outputPath: 'schemas/common/position.json' },
   { schema: VelocitySchema, outputPath: 'schemas/common/velocity.json' },
   { schema: MessageSchema, outputPath: 'schemas/common/message.json' },
+  { schema: PlayerHelloPublicDataSchema, outputPath: 'schemas/client-to-server/player-hello-public-data.json' },
+  { schema: PlayerHelloCodeDataSchema, outputPath: 'schemas/client-to-server/player-hello-code-data.json' },
+  { schema: PlayerHelloDataSchema, outputPath: 'schemas/client-to-server/player-hello-data.json' },
+  { schema: PlayerHelloMessageSchema, outputPath: 'schemas/client-to-server/player-hello-message.json' },
+  { schema: SessionLeaveMessageSchema, outputPath: 'schemas/client-to-server/session-leave-message.json' },
   { schema: InputStateDataSchema, outputPath: 'schemas/client-to-server/input-state-data.json' },
   { schema: InputStateMessageSchema, outputPath: 'schemas/client-to-server/input-state-message.json' },
   { schema: PlayerShootDataSchema, outputPath: 'schemas/client-to-server/player-shoot-data.json' },
@@ -74,6 +87,8 @@ const schemas: SchemaExport[] = [
   { schema: PlayerReloadMessageSchema, outputPath: 'schemas/client-to-server/player-reload-message.json' },
   { schema: WeaponPickupAttemptDataSchema, outputPath: 'schemas/client-to-server/weapon-pickup-attempt-data.json' },
   { schema: WeaponPickupAttemptMessageSchema, outputPath: 'schemas/client-to-server/weapon-pickup-attempt-message.json' },
+  { schema: SessionStatusDataSchema, outputPath: 'schemas/server-to-client/session-status-data.json' },
+  { schema: SessionStatusMessageSchema, outputPath: 'schemas/server-to-client/session-status-message.json' },
   { schema: RoomJoinedDataSchema, outputPath: 'schemas/server-to-client/room-joined-data.json' },
   { schema: RoomJoinedMessageSchema, outputPath: 'schemas/server-to-client/room-joined-message.json' },
   { schema: PlayerStateSchema, outputPath: 'schemas/server-to-client/player-state.json' },
@@ -99,6 +114,7 @@ const schemas: SchemaExport[] = [
   { schema: PlayerRespawnMessageSchema, outputPath: 'schemas/server-to-client/player-respawn-message.json' },
   { schema: MatchTimerDataSchema, outputPath: 'schemas/server-to-client/match-timer-data.json' },
   { schema: MatchTimerMessageSchema, outputPath: 'schemas/server-to-client/match-timer-message.json' },
+  { schema: WinnerSummarySchema, outputPath: 'schemas/server-to-client/winner-summary.json' },
   { schema: MatchEndedDataSchema, outputPath: 'schemas/server-to-client/match-ended-data.json' },
   { schema: MatchEndedMessageSchema, outputPath: 'schemas/server-to-client/match-ended-message.json' },
   { schema: WeaponCrateSchema, outputPath: 'schemas/server-to-client/weapon-crate.json' },

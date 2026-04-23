@@ -1,6 +1,6 @@
 # Graphics
 
-> **Spec Version**: 2.4.4
+> **Spec Version**: 2.5.1
 > **Last Updated**: 2026-04-22
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [arena.md](arena.md)
 > **Depended By**: [client-architecture.md](client-architecture.md), [test-index.md](test-index.md)
@@ -51,7 +51,7 @@ All graphics constants are documented here for single-source-of-truth. These val
 | PLAYER_DEPTH | 50 | Stick figures render at this depth |
 | DEATH_CORPSE_DEPTH | 5 | Dead player corpses render below live players |
 | EFFECT_DEPTH | 60 | Hit effects render above players |
-| MELEE_ARC_DEPTH | 100 | Melee swing arcs render above effects |
+| MELEE_ARC_DEPTH | 100 | Melee swing trails / motion effects render above effects |
 | HIT_MARKER_DEPTH | 1000 | Hit markers render above game objects |
 | HIT_INDICATOR_DEPTH | 1001 | Directional hit indicators render above markers |
 | MINIMAP_BG_DEPTH | 1999 | Minimap background |
@@ -65,7 +65,7 @@ All graphics constants are documented here for single-source-of-truth. These val
 | WALK_SPEED_FACTOR | 0.02 | multiplier | Walk cycle animation speed |
 | TRACER_FADE_DURATION | 100 | ms | Bullet tracer fade time |
 | MUZZLE_FLASH_DURATION | 50-100 | ms | Per-weapon muzzle flash time |
-| MELEE_SWING_DURATION | 200 | ms | Melee arc animation time |
+| MELEE_SWING_DURATION | 200 | ms | Melee swing readability window |
 | HIT_EFFECT_FADE | 100 | ms | Hit particle fade time |
 | WEAPON_CRATE_BOB | 1000 | ms | Crate bobbing cycle |
 
@@ -545,46 +545,30 @@ Generic pickup markers (for example a standalone yellow circle or `⊕` icon wit
 - Ease: Sine.easeInOut
 - Type: Yoyo (repeat forever)
 
-### Melee Swing Arc
+### Melee Swing Motion
 
-The melee swing uses a **white stroke-only arc** (no pie-slice fill, no per-weapon colors) combined with a **weapon container rotation tween**.
+Melee attacks are rendered as **weapon-following swing motion** with a short trail, not as a literal player-centered hitbox overlay. The gameplay cone still exists for hit detection, but it is invisible in the normal presentation.
 
-**Arc Rendering**:
-```typescript
-// Stroke-only arc — no fill, white color, all weapons
-const slash = this.add.graphics();
-slash.lineStyle(2, 0xffffff, 0.8);
-slash.beginPath();
-slash.arc(attacker.x, attacker.y, range, angle - 0.7, angle + 0.7, false);
-slash.strokePath();
-this.tweens.add({ targets: slash, alpha: 0, duration: 200, onComplete: () => slash.destroy() });
-```
+**Swing Presentation Rules:**
+- The held weapon must visibly travel through a meaningful path in the player's hands
+- The trail follows the moving weapon tip / blade path rather than a fixed-radius arc centered on the body
+- A tiny anticipation before the forward sweep is allowed and encouraged for readability
+- The player body remains mostly stable; the arms and weapon carry the expressive motion
+- The local attacker may see an immediate preview swing, but remote players only see the server-confirmed swing
+- The same motion family is used for preview and confirmed swings so players learn one melee grammar
 
-**Weapon Container Swing Tween**:
-```typescript
-// 100ms yoyo rotation: -45° to +60°
-this.scene.tweens.add({
-    targets: this.weaponContainer,
-    angle: { from: this.weaponContainer.angle - 45, to: this.weaponContainer.angle + 60 },
-    duration: 100,
-    yoyo: true,
-    onComplete: () => {
-        this.isAttacking = false;
-        this.weaponContainer.setAngle(0);
-    }
-});
-```
+**Per-Weapon Feel:**
+- **Bat**: heavier motion, wider trail, chunkier follow-through
+- **Katana**: tighter anticipation, faster release, thinner directional trail
 
 | Property | Value | Source |
 |----------|-------|--------|
-| Arc Color | 0xFFFFFF (white) | All weapons use white |
-| Arc Stroke | 2px | Thin, visible |
-| Arc Alpha | 0.8 | Slightly transparent |
-| Arc Angle | ±0.7 rad (~80°) | `constants.md` |
-| Arc Fade | 200ms | Quick dissolve |
-| Swing From | -45° | Wind-up behind player |
-| Swing To | +60° | Forward swing |
-| Swing Duration | 100ms | Fast yoyo tween |
+| Hitbox Overlay | Not shown literally | Presentation rule |
+| Trail Lifetime | ~200ms readability window | `MELEE_SWING_DURATION` |
+| Anticipation | Subtle and fast | Readability-first |
+| Follow-through | Visible, but not telegraphed | Readability-first |
+| Local Preview | Attacker only | Input responsiveness |
+| Remote Visibility | Server-confirmed only | Authority rule |
 
 **Constants**: See [constants.md § Melee Visual Constants](constants.md#melee-visual-constants).
 
@@ -601,10 +585,12 @@ During 8-player combat, many hit effects spawn simultaneously. Pre-creating a po
 - Fade: 100ms
 
 **Melee Impact:**
-- Shape: X pattern (2 crossing lines) + center circle
-- Lines: 2px width, white (0xffffff)
-- Line positions: (-6,-6) to (6,6) and (6,-6) to (-6,6)
-- Center: 2px radius circle
+- The old symbolic `X` marker is removed
+- Melee contact is a **diegetic material effect**, not a symbolic glyph
+- Contact effects appear only on confirmed hits, never on whiffs
+- Each victim in a multi-hit swing gets a separate effect at their own contact point
+- **Bat**: blunt impact burst / short shock-ring that reads as force and knockback
+- **Katana**: sharp directional slash-flare / crescent spark that reads as cut-through precision
 - Fade: 100ms
 
 **Muzzle Flash Effect:**
@@ -623,22 +609,24 @@ private drawBulletImpact(graphics: Phaser.GameObjects.Graphics): void {
   graphics.fillRect(-2, -2, 4, 4);
 }
 
-private drawMeleeHit(graphics: Phaser.GameObjects.Graphics): void {
+private drawBatImpact(graphics: Phaser.GameObjects.Graphics): void {
   graphics.clear();
   graphics.lineStyle(2, 0xffffff, 1);
-
-  graphics.beginPath();
-  graphics.moveTo(-6, -6);
-  graphics.lineTo(6, 6);
-  graphics.strokePath();
-
-  graphics.beginPath();
-  graphics.moveTo(6, -6);
-  graphics.lineTo(-6, 6);
-  graphics.strokePath();
-
+  graphics.strokeCircle(0, 0, 7);
   graphics.fillStyle(0xffffff, 1);
-  graphics.fillCircle(0, 0, 2);
+  graphics.fillRect(-5, -2, 10, 4);
+}
+
+private drawKatanaImpact(graphics: Phaser.GameObjects.Graphics): void {
+  graphics.clear();
+  graphics.lineStyle(2, 0xffffff, 1);
+  graphics.beginPath();
+  graphics.arc(0, 0, 9, -0.8, 0.4, false);
+  graphics.strokePath();
+  graphics.beginPath();
+  graphics.moveTo(-2, -6);
+  graphics.lineTo(7, 1);
+  graphics.strokePath();
 }
 ```
 
@@ -1014,6 +1002,24 @@ Enemy players display their name above their head.
 - Color: Gray/white
 - Position: `(player.x, player.y - headRadius - 5px)`, centered on X
 - Depth: Above player sprite
+
+### Overhead Identification And Health Stack
+
+**2026-04-17 Amendment:** The overhead contract is now:
+- local player: minimal `YOU` marker only
+- local player: no overhead health bar
+- remote players: fixed overhead stack with `displayName` above and health bar below
+- remote overhead elements must have stable ordering, visible separation, and a strict no-overlap guarantee
+
+**Why this amendment?**
+- The HUD already provides authoritative local health, so the local overhead health bar is redundant clutter
+- Remote players still need both identification and health readability
+- The earlier cramped/overlapping layout was a product bug, not just a spacing typo
+
+**Behavioral Rules:**
+- Remote overhead layout is defined behaviorally, not by brittle exact pixel offsets
+- The stack must remain readable during movement, rolling, death, and respawn
+- Implementations may tune offsets, but may not allow the name label and health bar to collide or appear cramped
 
 ### Damage Screen Flash
 
@@ -1546,6 +1552,8 @@ test "player renders all body parts":
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.5.1 | 2026-04-22 | Merged the latest visual clarifications: local overhead readability keeps only `YOU` for the local player, melee presentation uses weapon-following swing motion and weapon-specific contact effects, and the live-player silhouette must still read as the authoritative 48x48 top-down footprint flush to blocker edges. |
+| 2.5.0 | 2026-04-22 | Merged the April visual clarifications: local overhead readability now keeps only `YOU` for the local player while remote players use a fixed `displayName` + health stack, and melee presentation now uses weapon-following swing motion with weapon-specific contact effects instead of the old debug-like arc/`X` grammar. |
 | 2.4.4 | 2026-04-22 | Updated live-player rendering to match the new 48x48 authoritative footprint. Preserved the true top-down stick-figure direction while giving the player more on-map presence. |
 | 2.4.3 | 2026-04-22 | Updated live-player rendering to match the new 32x32 authoritative footprint. Clarified that the overhead stick figure is now a true top-down read rather than a compressed tall body projected onto a top-down map. |
 | 2.4.2 | 2026-04-22 | Removed the square body-core treatment and restored a pure top-down stick-figure live player. Clarified that collision readability must come from the completed stick figure itself, and that any torso/body box treatment is out of spec. |

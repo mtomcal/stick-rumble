@@ -1,0 +1,100 @@
+{
+  "$id": "session_statusMessage",
+  "description": "session:status WebSocket message",
+  "type": "object",
+  "required": [
+    "type",
+    "timestamp",
+    "data"
+  ],
+  "properties": {
+    "type": {
+      "description": "Message type identifier",
+      "const": "session:status",
+      "type": "string"
+    },
+    "timestamp": {
+      "description": "Unix timestamp in milliseconds",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "data": {
+      "$id": "SessionStatusData",
+      "description": "Authoritative pre-match session snapshot",
+      "type": "object",
+      "required": [
+        "state",
+        "playerId",
+        "displayName",
+        "joinMode"
+      ],
+      "properties": {
+        "state": {
+          "description": "Authoritative pre-match session lifecycle state",
+          "anyOf": [
+            {
+              "const": "searching_for_match",
+              "type": "string"
+            },
+            {
+              "const": "waiting_for_players",
+              "type": "string"
+            },
+            {
+              "const": "match_ready",
+              "type": "string"
+            }
+          ]
+        },
+        "playerId": {
+          "description": "Unique identifier for the player",
+          "minLength": 1,
+          "type": "string"
+        },
+        "displayName": {
+          "description": "Server-sanitized display name for the local player",
+          "minLength": 1,
+          "type": "string"
+        },
+        "joinMode": {
+          "description": "Join intent mode for the current session",
+          "anyOf": [
+            {
+              "const": "public",
+              "type": "string"
+            },
+            {
+              "const": "code",
+              "type": "string"
+            }
+          ]
+        },
+        "roomId": {
+          "description": "Assigned room identifier when available",
+          "minLength": 1,
+          "type": "string"
+        },
+        "code": {
+          "description": "Normalized named-room code",
+          "minLength": 1,
+          "type": "string"
+        },
+        "rosterSize": {
+          "description": "Current room roster size",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "minPlayers": {
+          "description": "Minimum players required to start",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "mapId": {
+          "description": "Selected shared map identifier once the match is ready",
+          "minLength": 1,
+          "type": "string"
+        }
+      }
+    }
+  }
+}

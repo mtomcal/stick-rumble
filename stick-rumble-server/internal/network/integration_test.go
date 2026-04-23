@@ -24,15 +24,13 @@ func SkipTestFullGameplayFlow(t *testing.T) {
 	defer conn2.Close()
 
 	// 2. Verify room creation and join
-	msg1, err := readMessageOfType(t, conn1, "room:joined", 2*time.Second)
+	_, data1, err := readSessionStatus(t, conn1, "match_ready", 2*time.Second)
 	require.NoError(t, err, "Player 1 should join room")
-	data1 := msg1.Data.(map[string]interface{})
 	player1ID := data1["playerId"].(string)
 	roomID := data1["roomId"].(string)
 
-	msg2, err := readMessageOfType(t, conn2, "room:joined", 2*time.Second)
+	_, data2, err := readSessionStatus(t, conn2, "match_ready", 2*time.Second)
 	require.NoError(t, err, "Player 2 should join room")
-	data2 := msg2.Data.(map[string]interface{})
 	player2ID := data2["playerId"].(string)
 
 	assert.Equal(t, roomID, data2["roomId"].(string), "Both players in same room")
@@ -203,10 +201,9 @@ func TestMultiplePlayersJoining(t *testing.T) {
 	conn4 := ts.connectClient(t)
 	defer conn4.Close()
 
-	// Now player 3 should receive room:joined
-	msg3, err := readMessageOfType(t, conn3, "room:joined", 2*time.Second)
+	// Now player 3 should receive match_ready
+	_, data3, err := readSessionStatus(t, conn3, "match_ready", 2*time.Second)
 	require.NoError(t, err, "Player 3 should join room")
-	data3 := msg3.Data.(map[string]interface{})
 	player3ID := data3["playerId"].(string)
 
 	// All players should have unique IDs
