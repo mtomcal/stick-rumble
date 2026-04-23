@@ -40,8 +40,10 @@ export function getCanonicalPlayerBodyBounds(centerX: number, centerY: number): 
  * - Spawn invulnerability ring rendering
  */
 export class ProceduralPlayerGraphics {
-  private static readonly BODY_OUTLINE_ALPHA = 0.3;
-  private static readonly BODY_OUTLINE_WIDTH = 1;
+  private static readonly BODY_FILL_ALPHA = 0.14;
+  private static readonly BODY_OUTLINE_ALPHA = 0.6;
+  private static readonly BODY_OUTLINE_WIDTH = 2;
+  private static readonly BODY_DETAIL_ALPHA = 0.45;
   private scene: Phaser.Scene;
   private graphics: Phaser.GameObjects.Graphics;
   private x: number;
@@ -144,15 +146,30 @@ export class ProceduralPlayerGraphics {
       this.graphics.strokeCircle(cx, cy, 25);
     }
 
-    // Canonical live body: this is the collision-reading footprint on screen.
-    this.graphics.fillStyle(this.bodyColor, 1);
+    // Canonical live body: readable outer footprint without a monolithic black slab.
+    this.graphics.fillStyle(this.bodyColor, ProceduralPlayerGraphics.BODY_FILL_ALPHA);
     this.graphics.fillRect(bounds.left, bounds.top, bounds.width, bounds.height);
     this.graphics.lineStyle(
       ProceduralPlayerGraphics.BODY_OUTLINE_WIDTH,
-      0x000000,
+      this.bodyColor,
       ProceduralPlayerGraphics.BODY_OUTLINE_ALPHA
     );
     this.graphics.strokeRect(bounds.left, bounds.top, bounds.width, bounds.height);
+
+    // Interior guides keep the body readable as a stylized figure instead of a block.
+    this.graphics.lineStyle(1, this.bodyColor, ProceduralPlayerGraphics.BODY_DETAIL_ALPHA);
+    this.graphics.beginPath();
+    this.graphics.moveTo(cx, bounds.top + 10);
+    this.graphics.lineTo(cx, bounds.bottom - 10);
+    this.graphics.strokePath();
+    this.graphics.beginPath();
+    this.graphics.moveTo(bounds.left + 5, bounds.top + 16);
+    this.graphics.lineTo(bounds.right - 5, bounds.top + 16);
+    this.graphics.strokePath();
+    this.graphics.beginPath();
+    this.graphics.moveTo(bounds.left + 6, bounds.bottom - 14);
+    this.graphics.lineTo(bounds.right - 6, bounds.bottom - 14);
+    this.graphics.strokePath();
 
     // --- LEGS ---
     this.graphics.lineStyle(3, this.bodyColor, 1);

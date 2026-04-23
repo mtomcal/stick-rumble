@@ -165,6 +165,10 @@ The live player still uses a stylized stick-figure presentation, but the renderi
 
 The exact artistic shape used to realize the canonical footprint is intentionally not fixed to one named silhouette. A rounded rectangle, capsule-like mass, or another body treatment is acceptable if it satisfies the footprint contract above.
 
+**Styling guardrail:**
+- the canonical footprint should read as a body silhouette, not as a monolithic opaque block
+- a subtle interior fill plus readable edge treatment is preferred over a solid black slab, as long as the authoritative outer extents still read clearly
+
 ### Preserved Stick-Figure Detail Layer
 
 Stick-figure detail remains part of the live player style because it preserves the prototype's readability and personality. The detail layer is composed of:
