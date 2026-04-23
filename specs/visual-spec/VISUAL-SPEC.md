@@ -445,6 +445,12 @@ The level has two distinct zone types:
 | `70-corrections-aim-line-long-diagonal-to-cursor.jpg` | Long diagonal hit trail from player toward distant target in lower-center |
 | `71-corrections-cursor-directly-above-player-short-line.jpg` | Cursor directly above player head, short upward hit trail with reticle at cursor |
 
+### Supplementary Mobile Reference
+
+| Frame | Key Content |
+|-------|-------------|
+| `72-mobile-mode-phone-landscape.png` | Prototype mobile-mode reference in landscape: full-bleed phone-safe gameplay stage, preserved top HUD, bottom-left move stick, bottom-right aim/fire stick, and reticle-driven touch aiming |
+
 ---
 
 ## Game Systems Summary

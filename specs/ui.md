@@ -1,6 +1,6 @@
 # UI System
 
-> **Spec Version**: 2.6.0
+> **Spec Version**: 2.6.2
 > **Last Updated**: 2026-04-23
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [match.md](match.md), [client-architecture.md](client-architecture.md), [graphics.md](graphics.md)
 > **Depended By**: [test-index.md](test-index.md)
@@ -127,12 +127,22 @@ interface UIElementPosition {
 - React owns the canonical gameplay stage container.
 - During pre-match states there is no mounted gameplay canvas and no reserved blank fake-canvas placeholder.
 - Desktop gameplay remains the baseline experience and must continue to work as-is.
-- Mobile gameplay is an optional alternate mode, not a replacement for the desktop presentation or desktop input path.
-- When mobile mode is not enabled, gameplay continues to use the existing centered stage behavior.
-- When mobile mode is enabled on a phone-sized touch layout, gameplay uses a full-bleed landscape stage that may consume the entire visible app area.
+- Mobile gameplay is an automatically detected alternate presentation on phone-sized touch layouts, not a user-button mode.
+- When mobile mode is not detected, gameplay continues to use the existing centered desktop stage behavior.
+- When mobile mode is detected on a phone-sized touch layout, gameplay uses a full-bleed landscape stage that may consume the entire visible app area.
 - Mobile mode must respect `env(safe-area-inset-*)` padding and dynamic viewport height; browser chrome may not cover touch controls or crop HUD elements.
 - Portrait phone gameplay is out of contract only for mobile mode. In that mode, the app must present a rotate-device screen instead of an active gameplay layout until landscape is restored.
 - The gameplay stage may visually switch between centered and full-bleed presentation by mode, but the match camera and core HUD contract must remain recognizable across both.
+
+### Mobile Mode Selection
+
+- Mobile mode is a client-local presentation and input option.
+- Enabling mobile mode does not change matchmaking, room membership, message contracts, or server authority.
+- Mobile mode is automatically detected rather than selected by a gameplay button.
+- The detection target is phone-sized touch play, not every touch-capable device indiscriminately.
+- The client should use a phone-oriented heuristic such as: coarse pointer or touch capability, small viewport class, and active landscape gameplay layout.
+- Desktop-capable users and larger non-phone layouts must continue to receive the existing centered stage and keyboard/mouse presentation by default.
+- Detection changes must preserve the existing session and may not remount the match or disconnect the socket as a side effect.
 
 ### `join_form`
 
@@ -193,7 +203,9 @@ interface UIElementPosition {
 
 The multiplayer mobile mode follows the prototype's phone presentation closely: the same core gameplay view and top HUD remain recognizable, while touch controls are layered above the stage in the bottom corners.
 
-- Mobile mode is an explicit optional mode layered on top of the existing desktop functionality.
+**Visual reference:** [visual-spec/VISUAL-SPEC.md](visual-spec/VISUAL-SPEC.md) supplementary mobile frame `72-mobile-mode-phone-landscape.png`
+
+- Mobile mode is an automatically detected alternate presentation layered on top of the existing desktop functionality.
 - The default desktop HUD and keyboard/mouse flow remain authoritative for non-mobile-mode play.
 - Mobile mode is landscape-only.
 - The gameplay surface is full-bleed within the phone-safe area rather than a desktop-style framed card.
@@ -1802,6 +1814,9 @@ it('should use shared rank for equal-kill players', () => {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.6.2 | 2026-04-23 | Replaced mobile-mode opt-in language with automatic detection: phone-sized touch layouts should enter mobile mode without a gameplay button, while desktop layouts continue using the existing centered stage. |
+| 2.6.1 | 2026-04-23 | Added explicit mobile-mode selection rules: mobile mode is a client-local optional mode that must not silently replace desktop behavior or remount an active match when toggled. |
+| 2.6.0 | 2026-04-23 | Added mobile gameplay mode as an optional desktop-parity overlay mode: full-bleed landscape phone stage, safe-area-aware touch controls, preserved top HUD ownership, and no in-match multiplayer chat footprint. |
 | 2.5.4 | 2026-04-23 | Clarified the compact top-left ammo row alignment: the icon stays in the left gutter, while the ammo text column aligns with the health-bar left edge. |
 | 2.5.3 | 2026-04-23 | Tightened the top-left combat HUD visual contract: the health and ammo rows must read as one compact cluster, and a subtle measured backing plate is allowed behind the full cluster for legibility. |
 | 2.5.2 | 2026-04-23 | Clarified that the top-left combat HUD must use one shared measured layout system anchored at 20px padding, rather than independent hardcoded offsets for the health row, ammo row, or their icons/text. |

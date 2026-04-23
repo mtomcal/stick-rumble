@@ -1,7 +1,7 @@
 # Overview
 
-> **Spec Version**: 1.1.0
-> **Last Updated**: 2026-04-07
+> **Spec Version**: 1.2.0
+> **Last Updated**: 2026-04-23
 > **Depends On**: None (root specification)
 > **Depended By**: [constants.md](constants.md), [maps.md](maps.md), [arena.md](arena.md), [player.md](player.md), [networking.md](networking.md), [client-architecture.md](client-architecture.md), [server-architecture.md](server-architecture.md)
 
@@ -58,7 +58,7 @@ Stick Rumble is a top-down multiplayer shooter where stick figure characters bat
 - **Multiplayer**: 2-8 players per match
 - **Fast-paced**: Instant respawns (3 seconds), high mobility
 - **Competitive**: Kill-based scoring with time limits
-- **Accessible**: Simple WASD + mouse controls
+- **Accessible**: Existing desktop keyboard/mouse play plus optional mobile touch mode
 
 ### Win Conditions
 
@@ -93,6 +93,7 @@ Each match is played on a selected map loaded from shared configuration files. T
 
 **Why this design:**
 - WASD + mouse mirrors industry-standard FPS controls
+- Optional mobile mode extends the same match to phone play without replacing the desktop baseline
 - Dodge roll adds skill expression and outplay potential
 - Sprint creates risk/reward tradeoff (speed vs accuracy)
 
@@ -704,6 +705,7 @@ func (s *Server) Serve(ctx context.Context) error {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.2.0 | 2026-04-23 | Updated the root product framing to recognize optional mobile touch mode alongside the unchanged desktop keyboard/mouse baseline. |
 | 1.0.0 | 2026-02-02 | Initial specification |
 | 1.0.1 | 2026-02-16 | Fixed GameServer struct — replaced nonexistent Room/Match/ticker/broadcaster fields with actual callbacks and duration configs from `gameserver.go`. |
 | 1.0.2 | 2026-02-16 | Fixed anti-cheat PlayerShoot pseudocode — no `IsDead` check (only `!exists`), weapon state via `gs.weaponStates` map (not `player.Weapon`). |

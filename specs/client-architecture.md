@@ -1,7 +1,7 @@
 # Client Architecture
 
-> **Spec Version**: 1.4.0
-> **Last Updated**: 2026-04-17
+> **Spec Version**: 1.5.1
+> **Last Updated**: 2026-04-23
 > **Depends On**: [constants.md](constants.md), [messages.md](messages.md), [networking.md](networking.md), [player.md](player.md), [movement.md](movement.md), [weapons.md](weapons.md), [maps.md](maps.md)
 > **Depended By**: [graphics.md](graphics.md), [ui.md](ui.md), [audio.md](audio.md)
 
@@ -109,11 +109,20 @@ interface MatchSession {
 **Rendering Rules:**
 - `join_form`, `joining`, `searching_for_match`, `waiting_for_players`, and `recoverable_error` render with no Phaser canvas mounted.
 - `match_loading` is the handoff phase where React prepares the centered stage and mounts Phaser with the completed `MatchSession`.
-- `in_match` continues to render the existing centered desktop stage unless mobile mode is explicitly enabled.
-- When mobile mode is enabled on a phone-sized touch layout, `in_match` uses a full-bleed landscape stage with React-owned touch controls in the bottom corners.
+- `in_match` continues to render the existing centered desktop stage unless mobile mode is automatically detected.
+- When mobile mode is detected on a phone-sized touch layout, `in_match` uses a full-bleed landscape stage with React-owned touch controls in the bottom corners.
 - Mobile mode must use safe-area-aware layout, suppress scrolling/zoom gestures that interfere with play, and reserve the bottom corners for React-owned touch controls.
 - Portrait phone gameplay is blocked by a rotate-device screen only while mobile mode is active, rather than silently degrading the match layout.
 - `match_end` replaces the gameplay surface with a full-screen React results experience.
+
+**Visual reference:** [ui.md § Mobile Gameplay Mode](ui.md#mobile-gameplay-mode) and [visual-spec/VISUAL-SPEC.md](visual-spec/VISUAL-SPEC.md) supplementary mobile frame `72-mobile-mode-phone-landscape.png`
+
+**Mobile Mode Selection Rules:**
+- Mobile mode is a client-local option, not a separate session type.
+- Enabling mobile mode must not alter the WebSocket handshake, room assignment, or authoritative server simulation.
+- Mobile mode is automatically detected; the gameplay flow may not require a user-facing enable button to enter it.
+- Detection should target phone-sized touch play using local device/layout signals rather than server state.
+- Automatic detection and any live layout transitions must preserve the current session and may not tear down the socket or re-bootstrap the match as a side effect.
 
 ---
 
@@ -317,7 +326,7 @@ stick-rumble-client/
 │       │   ├── HealthBar.ts
 │       │   └── Crosshair.ts
 │       ├── input/
-│       │   ├── InputManager.ts           # WASD + mouse + sequence numbers
+│       │   ├── InputManager.ts           # Desktop input baseline + sequence numbers
 │       │   ├── ShootingManager.ts        # Fire + reload
 │       │   └── DodgeRollManager.ts       # Roll cooldown
 │       ├── network/
@@ -344,7 +353,7 @@ stick-rumble-client/
 │       │   ├── ScoreDisplayUI.ts         # Top-right 6-digit score
 │       │   ├── KillCounterUI.ts          # Top-right kill count
 │       │   ├── DebugOverlayUI.ts         # FPS/Update/AI debug stats
-│       │   └── ChatLogUI.ts              # Bottom-left chat panel
+│       │   └── ChatLogUI.ts              # Legacy inactive prototype carry-over
 │       ├── effects/
 │       │   ├── ScreenShake.ts            # Camera shake
 │       │   ├── DamageNumberManager.ts    # Floating damage numbers
@@ -1056,7 +1065,10 @@ showBulletImpact(x: number, y: number): void {
 
 #### InputManager
 
-**Purpose:** Capture WASD keyboard and mouse aim input.
+**Purpose:** Capture the baseline desktop gameplay input state and send normalized authoritative input to the server.
+
+- Desktop baseline: WASD movement, Shift sprint, mouse aim
+- Mobile-mode touch controls must ultimately feed the same normalized gameplay intent shape rather than introducing a separate server contract
 
 **Pseudocode:**
 ```
@@ -1608,15 +1620,15 @@ const PhaserGame: React.FC<{ onMatchEnd: (data: MatchEndData, playerId: string) 
 │ Frame Start                                                  │
 ├─────────────────────────────────────────────────────────────┤
 │ 1. Input Processing                                          │
-│    ├─ InputManager.update() - Read WASD + mouse              │
-│    ├─ Calculate aim angle from mouse position                │
+│    ├─ InputManager.update() - Read active local input source │
+│    ├─ Calculate aim angle from mouse or touch-reticle state  │
 │    └─ Send input:state to server (if changed)                │
 ├─────────────────────────────────────────────────────────────┤
 │ 2. Client-Side Prediction (local player)                      │
 │    ├─ PredictionEngine.predictPosition(pos, vel, input, dt)  │
 │    ├─ PlayerManager.setLocalPlayerPredictedPosition()        │
 │    ├─ PlayerManager.updateLocalPlayerAim() - Rotate weapon   │
-│    └─ Crosshair.update() - Follow mouse                      │
+│    └─ Crosshair.update() - Follow mouse or touch reticle     │
 ├─────────────────────────────────────────────────────────────┤
 │ 3. Automatic Fire Check                                      │
 │    └─ If Uzi/AK47 + pointer down → ShootingManager.shoot()   │
@@ -1701,7 +1713,7 @@ On `player:death`:
 ### Depth Layering
 
 ```
-Depth 1000+: Fixed UI (reload bar, match timer, health display, minimap, score, kills, debug, chat)
+Depth 1000+: Fixed UI (reload bar, match timer, health display, minimap, score, kills, debug)
 Depth 999:   Damage flash overlay (below fixed HUD, above all gameplay)
 Depth 100:   HUD elements (kill feed, pickup prompt)
 Depth 60:    Hit effects (particles, impact markers, damage numbers)
@@ -2071,6 +2083,8 @@ it('should follow local player with camera', () => {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.5.1 | 2026-04-23 | Replaced mobile-mode opt-in language with automatic client-side detection for phone-sized touch layouts, while preserving the unchanged desktop baseline and session continuity. |
+| 1.5.0 | 2026-04-23 | Specified optional mobile mode architecture: React now owns mobile-mode selection, safe-area-aware phone stage behavior, and touch overlays as client-local options while the existing desktop runtime remains the baseline. Also marked chat UI as inactive legacy carry-over rather than active multiplayer contract. |
 | 1.4.0 | 2026-04-17 | Session-first app shell: React now owns the WebSocket/session lifecycle, explicit app-session states (`join_form`, `searching_for_match`, `waiting_for_players`, `match_loading`, `in_match`, `match_end`, `recoverable_error`) were introduced, and Phaser bootstrap is deferred until an authoritative `match_ready` session snapshot exists. |
 | 1.3.2 | 2026-04-13 | Friends-MVP invite polish: invite auto-submit now only fires when a cached display name already exists before user interaction; typing into an empty display-name field no longer submits on the first character. |
 | 1.3.1 | 2026-04-13 | Friends-MVP join-flow bridge hardening: specified that React overlay state must not remount Phaser or disconnect the active WebSocket, and that join controls expose explicit bridge-ready / joining states instead of silently dropping input before `window.submitJoinIntent` is installed. |
