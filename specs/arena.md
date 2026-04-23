@@ -1,6 +1,6 @@
 # Arena
 
-> **Spec Version**: 2.1.1
+> **Spec Version**: 2.1.3
 > **Last Updated**: 2026-04-22
 > **Depends On**: [constants.md](constants.md), [maps.md](maps.md)
 > **Depended By**: [player.md](player.md), [movement.md](movement.md), [dodge-roll.md](dodge-roll.md), [weapons.md](weapons.md), [shooting.md](shooting.md), [hit-detection.md](hit-detection.md), [graphics.md](graphics.md)
@@ -41,8 +41,8 @@ All arena-adjacent tuning values are defined in [constants.md](constants.md). Th
 
 | Constant | Value | Unit | Description |
 |----------|-------|------|-------------|
-| PLAYER_WIDTH | 32 | px | Player hitbox width for clamping and obstacle collision |
-| PLAYER_HEIGHT | 64 | px | Player hitbox height for clamping and obstacle collision |
+| PLAYER_WIDTH | 48 | px | Player hitbox width for clamping and obstacle collision |
+| PLAYER_HEIGHT | 48 | px | Player hitbox height for clamping and obstacle collision |
 | WEAPON_PICKUP_RADIUS | 32 | px | Distance for weapon crate pickup |
 | PROJECTILE_MAX_RANGE | 800 | px | Maximum projectile travel distance |
 
@@ -92,12 +92,12 @@ Players use an axis-aligned bounding box for collision and boundary enforcement.
 
 | Property | Formula |
 |----------|---------|
-| Half-width | PLAYER_WIDTH / 2 = 16 px |
-| Half-height | PLAYER_HEIGHT / 2 = 32 px |
-| Left edge | x - 16 |
-| Right edge | x + 16 |
-| Top edge | y - 32 |
-| Bottom edge | y + 32 |
+| Half-width | PLAYER_WIDTH / 2 = 24 px |
+| Half-height | PLAYER_HEIGHT / 2 = 24 px |
+| Left edge | x - 24 |
+| Right edge | x + 24 |
+| Top edge | y - 24 |
+| Bottom edge | y + 24 |
 
 ### Arena Obstacle
 
@@ -260,5 +260,7 @@ Then the visible contact read is anchored to the obstacle's authoritative rectan
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.1.3 | 2026-04-22 | Updated the authoritative player bounding box from 32x32 to 48x48. Arena clamping and obstacle collision examples now use a 24px half-size. |
+| 2.1.2 | 2026-04-22 | Updated the authoritative player bounding box to 32x32. Arena clamping and obstacle collision examples now use a 16px half-height instead of 32px. |
 | 2.1.1 | 2026-04-22 | Clarified that the obstacle rectangle edge is the real blocking edge for live-player contact reads. Cross-referenced the canonical visible-footprint contract from `graphics.md` and added TS-ARENA-007 for visual edge alignment. |
 | 2.1.0 | 2026-04-17 | Introduced map-selected arena geometry as the authoritative source for movement bounds, obstacle collision, LOS blocking, projectile blocking, and spawn-space validation. Added shared barrier contract and first-blocking-contact rule across movement, projectiles, melee, LOS, and forced movement. |

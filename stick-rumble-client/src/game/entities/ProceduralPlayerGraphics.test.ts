@@ -17,6 +17,7 @@ describe('ProceduralPlayerGraphics', () => {
       lineStyle: vi.fn(),
       fillStyle: vi.fn(),
       fillRect: vi.fn(),
+      fillEllipse: vi.fn(),
       beginPath: vi.fn(),
       moveTo: vi.fn(),
       lineTo: vi.fn(),
@@ -87,15 +88,22 @@ describe('ProceduralPlayerGraphics', () => {
   });
 
   describe('Stick figure rendering', () => {
-    it('should draw the canonical live body from shared player dimensions', () => {
+    it('should not draw a torso box or body rectangle', () => {
       new ProceduralPlayerGraphics(scene, 100, 100, COLORS.PLAYER_HEAD, COLORS.BODY);
 
-      expect(graphics.fillRect).toHaveBeenCalledWith(
-        -PLAYER.WIDTH / 2,
-        -PLAYER.HEIGHT / 2,
-        PLAYER.WIDTH,
-        PLAYER.HEIGHT
-      );
+      expect(graphics.fillRect).not.toHaveBeenCalled();
+    });
+
+    it('should draw a subtle round body mass to keep the silhouette flush', () => {
+      new ProceduralPlayerGraphics(scene, 100, 100, COLORS.PLAYER_HEAD, COLORS.BODY);
+
+      expect(graphics.fillEllipse).toHaveBeenCalledWith(0, 0, PLAYER.WIDTH - 2, PLAYER.HEIGHT - 2);
+    });
+
+    it('should not draw a full-height body outline rectangle', () => {
+      new ProceduralPlayerGraphics(scene, 100, 100, COLORS.PLAYER_HEAD, COLORS.BODY);
+
+      expect(graphics.strokeRect).not.toHaveBeenCalled();
     });
 
     it('should use body color for legs and arms', () => {
@@ -124,13 +132,13 @@ describe('ProceduralPlayerGraphics', () => {
       expect(hasLocalHeadColor).toBe(true);
     });
 
-    it('should draw head circle at center position', () => {
+    it('should draw head circle near the north edge of the canonical body', () => {
       new ProceduralPlayerGraphics(scene, 100, 100, COLORS.ENEMY_HEAD, COLORS.BODY);
 
-      // Head should be drawn at local (0, 0) with radius 13 (Graphics transform handles position)
+      const headCenterY = -6;
       const fillCircleCalls = (graphics.fillCircle as any).mock.calls;
       const hasHeadCircle = fillCircleCalls.some(
-        (call: any[]) => call[0] === 0 && call[1] === 0 && call[2] === 13
+        (call: any[]) => call[0] === 0 && call[1] === headCenterY && call[2] === 11
       );
       expect(hasHeadCircle).toBe(true);
     });
@@ -147,6 +155,14 @@ describe('ProceduralPlayerGraphics', () => {
       expect(graphics.moveTo).toHaveBeenCalled();
       expect(graphics.lineTo).toHaveBeenCalled();
       expect(graphics.strokePath).toHaveBeenCalled();
+    });
+
+    it('should connect both legs to a shared pelvis point with no hip gap', () => {
+      new ProceduralPlayerGraphics(scene, 100, 100, COLORS.ENEMY_HEAD, COLORS.BODY);
+
+      const moveToCalls = (graphics.moveTo as any).mock.calls;
+      const pelvisStarts = moveToCalls.filter((call: any[]) => call[0] === 0 && call[1] === 13);
+      expect(pelvisStarts.length).toBeGreaterThanOrEqual(2);
     });
 
     it('should draw feet circles', () => {
@@ -232,10 +248,10 @@ describe('ProceduralPlayerGraphics', () => {
     it('should preserve the canonical body extents while idle, moving, aiming, and rotating fallback aim', () => {
       const player = new ProceduralPlayerGraphics(scene, 100, 200, COLORS.ENEMY_HEAD, COLORS.BODY);
       const expectedBounds = {
-        left: 84,
-        right: 116,
-        top: 168,
-        bottom: 232,
+        left: 76,
+        right: 124,
+        top: 176,
+        bottom: 224,
       };
 
       expect(player.getCanonicalBodyBounds()).toEqual(
@@ -258,15 +274,15 @@ describe('ProceduralPlayerGraphics', () => {
       );
     });
 
-    it('should redraw the canonical live body rectangle when movement updates', () => {
+    it('should keep body-box rendering disabled when movement updates', () => {
       const player = new ProceduralPlayerGraphics(scene, 100, 200, COLORS.ENEMY_HEAD, COLORS.BODY);
       (graphics.fillRect as any).mockClear();
       (graphics.strokeRect as any).mockClear();
 
       player.update(16, true);
 
-      expect(graphics.fillRect).toHaveBeenCalledWith(-PLAYER.WIDTH / 2, -PLAYER.HEIGHT / 2, PLAYER.WIDTH, PLAYER.HEIGHT);
-      expect(graphics.strokeRect).toHaveBeenCalledWith(-PLAYER.WIDTH / 2, -PLAYER.HEIGHT / 2, PLAYER.WIDTH, PLAYER.HEIGHT);
+      expect(graphics.fillRect).not.toHaveBeenCalled();
+      expect(graphics.strokeRect).not.toHaveBeenCalled();
     });
 
     it('should update walk cycle when moving', () => {
@@ -376,15 +392,15 @@ describe('ProceduralPlayerGraphics', () => {
       expect(player.getCanonicalBodyBounds()).toEqual(before);
     });
 
-    it('should redraw the same canonical body rectangle when fallback rotation changes', () => {
+    it('should keep body-box rendering disabled when fallback rotation changes', () => {
       const player = new ProceduralPlayerGraphics(scene, 100, 200, COLORS.ENEMY_HEAD, COLORS.BODY);
       (graphics.fillRect as any).mockClear();
       (graphics.strokeRect as any).mockClear();
 
       player.setRotation(Math.PI / 2);
 
-      expect(graphics.fillRect).toHaveBeenCalledWith(-PLAYER.WIDTH / 2, -PLAYER.HEIGHT / 2, PLAYER.WIDTH, PLAYER.HEIGHT);
-      expect(graphics.strokeRect).toHaveBeenCalledWith(-PLAYER.WIDTH / 2, -PLAYER.HEIGHT / 2, PLAYER.WIDTH, PLAYER.HEIGHT);
+      expect(graphics.fillRect).not.toHaveBeenCalled();
+      expect(graphics.strokeRect).not.toHaveBeenCalled();
     });
   });
 
@@ -505,15 +521,15 @@ describe('ProceduralPlayerGraphics', () => {
   });
 
   describe('Aim redraw invariance', () => {
-    it('should redraw the same canonical body rectangle when aim changes', () => {
+    it('should keep body-box rendering disabled when aim changes', () => {
       const player = new ProceduralPlayerGraphics(scene, 100, 200, COLORS.ENEMY_HEAD, COLORS.BODY);
       (graphics.fillRect as any).mockClear();
       (graphics.strokeRect as any).mockClear();
 
       player.setAimAngle(Math.PI / 3);
 
-      expect(graphics.fillRect).toHaveBeenCalledWith(-PLAYER.WIDTH / 2, -PLAYER.HEIGHT / 2, PLAYER.WIDTH, PLAYER.HEIGHT);
-      expect(graphics.strokeRect).toHaveBeenCalledWith(-PLAYER.WIDTH / 2, -PLAYER.HEIGHT / 2, PLAYER.WIDTH, PLAYER.HEIGHT);
+      expect(graphics.fillRect).not.toHaveBeenCalled();
+      expect(graphics.strokeRect).not.toHaveBeenCalled();
     });
   });
 
@@ -583,14 +599,14 @@ describe('ProceduralPlayerGraphics', () => {
       );
     });
 
-    it('should position label above head (y = playerY - headRadius - 5)', () => {
+    it('should position label above the shifted top-down head', () => {
       const player = new ProceduralPlayerGraphics(scene, 100, 200, COLORS.PLAYER_HEAD, COLORS.BODY);
       player.setNameLabel('YOU');
 
-      // Head radius is 13, so label Y = 200 - 13 - 5 = 182
+      // Label Y follows head center - radius - 5: 200 - 6 - 11 - 5 = 178.
       expect(scene.add.text).toHaveBeenCalledWith(
         100,
-        182,
+        178,
         'YOU',
         expect.anything()
       );
@@ -668,9 +684,9 @@ describe('ProceduralPlayerGraphics', () => {
 
       player.setPosition(300, 400);
 
-      // Label should follow player position (x=300, y=400 - 13 - 5 = 382)
+      // Label should follow the updated head position (x=300, y=400 - 6 - 11 - 5 = 378)
       expect(mockText.x).toBe(300);
-      expect(mockText.y).toBe(382);
+      expect(mockText.y).toBe(378);
     });
   });
 
@@ -680,7 +696,7 @@ describe('ProceduralPlayerGraphics', () => {
 
       // strokeCircle should only be called for head outline (not ring)
       const strokeCircleCalls = (graphics.strokeCircle as any).mock.calls;
-      // Only one stroke circle call (head outline at radius 13)
+      // Only one stroke circle call (head outline at radius 11)
       const ringCalls = strokeCircleCalls.filter((call: any[]) => call[2] === 25);
       expect(ringCalls).toHaveLength(0);
     });

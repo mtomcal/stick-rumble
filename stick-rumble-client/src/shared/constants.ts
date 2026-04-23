@@ -117,10 +117,10 @@ export const NETWORK = {
  */
 export const PLAYER = {
   /** Player sprite width (placeholder until actual sprites) */
-  WIDTH: 32,
+  WIDTH: 48,
 
   /** Player sprite height (placeholder until actual sprites) */
-  HEIGHT: 64,
+  HEIGHT: 48,
 
   /** World-space health bar width in pixels */
   PLAYER_HEALTH_BAR_WIDTH: 32,

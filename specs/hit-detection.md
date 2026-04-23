@@ -1,7 +1,7 @@
 # Hit Detection
 
-> **Spec Version**: 1.3.0
-> **Last Updated**: 2026-04-17
+> **Spec Version**: 1.3.2
+> **Last Updated**: 2026-04-22
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [shooting.md](shooting.md), [arena.md](arena.md), [messages.md](messages.md)
 > **Depended By**: [match.md](match.md), [client-architecture.md](client-architecture.md), [server-architecture.md](server-architecture.md)
 
@@ -50,8 +50,8 @@ All hit detection constants are defined in [constants.md](constants.md). Key val
 
 | Constant | Value | Unit | Description |
 |----------|-------|------|-------------|
-| PLAYER_WIDTH | 32 | px | Player hitbox width |
-| PLAYER_HEIGHT | 64 | px | Player hitbox height |
+| PLAYER_WIDTH | 48 | px | Player hitbox width |
+| PLAYER_HEIGHT | 48 | px | Player hitbox height |
 | PROJECTILE_MAX_LIFETIME | 1000 | ms | Projectile auto-expire after 1 second |
 | PROJECTILE_MAX_RANGE | 800 | px | Projectile ignored after traveling 800px |
 | SPAWN_INVULNERABILITY_DURATION | 2000 | ms | Post-respawn invulnerability |
@@ -122,19 +122,19 @@ interface HitEvent {
 
 ```
 Hitbox dimensions:
-- Width: 32 pixels
-- Height: 64 pixels
+- Width: 48 pixels
+- Height: 48 pixels
 - Center: Player position (x, y)
 
 Boundaries:
-- Left:   x - 16
-- Right:  x + 16
-- Top:    y - 32
-- Bottom: y + 32
+- Left:   x - 24
+- Right:  x + 24
+- Top:    y - 24
+- Bottom: y + 24
 ```
 
 **Why AABB instead of circle collision?**
-1. **Stick figure shape**: Players are tall and thin (32x64), poorly approximated by a circle
+1. **Top-down footprint**: Players still use a box-shaped gameplay footprint, and an AABB keeps the overhead 48x48 body exact against world geometry
 2. **Performance**: AABB collision is faster than circle-rectangle
 3. **Intuitive hitbox**: Matches the visual stick figure silhouette
 
@@ -294,7 +294,7 @@ func (p *Physics) CheckProjectilePlayerCollision(proj *Projectile, player *Playe
 The player hitbox remains the authoritative target volume, but attacks must resolve continuously against that volume rather than relying on an end-of-frame point sample.
 
 **Required outcome:**
-- a projectile or hitscan ray can hit any exposed portion of the 32x64 player hitbox
+- a projectile or hitscan ray can hit any exposed portion of the 48x48 player hitbox
 - blocking geometry protects only the covered portion of that hitbox
 - if a barrier is reached before the target hit volume, the attack is blocked
 - if an exposed portion of the hit volume is reached before the barrier, the hit is valid
@@ -867,7 +867,7 @@ func TestDirectHit(t *testing.T) {
 **Priority**: High
 
 **Preconditions:**
-- Player at position (500, 500) with 32x64 hitbox
+- Player at position (500, 500) with 48x48 hitbox
 - Projectile at position (515, 530) (just inside right-bottom edge)
 
 **Input:**
@@ -1253,7 +1253,7 @@ func TestProjectileOutOfBounds(t *testing.T) {
 
 **Preconditions:**
 - Victim is partially behind cover
-- Some portion of the authoritative 32x64 hitbox remains exposed before the first barrier contact
+- Some portion of the authoritative 48x48 hitbox remains exposed before the first barrier contact
 
 **Input:**
 - Fire a projectile or hitscan attack at the exposed side
@@ -1284,6 +1284,8 @@ func TestProjectileOutOfBounds(t *testing.T) {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.3.2 | 2026-04-22 | Updated the authoritative player hitbox from 32x32 to 48x48. Revised the hitbox boundaries and rationale to match the larger overhead player footprint. |
+| 1.3.1 | 2026-04-22 | Updated the authoritative player hitbox from 32x64 to 32x32. Revised the hitbox boundaries and rationale to match the overhead player footprint. |
 | 1.3.0 | 2026-04-17 | Reframed hit detection around continuous first-contact barrier resolution: projectiles and hitscan now resolve against blocking geometry before target hit volume, partial cover is defined against the authoritative 32x64 hitbox instead of a center-point approximation, and new acceptance scenarios cover wall-blocked hitscan, partial exposure, and projectile-first wall contact. |
 | 1.2.0 | 2026-02-18 | Art style alignment: Added client-side sections for Damage Numbers (#FF4444, float-and-fade), Hit Direction Indicators (#CC3333 chevrons), Blood Particle Effects (#CC3333), and Damage Screen Flash (#FF0000 overlay). |
 | 1.1.3 | 2026-02-16 | Fixed hitscan pseudocode — hitscan does NOT check `IsInvulnerable` or `IsInvincibleFromRoll()` (unlike projectile collision). Invulnerable/rolling players can be hit by hitscan. |

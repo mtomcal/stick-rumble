@@ -339,10 +339,10 @@ func TestPerformMeleeAttack_PartialCoverStillHitsExposedTarget(t *testing.T) {
 	bat := NewBat()
 	mapConfig := openTestMapConfig()
 	mapConfig.Obstacles = []MapObstacle{
-		{ID: "low-wall", X: 130, Y: 102, Width: 20, Height: 30, BlocksMovement: true, BlocksProjectiles: true, BlocksLineOfSight: true},
+		{ID: "low-wall", X: 130, Y: 110, Width: 20, Height: 30, BlocksMovement: true, BlocksProjectiles: true, BlocksLineOfSight: true},
 	}
 	attacker := createTestPlayer("attacker", 100, 84, 0)
-	target := createTestPlayer("target", 170, 100, 0)
+	target := createTestPlayer("target", 160, 100, 0)
 
 	result := PerformMeleeAttack(attacker, []*PlayerState{attacker, target}, bat, mapConfig)
 
@@ -365,8 +365,8 @@ func TestApplyKnockback_StopsAtFirstWallContact(t *testing.T) {
 	applyKnockback(attacker, target, 40, mapConfig)
 
 	newPos := target.GetPosition()
-	if newPos.X != 159 || newPos.Y != 100 {
-		t.Fatalf("knockback stop = %+v, want first wall contact at {X:159 Y:100}", newPos)
+	if newPos.X != 151 || newPos.Y != 100 {
+		t.Fatalf("knockback stop = %+v, want first wall contact at {X:151 Y:100}", newPos)
 	}
 }
 
@@ -401,7 +401,7 @@ func TestPerformMeleeAttack_HitboxEdgeWithinRangeDoesNotOverrideCenterRequiremen
 func TestHasMeleeReach_CenterBlockedFailsEvenWhenEdgesRemainExposed(t *testing.T) {
 	bat := NewBat()
 	attacker := createTestPlayer("attacker", 100, 100, 0)
-	target := createTestPlayer("target", 170, 100, 0)
+	target := createTestPlayer("target", 166, 100, 0)
 	mapConfig := openTestMapConfig()
 	mapConfig.Obstacles = []MapObstacle{
 		{ID: "center-wall", X: 130, Y: 90, Width: 20, Height: 20, BlocksMovement: true, BlocksProjectiles: true, BlocksLineOfSight: true},
@@ -415,7 +415,7 @@ func TestHasMeleeReach_CenterBlockedFailsEvenWhenEdgesRemainExposed(t *testing.T
 func TestHasMeleeReach_RequiresMajorityOfSamplePoints(t *testing.T) {
 	bat := NewBat()
 	attacker := createTestPlayer("attacker", 100, 100, 0)
-	target := createTestPlayer("target", 170, 100, 0)
+	target := createTestPlayer("target", 166, 100, 0)
 
 	testCases := []struct {
 		name      string
@@ -437,8 +437,8 @@ func TestHasMeleeReach_RequiresMajorityOfSamplePoints(t *testing.T) {
 			obstacles: []MapObstacle{
 				// Blocks top, top-left, and top-right while leaving center, left, and right clear.
 				{ID: "upper-cover", X: 125, Y: 75, Width: 45, Height: 20, BlocksMovement: true, BlocksProjectiles: true, BlocksLineOfSight: true},
-				// Catches only the bottom-right sample; the bottom-center path stays below this blocker.
-				{ID: "lower-right-cover", X: 160, Y: 121, Width: 10, Height: 4, BlocksMovement: true, BlocksProjectiles: true, BlocksLineOfSight: true},
+				// Catches only the bottom-right sample; the bottom-center path ends before this blocker.
+				{ID: "lower-right-cover", X: 186, Y: 120, Width: 10, Height: 8, BlocksMovement: true, BlocksProjectiles: true, BlocksLineOfSight: true},
 			},
 			want: true,
 		},
@@ -528,7 +528,7 @@ func TestIsInMeleeRange_JustBeyondMaxRange(t *testing.T) {
 	bat := NewBat() // 90px range
 	attacker := createTestPlayer("attacker", 100, 100, 0)
 	// Target positioned so the full hitbox stays just beyond 90px range.
-	target := createTestPlayer("target", 207, 100, 0)
+	target := createTestPlayer("target", 215, 100, 0)
 
 	inRange := isInMeleeRange(attacker, target, bat)
 
@@ -571,7 +571,7 @@ func TestKatanaRange_LongerThanBat(t *testing.T) {
 	katana := NewKatana()
 	attacker := createTestPlayer("attacker", 100, 100, 0)
 	// Target positioned so the hitbox is beyond bat range but within katana range.
-	target := createTestPlayer("target", 207, 100, 0)
+	target := createTestPlayer("target", 215, 100, 0)
 
 	batInRange := isInMeleeRange(attacker, target, bat)
 	katanaInRange := isInMeleeRange(attacker, target, katana)

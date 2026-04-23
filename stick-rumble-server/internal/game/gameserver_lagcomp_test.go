@@ -500,7 +500,7 @@ func TestHitscanShoot_PartialCoverExposedShoulderStillHits(t *testing.T) {
 	gs.SetWeaponState(shooterID, NewWeaponState(pistol))
 
 	shooter, _ := gs.world.GetPlayer(shooterID)
-	shooter.SetPosition(Vector2{X: 150, Y: 280})
+	shooter.SetPosition(Vector2{X: 150, Y: 290})
 	victim, _ := gs.world.GetPlayer(victimID)
 	victim.SetPosition(Vector2{X: 280, Y: 300})
 
@@ -509,7 +509,7 @@ func TestHitscanShoot_PartialCoverExposedShoulderStillHits(t *testing.T) {
 		t.Fatalf("shot should succeed, got %v", result.Reason)
 	}
 	if victim.Health != 100-PistolDamage {
-		t.Fatalf("victim health = %d, want %d because exposed shoulder is hittable", victim.Health, 100-PistolDamage)
+		t.Fatalf("victim health = %d, want %d because the exposed upper body is hittable", victim.Health, 100-PistolDamage)
 	}
 }
 

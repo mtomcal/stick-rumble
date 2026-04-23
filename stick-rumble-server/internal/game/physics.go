@@ -322,7 +322,7 @@ func (p *Physics) CheckPlayerCrateProximity(player *PlayerState, crate *WeaponCr
 }
 
 // CheckProjectilePlayerCollision checks if a projectile intersects a player's hitbox using AABB
-// Hitbox is 32x64 pixels (PlayerWidth x PlayerHeight) centered on player position
+// Hitbox is 48x48 pixels (PlayerWidth x PlayerHeight) centered on player position
 // Returns true if collision detected
 func (p *Physics) CheckProjectilePlayerCollision(proj *Projectile, player *PlayerState) bool {
 	_, hit := p.projectilePlayerContact(proj, player)

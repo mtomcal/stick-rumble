@@ -887,7 +887,7 @@ test "Cooldown prevents roll for 3 seconds":
 - Run physics for 100ms
 
 **Expected Output:**
-- Roll ended early (position clamped to 1904)
+- Roll ended early (position clamped to 1896)
 - `roll:end` sent with reason "wall_collision"
 
 **Pseudocode:**
@@ -900,7 +900,7 @@ test "Wall collision ends roll early":
 
     assert result.rollCancelled == true
     assert player.isRolling() == false
-    assert player.position.x == 1904  // Clamped to right boundary
+    assert player.position.x == 1896  // Clamped to right boundary
 ```
 
 ### TS-ROLL-006: Roll Direction Matches WASD Input

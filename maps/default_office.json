@@ -260,49 +260,49 @@
     },
     {
       "id": "vp_blocker_contact_wall_west",
-      "playerPosition": { "x": 680, "y": 364 },
+      "playerPosition": { "x": 672, "y": 364 },
       "aimDirection": { "x": 1, "y": 0 },
       "expectedOutcome": "reads_blocked"
     },
     {
       "id": "vp_blocker_contact_wall_north",
-      "playerPosition": { "x": 960, "y": 304 },
+      "playerPosition": { "x": 960, "y": 312 },
       "aimDirection": { "x": 0, "y": 1 },
       "expectedOutcome": "reads_blocked"
     },
     {
       "id": "vp_blocker_contact_wall_east",
-      "playerPosition": { "x": 1240, "y": 364 },
+      "playerPosition": { "x": 1248, "y": 364 },
       "aimDirection": { "x": -1, "y": 0 },
       "expectedOutcome": "reads_blocked"
     },
     {
       "id": "vp_blocker_contact_wall_south",
-      "playerPosition": { "x": 960, "y": 424 },
+      "playerPosition": { "x": 960, "y": 416 },
       "aimDirection": { "x": 0, "y": -1 },
       "expectedOutcome": "reads_blocked"
     },
     {
       "id": "vp_blocker_contact_desk_north",
-      "playerPosition": { "x": 1580, "y": 128 },
+      "playerPosition": { "x": 1580, "y": 136 },
       "aimDirection": { "x": 0, "y": 1 },
       "expectedOutcome": "reads_blocked"
     },
     {
       "id": "vp_blocker_contact_desk_east",
-      "playerPosition": { "x": 1726, "y": 208 },
+      "playerPosition": { "x": 1734, "y": 208 },
       "aimDirection": { "x": -1, "y": 0 },
       "expectedOutcome": "reads_blocked"
     },
     {
       "id": "vp_blocker_contact_desk_south",
-      "playerPosition": { "x": 1580, "y": 288 },
+      "playerPosition": { "x": 1580, "y": 280 },
       "aimDirection": { "x": 0, "y": -1 },
       "expectedOutcome": "reads_blocked"
     },
     {
       "id": "vp_blocker_contact_desk_west",
-      "playerPosition": { "x": 1434, "y": 208 },
+      "playerPosition": { "x": 1426, "y": 208 },
       "aimDirection": { "x": 1, "y": 0 },
       "expectedOutcome": "reads_blocked"
     },

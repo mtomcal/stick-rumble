@@ -97,8 +97,8 @@ func TestSegmentPlayerHitboxContact_ExposedPortionBeatsBarrierFirstContact(t *te
 		t.Fatal("expected player hitbox contact")
 	}
 
-	if playerContact.Point.X != 84 || playerContact.Point.Y != 100 {
-		t.Fatalf("player contact = %+v, want {X:84 Y:100}", playerContact.Point)
+	if playerContact.Point.X != 76 || playerContact.Point.Y != 100 {
+		t.Fatalf("player contact = %+v, want {X:76 Y:100}", playerContact.Point)
 	}
 
 	wallFirst, ok := segmentRectContact(Vector2{X: 0, Y: 100}, Vector2{X: 200, Y: 100}, rect{x: 70, y: 70, width: 10, height: 60})

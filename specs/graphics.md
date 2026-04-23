@@ -1,6 +1,6 @@
 # Graphics
 
-> **Spec Version**: 2.4.0
+> **Spec Version**: 2.4.4
 > **Last Updated**: 2026-04-22
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [arena.md](arena.md)
 > **Depended By**: [client-architecture.md](client-architecture.md), [test-index.md](test-index.md)
@@ -32,7 +32,7 @@ All rendering uses Phaser 3.90.0's Canvas/WebGL rendering with a 60 FPS target.
 
 ### Spec Dependencies
 
-- [constants.md](constants.md) - Arena dimensions (1920×1080), player dimensions (32×64)
+- [constants.md](constants.md) - Arena dimensions (1920×1080), player dimensions (48×48)
 - [player.md](player.md) - Player state structure, health system
 - [weapons.md](weapons.md) - Weapon configurations, melee ranges
 - [arena.md](arena.md) - World bounds for rendering context
@@ -140,7 +140,7 @@ Every live player must render a stable canonical visible footprint that is the v
 - the footprint is centered on the player world position
 - the footprint stays axis-aligned to the world and does not rotate with aim
 
-For the current game, that means the live player's collision-carrying visible body must read as a `32x64` footprint centered on the player position because `PLAYER_WIDTH = 32` and `PLAYER_HEIGHT = 64`.
+For the current game, that means the live player's collision-carrying visible read must cover the authoritative `48x48` player space centered on the player position because `PLAYER_WIDTH = 48` and `PLAYER_HEIGHT = 48`.
 
 **Hard rules:**
 - the canonical visible footprint is the primary live-player body read on screen
@@ -163,11 +163,16 @@ The live player still uses a stylized stick-figure presentation, but the renderi
 - those secondary layers may extend beyond the canonical footprint for expression, but they do not redefine where the live body "is" for blocker contact
 - attachments may not be used to hide a body-gap bug or to satisfy flush-contact readability by themselves
 
-The exact artistic shape used to realize the canonical footprint is intentionally not fixed to one named silhouette. A rounded rectangle, capsule-like mass, or another body treatment is acceptable if it satisfies the footprint contract above.
+The intended artistic direction is the prototype-faithful top-down stick figure rather than any boxed silhouette. The collision-carrying body read should therefore come from the completed stick figure itself: a clear head, torso, arms, and legs that collectively fill the authoritative player space without introducing a body box.
 
 **Styling guardrail:**
-- the canonical footprint should read as a body silhouette, not as a monolithic opaque block
-- a subtle interior fill plus readable edge treatment is preferred over a solid black slab, as long as the authoritative outer extents still read clearly
+- the live player should read as a true overhead stick figure, as if viewed from a ceiling camera
+- a subtle round or oval body mass underneath the stick figure is acceptable if it helps the visible silhouette stay flush to blockers
+- any remaining outline treatment on the live body should be low-contrast and supportive rather than a heavy black contour
+- a filled or outlined torso box around the live body is out of spec
+- a tall rectangular outline around the full `PLAYER_WIDTH x PLAYER_HEIGHT` space is out of spec
+- collision readability on north/south contact must come from the completed stick-figure silhouette rather than a visibly boxed body treatment
+- the torso-to-leg transition should read as one continuous stick figure with no visible hip gap at normal gameplay scale
 
 ### Preserved Stick-Figure Detail Layer
 
@@ -189,7 +194,6 @@ function renderLivePlayer(player, walkCycle):
         center = player.position
     )
 
-    drawCanonicalFootprint(canonicalFootprint)
     drawStickFigureDetailsInsideOrOnTop(canonicalFootprint, walkCycle, player.aimAngle)
     drawNonCollisionReadingAttachments(player.weapon, player.label, player.ring)
 ```
@@ -414,7 +418,7 @@ Players need to see enemy health at a glance during combat without looking away 
 ```typescript
 render(x: number, y: number, health: number): void {
   const barX = x - 16;  // Center horizontally
-  const barY = y - 32 - 8;  // Above head
+  const barY = y - 24 - 8;  // Above head
 
   // Background (depleted portion)
   this.graphics.fillStyle(0x333333, 1);  // COLORS.HEALTH_DEPLETED_BG
@@ -1124,7 +1128,7 @@ The server does not perform any rendering. All graphics are client-side only. Th
 test "player renders all body parts":
     setup: create player graphics at (100, 100)
     action: render player with aimAngle = 0
-    assert: graphics contains head circle (radius 13)
+    assert: graphics contains head circle (radius 9)
     assert: graphics contains 2 arm lines + 2 hand circles
     assert: graphics contains 2 leg lines + 2 foot circles
 ```
@@ -1511,7 +1515,7 @@ test "player renders all body parts":
 
 **Expected Output:**
 - The collision-carrying visible body derives directly from `PLAYER_WIDTH` and `PLAYER_HEIGHT`
-- The visible body's outer extents match the authoritative `32x64` hitbox within 1 rendered pixel on each side
+- The visible body's outer extents match the authoritative `48x48` hitbox within 1 rendered pixel on each side
 - The visible body remains axis-aligned in every tested live state
 - Animation and aim detail stay inside or on top of that stable outer footprint rather than redefining it
 
@@ -1542,6 +1546,10 @@ test "player renders all body parts":
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.4.4 | 2026-04-22 | Updated live-player rendering to match the new 48x48 authoritative footprint. Preserved the true top-down stick-figure direction while giving the player more on-map presence. |
+| 2.4.3 | 2026-04-22 | Updated live-player rendering to match the new 32x32 authoritative footprint. Clarified that the overhead stick figure is now a true top-down read rather than a compressed tall body projected onto a top-down map. |
+| 2.4.2 | 2026-04-22 | Removed the square body-core treatment and restored a pure top-down stick-figure live player. Clarified that collision readability must come from the completed stick figure itself, and that any torso/body box treatment is out of spec. |
+| 2.4.1 | 2026-04-22 | Restored the intended top-down stick-figure direction for live players. Clarified that the canonical collision read may come from a square body core plus stick-figure detail, removed the tall full-body outline as an acceptable treatment, and required north/south contact readability without reverting to an outlined slab. |
 | 2.4.0 | 2026-04-22 | Reframed live-player rendering around a canonical visible footprint derived directly from `PLAYER_WIDTH` and `PLAYER_HEIGHT`. Added a footprint-first contract: the live body must stay axis-aligned, stable across movement and dodge roll, and read flush against authoritative blocker edges on all four sides within a 1 rendered-pixel tolerance. Replaced dodge-roll body rotation/flicker as normative behavior. Added TS-GFX-025 and TS-GFX-026 for geometry and four-direction contact acceptance. |
 | 2.3.2 | 2026-04-10 | Renamed enemy weapon visibility to held weapon visibility. Clarified that local and remote held weapons share the same readability contract, and explicitly required the bat to remain visibly brown and recognizable in-hand. |
 | 2.3.1 | 2026-04-09 | Clarified pickup rendering contract: normal gameplay pickups must be weapon-specific floor silhouettes with a secondary zone affordance; generic marker-only presentation is explicitly out of spec. Updated TS-GFX-008 and TS-GFX-009 wording accordingly. |

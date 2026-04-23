@@ -1,7 +1,7 @@
 # Player
 
-> **Spec Version**: 1.4.0
-> **Last Updated**: 2026-04-11
+> **Spec Version**: 1.4.2
+> **Last Updated**: 2026-04-22
 > **Depends On**: [constants.md](constants.md), [arena.md](arena.md)
 > **Depended By**: [movement.md](movement.md), [dodge-roll.md](dodge-roll.md), [weapons.md](weapons.md), [shooting.md](shooting.md), [melee.md](melee.md), [hit-detection.md](hit-detection.md), [match.md](match.md), [graphics.md](graphics.md), [ui.md](ui.md)
 
@@ -40,8 +40,8 @@ All player-related constants are defined in [constants.md](constants.md). Key va
 
 | Constant | Value | Unit | Description |
 |----------|-------|------|-------------|
-| PLAYER_WIDTH | 32 | px | Hitbox width |
-| PLAYER_HEIGHT | 64 | px | Hitbox height |
+| PLAYER_WIDTH | 48 | px | Hitbox width |
+| PLAYER_HEIGHT | 48 | px | Hitbox height |
 | PLAYER_MAX_HEALTH | 100 | HP | Maximum health |
 | HEALTH_REGEN_DELAY | 5.0 | s | Delay before regeneration starts |
 | HEALTH_REGEN_RATE | 10.0 | HP/s | Regeneration speed |
@@ -973,6 +973,8 @@ func TestOverkillDamage(t *testing.T) {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.4.2 | 2026-04-22 | Updated the player hitbox contract from 32x32 to 48x48 to better match the intended top-down gameplay scale. |
+| 1.4.1 | 2026-04-22 | Updated the player hitbox contract from 32x64 to 32x32 to match the intended top-down gameplay and rendering perspective. |
 | 1.4.0 | 2026-04-11 | Friends-MVP: added `DisplayName` to server and client `PlayerState` (sanitized, 1–16 chars, non-unique). See [rooms.md](rooms.md#display-name-sanitization) for the join-time contract. |
 | 1.0.0 | 2026-02-02 | Initial specification extracted from codebase |
 | 1.1.0 | 2026-02-15 | Added `inputSequence` field for prediction reconciliation. Added `CorrectionStats` struct for anti-cheat movement validation tracking. |

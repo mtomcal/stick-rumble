@@ -1,6 +1,6 @@
 # Movement
 
-> **Spec Version**: 1.2.3
+> **Spec Version**: 1.2.5
 > **Last Updated**: 2026-04-22
 > **Depends On**: [constants.md](constants.md), [arena.md](arena.md), [player.md](player.md)
 > **Depended By**: [dodge-roll.md](dodge-roll.md), [shooting.md](shooting.md), [hit-detection.md](hit-detection.md)
@@ -416,8 +416,8 @@ See [arena.md](arena.md) for complete clamping behavior. Summary:
 
 ```
 function clampToArena(pos):
-    halfWidth = PLAYER_WIDTH / 2   // 16
-    halfHeight = PLAYER_HEIGHT / 2 // 32
+    halfWidth = PLAYER_WIDTH / 2   // 24
+    halfHeight = PLAYER_HEIGHT / 2 // 24
 
     x = clamp(pos.x, halfWidth, map.width - halfWidth)
     y = clamp(pos.y, halfHeight, map.height - halfHeight)
@@ -876,7 +876,7 @@ func TestDiagonalNormalization(t *testing.T) {
 - Run physics for 1 second
 
 **Expected Output:**
-- Position X = 1904 (max valid X)
+- Position X = 1896 (max valid X)
 
 ### TS-MOVE-007: Sprint applies accuracy penalty
 
@@ -961,6 +961,8 @@ func TestDiagonalNormalization(t *testing.T) {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.2.5 | 2026-04-22 | Updated movement examples to the new 48x48 player footprint. Boundary clamping examples now use a 24px half-size. |
+| 1.2.4 | 2026-04-22 | Updated movement examples to the new 32x32 player footprint. Boundary clamping examples now use a 16px half-height. |
 | 1.2.3 | 2026-04-22 | Cross-referenced the live-player canonical visible-footprint contract from `graphics.md`. Clarified that ordinary blocker contact must read visually flush on all four sides during local movement, not just avoid overlap or rubberbanding. |
 | 1.2.2 | 2026-04-10 | Clarified that client prediction must resolve active-map bounds and blocking obstacles locally, so normal wall contact does not create visible snap-back. |
 | 1.2.1 | 2026-04-09 | Added executable movement-feel thresholds (start/stop/reversal/sprint) so red/green tests can enforce the perceptual contract directly. |

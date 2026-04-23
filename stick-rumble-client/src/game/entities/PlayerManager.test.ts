@@ -59,6 +59,7 @@ const createMockScene = () => {
     clear: ReturnType<typeof vi.fn>;
     lineStyle: ReturnType<typeof vi.fn>;
     fillStyle: ReturnType<typeof vi.fn>;
+    fillEllipse: ReturnType<typeof vi.fn>;
     fillRect: ReturnType<typeof vi.fn>;
     strokeRect: ReturnType<typeof vi.fn>;
     beginPath: ReturnType<typeof vi.fn>;
@@ -152,6 +153,7 @@ const createMockScene = () => {
           clear: vi.fn().mockReturnThis(),
           lineStyle: vi.fn().mockReturnThis(),
           fillStyle: vi.fn().mockReturnThis(),
+          fillEllipse: vi.fn().mockReturnThis(),
           fillRect: vi.fn().mockReturnThis(),
           strokeRect: vi.fn().mockReturnThis(),
           beginPath: vi.fn().mockReturnThis(),
@@ -247,7 +249,7 @@ describe('PlayerManager', () => {
       expect(mockScene.add.container).toHaveBeenCalled();
       expect(mockScene.add.text).toHaveBeenCalledWith(
         100,
-        158, // y: 200 - 64/2 - 10 = 158
+        166, // y: 200 - 48/2 - 10 = 166
         'Player',
         expect.objectContaining({
           fontSize: '14px',
@@ -297,7 +299,7 @@ describe('PlayerManager', () => {
 
       expect(mockScene.add.text).toHaveBeenCalledWith(
         100,
-        158, // y: 200 - 64/2 - 10 = 158
+        166, // y: 200 - 48/2 - 10 = 166
         'You',
         expect.objectContaining({
           fontSize: '14px',
@@ -317,7 +319,7 @@ describe('PlayerManager', () => {
 
       expect(mockScene.add.text).toHaveBeenCalledWith(
         100,
-        158, // y: 200 - 64/2 - 10 = 158
+        166, // y: 200 - 48/2 - 10 = 166
         'Player',
         expect.objectContaining({
           fontSize: '14px',
@@ -371,7 +373,7 @@ describe('PlayerManager', () => {
       // Verify the last call has the correct position
       const lastCall = label.setPosition.mock.calls[label.setPosition.mock.calls.length - 1];
       expect(lastCall[0]).toBe(300);
-      expect(lastCall[1]).toBe(358); // y: 400 - 64/2 - 10 = 358
+      expect(lastCall[1]).toBe(366); // y: 400 - 48/2 - 10 = 366
     });
 
     it('should remove players that no longer exist', () => {
@@ -1027,8 +1029,8 @@ describe('PlayerManager', () => {
 
       const playerGraphics = (playerManager as any).players.get('player-1');
       expect(playerGraphics.getRotation()).toBe(0);
-      expect(graphics.fillRect).toHaveBeenCalledWith(-16, -32, 32, 64);
-      expect(graphics.strokeRect).toHaveBeenCalledWith(-16, -32, 32, 64);
+      expect(graphics.fillRect).not.toHaveBeenCalled();
+      expect(graphics.strokeRect).not.toHaveBeenCalled();
     });
 
     it('should keep the live body visible without flicker during roll', () => {
@@ -1103,7 +1105,7 @@ describe('PlayerManager', () => {
         },
       ];
 
-      expect(graphics.fillRect).toHaveBeenCalledWith(-16, -32, 32, 64);
+      expect(graphics.fillRect).not.toHaveBeenCalled();
       expect(graphics.setVisible).toHaveBeenCalledWith(true);
       vi.clearAllMocks();
 
@@ -1111,7 +1113,7 @@ describe('PlayerManager', () => {
 
       expect(graphics.setVisible).toHaveBeenCalledWith(true);
       expect(graphics.setVisible).not.toHaveBeenCalledWith(false);
-      expect(graphics.fillRect).toHaveBeenCalledWith(-16, -32, 32, 64);
+      expect(graphics.fillRect).not.toHaveBeenCalled();
     });
 
     it('should handle players with undefined isRolling (backward compatibility)', () => {
@@ -2629,7 +2631,7 @@ describe('PlayerManager', () => {
       playerManager.teleportPlayer('player-1', { x: 500, y: 300 });
 
       // Label should be positioned above the new position
-      expect(label.setPosition).toHaveBeenCalledWith(500, 258); // 300 - 64/2 - 10
+      expect(label.setPosition).toHaveBeenCalledWith(500, 266); // 300 - 48/2 - 10
     });
 
     it('should update weapon barrel position', () => {

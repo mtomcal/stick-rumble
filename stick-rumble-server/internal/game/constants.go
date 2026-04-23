@@ -45,10 +45,10 @@ const (
 // Player appearance
 const (
 	// PlayerWidth is the player sprite width in pixels
-	PlayerWidth = 32.0
+	PlayerWidth = 48.0
 
 	// PlayerHeight is the player sprite height in pixels
-	PlayerHeight = 64.0
+	PlayerHeight = 48.0
 )
 
 // Player health

@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	testPlayerWidth  = 32.0
-	testPlayerHeight = 64.0
+	testPlayerWidth  = 48.0
+	testPlayerHeight = 48.0
 )
 
 func TestLoadMapRegistryFromDir_LoadsDefaultOffice(t *testing.T) {

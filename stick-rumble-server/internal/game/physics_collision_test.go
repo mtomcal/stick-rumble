@@ -63,9 +63,9 @@ func TestCheckProjectilePlayerCollision_EdgeOfHitbox(t *testing.T) {
 	}
 
 	// Create target just at edge of hitbox (should still hit)
-	// Player hitbox is 32x64, so half-width is 16
+	// Player hitbox is 48x48, so half-width is 24
 	target := NewPlayerState("player-2")
-	target.SetPosition(Vector2{X: 515, Y: 500}) // 15 pixels right (within 16)
+	target.SetPosition(Vector2{X: 524, Y: 500}) // 24 pixels right (touching the hitbox edge)
 
 	result := physics.CheckProjectilePlayerCollision(proj, target)
 
@@ -87,9 +87,9 @@ func TestCheckProjectilePlayerCollision_BarelyMiss(t *testing.T) {
 	}
 
 	// Create target just outside hitbox (should miss)
-	// Player hitbox half-width is 16, so 17 should miss
+	// Player hitbox half-width is 24, so 25 should miss
 	target := NewPlayerState("player-2")
-	target.SetPosition(Vector2{X: 517, Y: 500})
+	target.SetPosition(Vector2{X: 525, Y: 500})
 
 	result := physics.CheckProjectilePlayerCollision(proj, target)
 
