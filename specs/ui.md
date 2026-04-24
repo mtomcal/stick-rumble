@@ -137,6 +137,7 @@ interface UIElementPosition {
 - In browser-tab `mobile-landscape`, the gameplay surface should fill the settled safe-area viewport rectangle in both width and height. The mobile stage must not preserve a fixed gameplay aspect ratio if doing so would leave unused space in the live phone viewport.
 - Safe-area handling in `mobile-landscape` should not be implemented by shrinking the gameplay canvas inward with outer black gutters. The gameplay surface may extend to the viewport edges, while HUD and touch overlays stay readable and reachable through inset-aware positioning.
 - In `mobile-landscape`, the fixed HUD may scale down modestly relative to desktop so health, timer, ammo, and score clusters consume less vertical and horizontal space on phone screens. This reduction should be small and should not make the HUD hard to read.
+- Mobile touch controls and their nearby overlay surface may not trigger iOS text-selection or copy/translate callouts during normal play. Long-pressing the virtual sticks or action buttons should remain inside gameplay input handling rather than surfacing browser selection UI.
 - In phone gameplay modes, the in-match layout should behave like one fixed viewport layer rather than a stack of document-flow wrappers. The stage, overlays, and controls should share one stable viewport-anchored rectangle so rotation and gate transitions do not reflow through multiple flexbox/container layers.
 - No ancestor layout wrapper may horizontally center, max-width clamp, or otherwise shrink the mobile stage below the viewport-safe width. In mobile landscape, the stage should effectively span the viewport width minus only minimal safe-area and padding offsets.
 - In browser-tab mobile landscape, stage sizing should be width-first. The phone-safe width is the primary constraint, and the gameplay rectangle should derive its height from the chosen aspect ratio rather than allowing visible browser-chrome height to shrink the stage width back into a centered postcard.
@@ -148,6 +149,7 @@ interface UIElementPosition {
 - After phone orientation changes, the client should wait for the mobile viewport to settle before committing the new gameplay stage geometry. During that short settle window, a gate/cover may remain above the mounted game so Safari does not briefly show a stale, wrongly proportioned stage.
 - On phone gameplay, entering active match rendering may require an explicit post-rotation confirmation step in landscape, such as an `Enter Game` action. This confirmation should happen only after the landscape viewport has settled, so the first mounted gameplay frame uses the final dimensions rather than an intermediate Safari resize state.
 - In flows that use an `Enter Game` confirmation, the client should capture the settled gameplay viewport at the moment of confirmation and use that captured rectangle for the first mounted frame. The first live gameplay render may not briefly mount against an older pre-confirmation viewport.
+- Once the player has entered an active phone match for the current session, subsequent temporary rotations may not tear down the live gameplay runtime. Portrait should become a rotate-device overlay over the existing match, and returning to landscape should resume that same live runtime rather than requiring a fresh remount.
 - When switching between desktop and widened mobile landscape, the visible framing should expand or contract around the player's current center rather than preserving a raw top-left camera origin.
 - Portrait phone gameplay is out of contract only for mobile mode. In that mode, the app must present a rotate-device screen instead of an active gameplay layout until landscape is restored.
 - The gameplay stage may visually switch between centered and full-bleed presentation by mode, but the match camera and core HUD contract must remain recognizable across both.
@@ -170,6 +172,7 @@ interface UIElementPosition {
 - Invite links prefill the room code only; they do not auto-submit
 - The form may provide light client-side display-name guidance, but server sanitization remains authoritative
 - Blank display names are allowed; the server may fall back to `Guest`
+- On iPhone Safari, focusing pre-match form fields may not trigger browser auto-zoom or text autosizing that distorts the overall page layout. Input sizing and typography in the join form should stay above Safari's focus-zoom threshold.
 
 ### `searching_for_match`
 

@@ -176,7 +176,7 @@ function App() {
   const [debugPanelVisible, setDebugPanelVisible] = useState(false)
   const [networkStats, setNetworkStats] = useState<NetworkSimulatorStats>(DEFAULT_STATS)
   const { stageMode, width: viewportWidth, height: viewportHeight, isSettling } = useStageMode()
-  const [mobileLandscapeConfirmed, setMobileLandscapeConfirmed] = useState(false)
+  const [mobileGameplayEntered, setMobileGameplayEntered] = useState(false)
   const [viewportLayout, setViewportLayoutState] = useState<GameplayViewportLayout>({
     ...buildInitialViewportLayout(stageMode, viewportWidth, viewportHeight),
   })
@@ -312,7 +312,7 @@ function App() {
       const nextMatchSession = toMatchSession(status)
       setMatchEndData(null)
       setLocalPlayerId(status.playerId)
-      setMobileLandscapeConfirmed(false)
+      setMobileGameplayEntered(false)
       setMatchBootstrap(
         nextMatchSession && clientRef.current
           ? { session: nextMatchSession, wsClient: clientRef.current }
@@ -528,7 +528,7 @@ function App() {
   const shouldShowGameplayStage = viewState === 'in_match' && matchBootstrap
   const shouldRenderPhaser =
     shouldShowGameplayStage &&
-    (stageMode === 'desktop' || (stageMode === 'mobile-landscape' && mobileLandscapeConfirmed))
+    (stageMode === 'desktop' || mobileGameplayEntered)
   const inMobileStage = shouldShowGameplayStage && stageMode !== 'desktop'
 
   useEffect(() => {
@@ -558,12 +558,6 @@ function App() {
     }
   }, [shouldRenderPhaser, stageMode, viewportWidth, viewportHeight])
 
-  useEffect(() => {
-    if (stageMode !== 'mobile-landscape') {
-      setMobileLandscapeConfirmed(false)
-    }
-  }, [stageMode])
-
   return (
     <div className={`app-shell${inMobileStage ? ' app-shell--mobile-stage' : ''}`}>
       <div className={`app-header${inMobileStage ? ' app-header--hidden' : ''}`}>
@@ -591,7 +585,7 @@ function App() {
             {stageMode === 'mobile-portrait-blocked' || (stageMode !== 'desktop' && isSettling) ? (
               <RotateDeviceGate />
             ) : null}
-            {stageMode === 'mobile-landscape' && !isSettling && !mobileLandscapeConfirmed ? (
+            {stageMode === 'mobile-landscape' && !isSettling && !mobileGameplayEntered ? (
               <RotateDeviceGate
                 title="Enter Game"
                 body="Landscape is ready. Tap to enter with the final phone viewport."
@@ -601,7 +595,7 @@ function App() {
                   if (nextLayout) {
                     setViewportLayoutState(nextLayout)
                   }
-                  setMobileLandscapeConfirmed(true)
+                  setMobileGameplayEntered(true)
                 }}
               />
             ) : null}
@@ -622,6 +616,7 @@ function App() {
               Display Name
               <input
                 aria-label="Display Name"
+                className="overlay-card__input"
                 value={joinForm.displayName}
                 onChange={(event) => {
                   displayNameDirtyRef.current = true
@@ -634,6 +629,7 @@ function App() {
               Room Code
               <input
                 aria-label="Room Code"
+                className="overlay-card__input"
                 value={joinForm.code}
                 onChange={(event) => setJoinForm((prev) => ({ ...prev, code: event.target.value }))}
                 placeholder="PIZZA"
@@ -645,12 +641,14 @@ function App() {
             {reconnectIntent ? <p className="overlay-status">Reconnect failed. Choose a new action.</p> : null}
             <div className="overlay-actions">
               <button
+                className="overlay-card__button"
                 disabled={!isSocketReady || viewState === 'joining'}
                 onClick={() => submitJoinIntent({ displayName: joinForm.displayName, mode: 'public' })}
               >
                 Play Public
               </button>
               <button
+                className="overlay-card__button"
                 disabled={!isSocketReady || viewState === 'joining'}
                 onClick={() => submitJoinIntent({ displayName: joinForm.displayName, mode: 'code', code: joinForm.code })}
               >
@@ -659,10 +657,13 @@ function App() {
             </div>
             {reconnectIntent ? (
               <div className="overlay-actions">
-                <button onClick={() => submitJoinIntent(reconnectIntent)}>
+                <button className="overlay-card__button" onClick={() => submitJoinIntent(reconnectIntent)}>
                   {formatReconnectLabel(reconnectIntent)}
                 </button>
-                <button onClick={() => submitJoinIntent({ displayName: joinForm.displayName, mode: 'public' })}>
+                <button
+                  className="overlay-card__button"
+                  onClick={() => submitJoinIntent({ displayName: joinForm.displayName, mode: 'public' })}
+                >
                   Play Public
                 </button>
               </div>

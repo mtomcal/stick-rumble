@@ -161,6 +161,17 @@ describe('App', () => {
     expect(screen.queryByTestId('phaser-game')).not.toBeInTheDocument()
   })
 
+  it('renders safari-safe join inputs and actions to avoid iPhone focus zoom', async () => {
+    render(<App />)
+
+    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
+
+    expect(screen.getByRole('textbox', { name: 'Display Name' })).toHaveClass('overlay-card__input')
+    expect(screen.getByRole('textbox', { name: 'Room Code' })).toHaveClass('overlay-card__input')
+    expect(screen.getByRole('button', { name: 'Play Public' })).toHaveClass('overlay-card__button')
+    expect(screen.getByRole('button', { name: 'Join with Code' })).toHaveClass('overlay-card__button')
+  })
+
   it('prefills the invite code but does not auto-submit without a saved display name', async () => {
     window.history.replaceState({}, '', '/?invite=PIZZA')
 
@@ -439,17 +450,14 @@ describe('App', () => {
       await new Promise((resolve) => window.setTimeout(resolve, 220))
     })
     await waitFor(() => expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'mobile-portrait-blocked'))
-    expect(screen.queryByTestId('phaser-game')).not.toBeInTheDocument()
+    expect(screen.getByTestId('phaser-game')).toBeInTheDocument()
 
     dispatchResize(844, 390)
     await act(async () => {
       await new Promise((resolve) => window.setTimeout(resolve, 220))
     })
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Enter Game' })).toBeInTheDocument())
-    expect(screen.queryByTestId('phaser-game')).not.toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Enter Game' }))
     await waitFor(() => expect(screen.getByTestId('phaser-game')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: 'Enter Game' })).not.toBeInTheDocument()
 
     setTouchPhoneLayout(false)
     dispatchResize(1280, 720)
@@ -458,11 +466,54 @@ describe('App', () => {
     )
 
     expect(screen.getByTestId('phaser-game')).toBeInTheDocument()
-    expect(testState.phaserMountSpy).toHaveBeenCalledTimes(2)
-    expect(testState.phaserUnmountSpy).toHaveBeenCalledTimes(1)
+    expect(testState.phaserMountSpy).toHaveBeenCalledTimes(1)
+    expect(testState.phaserUnmountSpy).toHaveBeenCalledTimes(0)
     expect(testState.clientInstances).toHaveLength(1)
     expect(getClient().sendSessionLeave).not.toHaveBeenCalled()
     expect(getClient().restartSession).not.toHaveBeenCalled()
+  })
+
+  it('keeps gameplay mounted and resumes without a second enter step after rotating during play', async () => {
+    setViewportSize(844, 390)
+    setTouchPhoneLayout(true)
+
+    render(<App />)
+    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
+
+    emitSessionStatus({
+      state: 'match_ready',
+      playerId: 'player-1',
+      displayName: 'Alice',
+      joinMode: 'public',
+      roomId: 'room-1',
+      mapId: 'default_office',
+    })
+
+    await waitFor(() =>
+      expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'mobile-landscape')
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Enter Game' }))
+    await waitFor(() => expect(screen.getByTestId('phaser-game')).toBeInTheDocument())
+
+    dispatchResize(390, 844)
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 220))
+    })
+    await waitFor(() => expect(screen.getByTestId('rotate-device-gate')).toBeInTheDocument())
+    expect(screen.getByTestId('phaser-game')).toBeInTheDocument()
+
+    dispatchResize(844, 390)
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 220))
+    })
+
+    await waitFor(() =>
+      expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'mobile-landscape')
+    )
+    expect(screen.getByTestId('phaser-game')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Enter Game' })).not.toBeInTheDocument()
+    expect(testState.phaserMountSpy).toHaveBeenCalledTimes(1)
+    expect(testState.phaserUnmountSpy).toHaveBeenCalledTimes(0)
   })
 
   it('captures the settled landscape viewport when Enter Game is pressed after rotating from portrait', async () => {

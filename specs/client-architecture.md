@@ -149,6 +149,7 @@ interface MatchSession {
 - On phone orientation changes, React may hold the last stable mobile stage snapshot briefly while the browser viewport settles, rather than immediately committing transient intermediate dimensions from Safari/UI rotation.
 - For phone-mode matches, React may also delay the initial Phaser mount until the user explicitly confirms entry from a settled landscape gate. This keeps the first gameplay mount aligned with the final post-rotation viewport instead of an intermediate mobile browser resize.
 - When that confirmation exists, React should capture the stage rectangle and derived viewport layout in the confirmation handler before mounting Phaser, rather than relying on a later resize effect to correct the first frame.
+- After that initial confirmation for a given active match, phone orientation changes should preserve the mounted Phaser runtime. Portrait/settling states should be handled as overlay gates instead of by unmounting and remounting the live game instance.
 - The phone in-match presentation should prefer a fixed viewport-root architecture over nested document-flow layout. One viewport-anchored stage rectangle should own Phaser, gates, and touch overlays so CSS reflow does not fight orientation transitions.
 - When the logical viewport changes between desktop and mobile-landscape widths, the active match should preserve player-centered framing rather than preserving the previous top-left camera origin.
 
@@ -223,6 +224,7 @@ Rules:
 - Spectator and death overlays use the widened mobile viewport too; they do not snap back to the desktop baseline during an active mobile session.
 - Mobile landscape should prefer neutral camera zoom by default once the game is already filling the live phone viewport. Additional zoom should be used sparingly because it quickly over-amplifies a fill-viewport mobile presentation.
 - Mobile landscape may apply a modest HUD-only scale reduction for fixed overlay elements. This should be handled in the HUD presentation layer rather than by shrinking the gameplay viewport or changing world scale.
+- Mobile browser-tab controls should explicitly suppress browser text selection/callout behavior in the gameplay overlay layer. iOS long-press selection UI is out of contract for the virtual sticks and action buttons.
 - Mobile overlay controls in browser-tab mode should be sized for constrained visible height: enough for reliable thumb input, but compact enough that they do not overrun the center of the gameplay view.
 
 ### InputState
@@ -1572,6 +1574,7 @@ See [networking.md](networking.md#network-simulator) for server-side counterpart
 - Join errors, queue states, named-room waiting, replay failures, and post-match results are React screen states and MUST NOT depend on a hidden Phaser instance.
 - Replay of the last successful join intent is initiated by the app shell. If replay fails, the client transitions to `recoverable_error` instead of silently dropping back to the join form.
 - Invite links prefill the room code only. They do not auto-submit; the user confirms explicitly from the join form.
+- The join form should remain stable on iPhone Safari when inputs receive focus. Form field typography and global text-size adjustment should prevent Safari from auto-zooming or inflating the page during display-name and room-code entry.
 
 **Pseudocode:**
 ```

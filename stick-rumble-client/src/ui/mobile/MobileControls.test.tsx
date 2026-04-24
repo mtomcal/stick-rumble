@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, createEvent, fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MobileControls } from './MobileControls'
 
@@ -219,6 +219,17 @@ describe('MobileControls', () => {
     expect(testState.triggerRuntimeAction).toHaveBeenNthCalledWith(2, 'dodge')
     expect(screen.getByLabelText('Movement Control')).toBeInTheDocument()
     expect(screen.getByLabelText('Aim And Fire Control')).toBeInTheDocument()
+  })
+
+  it('suppresses browser context menus on mobile action controls', () => {
+    render(<MobileControls />)
+
+    const reloadButton = screen.getByRole('button', { name: 'Reload' })
+    const event = createEvent.contextMenu(reloadButton)
+
+    fireEvent(reloadButton, event)
+
+    expect(event.defaultPrevented).toBe(true)
   })
 
   it('shows a mobile pickup action only when a nearby crate is available', () => {

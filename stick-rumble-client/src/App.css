@@ -168,12 +168,14 @@
   color: #c6bca4;
 }
 
-.overlay-card input {
+.overlay-card__input {
   border: 1px solid rgba(255, 235, 188, 0.16);
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.05);
   color: #f3efe3;
   padding: 0.75rem 0.9rem;
+  font-size: 16px;
+  line-height: 1.25;
 }
 
 .overlay-actions {
@@ -181,6 +183,7 @@
   gap: 0.75rem;
 }
 
+.overlay-card__button,
 .overlay-card button {
   border: 0;
   border-radius: 10px;
@@ -189,6 +192,7 @@
   cursor: pointer;
   font-weight: 700;
   padding: 0.75rem 0.9rem;
+  font-size: 16px;
 }
 
 .overlay-error {
@@ -211,6 +215,10 @@
     max(14px, env(safe-area-inset-bottom))
     max(14px, env(safe-area-inset-left));
   pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .mobile-controls__column {
@@ -241,6 +249,10 @@
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
   pointer-events: auto;
   touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .mobile-stick__thumb {
@@ -267,6 +279,10 @@
   font-size: 0.95rem;
   pointer-events: auto;
   touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .rotate-device-gate {

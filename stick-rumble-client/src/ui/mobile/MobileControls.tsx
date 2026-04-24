@@ -328,7 +328,13 @@ export function MobileControls() {
   }
 
   return (
-    <div className="mobile-controls" data-testid="mobile-controls">
+    <div
+      className="mobile-controls"
+      data-testid="mobile-controls"
+      onContextMenu={(event) => {
+        event.preventDefault()
+      }}
+    >
       <div className="mobile-controls__column mobile-controls__column--left">
         <MobileStick
           label="Movement Control"
