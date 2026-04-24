@@ -368,14 +368,10 @@ function App() {
     client.on('error:room_full', onRoomFull)
     client.on('error:no_hello', onNoHello)
 
-    client.connect()
-      .catch(() => {
-        setJoinError({
-          type: 'error:no_hello',
-          offendingType: 'socket_connect_failed',
-        })
-        setViewState('recoverable_error')
-      })
+    client.connect().catch(() => {
+      // Initial socket failures are transport state, not a server-side join rejection.
+      // The overlay already renders a connection-status message while the client retries.
+    })
 
     return () => {
       client.off('session:status', onSessionStatus)
