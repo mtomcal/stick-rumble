@@ -132,6 +132,25 @@ function setTouchPhoneLayout(enabled: boolean): void {
   })) as typeof window.matchMedia
 }
 
+function setUserAgent(userAgent: string): void {
+  Object.defineProperty(window.navigator, 'userAgent', {
+    configurable: true,
+    value: userAgent,
+  })
+}
+
+function setTouchStartSupport(enabled: boolean): void {
+  if (enabled) {
+    Object.defineProperty(window, 'ontouchstart', {
+      configurable: true,
+      value: null,
+    })
+    return
+  }
+
+  delete (window as Window & { ontouchstart?: unknown }).ontouchstart
+}
+
 describe('App', () => {
   beforeEach(() => {
     testState.clientInstances.length = 0
@@ -144,6 +163,8 @@ describe('App', () => {
     window.history.replaceState({}, '', '/')
     setViewportSize(1280, 720)
     setTouchPhoneLayout(false)
+    setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)')
+    setTouchStartSupport(false)
   })
 
   afterEach(() => {
@@ -349,6 +370,7 @@ describe('App', () => {
   it('auto-detects mobile landscape mode on phone-sized touch layouts', async () => {
     setViewportSize(844, 390)
     setTouchPhoneLayout(true)
+    setTouchStartSupport(true)
 
     render(<App />)
     await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
@@ -399,6 +421,7 @@ describe('App', () => {
   it('shows a rotate-device gate in portrait while keeping Phaser mounted', async () => {
     setViewportSize(390, 844)
     setTouchPhoneLayout(true)
+    setTouchStartSupport(true)
 
     render(<App />)
     await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
@@ -422,6 +445,7 @@ describe('App', () => {
   it('preserves the mounted gameplay surface across landscape, portrait gate, and desktop transitions', async () => {
     setViewportSize(844, 390)
     setTouchPhoneLayout(true)
+    setTouchStartSupport(true)
 
     render(<App />)
     await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
@@ -444,7 +468,7 @@ describe('App', () => {
 
     dispatchResize(390, 844)
     expect(screen.getByTestId('rotate-device-gate')).toBeInTheDocument()
-    expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'mobile-landscape')
+    expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'mobile-portrait-blocked')
 
     await act(async () => {
       await new Promise((resolve) => window.setTimeout(resolve, 220))
@@ -476,6 +500,7 @@ describe('App', () => {
   it('keeps gameplay mounted and resumes without a second enter step after rotating during play', async () => {
     setViewportSize(844, 390)
     setTouchPhoneLayout(true)
+    setTouchStartSupport(true)
 
     render(<App />)
     await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
@@ -519,6 +544,7 @@ describe('App', () => {
   it('captures the settled landscape viewport when Enter Game is pressed after rotating from portrait', async () => {
     setViewportSize(390, 844)
     setTouchPhoneLayout(true)
+    setTouchStartSupport(true)
 
     render(<App />)
     await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
@@ -555,6 +581,83 @@ describe('App', () => {
         }),
       }),
     )
+  })
+
+  it('treats Android phone device emulation as mobile during match flow without touch APIs', async () => {
+    setViewportSize(915, 412)
+    setUserAgent(
+      'Mozilla/5.0 (Linux; Android 10; Samsung Galaxy S20) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Mobile Safari/537.36',
+    )
+
+    render(<App />)
+    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
+
+    emitSessionStatus({
+      state: 'match_ready',
+      playerId: 'player-1',
+      displayName: 'Alice',
+      joinMode: 'public',
+      roomId: 'room-1',
+      mapId: 'default_office',
+    })
+
+    await waitFor(() =>
+      expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'mobile-landscape')
+    )
+    expect(screen.getByRole('button', { name: 'Enter Game' })).toBeInTheDocument()
+    expect(screen.queryByTestId('phaser-game')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Enter Game' }))
+
+    await waitFor(() => expect(screen.getByTestId('phaser-game')).toBeInTheDocument())
+    expect(screen.getByTestId('mobile-controls')).toBeInTheDocument()
+  })
+
+  it('treats phone-sized viewport previews as mobile during match flow even without touch signals', async () => {
+    setViewportSize(915, 412)
+    setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)')
+
+    render(<App />)
+    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
+
+    emitSessionStatus({
+      state: 'match_ready',
+      playerId: 'player-1',
+      displayName: 'Alice',
+      joinMode: 'public',
+      roomId: 'room-1',
+      mapId: 'default_office',
+    })
+
+    await waitFor(() =>
+      expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'mobile-landscape')
+    )
+    expect(screen.getByRole('button', { name: 'Enter Game' })).toBeInTheDocument()
+  })
+
+  it('does not mount the desktop gameplay stage while a phone-sized layout is settling into mobile mode', async () => {
+    render(<App />)
+    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
+
+    dispatchResize(915, 412)
+
+    emitSessionStatus({
+      state: 'match_ready',
+      playerId: 'player-1',
+      displayName: 'Alice',
+      joinMode: 'public',
+      roomId: 'room-1',
+      mapId: 'default_office',
+    })
+
+    await waitFor(() =>
+      expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'mobile-landscape')
+    )
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 220))
+    })
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Enter Game' })).toBeInTheDocument())
+    expect(screen.queryByTestId('phaser-game')).not.toBeInTheDocument()
   })
 
   it('replaces gameplay with the match-end screen when Phaser reports match end', async () => {

@@ -159,11 +159,13 @@ interface UIElementPosition {
 - Mobile mode is a client-local presentation and input option.
 - Enabling mobile mode does not change matchmaking, room membership, message contracts, or server authority.
 - Mobile mode is automatically detected rather than selected by a gameplay button.
-- The detection target is phone-sized touch play, not every touch-capable device indiscriminately.
-- The client should use a phone-oriented heuristic such as: coarse pointer or touch capability, small viewport class, and active landscape gameplay layout.
+- The detection target is phone-sized play, not every touch-capable device indiscriminately.
+- The client should use a conservative phone-sized viewport heuristic first. Additional touch, coarse-pointer, or handset user-agent signals may strengthen the decision, but the client may still enter mobile mode for true phone-sized viewport classes even when desktop-hosted browser emulation does not fully expose mobile APIs.
+- Phone-sized browser device emulation and similar phone-sized viewport previews should enter mobile mode even if desktop-hosted emulation does not perfectly mirror real touch/coarse-pointer signals or handset user-agent metadata.
 - Desktop-capable users and larger non-phone layouts must continue to receive the existing centered stage and keyboard/mouse presentation by default.
 - Detection changes must preserve the existing session and may not remount the match or disconnect the socket as a side effect.
 - The gameplay stage chrome may switch between desktop and mobile presentation while the underlying Phaser runtime remains mounted for the active match.
+- During a phone-layout settle window, the reported stage mode should already reflect the pending phone presentation (`mobile-landscape` or `mobile-portrait-blocked`) rather than briefly preserving a stale desktop mode. Temporary settling should delay active gameplay entry, not accidentally mount the desktop stage.
 
 ### `join_form`
 

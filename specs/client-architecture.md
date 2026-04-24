@@ -130,8 +130,10 @@ interface MatchSession {
 - Mobile mode is a client-local option, not a separate session type.
 - Enabling mobile mode must not alter the WebSocket handshake, room assignment, or authoritative server simulation.
 - Mobile mode is automatically detected; the gameplay flow may not require a user-facing enable button to enter it.
-- Detection should target phone-sized touch play using local device/layout signals rather than server state.
+- Detection should target phone-sized play using local device/layout signals rather than server state.
 - Detection must be conservative: touch-capable laptops and larger tablet-class layouts should remain on the desktop presentation unless the local viewport also matches the phone-sized heuristic.
+- The client may treat mobile handset user-agent signals as additional evidence for phone mode, especially to support browser device emulation where viewport size is phone-like but coarse/touch APIs are incomplete.
+- The phone-sized viewport heuristic may stand on its own when desktop-hosted browser emulation fails to expose reliable touch, coarse-pointer, or handset user-agent signals. In that case, entering mobile mode is preferable to leaving the emulator stuck on the desktop stage.
 - Automatic detection and any live layout transitions must preserve the current session and may not tear down the socket or re-bootstrap the match as a side effect.
 
 ### Runtime Bridge Contract
@@ -147,6 +149,7 @@ interface MatchSession {
 - In `mobile-landscape`, viewport-layout updates should drive a real Phaser viewport resize path rather than a pure CSS zoom illusion.
 - Mobile logical viewport width should be stable during play. Recompute on meaningful orientation/resize changes, not on every transient Safari chrome animation.
 - On phone orientation changes, React may hold the last stable mobile stage snapshot briefly while the browser viewport settles, rather than immediately committing transient intermediate dimensions from Safari/UI rotation.
+- During that brief settle window, the published stage mode should reflect the pending phone mode immediately so the app can gate gameplay correctly. Settling may defer final viewport dimensions, but it may not leave the runtime thinking it is still in desktop mode long enough to mount the desktop stage by mistake.
 - For phone-mode matches, React may also delay the initial Phaser mount until the user explicitly confirms entry from a settled landscape gate. This keeps the first gameplay mount aligned with the final post-rotation viewport instead of an intermediate mobile browser resize.
 - When that confirmation exists, React should capture the stage rectangle and derived viewport layout in the confirmation handler before mounting Phaser, rather than relying on a later resize effect to correct the first frame.
 - After that initial confirmation for a given active match, phone orientation changes should preserve the mounted Phaser runtime. Portrait/settling states should be handled as overlay gates instead of by unmounting and remounting the live game instance.

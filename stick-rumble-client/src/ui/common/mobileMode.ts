@@ -24,14 +24,9 @@ function getViewportHeight(): number {
 export function detectStageMode(width: number, height: number): StageMode {
   const shortEdge = Math.min(width, height)
   const longEdge = Math.max(width, height)
-  const coarsePointer = window.matchMedia?.('(pointer: coarse)').matches ?? false
-  const touchCapable =
-    coarsePointer ||
-    (navigator.maxTouchPoints ?? 0) > 0 ||
-    'ontouchstart' in window
   const isPhoneSized = shortEdge <= MAX_PHONE_SHORT_EDGE && longEdge <= MAX_PHONE_LONG_EDGE
 
-  if (!touchCapable || !isPhoneSized) {
+  if (!isPhoneSized) {
     return 'desktop'
   }
 
@@ -83,10 +78,10 @@ export function useStageMode(): DeviceViewportSnapshot {
         window.clearTimeout(settleTimeout)
       }
 
-      setSnapshot((current) => ({
-        ...current,
+      setSnapshot({
+        ...nextSnapshot,
         isSettling: true,
-      }))
+      })
 
       settleTimeout = window.setTimeout(() => {
         stableSnapshot = nextSnapshot
