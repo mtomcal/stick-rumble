@@ -163,6 +163,7 @@ function App() {
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null)
   const duplicateBlockedKeyRef = useRef<string | null>(null)
   const displayNameDirtyRef = useRef(false)
+  const activeMatchSessionKeyRef = useRef<string | null>(null)
 
   const [viewState, setViewState] = useState<AppViewState>('join_form')
   const [isSocketReady, setIsSocketReady] = useState(false)
@@ -184,6 +185,10 @@ function App() {
     displayName: initialSavedDisplayName,
     code: inviteCode ?? '',
   }))
+
+  const getSessionKey = useCallback((session: MatchSession): string => {
+    return `${session.roomId}:${session.playerId}:${session.mapId}`
+  }, [])
 
   const captureCurrentViewportLayout = useCallback((): GameplayViewportLayout | null => {
     if (!stageShellRef.current) {
@@ -298,12 +303,16 @@ function App() {
       getBrowserStorage()?.setItem(DISPLAY_NAME_STORAGE_KEY, status.displayName)
 
       if (status.state === 'searching_for_match') {
+        activeMatchSessionKeyRef.current = null
+        setMobileGameplayEntered(false)
         setMatchBootstrap(null)
         setViewState('searching_for_match')
         return
       }
 
       if (status.state === 'waiting_for_players') {
+        activeMatchSessionKeyRef.current = null
+        setMobileGameplayEntered(false)
         setMatchBootstrap(null)
         setViewState('waiting_for_players')
         return
@@ -312,7 +321,16 @@ function App() {
       const nextMatchSession = toMatchSession(status)
       setMatchEndData(null)
       setLocalPlayerId(status.playerId)
-      setMobileGameplayEntered(false)
+      if (nextMatchSession) {
+        const nextSessionKey = getSessionKey(nextMatchSession)
+        if (activeMatchSessionKeyRef.current !== nextSessionKey) {
+          setMobileGameplayEntered(false)
+        }
+        activeMatchSessionKeyRef.current = nextSessionKey
+      } else {
+        activeMatchSessionKeyRef.current = null
+        setMobileGameplayEntered(false)
+      }
       setMatchBootstrap(
         nextMatchSession && clientRef.current
           ? { session: nextMatchSession, wsClient: clientRef.current }
@@ -368,7 +386,7 @@ function App() {
       client.disconnect()
       clientRef.current = null
     }
-  }, [])
+  }, [getSessionKey])
 
   useEffect(() => {
     window.onNetworkSimulatorToggle = () => {
@@ -460,6 +478,7 @@ function App() {
   }, [initialSavedDisplayName, inviteCode, isSocketReady, submitJoinIntent])
 
   const handleMatchEnd = useCallback((data: MatchEndData, playerId: string) => {
+    activeMatchSessionKeyRef.current = null
     setLocalPlayerId(playerId)
     setMatchEndData(data)
     setMatchBootstrap(null)
@@ -470,6 +489,8 @@ function App() {
     const client = getClient()
     client?.sendSessionLeave()
     releaseInviteClaim()
+    activeMatchSessionKeyRef.current = null
+    setMobileGameplayEntered(false)
     setSessionStatus(null)
     setMatchBootstrap(null)
     setJoinError(null)
@@ -490,6 +511,8 @@ function App() {
 
     setMatchEndData(null)
     setJoinError(null)
+    activeMatchSessionKeyRef.current = null
+    setMobileGameplayEntered(false)
     setViewState('joining')
     client.restartSession(lastIntent)
   }, [getClient, joinForm.code, joinForm.displayName, reconnectIntent, sessionStatus])

@@ -140,16 +140,13 @@ interface UIElementPosition {
 - Mobile touch controls and their nearby overlay surface may not trigger iOS text-selection or copy/translate callouts during normal play. Long-pressing the virtual sticks or action buttons should remain inside gameplay input handling rather than surfacing browser selection UI.
 - In phone gameplay modes, the in-match layout should behave like one fixed viewport layer rather than a stack of document-flow wrappers. The stage, overlays, and controls should share one stable viewport-anchored rectangle so rotation and gate transitions do not reflow through multiple flexbox/container layers.
 - No ancestor layout wrapper may horizontally center, max-width clamp, or otherwise shrink the mobile stage below the viewport-safe width. In mobile landscape, the stage should effectively span the viewport width minus only minimal safe-area and padding offsets.
-- In browser-tab mobile landscape, stage sizing should be width-first. The phone-safe width is the primary constraint, and the gameplay rectangle should derive its height from the chosen aspect ratio rather than allowing visible browser-chrome height to shrink the stage width back into a centered postcard.
-- Mobile landscape widens the logical gameplay viewport rather than preserving an immutable desktop 16:9 aperture. The extra phone width is used to reveal more world horizontally while keeping the desktop vertical gameplay span.
 - The fill-viewport mobile logical viewport applies only to `mobile-landscape`. Desktop and portrait-blocked states keep the desktop baseline viewport contract.
-- Mobile landscape logical viewport height remains fixed at `720`. Logical viewport width is derived from the phone landscape aspect ratio with a minimum of `1280` and no artificial maximum-width cap.
-- The recommended width formula is `max(round(720 * aspectRatio), 1280)`.
 - The widened logical width is stable during play. Browser-chrome show/hide animation may change the visible page height, but it may not continuously widen/narrow the gameplay framing during that chrome motion. Reframing should happen only on meaningful resize/orientation changes.
 - After phone orientation changes, the client should wait for the mobile viewport to settle before committing the new gameplay stage geometry. During that short settle window, a gate/cover may remain above the mounted game so Safari does not briefly show a stale, wrongly proportioned stage.
 - On phone gameplay, entering active match rendering may require an explicit post-rotation confirmation step in landscape, such as an `Enter Game` action. This confirmation should happen only after the landscape viewport has settled, so the first mounted gameplay frame uses the final dimensions rather than an intermediate Safari resize state.
 - In flows that use an `Enter Game` confirmation, the client should capture the settled gameplay viewport at the moment of confirmation and use that captured rectangle for the first mounted frame. The first live gameplay render may not briefly mount against an older pre-confirmation viewport.
 - Once the player has entered an active phone match for the current session, subsequent temporary rotations may not tear down the live gameplay runtime. Portrait should become a rotate-device overlay over the existing match, and returning to landscape should resume that same live runtime rather than requiring a fresh remount.
+- Replayed `match_ready` handshakes for the same active session, such as socket recovery on a flaky phone connection, may not revoke previously granted mobile gameplay entry or force the user back through a second `Enter Game` gate.
 - When switching between desktop and widened mobile landscape, the visible framing should expand or contract around the player's current center rather than preserving a raw top-left camera origin.
 - Portrait phone gameplay is out of contract only for mobile mode. In that mode, the app must present a rotate-device screen instead of an active gameplay layout until landscape is restored.
 - The gameplay stage may visually switch between centered and full-bleed presentation by mode, but the match camera and core HUD contract must remain recognizable across both.
@@ -233,11 +230,12 @@ The multiplayer mobile mode follows the prototype's phone presentation closely: 
 - The default desktop HUD and keyboard/mouse flow remain authoritative for non-mobile-mode play.
 - Mobile mode is landscape-only.
 - The gameplay surface is full-bleed within the phone-safe area rather than a desktop-style framed card.
-- The widened mobile landscape view may reveal more world horizontally than desktop. This is an accepted tradeoff for using phone landscape width effectively.
+- Mobile landscape uses the settled safe-area viewport dimensions directly as the active gameplay viewport. The contract is to fill the usable phone rectangle, not to preserve a fixed `1280x720` logical aperture.
 - Top-left HUD ownership remains the same as desktop: minimap plus the survival/combat cluster.
 - Top-right HUD ownership remains the same as desktop: score, kills, timer, and kill feed.
 - Bottom-left becomes a movement control zone in touch mode. The minimap remains in the upper portion of the corner, and the movement stick occupies the lower safe-area-respecting portion.
 - Bottom-right becomes an aim/fire control zone in touch mode. The aim stick owns the lower corner, and any touch buttons such as dodge or reload must stack above or alongside it without covering score-critical HUD.
+- When the aim stick returns to neutral, the last explicit mobile aim heading remains authoritative for facing and action direction until a new mobile aim input arrives or the match leaves mobile mode.
 - Touch controls stay pinned to the true screen-safe corners. They do not move inward just because the logical world viewport becomes wider.
 - In browser-tab phone landscape, touch controls should stay compact enough that they do not dominate the reduced visible stage height. Oversized sticks and buttons that consume a large central slice of the screen are out of contract.
 - Touch controls are rendered as semi-transparent overlays inside the gameplay stage, not as separate below-stage UI.

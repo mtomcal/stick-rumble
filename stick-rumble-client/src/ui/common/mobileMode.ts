@@ -62,8 +62,6 @@ export function useStageMode(): DeviceViewportSnapshot {
     let settleTimeout: number | null = null
     let stableSnapshot = readSnapshot()
 
-    setSnapshot(stableSnapshot)
-
     const updateSnapshot = () => {
       const nextSnapshot = readSnapshot()
       const isPhoneModeTransition = nextSnapshot.stageMode !== 'desktop' || stableSnapshot.stageMode !== 'desktop'

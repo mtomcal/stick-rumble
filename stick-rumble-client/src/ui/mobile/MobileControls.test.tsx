@@ -107,6 +107,39 @@ describe('MobileControls', () => {
     })
   })
 
+  it('keeps both sticks neutral when the pointer stays inside the dead zone', () => {
+    render(<MobileControls />)
+
+    const movementStick = screen.getByLabelText('Movement Control')
+    const aimStick = screen.getByLabelText('Aim And Fire Control')
+    mockStickBounds(movementStick)
+    mockStickBounds(aimStick)
+
+    fireEvent.pointerDown(movementStick, { pointerId: 1, clientX: 79, clientY: 68 })
+    fireEvent.pointerUp(movementStick, { pointerId: 1 })
+    fireEvent.pointerDown(aimStick, { pointerId: 2, clientX: 79, clientY: 68 })
+    fireEvent.pointerUp(aimStick, { pointerId: 2 })
+
+    expect(testState.setMobileGameplayIntent).toHaveBeenNthCalledWith(1, {
+      up: false,
+      down: false,
+      left: false,
+      right: false,
+      aimAngle: null,
+      isSprinting: false,
+      fireActive: false,
+    })
+    expect(testState.setMobileGameplayIntent).toHaveBeenNthCalledWith(3, {
+      up: false,
+      down: false,
+      left: false,
+      right: false,
+      aimAngle: null,
+      isSprinting: false,
+      fireActive: false,
+    })
+  })
+
   it('publishes aim and fire intent for larger right-stick drags too', () => {
     render(<MobileControls />)
 

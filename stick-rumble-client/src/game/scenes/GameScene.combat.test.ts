@@ -57,11 +57,16 @@ describe('GameScene combat input', () => {
 
   it('repeats ranged shots while mobile fire is held even for semi-automatic weapons', () => {
     const { scene } = setupBootstrappedGameScene()
+    const wallSparkSpy = vi.spyOn(scene['ui'], 'showWallSpark')
 
-    scene['shootingManager'].shoot = vi.fn().mockReturnValue(true)
+    scene['shootingManager'].shoot = vi.fn()
+      .mockReturnValueOnce(true)
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(true)
     scene['shootingManager'].isMeleeWeapon = vi.fn().mockReturnValue(false)
     scene['shootingManager'].isAutomatic = vi.fn().mockReturnValue(false)
     scene['inputManager'].getAimAngle = vi.fn().mockReturnValue(Math.PI / 3)
+    scene['getObstructedBarrelPosition'] = vi.fn().mockReturnValue({ x: 10, y: 20 })
 
     setMobileGameplayIntent({
       up: false,
@@ -77,13 +82,17 @@ describe('GameScene combat input', () => {
     scene.update(16, 16)
 
     expect(scene['shootingManager'].shoot).toHaveBeenCalledTimes(3)
+    expect(wallSparkSpy).toHaveBeenCalledTimes(2)
   })
 
   it('repeats melee swings while mobile fire is held after each cooldown', () => {
     const { scene } = setupBootstrappedGameScene()
 
     scene['shootingManager'].isMeleeWeapon = vi.fn().mockReturnValue(true)
-    scene['shootingManager'].meleeAttack = vi.fn().mockReturnValue(true)
+    scene['shootingManager'].meleeAttack = vi.fn()
+      .mockReturnValueOnce(true)
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(true)
     scene['inputManager'].getAimAngle = vi.fn().mockReturnValue(Math.PI / 4)
     scene['playerManager'].getLocalPlayerId = vi.fn().mockReturnValue('player-1')
     scene['playerManager'].getPlayerPosition = vi.fn().mockReturnValue({ x: 100, y: 200 })
@@ -104,7 +113,7 @@ describe('GameScene combat input', () => {
     scene.update(16, 16)
 
     expect(scene['shootingManager'].meleeAttack).toHaveBeenCalledTimes(3)
-    expect(scene['meleeWeaponManager'].startSwing).toHaveBeenCalledTimes(3)
+    expect(scene['meleeWeaponManager'].startSwing).toHaveBeenCalledTimes(2)
   })
 
   it('sends pickup attempts when the mobile pickup action is triggered near a crate', () => {

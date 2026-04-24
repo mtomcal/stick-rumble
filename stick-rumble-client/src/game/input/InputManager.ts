@@ -54,6 +54,7 @@ export class InputManager {
   private sequence: number = 0; // Monotonically increasing sequence number
   private inputHistory: InputHistoryEntry[] = []; // Store pending inputs for reconciliation
   private externalIntent: GameplayIntentState | null = null;
+  private lastExternalAimAngle: number | null = null;
 
   constructor(scene: Phaser.Scene, wsClient: WebSocketClient) {
     this.scene = scene;
@@ -97,7 +98,7 @@ export class InputManager {
 
     // Calculate aim angle from mouse position
     this.updateAimAngle();
-    const resolvedAimAngle = this.externalIntent?.aimAngle ?? this.aimAngle;
+    const resolvedAimAngle = this.resolveAimAngle();
 
     // Update current state from keyboard
     // aimAngle includes sway offset so server receives sway-affected angle
@@ -162,7 +163,7 @@ export class InputManager {
    * Get current aim angle in radians (includes sway offset)
    */
   getAimAngle(): number {
-    return (this.externalIntent?.aimAngle ?? this.aimAngle) + this.aimSwayOffset;
+    return this.resolveAimAngle() + this.aimSwayOffset;
   }
 
   /**
@@ -249,6 +250,28 @@ export class InputManager {
 
   setExternalIntent(intent: GameplayIntentState | null): void {
     this.externalIntent = intent ? { ...intent } : null;
+    if (!intent) {
+      this.lastExternalAimAngle = null;
+      return;
+    }
+
+    if (intent.aimAngle !== null) {
+      this.lastExternalAimAngle = intent.aimAngle;
+    }
+  }
+
+  private resolveAimAngle(): number {
+    if (!this.externalIntent) {
+      this.lastExternalAimAngle = null;
+      return this.aimAngle;
+    }
+
+    if (this.externalIntent.aimAngle !== null) {
+      this.lastExternalAimAngle = this.externalIntent.aimAngle;
+      return this.externalIntent.aimAngle;
+    }
+
+    return this.lastExternalAimAngle ?? this.aimAngle;
   }
 
   /**

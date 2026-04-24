@@ -153,8 +153,11 @@ interface MatchSession {
 - For phone-mode matches, React may also delay the initial Phaser mount until the user explicitly confirms entry from a settled landscape gate. This keeps the first gameplay mount aligned with the final post-rotation viewport instead of an intermediate mobile browser resize.
 - When that confirmation exists, React should capture the stage rectangle and derived viewport layout in the confirmation handler before mounting Phaser, rather than relying on a later resize effect to correct the first frame.
 - After that initial confirmation for a given active match, phone orientation changes should preserve the mounted Phaser runtime. Portrait/settling states should be handled as overlay gates instead of by unmounting and remounting the live game instance.
+- Repeated `match_ready` delivery for the same active session, including reconnect replay after a transport interruption, should preserve the same mounted phone runtime and may not reset the mobile entry gate.
 - The phone in-match presentation should prefer a fixed viewport-root architecture over nested document-flow layout. One viewport-anchored stage rectangle should own Phaser, gates, and touch overlays so CSS reflow does not fight orientation transitions.
 - When the logical viewport changes between desktop and mobile-landscape widths, the active match should preserve player-centered framing rather than preserving the previous top-left camera origin.
+- While a settle gate or explicit entry gate is delaying gameplay readiness, the client may buffer only a bounded recent backlog of gameplay traffic. A blocked phone gate may not allow unbounded queued-message growth before the runtime becomes ready.
+- When mobile touch aim becomes idle, the runtime should preserve the last non-null mobile aim heading for facing, dodge direction, and repeat-fire orientation until a new mobile aim heading arrives or desktop pointer aim becomes authoritative again.
 
 ---
 

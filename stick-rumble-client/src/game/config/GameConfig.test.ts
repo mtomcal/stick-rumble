@@ -52,6 +52,10 @@ describe('GameConfig', () => {
     expect(mobileConfig.width).toBe(844);
     expect(mobileConfig.height).toBe(390);
     expect(mobileConfig.scale?.mode).toBe(Phaser.Scale.RESIZE);
+    expect(mobileConfig.parent).toBe(GameConfig.parent);
+    expect(mobileConfig.backgroundColor).toBe(GameConfig.backgroundColor);
+    expect(mobileConfig.physics).toEqual(GameConfig.physics);
+    expect(mobileConfig.scene).toEqual(GameConfig.scene);
   });
 
   it('should be a valid Phaser game config', () => {

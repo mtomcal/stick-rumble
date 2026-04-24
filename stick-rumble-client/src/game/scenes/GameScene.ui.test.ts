@@ -206,6 +206,7 @@ describe('GameScene UI flow', () => {
     const bootstrap = createBootstrap()
     setActiveMatchBootstrap(bootstrap)
     scene.create()
+    mockSceneContext.cameras.main.setZoom.mockClear()
 
     setViewportLayout({
       mode: 'mobile-landscape',

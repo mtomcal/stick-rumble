@@ -39,10 +39,10 @@ describe('viewport layout helpers', () => {
     expect(
       buildGameplayViewportLayout({
         stageMode: 'mobile-landscape',
-        viewportWidth: 844,
+        viewportWidth: 780,
         viewportHeight: 390,
-        contentWidth: 832,
-        contentHeight: 378,
+        contentWidth: 390,
+        contentHeight: 195,
         padding: {
           top: 6,
           right: 6,
@@ -52,18 +52,18 @@ describe('viewport layout helpers', () => {
       })
     ).toEqual({
       mode: 'mobile-landscape',
-      width: 844,
+      width: 780,
       height: 390,
       insets: {
-        top: 6,
-        right: 6,
-        bottom: 6,
-        left: 6,
+        top: 12,
+        right: 12,
+        bottom: 12,
+        left: 12,
       },
       hudFrame: {
         x: 0,
         y: 0,
-        width: 844,
+        width: 780,
         height: 390,
       },
     })

@@ -763,5 +763,47 @@ describe('InputManager', () => {
         sequence: expect.any(Number),
       });
     });
+
+    it('preserves the last mobile aim angle while external intent stays active without a fresh aim value', () => {
+      inputManager.setPlayerPosition(400, 300);
+      mockScene.mockActivePointer.x = 500;
+      mockScene.mockActivePointer.y = 300;
+
+      inputManager.setExternalIntent({
+        up: false,
+        down: true,
+        left: true,
+        right: false,
+        aimAngle: Math.PI / 2,
+        isSprinting: false,
+        fireActive: true,
+      });
+      inputManager.update();
+
+      mockScene.mockKeys.D.isDown = true;
+      inputManager.setExternalIntent({
+        up: true,
+        down: false,
+        left: false,
+        right: false,
+        aimAngle: null,
+        isSprinting: false,
+        fireActive: false,
+      });
+      inputManager.update();
+
+      const lastSentState = mockWsClient.sendInputState.mock.calls.at(-1)?.[0];
+      expect(lastSentState).toEqual({
+        up: true,
+        down: false,
+        left: false,
+        right: false,
+        aimAngle: expect.any(Number),
+        isSprinting: false,
+        sequence: expect.any(Number),
+      });
+      expect(lastSentState.aimAngle).toBeCloseTo(Math.PI / 2, 5);
+      expect(inputManager.getAimAngle()).toBeCloseTo(Math.PI / 2, 5);
+    });
   });
 });

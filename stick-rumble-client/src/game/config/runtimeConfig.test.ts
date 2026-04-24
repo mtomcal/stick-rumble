@@ -32,4 +32,12 @@ describe('runtimeConfig', () => {
 
     expect(getWebSocketUrl()).toBe('wss://play.stickrumble.test:8080/ws');
   });
+
+  it('falls back to localhost when no browser location is available', async () => {
+    vi.stubGlobal('location', undefined);
+
+    const { getWebSocketUrl: getFallbackWebSocketUrl } = await import('./runtimeConfig');
+
+    expect(getFallbackWebSocketUrl()).toBe('ws://localhost:8080/ws');
+  });
 });

@@ -11,6 +11,7 @@ const testState = vi.hoisted(() => ({
   phaserUnmountSpy: vi.fn(),
   capturedOnMatchEnd: undefined as PhaserGameProps['onMatchEnd'],
   autoConnectReady: true,
+  connectRejectError: null as Error | null,
   clientInstances: [] as Array<{
     emit: (event: string, payload: unknown) => void
     connect: ReturnType<typeof vi.fn>
@@ -53,7 +54,11 @@ type Handler = (payload: unknown) => void
 vi.mock('./game/network/WebSocketClient', () => ({
   WebSocketClient: class {
     readonly handlers = new Map<string, Set<Handler>>()
-    readonly connect = vi.fn().mockResolvedValue(undefined)
+    readonly connect = vi.fn(() =>
+      testState.connectRejectError
+        ? Promise.reject(testState.connectRejectError)
+        : Promise.resolve(undefined)
+    )
     readonly disconnect = vi.fn()
     readonly on = vi.fn((event: string, handler: Handler) => {
       const handlers = this.handlers.get(event) ?? new Set<Handler>()
@@ -159,6 +164,7 @@ describe('App', () => {
     testState.phaserUnmountSpy.mockReset()
     testState.capturedOnMatchEnd = undefined
     testState.autoConnectReady = true
+    testState.connectRejectError = null
     window.localStorage.clear()
     window.history.replaceState({}, '', '/')
     setViewportSize(1280, 720)
@@ -313,6 +319,17 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: 'Play Public' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Join with Code' })).toBeDisabled()
     expect(screen.getByText('Connecting to game...')).toBeInTheDocument()
+  })
+
+  it('surfaces a recoverable connection failure when the initial socket connect rejects', async () => {
+    testState.connectRejectError = new Error('offline')
+
+    render(<App />)
+
+    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
+    expect(screen.getByText('Server rejected socket_connect_failed before hello.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Play Public' })).toBeEnabled()
+    expect(screen.queryByTestId('phaser-game')).not.toBeInTheDocument()
   })
 
   it('mounts Phaser only when match_ready arrives and passes a bootstrap session', async () => {
@@ -535,6 +552,42 @@ describe('App', () => {
     await waitFor(() =>
       expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'mobile-landscape')
     )
+    expect(screen.getByTestId('phaser-game')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Enter Game' })).not.toBeInTheDocument()
+    expect(testState.phaserMountSpy).toHaveBeenCalledTimes(1)
+    expect(testState.phaserUnmountSpy).toHaveBeenCalledTimes(0)
+  })
+
+  it('keeps the entered mobile match mounted when the same session is replayed after reconnect', async () => {
+    setViewportSize(844, 390)
+    setTouchPhoneLayout(true)
+    setTouchStartSupport(true)
+
+    render(<App />)
+    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
+
+    const matchReadyStatus: SessionStatusData = {
+      state: 'match_ready',
+      playerId: 'player-1',
+      displayName: 'Alice',
+      joinMode: 'public',
+      roomId: 'room-1',
+      mapId: 'default_office',
+    }
+
+    emitSessionStatus(matchReadyStatus)
+    await waitFor(() =>
+      expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'mobile-landscape')
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Enter Game' }))
+    await waitFor(() => expect(screen.getByTestId('phaser-game')).toBeInTheDocument())
+
+    act(() => {
+      getClient().connectionStateHandler?.(false)
+      getClient().connectionStateHandler?.(true)
+    })
+    emitSessionStatus(matchReadyStatus)
+
     expect(screen.getByTestId('phaser-game')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Enter Game' })).not.toBeInTheDocument()
     expect(testState.phaserMountSpy).toHaveBeenCalledTimes(1)

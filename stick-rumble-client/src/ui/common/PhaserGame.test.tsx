@@ -110,6 +110,8 @@ describe('PhaserGame', () => {
   it('does not recreate Phaser or clear the active bootstrap when only layout changes', () => {
     const { rerender } = render(<PhaserGame bootstrap={bootstrap} layout={layout} />)
 
+    expect(sessionRuntime.getViewportLayout()).toEqual(layout)
+
     rerender(
       <PhaserGame
         bootstrap={bootstrap}
@@ -138,6 +140,7 @@ describe('PhaserGame', () => {
 
     expect(mockGameInstances).toHaveLength(1)
     expect(sessionRuntime.getActiveMatchBootstrap()).toEqual(bootstrap)
+    expect(sessionRuntime.getViewportLayout()).toEqual(layout)
     expect(mockSetGameplayReady).not.toHaveBeenCalledWith(false)
     expect(mockGameInstances[0]?.scale.resize).toHaveBeenCalledWith(844, 390)
   })

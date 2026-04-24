@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { setupBootstrappedGameScene } from './GameScene.bootstrap-test-helpers'
-import { setActiveMatchBootstrap, setViewportLayout } from '../sessionRuntime'
+import { setActiveMatchBootstrap, setMobileGameplayIntent, setViewportLayout, triggerRuntimeAction } from '../sessionRuntime'
 
 vi.mock('phaser', () => ({
   default: {
@@ -73,5 +73,31 @@ describe('GameScene cleanup', () => {
     })
 
     expect(scorePositionSpy).not.toHaveBeenCalled()
+  })
+
+  it('stops reacting to mobile intent and runtime actions after cleanup', () => {
+    const { scene, wsClient, mockSceneContext } = setupBootstrappedGameScene()
+    const setExternalIntentSpy = vi.spyOn(scene['inputManager'], 'setExternalIntent')
+
+    const shutdownHandler = mockSceneContext.events.once.mock.calls.find(
+      (call: unknown[]) => call[0] === 'shutdown'
+    )?.[1] as (() => void) | undefined
+    shutdownHandler?.()
+    setExternalIntentSpy.mockClear()
+    wsClient.send.mockClear()
+
+    setMobileGameplayIntent({
+      up: false,
+      down: false,
+      left: false,
+      right: false,
+      aimAngle: Math.PI / 2,
+      isSprinting: false,
+      fireActive: true,
+    })
+    triggerRuntimeAction('pickup')
+
+    expect(setExternalIntentSpy).not.toHaveBeenCalled()
+    expect(wsClient.send).not.toHaveBeenCalled()
   })
 })
