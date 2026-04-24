@@ -199,6 +199,10 @@ export class HealthBarUI implements HudLayoutItem {
     this.container.setPosition(x, y);
   }
 
+  setScale(scale: number): void {
+    this.container.setScale(scale);
+  }
+
   measure(): HudLayoutSize {
     return this.healthRowLayout.measure();
   }

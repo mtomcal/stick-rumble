@@ -54,6 +54,10 @@ export class KillCounterUI {
     this.killText.setPosition(x, y);
   }
 
+  setScale(scale: number): void {
+    this.killText.setScale(scale);
+  }
+
   /**
    * Cleanup all resources
    */

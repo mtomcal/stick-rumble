@@ -55,6 +55,10 @@ export class ScoreDisplayUI {
     this.scoreText.setPosition(x, y);
   }
 
+  setScale(scale: number): void {
+    this.scoreText.setScale(scale);
+  }
+
   /**
    * Cleanup all resources
    */

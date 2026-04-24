@@ -23,6 +23,10 @@ function resizePhaserGame(game: Phaser.Game, width: number, height: number): voi
   }).scale
 
   scaleManager?.resize?.(width, height)
+  if (game.canvas) {
+    game.canvas.style.width = `${width}px`
+    game.canvas.style.height = `${height}px`
+  }
   scaleManager?.refresh?.()
 }
 

@@ -20,7 +20,8 @@ export class GameSceneUI {
     TOP_LEFT_TEXT_COLUMN_X: 28,
     MINIMAP_X: 20,
     MINIMAP_MARGIN_BOTTOM: 20,
-    MOBILE_BOTTOM_CONTROL_RESERVE: 180,
+    MOBILE_BOTTOM_CONTROL_RESERVE: 156,
+    MOBILE_HUD_SCALE: 0.88,
   } as const;
 
   private scene: Phaser.Scene;
@@ -32,6 +33,7 @@ export class GameSceneUI {
   private ammoRowY: number = 0;
   private topLeftClusterLayout: HudFlexLayout | null = null;
   private topLeftClusterBackground: Phaser.GameObjects.Rectangle | null = null;
+  private hudScale: number = 1;
 
   /**
    * Check if scene is valid and active for rendering
@@ -806,10 +808,19 @@ export class GameSceneUI {
       topInset
     );
     this.topLeftClusterBackground.setDisplaySize(clusterSize.width, clusterSize.height);
+    this.topLeftClusterBackground.setScale(this.hudScale);
     this.topLeftClusterLayout.setPosition(
       leftInset,
       topInset
     );
+  }
+
+  private applyHudScale(scale: number): void {
+    this.hudScale = scale;
+    this.ammoText?.setScale(scale);
+    this.ammoIcon?.setScale(scale);
+    this.matchTimerText?.setScale(scale);
+    this.topLeftClusterBackground?.setScale(scale);
   }
 
   setViewportLayout(layout: GameplayViewportLayout): void {
@@ -827,6 +838,10 @@ export class GameSceneUI {
     const leftInset = layout.insets.left;
     const bottomInset = layout.insets.bottom;
     const hudFrameLeft = layout.hudFrame.x;
+    const hudScale =
+      layout.mode === 'mobile-landscape' ? GameSceneUI.HUD_LAYOUT.MOBILE_HUD_SCALE : 1;
+
+    this.applyHudScale(hudScale);
 
     this.applyTopLeftClusterLayout();
 

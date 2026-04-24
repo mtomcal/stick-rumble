@@ -8,7 +8,7 @@ import {
 } from '../../game/sessionRuntime'
 import type { GameplayIntentState } from '../../shared/types'
 
-const JOYSTICK_RADIUS = 68
+const JOYSTICK_RADIUS = 60
 const DEAD_ZONE = 12
 
 const NEUTRAL_INTENT: GameplayIntentState = {

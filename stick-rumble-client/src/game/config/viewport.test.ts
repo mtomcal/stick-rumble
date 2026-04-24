@@ -19,23 +19,23 @@ describe('viewport layout helpers', () => {
     })
   })
 
-  it('widens mobile landscape based on aspect ratio without an artificial max-width cap', () => {
+  it('uses the settled mobile landscape viewport dimensions directly', () => {
     expect(getLogicalViewportSize('mobile-landscape', 760, 390)).toEqual({
-      width: 1403,
-      height: DESKTOP_VIEWPORT_HEIGHT,
+      width: 760,
+      height: 390,
     })
     expect(getLogicalViewportSize('mobile-landscape', 844, 390)).toEqual({
-      width: 1558,
-      height: DESKTOP_VIEWPORT_HEIGHT,
+      width: 844,
+      height: 390,
     })
   })
 
-  it('centers the HUD frame inside widened world widths', () => {
+  it('limits the HUD frame to the current logical viewport width', () => {
     expect(getHudFrame(1280, 720)).toEqual({ x: 0, y: 0, width: 1280, height: 720 })
-    expect(getHudFrame(1558, 720)).toEqual({ x: 139, y: 0, width: 1280, height: 720 })
+    expect(getHudFrame(844, 390)).toEqual({ x: 0, y: 0, width: 844, height: 390 })
   })
 
-  it('builds a widened mobile layout with scaled insets and a constrained HUD frame', () => {
+  it('builds a fill-viewport mobile layout with viewport-scaled insets', () => {
     expect(
       buildGameplayViewportLayout({
         stageMode: 'mobile-landscape',
@@ -52,19 +52,19 @@ describe('viewport layout helpers', () => {
       })
     ).toEqual({
       mode: 'mobile-landscape',
-      width: 1558,
-      height: 720,
+      width: 844,
+      height: 390,
       insets: {
-        top: 11,
-        right: 11,
-        bottom: 11,
-        left: 11,
+        top: 6,
+        right: 6,
+        bottom: 6,
+        left: 6,
       },
       hudFrame: {
-        x: 139,
+        x: 0,
         y: 0,
-        width: 1280,
-        height: 720,
+        width: 844,
+        height: 390,
       },
     })
   })

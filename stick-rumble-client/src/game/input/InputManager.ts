@@ -127,8 +127,7 @@ export class InputManager {
 
     const pointer = this.scene.input.activePointer;
 
-    // Convert screen coordinates to world coordinates accounting for scale mode
-    // This properly handles Phaser.Scale.FIT mode transformations
+    // Convert screen coordinates to world coordinates accounting for the active Phaser viewport transform.
     const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
 
     // Calculate delta from player position

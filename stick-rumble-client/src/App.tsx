@@ -110,6 +110,10 @@ function buildViewportLayout(
   const paddingRight = readPixelValue(style.paddingRight)
   const paddingBottom = readPixelValue(style.paddingBottom)
   const paddingLeft = readPixelValue(style.paddingLeft)
+  const viewportInsetTop = readPixelValue(style.getPropertyValue('--viewport-inset-top'))
+  const viewportInsetRight = readPixelValue(style.getPropertyValue('--viewport-inset-right'))
+  const viewportInsetBottom = readPixelValue(style.getPropertyValue('--viewport-inset-bottom'))
+  const viewportInsetLeft = readPixelValue(style.getPropertyValue('--viewport-inset-left'))
   const contentWidth = Math.max(stageElement.clientWidth - paddingLeft - paddingRight, 1)
   const contentHeight = Math.max(stageElement.clientHeight - paddingTop - paddingBottom, 1)
 
@@ -120,10 +124,10 @@ function buildViewportLayout(
     contentWidth,
     contentHeight,
     padding: {
-      top: paddingTop,
-      right: paddingRight,
-      bottom: paddingBottom,
-      left: paddingLeft,
+      top: paddingTop + viewportInsetTop,
+      right: paddingRight + viewportInsetRight,
+      bottom: paddingBottom + viewportInsetBottom,
+      left: paddingLeft + viewportInsetLeft,
     },
   })
 }
@@ -142,18 +146,6 @@ function buildInitialViewportLayout(
     insets: { top: 0, right: 0, bottom: 0, left: 0 },
     hudFrame: getHudFrame(logicalViewport.width, logicalViewport.height),
   }
-}
-
-function detectStandaloneDisplayMode(): boolean {
-  if (typeof window === 'undefined') {
-    return false
-  }
-
-  const navigatorWithStandalone = navigator as Navigator & { standalone?: boolean }
-  return (
-    (window.matchMedia?.('(display-mode: standalone)').matches ?? false) ||
-    navigatorWithStandalone.standalone === true
-  )
 }
 
 function App() {
@@ -183,8 +175,8 @@ function App() {
   const [reconnectIntent, setReconnectIntent] = useState<JoinIntent | null>(null)
   const [debugPanelVisible, setDebugPanelVisible] = useState(false)
   const [networkStats, setNetworkStats] = useState<NetworkSimulatorStats>(DEFAULT_STATS)
-  const { stageMode, width: viewportWidth, height: viewportHeight } = useStageMode()
-  const [isStandaloneDisplayMode, setIsStandaloneDisplayMode] = useState(() => detectStandaloneDisplayMode())
+  const { stageMode, width: viewportWidth, height: viewportHeight, isSettling } = useStageMode()
+  const [mobileLandscapeConfirmed, setMobileLandscapeConfirmed] = useState(false)
   const [viewportLayout, setViewportLayoutState] = useState<GameplayViewportLayout>({
     ...buildInitialViewportLayout(stageMode, viewportWidth, viewportHeight),
   })
@@ -192,6 +184,14 @@ function App() {
     displayName: initialSavedDisplayName,
     code: inviteCode ?? '',
   }))
+
+  const captureCurrentViewportLayout = useCallback((): GameplayViewportLayout | null => {
+    if (!stageShellRef.current) {
+      return null
+    }
+
+    return buildViewportLayout(stageShellRef.current, stageMode, viewportWidth, viewportHeight)
+  }, [stageMode, viewportWidth, viewportHeight])
 
   const getClient = useCallback(() => clientRef.current, [])
 
@@ -312,6 +312,7 @@ function App() {
       const nextMatchSession = toMatchSession(status)
       setMatchEndData(null)
       setLocalPlayerId(status.playerId)
+      setMobileLandscapeConfirmed(false)
       setMatchBootstrap(
         nextMatchSession && clientRef.current
           ? { session: nextMatchSession, wsClient: clientRef.current }
@@ -524,22 +525,11 @@ function App() {
   }
 
   const errorText = formatJoinError(joinError, joinForm.code)
-  const shouldRenderPhaser = viewState === 'in_match' && matchBootstrap
-  const inMobileStage = shouldRenderPhaser && stageMode !== 'desktop'
-
-  useEffect(() => {
-    const standaloneMediaQuery = window.matchMedia?.('(display-mode: standalone)')
-    const updateStandaloneDisplayMode = () => {
-      setIsStandaloneDisplayMode(detectStandaloneDisplayMode())
-    }
-
-    updateStandaloneDisplayMode()
-    standaloneMediaQuery?.addEventListener?.('change', updateStandaloneDisplayMode)
-
-    return () => {
-      standaloneMediaQuery?.removeEventListener?.('change', updateStandaloneDisplayMode)
-    }
-  }, [])
+  const shouldShowGameplayStage = viewState === 'in_match' && matchBootstrap
+  const shouldRenderPhaser =
+    shouldShowGameplayStage &&
+    (stageMode === 'desktop' || (stageMode === 'mobile-landscape' && mobileLandscapeConfirmed))
+  const inMobileStage = shouldShowGameplayStage && stageMode !== 'desktop'
 
   useEffect(() => {
     if (!shouldRenderPhaser || !stageShellRef.current) {
@@ -568,12 +558,11 @@ function App() {
     }
   }, [shouldRenderPhaser, stageMode, viewportWidth, viewportHeight])
 
-  const stageViewportSize = useMemo(
-    () => getLogicalViewportSize(stageMode, viewportWidth, viewportHeight),
-    [stageMode, viewportWidth, viewportHeight]
-  )
-  const showMobileScrollAffordance =
-    shouldRenderPhaser && stageMode === 'mobile-landscape' && !isStandaloneDisplayMode
+  useEffect(() => {
+    if (stageMode !== 'mobile-landscape') {
+      setMobileLandscapeConfirmed(false)
+    }
+  }, [stageMode])
 
   return (
     <div className={`app-shell${inMobileStage ? ' app-shell--mobile-stage' : ''}`}>
@@ -582,28 +571,40 @@ function App() {
       </div>
 
       <div className={`app-container${inMobileStage ? ' app-container--mobile-stage' : ''}`}>
-        {showMobileScrollAffordance ? (
-          <div className="mobile-scroll-affordance" data-testid="mobile-scroll-affordance">
-            <p className="mobile-scroll-affordance__title">Swipe down to play</p>
-            <p className="mobile-scroll-affordance__body">Scroll once to collapse Safari chrome and line up the full game view.</p>
-          </div>
-        ) : null}
-
-        {shouldRenderPhaser && matchBootstrap && (
+        {shouldShowGameplayStage && matchBootstrap && (
           <div
             ref={stageShellRef}
             className={`game-frame game-frame--${stageMode}`}
             data-testid="stage-shell"
             data-stage-mode={stageMode}
-            style={stageMode === 'mobile-landscape' ? { aspectRatio: `${stageViewportSize.width} / ${stageViewportSize.height}` } : undefined}
           >
-            <PhaserGame
-              bootstrap={matchBootstrap}
-              layout={viewportLayout.mode === stageMode ? viewportLayout : { ...viewportLayout, mode: stageMode }}
-              onMatchEnd={handleMatchEnd}
-            />
-            {stageMode === 'mobile-landscape' ? <MobileControls /> : null}
-            {stageMode === 'mobile-portrait-blocked' ? <RotateDeviceGate /> : null}
+            {shouldRenderPhaser ? (
+              <>
+                <PhaserGame
+                  bootstrap={matchBootstrap}
+                  layout={viewportLayout.mode === stageMode ? viewportLayout : { ...viewportLayout, mode: stageMode }}
+                  onMatchEnd={handleMatchEnd}
+                />
+                {stageMode === 'mobile-landscape' ? <MobileControls /> : null}
+              </>
+            ) : null}
+            {stageMode === 'mobile-portrait-blocked' || (stageMode !== 'desktop' && isSettling) ? (
+              <RotateDeviceGate />
+            ) : null}
+            {stageMode === 'mobile-landscape' && !isSettling && !mobileLandscapeConfirmed ? (
+              <RotateDeviceGate
+                title="Enter Game"
+                body="Landscape is ready. Tap to enter with the final phone viewport."
+                actionLabel="Enter Game"
+                onAction={() => {
+                  const nextLayout = captureCurrentViewportLayout()
+                  if (nextLayout) {
+                    setViewportLayoutState(nextLayout)
+                  }
+                  setMobileLandscapeConfirmed(true)
+                }}
+              />
+            ) : null}
           </div>
         )}
 

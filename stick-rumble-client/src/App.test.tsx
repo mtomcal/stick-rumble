@@ -121,9 +121,7 @@ function setTouchPhoneLayout(enabled: boolean): void {
     value: enabled ? 5 : 0,
   })
   window.matchMedia = vi.fn().mockImplementation((query: string) => ({
-    matches:
-      (enabled && query === '(pointer: coarse)') ||
-      (query === '(display-mode: standalone)' ? false : false),
+    matches: enabled && query === '(pointer: coarse)',
     media: query,
     onchange: null,
     addListener: vi.fn(),
@@ -149,6 +147,7 @@ describe('App', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.clearAllMocks()
   })
 
@@ -356,15 +355,19 @@ describe('App', () => {
       expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'mobile-landscape')
     )
     expect(document.querySelector('.app-container')).toHaveClass('app-container--mobile-stage')
-    expect(screen.getByTestId('mobile-scroll-affordance')).toBeInTheDocument()
-    expect(screen.getByText('Swipe down to play')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Enter Game' })).toBeInTheDocument()
+    expect(screen.queryByTestId('phaser-game')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Enter Game' }))
+
+    await waitFor(() => expect(screen.getByTestId('phaser-game')).toBeInTheDocument())
     expect(testState.phaserRenderSpy.mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({
         layout: expect.objectContaining({
           mode: 'mobile-landscape',
-          width: 1558,
-          height: 720,
-          hudFrame: { x: 139, y: 0, width: 1280, height: 720 },
+          width: 844,
+          height: 390,
+          hudFrame: { x: 0, y: 0, width: 844, height: 390 },
         }),
       }),
     )
@@ -372,13 +375,12 @@ describe('App', () => {
       expect.objectContaining({
         layout: expect.objectContaining({
           mode: 'mobile-landscape',
-          width: 1558,
-          height: 720,
-          hudFrame: { x: 139, y: 0, width: 1280, height: 720 },
+          width: 844,
+          height: 390,
+          hudFrame: { x: 0, y: 0, width: 844, height: 390 },
         }),
       }),
     )
-    expect(screen.getByTestId('stage-shell')).toHaveStyle({ aspectRatio: '1558 / 720' })
     expect(screen.getByTestId('mobile-controls')).toBeInTheDocument()
     expect(screen.queryByTestId('rotate-device-gate')).not.toBeInTheDocument()
   })
@@ -403,7 +405,7 @@ describe('App', () => {
       expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'mobile-portrait-blocked')
     )
     expect(screen.getByTestId('rotate-device-gate')).toBeInTheDocument()
-    expect(screen.getByTestId('phaser-game')).toBeInTheDocument()
+    expect(screen.queryByTestId('phaser-game')).not.toBeInTheDocument()
   })
 
   it('preserves the mounted gameplay surface across landscape, portrait gate, and desktop transitions', async () => {
@@ -425,13 +427,29 @@ describe('App', () => {
     await waitFor(() =>
       expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'mobile-landscape')
     )
+    fireEvent.click(screen.getByRole('button', { name: 'Enter Game' }))
+    await waitFor(() => expect(screen.getByTestId('phaser-game')).toBeInTheDocument())
     expect(testState.phaserMountSpy).toHaveBeenCalledTimes(1)
 
     dispatchResize(390, 844)
-    await waitFor(() =>
-      expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'mobile-portrait-blocked')
-    )
-    expect(screen.getByTestId('phaser-game')).toBeInTheDocument()
+    expect(screen.getByTestId('rotate-device-gate')).toBeInTheDocument()
+    expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'mobile-landscape')
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 220))
+    })
+    await waitFor(() => expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'mobile-portrait-blocked'))
+    expect(screen.queryByTestId('phaser-game')).not.toBeInTheDocument()
+
+    dispatchResize(844, 390)
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 220))
+    })
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Enter Game' })).toBeInTheDocument())
+    expect(screen.queryByTestId('phaser-game')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Enter Game' }))
+    await waitFor(() => expect(screen.getByTestId('phaser-game')).toBeInTheDocument())
 
     setTouchPhoneLayout(false)
     dispatchResize(1280, 720)
@@ -440,11 +458,52 @@ describe('App', () => {
     )
 
     expect(screen.getByTestId('phaser-game')).toBeInTheDocument()
-    expect(testState.phaserMountSpy).toHaveBeenCalledTimes(1)
-    expect(testState.phaserUnmountSpy).not.toHaveBeenCalled()
+    expect(testState.phaserMountSpy).toHaveBeenCalledTimes(2)
+    expect(testState.phaserUnmountSpy).toHaveBeenCalledTimes(1)
     expect(testState.clientInstances).toHaveLength(1)
     expect(getClient().sendSessionLeave).not.toHaveBeenCalled()
     expect(getClient().restartSession).not.toHaveBeenCalled()
+  })
+
+  it('captures the settled landscape viewport when Enter Game is pressed after rotating from portrait', async () => {
+    setViewportSize(390, 844)
+    setTouchPhoneLayout(true)
+
+    render(<App />)
+    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
+
+    emitSessionStatus({
+      state: 'match_ready',
+      playerId: 'player-1',
+      displayName: 'Alice',
+      joinMode: 'public',
+      roomId: 'room-1',
+      mapId: 'default_office',
+    })
+
+    await waitFor(() =>
+      expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'mobile-portrait-blocked')
+    )
+
+    dispatchResize(844, 390)
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 220))
+    })
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Enter Game' })).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Enter Game' }))
+
+    await waitFor(() => expect(screen.getByTestId('phaser-game')).toBeInTheDocument())
+    expect(testState.phaserRenderSpy.mock.calls.at(-1)?.[0]).toEqual(
+      expect.objectContaining({
+        layout: expect.objectContaining({
+          mode: 'mobile-landscape',
+          width: 844,
+          height: 390,
+          hudFrame: { x: 0, y: 0, width: 844, height: 390 },
+        }),
+      }),
+    )
   })
 
   it('replaces gameplay with the match-end screen when Phaser reports match end', async () => {

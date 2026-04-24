@@ -46,9 +46,9 @@ import {
 } from '../sessionRuntime';
 
 const OBSTACLE_EDGE_INSET_PX = 1;
-const MOBILE_BOTTOM_RIGHT_HUD_RESERVE = 180;
+const MOBILE_BOTTOM_RIGHT_HUD_RESERVE = 156;
 const DESKTOP_CAMERA_ZOOM = 1;
-const MOBILE_LANDSCAPE_CAMERA_ZOOM = 1.15;
+const MOBILE_LANDSCAPE_CAMERA_ZOOM = 1;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
@@ -530,6 +530,10 @@ export class GameScene extends Phaser.Scene {
 
     this.scoreDisplayUI?.setPosition(hudFrameRight - 10 - rightInset, 10 + topInset);
     this.killCounterUI?.setPosition(hudFrameRight - 10 - rightInset, 42 + topInset);
+    const hudScale = layout.mode === 'mobile-landscape' ? GameSceneUI.HUD_LAYOUT.MOBILE_HUD_SCALE : 1;
+    this.healthBarUI?.setScale(hudScale);
+    this.scoreDisplayUI?.setScale(hudScale);
+    this.killCounterUI?.setScale(hudScale);
     this.killFeedUI?.setPosition(hudFrameRight - 10 - rightInset, 100 + topInset);
     this.dodgeRollCooldownUI?.setPosition(
       hudFrameRight - 50 - rightInset,

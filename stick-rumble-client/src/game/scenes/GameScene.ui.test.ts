@@ -155,12 +155,44 @@ describe('GameScene UI flow', () => {
     })
     expect(scorePositionSpy).toHaveBeenCalledWith(1379, 34)
     expect(killCounterPositionSpy).toHaveBeenCalledWith(1379, 66)
-    expect(dodgePositionSpy).toHaveBeenCalledWith(1339, 442)
+    expect(dodgePositionSpy).toHaveBeenCalledWith(1339, 466)
     expect(clusterBackgroundPositionSpy).toHaveBeenCalledWith(177, 44)
-    expect(minimapFillRectSpy).toHaveBeenCalledWith(177, 302, 170, 170)
+    expect(minimapFillRectSpy).toHaveBeenCalledWith(177, 326, 170, 170)
   })
 
-  it('applies a modest zoom-in for mobile landscape without using the desktop zoom', () => {
+  it('applies a modest HUD scale reduction in mobile landscape', () => {
+    const scene = new GameScene()
+    const mockSceneContext = createMockScene()
+    mockSceneContext.input = {
+      ...mockSceneContext.input,
+      mouse: {
+        disableContextMenu: vi.fn(),
+      },
+    } as any
+    Object.assign(scene, mockSceneContext)
+
+    const bootstrap = createBootstrap()
+    setActiveMatchBootstrap(bootstrap)
+    scene.create()
+
+    const healthScaleSpy = vi.spyOn(scene['healthBarUI'], 'setScale')
+    const scoreScaleSpy = vi.spyOn(scene['scoreDisplayUI'], 'setScale')
+    const killScaleSpy = vi.spyOn(scene['killCounterUI'], 'setScale')
+
+    setViewportLayout({
+      mode: 'mobile-landscape',
+      width: 844,
+      height: 390,
+      insets: { top: 24, right: 30, bottom: 48, left: 18 },
+      hudFrame: { x: 0, y: 0, width: 844, height: 390 },
+    })
+
+    expect(healthScaleSpy).toHaveBeenCalledWith(0.88)
+    expect(scoreScaleSpy).toHaveBeenCalledWith(0.88)
+    expect(killScaleSpy).toHaveBeenCalledWith(0.88)
+  })
+
+  it('keeps mobile landscape on the neutral gameplay zoom when filling the phone viewport', () => {
     const scene = new GameScene()
     const mockSceneContext = createMockScene()
     mockSceneContext.input = {
@@ -183,6 +215,6 @@ describe('GameScene UI flow', () => {
       hudFrame: { x: 139, y: 0, width: 1280, height: 720 },
     })
 
-    expect(mockSceneContext.cameras.main.setZoom).toHaveBeenCalledWith(1.15)
+    expect(mockSceneContext.cameras.main.setZoom).toHaveBeenCalledWith(1)
   })
 })

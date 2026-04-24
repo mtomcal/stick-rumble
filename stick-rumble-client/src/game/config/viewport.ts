@@ -2,8 +2,6 @@ import type { GameplayHudFrame, GameplayViewportLayout, StageMode, ViewportInset
 
 export const DESKTOP_VIEWPORT_WIDTH = 1280
 export const DESKTOP_VIEWPORT_HEIGHT = 720
-export const MOBILE_VIEWPORT_HEIGHT = 720
-export const MOBILE_VIEWPORT_MIN_WIDTH = 1280
 export const HUD_FRAME_MAX_WIDTH = DESKTOP_VIEWPORT_WIDTH
 
 export interface ViewportPadding {
@@ -33,13 +31,9 @@ export function getLogicalViewportSize(stageMode: StageMode, viewportWidth: numb
     }
   }
 
-  const aspectRatio = Math.max(viewportWidth, 1) / Math.max(viewportHeight, 1)
   return {
-    width: Math.max(
-      Math.round(MOBILE_VIEWPORT_HEIGHT * aspectRatio),
-      MOBILE_VIEWPORT_MIN_WIDTH
-    ),
-    height: MOBILE_VIEWPORT_HEIGHT,
+    width: Math.max(Math.round(viewportWidth), 1),
+    height: Math.max(Math.round(viewportHeight), 1),
   }
 }
 

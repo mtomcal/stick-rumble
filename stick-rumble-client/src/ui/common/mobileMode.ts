@@ -3,12 +3,14 @@ import type { StageMode } from '../../shared/types'
 
 const MAX_PHONE_SHORT_EDGE = 540
 const MAX_PHONE_LONG_EDGE = 960
+const MOBILE_STAGE_SETTLE_MS = 180
 
 export interface DeviceViewportSnapshot {
   width: number
   height: number
   stageMode: StageMode
   isTouchPhoneLayout: boolean
+  isSettling: boolean
 }
 
 function getViewportWidth(): number {
@@ -46,13 +48,14 @@ function readSnapshot(): DeviceViewportSnapshot {
     height,
     stageMode,
     isTouchPhoneLayout: stageMode !== 'desktop',
+    isSettling: false,
   }
 }
 
 export function useStageMode(): DeviceViewportSnapshot {
   const [snapshot, setSnapshot] = useState<DeviceViewportSnapshot>(() =>
     typeof window === 'undefined'
-      ? { width: 1280, height: 720, stageMode: 'desktop', isTouchPhoneLayout: false }
+      ? { width: 1280, height: 720, stageMode: 'desktop', isTouchPhoneLayout: false, isSettling: false }
       : readSnapshot()
   )
 
@@ -61,12 +64,45 @@ export function useStageMode(): DeviceViewportSnapshot {
       return undefined
     }
 
+    let settleTimeout: number | null = null
+    let stableSnapshot = readSnapshot()
+
+    setSnapshot(stableSnapshot)
+
     const updateSnapshot = () => {
-      setSnapshot(readSnapshot())
+      const nextSnapshot = readSnapshot()
+      const isPhoneModeTransition = nextSnapshot.stageMode !== 'desktop' || stableSnapshot.stageMode !== 'desktop'
+
+      if (!isPhoneModeTransition) {
+        stableSnapshot = nextSnapshot
+        setSnapshot(nextSnapshot)
+        return
+      }
+
+      if (settleTimeout !== null) {
+        window.clearTimeout(settleTimeout)
+      }
+
+      setSnapshot((current) => ({
+        ...current,
+        isSettling: true,
+      }))
+
+      settleTimeout = window.setTimeout(() => {
+        stableSnapshot = nextSnapshot
+        setSnapshot({
+          ...nextSnapshot,
+          isSettling: false,
+        })
+        settleTimeout = null
+      }, MOBILE_STAGE_SETTLE_MS)
     }
 
     window.addEventListener('resize', updateSnapshot)
     return () => {
+      if (settleTimeout !== null) {
+        window.clearTimeout(settleTimeout)
+      }
       window.removeEventListener('resize', updateSnapshot)
     }
   }, [])

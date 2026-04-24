@@ -42,20 +42,16 @@ describe('GameConfig', () => {
     expect((GameConfig.scene as any[]).length).toBeGreaterThan(0);
   });
 
-  it('should have FIT scale mode', () => {
-    expect(GameConfig.scale?.mode).toBe(Phaser.Scale.FIT);
-  });
-
-  it('should center game on both axes', () => {
-    expect(GameConfig.scale?.autoCenter).toBe(Phaser.Scale.CENTER_BOTH);
+  it('should have RESIZE scale mode', () => {
+    expect(GameConfig.scale?.mode).toBe(Phaser.Scale.RESIZE);
   });
 
   it('creates runtime configs with the requested logical viewport size', () => {
-    const mobileConfig = createGameConfig(1558, 720);
+    const mobileConfig = createGameConfig(844, 390);
 
-    expect(mobileConfig.width).toBe(1558);
-    expect(mobileConfig.height).toBe(720);
-    expect(mobileConfig.scale?.mode).toBe(Phaser.Scale.FIT);
+    expect(mobileConfig.width).toBe(844);
+    expect(mobileConfig.height).toBe(390);
+    expect(mobileConfig.scale?.mode).toBe(Phaser.Scale.RESIZE);
   });
 
   it('should be a valid Phaser game config', () => {

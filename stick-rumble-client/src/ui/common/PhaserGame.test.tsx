@@ -24,8 +24,7 @@ vi.mock('phaser', () => ({
     Game: MockGame,
     AUTO: 0,
     Scale: {
-      FIT: 1,
-      CENTER_BOTH: 2,
+      RESIZE: 1,
     },
     Scene: class MockScene {},
   },
@@ -117,9 +116,10 @@ describe('PhaserGame', () => {
         layout={{
           ...layout,
           mode: 'mobile-landscape',
-          width: 1558,
+          width: 844,
+          height: 390,
           insets: { top: 12, right: 16, bottom: 20, left: 16 },
-          hudFrame: { x: 139, y: 0, width: 1280, height: 720 },
+          hudFrame: { x: 0, y: 0, width: 844, height: 390 },
         }}
       />
     )
@@ -139,7 +139,7 @@ describe('PhaserGame', () => {
     expect(mockGameInstances).toHaveLength(1)
     expect(sessionRuntime.getActiveMatchBootstrap()).toEqual(bootstrap)
     expect(mockSetGameplayReady).not.toHaveBeenCalledWith(false)
-    expect(mockGameInstances[0]?.scale.resize).toHaveBeenCalledWith(1558, 720)
+    expect(mockGameInstances[0]?.scale.resize).toHaveBeenCalledWith(844, 390)
   })
 
   it('cleans up the match-end bridge and marks gameplay not ready on unmount', () => {
