@@ -1,16 +1,38 @@
 import { useEffect, useRef } from 'react';
 import Phaser from 'phaser';
-import { GameConfig } from '../../game/config/GameConfig';
-import { setActiveMatchBootstrap, type MatchBootstrap } from '../../game/sessionRuntime';
-import type { MatchEndData } from '../../shared/types';
+import { createGameConfig } from '../../game/config/GameConfig';
+import {
+  setActiveMatchBootstrap,
+  setViewportLayout,
+  type MatchBootstrap,
+} from '../../game/sessionRuntime';
+import type { GameplayViewportLayout, MatchEndData } from '../../shared/types';
 
 export interface PhaserGameProps {
   bootstrap: MatchBootstrap;
+  layout: GameplayViewportLayout;
   onMatchEnd?: (data: MatchEndData, playerId: string) => void;
 }
 
-export function PhaserGame({ bootstrap, onMatchEnd }: PhaserGameProps) {
+function resizePhaserGame(game: Phaser.Game, width: number, height: number): void {
+  const scaleManager = (game as Phaser.Game & {
+    scale?: {
+      resize?: (nextWidth: number, nextHeight: number) => void;
+      refresh?: () => void;
+    };
+  }).scale
+
+  scaleManager?.resize?.(width, height)
+  if (game.canvas) {
+    game.canvas.style.width = `${width}px`
+    game.canvas.style.height = `${height}px`
+  }
+  scaleManager?.refresh?.()
+}
+
+export function PhaserGame({ bootstrap, layout, onMatchEnd }: PhaserGameProps) {
   const gameRef = useRef<Phaser.Game | null>(null);
+  const initialLayoutRef = useRef(layout);
   const onMatchEndRef = useRef(onMatchEnd);
 
   useEffect(() => {
@@ -29,10 +51,25 @@ export function PhaserGame({ bootstrap, onMatchEnd }: PhaserGameProps) {
 
   useEffect(() => {
     setActiveMatchBootstrap(bootstrap);
+  }, [bootstrap]);
 
+  useEffect(() => {
+    setViewportLayout(layout);
+  }, [layout]);
+
+  useEffect(() => {
+    if (!gameRef.current) {
+      return
+    }
+
+    resizePhaserGame(gameRef.current, layout.width, layout.height)
+  }, [layout.height, layout.width])
+
+  useEffect(() => {
     // Initialize Phaser game
     if (!gameRef.current) {
-      gameRef.current = new Phaser.Game(GameConfig);
+      const initialLayout = initialLayoutRef.current
+      gameRef.current = new Phaser.Game(createGameConfig(initialLayout.width, initialLayout.height));
     }
 
     // Cleanup on unmount
@@ -45,7 +82,7 @@ export function PhaserGame({ bootstrap, onMatchEnd }: PhaserGameProps) {
 
       setActiveMatchBootstrap(null);
     };
-  }, [bootstrap]);
+  }, [bootstrap.wsClient]);
 
   return <div id="game-container" />;
 }

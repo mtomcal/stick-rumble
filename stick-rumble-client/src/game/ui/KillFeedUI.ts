@@ -121,6 +121,10 @@ export class KillFeedUI {
     });
   }
 
+  setPosition(x: number, y: number): void {
+    this.container.setPosition(x, y);
+  }
+
   /**
    * Cleanup all resources
    */

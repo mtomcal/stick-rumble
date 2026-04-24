@@ -1,7 +1,7 @@
 # Client Architecture
 
-> **Spec Version**: 1.4.0
-> **Last Updated**: 2026-04-17
+> **Spec Version**: 1.5.1
+> **Last Updated**: 2026-04-23
 > **Depends On**: [constants.md](constants.md), [messages.md](messages.md), [networking.md](networking.md), [player.md](player.md), [movement.md](movement.md), [weapons.md](weapons.md), [maps.md](maps.md)
 > **Depended By**: [graphics.md](graphics.md), [ui.md](ui.md), [audio.md](audio.md)
 
@@ -65,6 +65,8 @@ See [constants.md](constants.md) for all values. Key constants for client archit
 | ARENA_HEIGHT | 1080 | Canonical baseline for the first shipped map; selected map remains authoritative at runtime |
 | WINDOW_WIDTH | 1280 | Default browser window width |
 | WINDOW_HEIGHT | 720 | Default browser window height |
+| MOBILE_VIEWPORT_MIN_WIDTH | 1280 | Minimum logical mobile-landscape width |
+| MOBILE_VIEWPORT_HEIGHT | 720 | Fixed logical mobile-landscape height |
 | SERVER_TICK_RATE | 60 | Server physics updates per second |
 | CLIENT_UPDATE_RATE | 20 | player:move broadcast frequency (Hz) |
 | CLIENT_UPDATE_INTERVAL | 50 | Milliseconds between player:move messages |
@@ -102,13 +104,60 @@ interface MatchSession {
 - Phaser is mounted only after the app shell receives `session:status { state: "match_ready" }` and constructs a `MatchSession`.
 - The `searching_for_match` and `waiting_for_players` screens are app states, not hidden Phaser phases.
 - `match_end` is a full React screen state, not a modal layered over the active canvas.
-- The architecture MUST remain compatible with future React-owned mobile touch controls, but those controls are out of scope for this effort.
+- React also owns phone-orientation gating, safe-area-aware stage sizing, and mobile touch control overlays.
+- The existing desktop keyboard/mouse runtime remains the baseline path and may not regress when mobile mode is added.
+- Phaser remains the owner of the match camera, in-canvas HUD, and world rendering; React-owned touch controls feed normalized gameplay intents into that runtime rather than replacing it.
 
 **Rendering Rules:**
 - `join_form`, `joining`, `searching_for_match`, `waiting_for_players`, and `recoverable_error` render with no Phaser canvas mounted.
 - `match_loading` is the handoff phase where React prepares the centered stage and mounts Phaser with the completed `MatchSession`.
-- `in_match` renders the centered stage container and any app-shell-owned below-stage content.
+- `in_match` continues to render the existing centered desktop stage unless mobile mode is automatically detected.
+- When mobile mode is detected on a phone-sized touch layout, `in_match` uses a full-bleed landscape stage with React-owned touch controls in the bottom corners.
+- Mobile mode must use safe-area-aware layout, suppress scrolling/zoom gestures that interfere with play, and reserve the bottom corners for React-owned touch controls.
+- In browser-chrome-constrained phone landscape, the game should fill the settled safe-area viewport rectangle instead of preserving a desktop-style 16:9 shell. The stage should not be reduced to a small centered postcard solely to fit an artificial aspect-ratio contract.
+- In `mobile-landscape`, the rendered gameplay surface should sit nearly edge-to-edge inside the safe area rather than inside a decorative card frame. Large shell padding, pronounced corner rounding, and heavy drop shadows are desktop affordances and should be removed or minimized there.
+- In browser-tab `mobile-landscape`, the stage rectangle should fill the settled safe-area viewport in both dimensions. Mobile gameplay must not preserve a fixed aspect ratio in the outer shell or Phaser scale manager if that would leave unused width or height in the phone viewport.
+- In browser-tab `mobile-landscape`, safe-area compensation should be handled through viewport inset metadata for HUD/control placement, not by shrinking the Phaser stage rectangle itself away from the viewport edges.
+- In `mobile-landscape`, the Phaser runtime uses the settled safe-area viewport as its logical viewport rather than the desktop-fixed `1280x720` aperture.
+- That mobile landscape viewport tracks the actual settled mobile width and height directly, without a fixed `720`-high aspect-ratio-derived contract.
+- The fill-viewport mobile viewport applies only to `mobile-landscape`. Desktop and portrait-blocked states keep the desktop baseline viewport contract.
+- Portrait phone gameplay is blocked by a rotate-device screen only while mobile mode is active, rather than silently degrading the match layout.
 - `match_end` replaces the gameplay surface with a full-screen React results experience.
+
+**Visual reference:** [ui.md § Mobile Gameplay Mode](ui.md#mobile-gameplay-mode) and [visual-spec/VISUAL-SPEC.md](visual-spec/VISUAL-SPEC.md) supplementary mobile frame `72-mobile-mode-phone-landscape.png`
+
+**Mobile Mode Selection Rules:**
+- Mobile mode is a client-local option, not a separate session type.
+- Enabling mobile mode must not alter the WebSocket handshake, room assignment, or authoritative server simulation.
+- Mobile mode is automatically detected; the gameplay flow may not require a user-facing enable button to enter it.
+- Detection should target phone-sized play using local device/layout signals rather than server state.
+- Detection must be conservative: touch-capable laptops and larger tablet-class layouts should remain on the desktop presentation unless the local viewport also matches the phone-sized heuristic.
+- The client may treat mobile handset user-agent signals as additional evidence for phone mode, especially to support browser device emulation where viewport size is phone-like but coarse/touch APIs are incomplete.
+- The phone-sized viewport heuristic may stand on its own when desktop-hosted browser emulation fails to expose reliable touch, coarse-pointer, or handset user-agent signals. In that case, entering mobile mode is preferable to leaving the emulator stuck on the desktop stage.
+- Automatic detection and any live layout transitions must preserve the current session and may not tear down the socket or re-bootstrap the match as a side effect.
+
+### Runtime Bridge Contract
+
+- React and Phaser share one active match runtime bridge for the current `match_ready` session.
+- That bridge owns only presentation-local state:
+  - active match bootstrap
+  - mobile touch intent
+  - viewport layout metadata such as stage mode, logical viewport size, and safe-area-aware insets
+- The bridge may not become a second source of truth for authoritative gameplay state.
+- React publishes normalized mobile gameplay intent into the bridge, and Phaser consumes that intent through the same movement, aim, shoot, reload, and dodge pathways already used by desktop controls.
+- Updating bridge state during resize, orientation changes, or mobile-control interaction must not recreate the Phaser game instance.
+- In `mobile-landscape`, viewport-layout updates should drive a real Phaser viewport resize path rather than a pure CSS zoom illusion.
+- Mobile logical viewport width should be stable during play. Recompute on meaningful orientation/resize changes, not on every transient Safari chrome animation.
+- On phone orientation changes, React may hold the last stable mobile stage snapshot briefly while the browser viewport settles, rather than immediately committing transient intermediate dimensions from Safari/UI rotation.
+- During that brief settle window, the published stage mode should reflect the pending phone mode immediately so the app can gate gameplay correctly. Settling may defer final viewport dimensions, but it may not leave the runtime thinking it is still in desktop mode long enough to mount the desktop stage by mistake.
+- For phone-mode matches, React may also delay the initial Phaser mount until the user explicitly confirms entry from a settled landscape gate. This keeps the first gameplay mount aligned with the final post-rotation viewport instead of an intermediate mobile browser resize.
+- When that confirmation exists, React should capture the stage rectangle and derived viewport layout in the confirmation handler before mounting Phaser, rather than relying on a later resize effect to correct the first frame.
+- After that initial confirmation for a given active match, phone orientation changes should preserve the mounted Phaser runtime. Portrait/settling states should be handled as overlay gates instead of by unmounting and remounting the live game instance.
+- Repeated `match_ready` delivery for the same active session, including reconnect replay after a transport interruption, should preserve the same mounted phone runtime and may not reset the mobile entry gate.
+- The phone in-match presentation should prefer a fixed viewport-root architecture over nested document-flow layout. One viewport-anchored stage rectangle should own Phaser, gates, and touch overlays so CSS reflow does not fight orientation transitions.
+- When the logical viewport changes between desktop and mobile-landscape widths, the active match should preserve player-centered framing rather than preserving the previous top-left camera origin.
+- While a settle gate or explicit entry gate is delaying gameplay readiness, the client may buffer only a bounded recent backlog of gameplay traffic. A blocked phone gate may not allow unbounded queued-message growth before the runtime becomes ready.
+- When mobile touch aim becomes idle, the runtime should preserve the last non-null mobile aim heading for facing, dodge direction, and repeat-fire orientation until a new mobile aim heading arrives or desktop pointer aim becomes authoritative again.
 
 ---
 
@@ -122,8 +171,8 @@ Phaser game configuration object.
 ```typescript
 const GameConfig: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,           // WebGL with Canvas fallback
-  width: 1280,                 // Window width
-  height: 720,                 // Window height
+  width: 1280,                 // Desktop baseline logical viewport width
+  height: 720,                 // Desktop baseline logical viewport height
   parent: 'game-container',    // HTML div ID
   backgroundColor: '#C8CCC8',  // Light gray background (matches arena)
 
@@ -138,8 +187,7 @@ const GameConfig: Phaser.Types.Core.GameConfig = {
   scene: [GameScene],          // Scene classes to load
 
   scale: {
-    mode: Phaser.Scale.FIT,    // Fit to browser window
-    autoCenter: Phaser.Scale.CENTER_BOTH
+    mode: Phaser.Scale.RESIZE  // Runtime viewport follows the mounted stage rectangle
   }
 };
 ```
@@ -147,8 +195,43 @@ const GameConfig: Phaser.Types.Core.GameConfig = {
 **Why:**
 - `Phaser.AUTO` uses WebGL if available, Canvas fallback for compatibility
 - `physics.arcade` with zero gravity enables top-down 2D gameplay
-- `scale.FIT` maintains aspect ratio while filling browser window
+- Desktop keeps the baseline `1280x720` logical aperture
+- Mobile landscape uses the settled safe-area viewport dimensions directly
+- `scale.RESIZE` removes Phaser-side aspect-ratio fitting so the canvas follows the actual stage rectangle
 - Light gray background (#C8CCC8) matches the arena floor color
+
+### Mobile Landscape Viewport Derivation
+
+In `mobile-landscape`, derive the logical viewport directly from the settled safe-area viewport rectangle:
+
+```typescript
+function getMobileLandscapeViewport(
+  settledSafeViewportWidth: number,
+  settledSafeViewportHeight: number
+) {
+  return {
+    width: settledSafeViewportWidth,
+    height: settledSafeViewportHeight,
+  };
+}
+```
+
+Rules:
+- Apply only to `mobile-landscape`.
+- Use the settled width and height as the actual logical Phaser viewport size, not just as a CSS display trick.
+- Recompute only on meaningful orientation/resize changes.
+
+### HUD And Control Anchoring Under Fill-Viewport Mobile View
+
+- The fill-viewport mobile landscape primarily benefits use of the actual phone screen rectangle.
+- Core HUD clusters should continue to anchor inside a constrained HUD frame that remains closer to desktop glance positions.
+- The minimap stays inside that constrained HUD frame rather than drifting to the extreme widened edge.
+- Touch controls remain pinned to the true safe-area corners for reachability.
+- Spectator and death overlays use the widened mobile viewport too; they do not snap back to the desktop baseline during an active mobile session.
+- Mobile landscape should prefer neutral camera zoom by default once the game is already filling the live phone viewport. Additional zoom should be used sparingly because it quickly over-amplifies a fill-viewport mobile presentation.
+- Mobile landscape may apply a modest HUD-only scale reduction for fixed overlay elements. This should be handled in the HUD presentation layer rather than by shrinking the gameplay viewport or changing world scale.
+- Mobile browser-tab controls should explicitly suppress browser text selection/callout behavior in the gameplay overlay layer. iOS long-press selection UI is out of contract for the virtual sticks and action buttons.
+- Mobile overlay controls in browser-tab mode should be sized for constrained visible height: enough for reliable thumb input, but compact enough that they do not overrun the center of the gameplay view.
 
 ### InputState
 
@@ -312,7 +395,7 @@ stick-rumble-client/
 │       │   ├── HealthBar.ts
 │       │   └── Crosshair.ts
 │       ├── input/
-│       │   ├── InputManager.ts           # WASD + mouse + sequence numbers
+│       │   ├── InputManager.ts           # Desktop input baseline + sequence numbers
 │       │   ├── ShootingManager.ts        # Fire + reload
 │       │   └── DodgeRollManager.ts       # Roll cooldown
 │       ├── network/
@@ -339,7 +422,7 @@ stick-rumble-client/
 │       │   ├── ScoreDisplayUI.ts         # Top-right 6-digit score
 │       │   ├── KillCounterUI.ts          # Top-right kill count
 │       │   ├── DebugOverlayUI.ts         # FPS/Update/AI debug stats
-│       │   └── ChatLogUI.ts              # Bottom-left chat panel
+│       │   └── ChatLogUI.ts              # Legacy inactive prototype carry-over
 │       ├── effects/
 │       │   ├── ScreenShake.ts            # Camera shake
 │       │   ├── DamageNumberManager.ts    # Floating damage numbers
@@ -1039,16 +1122,11 @@ showBulletImpact(x: number, y: number): void {
 
 #### ChatLogUI (`game/ui/ChatLogUI.ts`)
 
-**Purpose:** Render a chat log panel for system and player messages.
+**Status:** Legacy prototype carry-over, not part of the active multiplayer product contract.
 
-- Dimensions: ~300x120px
-- Position: bottom-left of viewport, screen-fixed (scroll factor 0)
-- Background: `#808080` at 70% opacity
-- System messages: `COLORS.CHAT_SYSTEM` / `#BBA840` (yellow), prefixed `[SYSTEM]`
-- Player messages: name in red/orange, message text in white
-- Font: sans-serif, 14px
-- Max visible lines with scroll behavior
-- Depth: 1000 (fixed UI layer)
+- The active multiplayer message schema defines no client chat or server chat message types.
+- The in-match HUD may not reserve space for chat on desktop or mobile.
+- If this file remains in the repository during transition work, it must be treated as inactive and unmapped from the authoritative gameplay surface.
 
 ---
 
@@ -1056,7 +1134,10 @@ showBulletImpact(x: number, y: number): void {
 
 #### InputManager
 
-**Purpose:** Capture WASD keyboard and mouse aim input.
+**Purpose:** Capture the baseline desktop gameplay input state and send normalized authoritative input to the server.
+
+- Desktop baseline: WASD movement, Shift sprint, mouse aim
+- Mobile-mode touch controls must ultimately feed the same normalized gameplay intent shape rather than introducing a separate server contract
 
 **Pseudocode:**
 ```
@@ -1500,6 +1581,7 @@ See [networking.md](networking.md#network-simulator) for server-side counterpart
 - Transport-state notifications (initial socket connect, reconnect in progress, exhausted reconnect attempts) are separate from join-protocol errors. The app shell MUST NOT synthesize `error:no_hello` or any other server message type to represent a local socket-connect failure.
 - Replay of the last successful join intent is initiated by the app shell. If replay fails, the client transitions to `recoverable_error` instead of silently dropping back to the join form.
 - Invite links prefill the room code only. They do not auto-submit; the user confirms explicitly from the join form.
+- The join form should remain stable on iPhone Safari when inputs receive focus. Form field typography and global text-size adjustment should prevent Safari from auto-zooming or inflating the page during display-name and room-code entry.
 
 **Pseudocode:**
 ```
@@ -1609,15 +1691,15 @@ const PhaserGame: React.FC<{ onMatchEnd: (data: MatchEndData, playerId: string) 
 │ Frame Start                                                  │
 ├─────────────────────────────────────────────────────────────┤
 │ 1. Input Processing                                          │
-│    ├─ InputManager.update() - Read WASD + mouse              │
-│    ├─ Calculate aim angle from mouse position                │
+│    ├─ InputManager.update() - Read active local input source │
+│    ├─ Calculate aim angle from mouse or touch-reticle state  │
 │    └─ Send input:state to server (if changed)                │
 ├─────────────────────────────────────────────────────────────┤
 │ 2. Client-Side Prediction (local player)                      │
 │    ├─ PredictionEngine.predictPosition(pos, vel, input, dt)  │
 │    ├─ PlayerManager.setLocalPlayerPredictedPosition()        │
 │    ├─ PlayerManager.updateLocalPlayerAim() - Rotate weapon   │
-│    └─ Crosshair.update() - Follow mouse                      │
+│    └─ Crosshair.update() - Follow mouse or touch reticle     │
 ├─────────────────────────────────────────────────────────────┤
 │ 3. Automatic Fire Check                                      │
 │    └─ If Uzi/AK47 + pointer down → ShootingManager.shoot()   │
@@ -1702,7 +1784,7 @@ On `player:death`:
 ### Depth Layering
 
 ```
-Depth 1000+: Fixed UI (reload bar, match timer, health display, minimap, score, kills, debug, chat)
+Depth 1000+: Fixed UI (reload bar, match timer, health display, minimap, score, kills, debug)
 Depth 999:   Damage flash overlay (below fixed HUD, above all gameplay)
 Depth 100:   HUD elements (kill feed, pickup prompt)
 Depth 60:    Hit effects (particles, impact markers, damage numbers)
@@ -2072,6 +2154,8 @@ it('should follow local player with camera', () => {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.5.1 | 2026-04-23 | Replaced mobile-mode opt-in language with automatic client-side detection for phone-sized touch layouts, while preserving the unchanged desktop baseline and session continuity. |
+| 1.5.0 | 2026-04-23 | Specified optional mobile mode architecture: React now owns mobile-mode selection, safe-area-aware phone stage behavior, and touch overlays as client-local options while the existing desktop runtime remains the baseline. Also marked chat UI as inactive legacy carry-over rather than active multiplayer contract. |
 | 1.4.1 | 2026-04-23 | Clarified that socket transport failures and reconnect-in-progress notices are app-level connection status, not synthetic join errors; React must not fabricate `error:no_hello` to represent a local connect failure, and transient connection notices must clear when the socket becomes ready again. |
 | 1.4.0 | 2026-04-17 | Session-first app shell: React now owns the WebSocket/session lifecycle, explicit app-session states (`join_form`, `searching_for_match`, `waiting_for_players`, `match_loading`, `in_match`, `match_end`, `recoverable_error`) were introduced, and Phaser bootstrap is deferred until an authoritative `match_ready` session snapshot exists. |
 | 1.3.2 | 2026-04-13 | Friends-MVP invite polish: invite auto-submit now only fires when a cached display name already exists before user interaction; typing into an empty display-name field no longer submits on the first character. |

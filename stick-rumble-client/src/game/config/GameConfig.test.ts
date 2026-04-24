@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import Phaser from 'phaser';
-import { GameConfig } from './GameConfig';
+import { createGameConfig, GameConfig } from './GameConfig';
 
 describe('GameConfig', () => {
   it('should have correct game dimensions', () => {
@@ -42,12 +42,20 @@ describe('GameConfig', () => {
     expect((GameConfig.scene as any[]).length).toBeGreaterThan(0);
   });
 
-  it('should have FIT scale mode', () => {
-    expect(GameConfig.scale?.mode).toBe(Phaser.Scale.FIT);
+  it('should have RESIZE scale mode', () => {
+    expect(GameConfig.scale?.mode).toBe(Phaser.Scale.RESIZE);
   });
 
-  it('should center game on both axes', () => {
-    expect(GameConfig.scale?.autoCenter).toBe(Phaser.Scale.CENTER_BOTH);
+  it('creates runtime configs with the requested logical viewport size', () => {
+    const mobileConfig = createGameConfig(844, 390);
+
+    expect(mobileConfig.width).toBe(844);
+    expect(mobileConfig.height).toBe(390);
+    expect(mobileConfig.scale?.mode).toBe(Phaser.Scale.RESIZE);
+    expect(mobileConfig.parent).toBe(GameConfig.parent);
+    expect(mobileConfig.backgroundColor).toBe(GameConfig.backgroundColor);
+    expect(mobileConfig.physics).toEqual(GameConfig.physics);
+    expect(mobileConfig.scene).toEqual(GameConfig.scene);
   });
 
   it('should be a valid Phaser game config', () => {

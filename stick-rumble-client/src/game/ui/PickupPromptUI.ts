@@ -58,6 +58,10 @@ export class PickupPromptUI {
     return this.promptText?.visible ?? false;
   }
 
+  setPosition(x: number, y: number): void {
+    this.promptText?.setPosition(x, y);
+  }
+
   destroy(): void {
     if (this.promptText) {
       this.promptText.destroy();

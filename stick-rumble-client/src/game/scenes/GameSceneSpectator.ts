@@ -147,6 +147,21 @@ export class GameSceneSpectator {
     }
   }
 
+  setViewportSize(width: number, height: number): void {
+    if (!this.isSpectating) {
+      return;
+    }
+
+    const centerX = width / 2;
+    const centerY = height / 2;
+
+    this.overlay?.setPosition(centerX, centerY);
+    this.overlay?.setDisplaySize(width, height);
+    this.diedText?.setPosition(centerX, centerY - 100);
+    this.statsContainer?.setPosition(centerX, centerY);
+    this.tryAgainButton?.setPosition(centerX, centerY + 80);
+  }
+
   /**
    * Update spectator camera to follow nearest living player
    */

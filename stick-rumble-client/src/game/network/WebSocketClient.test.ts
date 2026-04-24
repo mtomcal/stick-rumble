@@ -523,6 +523,39 @@ describe('WebSocketClient', () => {
     });
   });
 
+  describe('gameplay queueing', () => {
+    it('keeps only a bounded recent gameplay backlog while gameplay is not ready', async () => {
+      const client = new WebSocketClient('ws://localhost:8080/ws');
+      const handler = vi.fn();
+      client.on('test', handler);
+      client.setGameplayReady(false);
+
+      const connectPromise = client.connect();
+      if (mockWebSocketInstance.onopen) {
+        mockWebSocketInstance.onopen({});
+      }
+      await connectPromise;
+
+      for (let index = 0; index < 300; index += 1) {
+        if (mockWebSocketInstance.onmessage) {
+          mockWebSocketInstance.onmessage({
+            data: JSON.stringify({
+              type: 'test',
+              timestamp: index,
+              data: { index },
+            }),
+          });
+        }
+      }
+
+      client.setGameplayReady(true);
+
+      expect(handler).toHaveBeenCalledTimes(256);
+      expect(handler.mock.calls[0]?.[0]).toEqual({ index: 44 });
+      expect(handler.mock.calls.at(-1)?.[0]).toEqual({ index: 299 });
+    });
+  });
+
   describe('reconnection logic', () => {
     beforeEach(() => {
       vi.useFakeTimers();

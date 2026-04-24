@@ -5,14 +5,24 @@ import { DebugNetworkPanel } from './ui/debug/DebugNetworkPanel'
 import { WebSocketClient } from './game/network/WebSocketClient'
 import type { MatchBootstrap } from './game/sessionRuntime'
 import type {
+  GameplayViewportLayout,
   JoinErrorPayload,
   JoinIntent,
   MatchEndData,
   MatchSession,
+  StageMode,
   SessionStatusData,
 } from './shared/types'
 import type { NetworkSimulatorStats } from './game/network/NetworkSimulator'
 import { buildInviteLink, formatReconnectLabel, getInviteCodeFromLocation, getWebSocketUrl } from './game/config/runtimeConfig'
+import { useStageMode } from './ui/common/mobileMode'
+import {
+  buildGameplayViewportLayout,
+  getHudFrame,
+  getLogicalViewportSize,
+} from './game/config/viewport'
+import { MobileControls } from './ui/mobile/MobileControls'
+import { RotateDeviceGate } from './ui/mobile/RotateDeviceGate'
 import './App.css'
 
 const DEFAULT_STATS: NetworkSimulatorStats = {
@@ -84,7 +94,62 @@ function formatJoinError(error: JoinErrorPayload | null, currentCode: string): s
   return `Server rejected ${error.offendingType ?? 'message'} before hello.`
 }
 
+function readPixelValue(value: string): number {
+  const parsed = Number.parseFloat(value)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function buildViewportLayout(
+  stageElement: HTMLElement,
+  stageMode: StageMode,
+  viewportWidth: number,
+  viewportHeight: number
+): GameplayViewportLayout {
+  const style = window.getComputedStyle(stageElement)
+  const paddingTop = readPixelValue(style.paddingTop)
+  const paddingRight = readPixelValue(style.paddingRight)
+  const paddingBottom = readPixelValue(style.paddingBottom)
+  const paddingLeft = readPixelValue(style.paddingLeft)
+  const viewportInsetTop = readPixelValue(style.getPropertyValue('--viewport-inset-top'))
+  const viewportInsetRight = readPixelValue(style.getPropertyValue('--viewport-inset-right'))
+  const viewportInsetBottom = readPixelValue(style.getPropertyValue('--viewport-inset-bottom'))
+  const viewportInsetLeft = readPixelValue(style.getPropertyValue('--viewport-inset-left'))
+  const contentWidth = Math.max(stageElement.clientWidth - paddingLeft - paddingRight, 1)
+  const contentHeight = Math.max(stageElement.clientHeight - paddingTop - paddingBottom, 1)
+
+  return buildGameplayViewportLayout({
+    stageMode,
+    viewportWidth,
+    viewportHeight,
+    contentWidth,
+    contentHeight,
+    padding: {
+      top: paddingTop + viewportInsetTop,
+      right: paddingRight + viewportInsetRight,
+      bottom: paddingBottom + viewportInsetBottom,
+      left: paddingLeft + viewportInsetLeft,
+    },
+  })
+}
+
+function buildInitialViewportLayout(
+  stageMode: StageMode,
+  viewportWidth: number,
+  viewportHeight: number
+): GameplayViewportLayout {
+  const logicalViewport = getLogicalViewportSize(stageMode, viewportWidth, viewportHeight)
+
+  return {
+    mode: stageMode,
+    width: logicalViewport.width,
+    height: logicalViewport.height,
+    insets: { top: 0, right: 0, bottom: 0, left: 0 },
+    hudFrame: getHudFrame(logicalViewport.width, logicalViewport.height),
+  }
+}
+
 function App() {
+  const stageShellRef = useRef<HTMLDivElement | null>(null)
   const inviteCode = useMemo(() => getInviteCodeFromLocation(), [])
   const initialSavedDisplayName = useMemo(
     () => getBrowserStorage()?.getItem(DISPLAY_NAME_STORAGE_KEY) ?? '',
@@ -98,6 +163,7 @@ function App() {
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null)
   const duplicateBlockedKeyRef = useRef<string | null>(null)
   const displayNameDirtyRef = useRef(false)
+  const activeMatchSessionKeyRef = useRef<string | null>(null)
 
   const [viewState, setViewState] = useState<AppViewState>('join_form')
   const [isSocketReady, setIsSocketReady] = useState(false)
@@ -110,10 +176,27 @@ function App() {
   const [reconnectIntent, setReconnectIntent] = useState<JoinIntent | null>(null)
   const [debugPanelVisible, setDebugPanelVisible] = useState(false)
   const [networkStats, setNetworkStats] = useState<NetworkSimulatorStats>(DEFAULT_STATS)
+  const { stageMode, width: viewportWidth, height: viewportHeight, isSettling } = useStageMode()
+  const [mobileGameplayEntered, setMobileGameplayEntered] = useState(false)
+  const [viewportLayout, setViewportLayoutState] = useState<GameplayViewportLayout>({
+    ...buildInitialViewportLayout(stageMode, viewportWidth, viewportHeight),
+  })
   const [joinForm, setJoinForm] = useState(() => ({
     displayName: initialSavedDisplayName,
     code: inviteCode ?? '',
   }))
+
+  const getSessionKey = useCallback((session: MatchSession): string => {
+    return `${session.roomId}:${session.playerId}:${session.mapId}`
+  }, [])
+
+  const captureCurrentViewportLayout = useCallback((): GameplayViewportLayout | null => {
+    if (!stageShellRef.current) {
+      return null
+    }
+
+    return buildViewportLayout(stageShellRef.current, stageMode, viewportWidth, viewportHeight)
+  }, [stageMode, viewportWidth, viewportHeight])
 
   const getClient = useCallback(() => clientRef.current, [])
 
@@ -220,12 +303,16 @@ function App() {
       getBrowserStorage()?.setItem(DISPLAY_NAME_STORAGE_KEY, status.displayName)
 
       if (status.state === 'searching_for_match') {
+        activeMatchSessionKeyRef.current = null
+        setMobileGameplayEntered(false)
         setMatchBootstrap(null)
         setViewState('searching_for_match')
         return
       }
 
       if (status.state === 'waiting_for_players') {
+        activeMatchSessionKeyRef.current = null
+        setMobileGameplayEntered(false)
         setMatchBootstrap(null)
         setViewState('waiting_for_players')
         return
@@ -234,6 +321,16 @@ function App() {
       const nextMatchSession = toMatchSession(status)
       setMatchEndData(null)
       setLocalPlayerId(status.playerId)
+      if (nextMatchSession) {
+        const nextSessionKey = getSessionKey(nextMatchSession)
+        if (activeMatchSessionKeyRef.current !== nextSessionKey) {
+          setMobileGameplayEntered(false)
+        }
+        activeMatchSessionKeyRef.current = nextSessionKey
+      } else {
+        activeMatchSessionKeyRef.current = null
+        setMobileGameplayEntered(false)
+      }
       setMatchBootstrap(
         nextMatchSession && clientRef.current
           ? { session: nextMatchSession, wsClient: clientRef.current }
@@ -285,7 +382,7 @@ function App() {
       client.disconnect()
       clientRef.current = null
     }
-  }, [])
+  }, [getSessionKey])
 
   useEffect(() => {
     window.onNetworkSimulatorToggle = () => {
@@ -377,6 +474,7 @@ function App() {
   }, [initialSavedDisplayName, inviteCode, isSocketReady, submitJoinIntent])
 
   const handleMatchEnd = useCallback((data: MatchEndData, playerId: string) => {
+    activeMatchSessionKeyRef.current = null
     setLocalPlayerId(playerId)
     setMatchEndData(data)
     setMatchBootstrap(null)
@@ -387,6 +485,8 @@ function App() {
     const client = getClient()
     client?.sendSessionLeave()
     releaseInviteClaim()
+    activeMatchSessionKeyRef.current = null
+    setMobileGameplayEntered(false)
     setSessionStatus(null)
     setMatchBootstrap(null)
     setJoinError(null)
@@ -407,6 +507,8 @@ function App() {
 
     setMatchEndData(null)
     setJoinError(null)
+    activeMatchSessionKeyRef.current = null
+    setMobileGameplayEntered(false)
     setViewState('joining')
     client.restartSession(lastIntent)
   }, [getClient, joinForm.code, joinForm.displayName, reconnectIntent, sessionStatus])
@@ -442,21 +544,80 @@ function App() {
   }
 
   const errorText = formatJoinError(joinError, joinForm.code)
-  const shouldRenderPhaser = viewState === 'in_match' && matchBootstrap
+  const shouldShowGameplayStage = viewState === 'in_match' && matchBootstrap
+  const shouldRenderPhaser =
+    shouldShowGameplayStage &&
+    (stageMode === 'desktop' || mobileGameplayEntered)
+  const inMobileStage = shouldShowGameplayStage && stageMode !== 'desktop'
+
+  useEffect(() => {
+    if (!shouldRenderPhaser || !stageShellRef.current) {
+      return undefined
+    }
+
+    const updateViewportLayout = () => {
+      if (!stageShellRef.current) {
+        return
+      }
+      setViewportLayoutState(buildViewportLayout(stageShellRef.current, stageMode, viewportWidth, viewportHeight))
+    }
+
+    updateViewportLayout()
+    window.addEventListener('resize', updateViewportLayout)
+
+    const resizeObserver =
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => updateViewportLayout())
+        : null
+    resizeObserver?.observe(stageShellRef.current)
+
+    return () => {
+      window.removeEventListener('resize', updateViewportLayout)
+      resizeObserver?.disconnect()
+    }
+  }, [shouldRenderPhaser, stageMode, viewportWidth, viewportHeight])
 
   return (
-    <div className="app-shell">
-      <div className="app-header">
+    <div className={`app-shell${inMobileStage ? ' app-shell--mobile-stage' : ''}`}>
+      <div className={`app-header${inMobileStage ? ' app-header--hidden' : ''}`}>
         <h1>Stick Rumble - Multiplayer Arena Shooter</h1>
       </div>
 
-      <div className="app-container">
-        {shouldRenderPhaser && matchBootstrap && (
-          <div className="game-frame">
-            <PhaserGame
-              bootstrap={matchBootstrap}
-              onMatchEnd={handleMatchEnd}
-            />
+      <div className={`app-container${inMobileStage ? ' app-container--mobile-stage' : ''}`}>
+        {shouldShowGameplayStage && matchBootstrap && (
+          <div
+            ref={stageShellRef}
+            className={`game-frame game-frame--${stageMode}`}
+            data-testid="stage-shell"
+            data-stage-mode={stageMode}
+          >
+            {shouldRenderPhaser ? (
+              <>
+                <PhaserGame
+                  bootstrap={matchBootstrap}
+                  layout={viewportLayout.mode === stageMode ? viewportLayout : { ...viewportLayout, mode: stageMode }}
+                  onMatchEnd={handleMatchEnd}
+                />
+                {stageMode === 'mobile-landscape' ? <MobileControls /> : null}
+              </>
+            ) : null}
+            {stageMode === 'mobile-portrait-blocked' || (stageMode !== 'desktop' && isSettling) ? (
+              <RotateDeviceGate />
+            ) : null}
+            {stageMode === 'mobile-landscape' && !isSettling && !mobileGameplayEntered ? (
+              <RotateDeviceGate
+                title="Enter Game"
+                body="Landscape is ready. Tap to enter with the final phone viewport."
+                actionLabel="Enter Game"
+                onAction={() => {
+                  const nextLayout = captureCurrentViewportLayout()
+                  if (nextLayout) {
+                    setViewportLayoutState(nextLayout)
+                  }
+                  setMobileGameplayEntered(true)
+                }}
+              />
+            ) : null}
           </div>
         )}
 
@@ -474,6 +635,7 @@ function App() {
               Display Name
               <input
                 aria-label="Display Name"
+                className="overlay-card__input"
                 value={joinForm.displayName}
                 onChange={(event) => {
                   displayNameDirtyRef.current = true
@@ -486,6 +648,7 @@ function App() {
               Room Code
               <input
                 aria-label="Room Code"
+                className="overlay-card__input"
                 value={joinForm.code}
                 onChange={(event) => setJoinForm((prev) => ({ ...prev, code: event.target.value }))}
                 placeholder="PIZZA"
@@ -497,12 +660,14 @@ function App() {
             {reconnectIntent ? <p className="overlay-status">Reconnect failed. Choose a new action.</p> : null}
             <div className="overlay-actions">
               <button
+                className="overlay-card__button"
                 disabled={!isSocketReady || viewState === 'joining'}
                 onClick={() => submitJoinIntent({ displayName: joinForm.displayName, mode: 'public' })}
               >
                 Play Public
               </button>
               <button
+                className="overlay-card__button"
                 disabled={!isSocketReady || viewState === 'joining'}
                 onClick={() => submitJoinIntent({ displayName: joinForm.displayName, mode: 'code', code: joinForm.code })}
               >
@@ -511,10 +676,13 @@ function App() {
             </div>
             {reconnectIntent ? (
               <div className="overlay-actions">
-                <button onClick={() => submitJoinIntent(reconnectIntent)}>
+                <button className="overlay-card__button" onClick={() => submitJoinIntent(reconnectIntent)}>
                   {formatReconnectLabel(reconnectIntent)}
                 </button>
-                <button onClick={() => submitJoinIntent({ displayName: joinForm.displayName, mode: 'public' })}>
+                <button
+                  className="overlay-card__button"
+                  onClick={() => submitJoinIntent({ displayName: joinForm.displayName, mode: 'public' })}
+                >
                   Play Public
                 </button>
               </div>

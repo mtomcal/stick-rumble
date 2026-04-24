@@ -7,6 +7,7 @@ import (
 )
 
 func TestLoadDefaults(t *testing.T) {
+	t.Setenv("HOST", "")
 	t.Setenv("PORT", "")
 	t.Setenv("ENABLE_SCHEMA_VALIDATION", "")
 	t.Setenv("GO_ENV", "")
@@ -14,6 +15,7 @@ func TestLoadDefaults(t *testing.T) {
 
 	cfg := Load()
 
+	assert.Equal(t, DefaultHost, cfg.Host)
 	assert.Equal(t, DefaultPort, cfg.Port)
 	assert.False(t, cfg.EnableSchemaValidation)
 	assert.Equal(t, "development", cfg.GoEnv)
@@ -21,6 +23,7 @@ func TestLoadDefaults(t *testing.T) {
 }
 
 func TestLoadConfiguredValues(t *testing.T) {
+	t.Setenv("HOST", "127.0.0.1")
 	t.Setenv("PORT", "9090")
 	t.Setenv("ENABLE_SCHEMA_VALIDATION", "true")
 	t.Setenv("GO_ENV", "production")
@@ -28,6 +31,7 @@ func TestLoadConfiguredValues(t *testing.T) {
 
 	cfg := Load()
 
+	assert.Equal(t, "127.0.0.1", cfg.Host)
 	assert.Equal(t, "9090", cfg.Port)
 	assert.True(t, cfg.EnableSchemaValidation)
 	assert.Equal(t, "production", cfg.GoEnv)

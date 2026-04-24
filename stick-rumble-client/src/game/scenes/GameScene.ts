@@ -34,9 +34,25 @@ import {
   type MapObstacle,
   type MatchMapContext,
 } from '../../shared/maps';
-import { getActiveMatchBootstrap } from '../sessionRuntime';
+import type { GameplayIntentState, GameplayViewportLayout } from '../../shared/types';
+import {
+  getActiveMatchBootstrap,
+  getMobileGameplayIntent,
+  getViewportLayout,
+  setMobilePickupAction,
+  subscribeMobileGameplayIntent,
+  subscribeRuntimeAction,
+  subscribeViewportLayout,
+} from '../sessionRuntime';
 
 const OBSTACLE_EDGE_INSET_PX = 1;
+const MOBILE_BOTTOM_RIGHT_HUD_RESERVE = 156;
+const DESKTOP_CAMERA_ZOOM = 1;
+const MOBILE_LANDSCAPE_CAMERA_ZOOM = 1;
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
 
 export function getObstacleReadableEdgeStrokeRect(obstacle: MapObstacle): {
   x: number;
@@ -81,7 +97,6 @@ export class GameScene extends Phaser.Scene {
   private isCameraFollowing: boolean = false;
   private cameraFollowTarget: Phaser.GameObjects.Graphics | null = null;
   private nearbyWeaponCrate: { id: string; weaponType: string } | null = null;
-  private isPointerHeld: boolean = false;
   private aimLine!: AimLine;
   private scoreDisplayUI!: ScoreDisplayUI;
   private killCounterUI!: KillCounterUI;
@@ -91,6 +106,13 @@ export class GameScene extends Phaser.Scene {
   private arenaBorder: Phaser.GameObjects.Rectangle | null = null;
   private floorGridGraphics: Phaser.GameObjects.Graphics | null = null;
   private obstacleGraphics: Phaser.GameObjects.Graphics | null = null;
+  private mobileIntent: GameplayIntentState | null = getMobileGameplayIntent();
+  private viewportLayout: GameplayViewportLayout = getViewportLayout();
+  private desktopFireHeld: boolean = false;
+  private mobileFireHeld: boolean = false;
+  private unsubscribeMobileIntent: (() => void) | null = null;
+  private unsubscribeViewportLayout: (() => void) | null = null;
+  private unsubscribeRuntimeAction: (() => void) | null = null;
 
   constructor() {
     super({ key: 'GameScene' });
@@ -221,6 +243,8 @@ export class GameScene extends Phaser.Scene {
     this.playerManager.setLocalPlayerId(bootstrap.session.playerId);
     this.healthBarUI.updateHealth(100, 100, false);
     this.initializeGameplaySystems();
+    this.bindRuntimeBridge();
+    this.applyViewportLayout(this.viewportLayout);
     this.wsClient.setGameplayReady(true);
   }
 
@@ -272,13 +296,30 @@ export class GameScene extends Phaser.Scene {
       const currentAimAngle = this.inputManager.getAimAngle();
       this.playerManager.updateLocalPlayerAim(currentAimAngle);
 
-      // Handle automatic fire for automatic weapons when pointer held
-      if (this.isPointerHeld && this.shootingManager && !this.shootingManager.isMeleeWeapon() && this.shootingManager.isAutomatic()) {
+      // Desktop hold-fire remains automatic-only; mobile hold-fire repeats for all weapons at their normal cadence.
+      const shouldRepeatDesktopFire = this.desktopFireHeld && this.shootingManager?.isAutomatic();
+      const shouldRepeatMobileFire = this.mobileFireHeld;
+      if ((shouldRepeatDesktopFire || shouldRepeatMobileFire) && this.shootingManager) {
         this.shootingManager.setAimAngle(currentAimAngle);
-        const obstructed = this.getObstructedBarrelPosition(currentAimAngle);
-        const didShoot = this.shootingManager.shoot();
-        if (didShoot && obstructed) {
-          this.ui.showWallSpark(obstructed.x, obstructed.y);
+
+        if (this.shootingManager.isMeleeWeapon()) {
+          const didAttack = this.shootingManager.meleeAttack();
+          if (didAttack) {
+            const localPlayerId = this.playerManager.getLocalPlayerId();
+            if (localPlayerId) {
+              const localPos = this.playerManager.getPlayerPosition(localPlayerId);
+              if (localPos) {
+                this.meleeWeaponManager.updatePosition(localPlayerId, localPos);
+                this.meleeWeaponManager.startSwing(localPlayerId, currentAimAngle);
+              }
+            }
+          }
+        } else {
+          const obstructed = this.getObstructedBarrelPosition(currentAimAngle);
+          const didShoot = this.shootingManager.shoot();
+          if (didShoot && obstructed) {
+            this.ui.showWallSpark(obstructed.x, obstructed.y);
+          }
         }
       }
 
@@ -349,6 +390,7 @@ export class GameScene extends Phaser.Scene {
 
     this.inputManager = new InputManager(this, this.wsClient);
     this.inputManager.init();
+    this.inputManager.setExternalIntent(this.mobileIntent);
     this.input.mouse?.disableContextMenu();
 
     this.shootingManager = new ShootingManager(this, this.wsClient);
@@ -362,42 +404,15 @@ export class GameScene extends Phaser.Scene {
     this.eventHandlers.setPredictionEngine(this.predictionEngine);
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      if (!this.shootingManager || !this.inputManager) {
-        return;
-      }
-
       if (pointer.button !== 0) {
         return;
       }
 
-      this.isPointerHeld = true;
-      const aimAngle = this.inputManager.getAimAngle();
-      this.shootingManager.setAimAngle(aimAngle);
-
-      if (this.shootingManager.isMeleeWeapon()) {
-        const didAttack = this.shootingManager.meleeAttack();
-        if (didAttack) {
-          const localPlayerId = this.playerManager.getLocalPlayerId();
-          if (localPlayerId) {
-            const localPos = this.playerManager.getPlayerPosition(localPlayerId);
-            if (localPos) {
-              this.meleeWeaponManager.updatePosition(localPlayerId, localPos);
-              this.meleeWeaponManager.startSwing(localPlayerId, aimAngle);
-            }
-          }
-        }
-        return;
-      }
-
-      const obstructed = this.getObstructedBarrelPosition(aimAngle);
-      const didShoot = this.shootingManager.shoot();
-      if (didShoot && obstructed) {
-        this.ui.showWallSpark(obstructed.x, obstructed.y);
-      }
+      this.setFireHeld('desktop', true);
     });
 
     this.input.on('pointerup', () => {
-      this.isPointerHeld = false;
+      this.setFireHeld('desktop', false);
     });
 
     const reloadKey = this.input.keyboard?.addKey('R');
@@ -418,35 +433,7 @@ export class GameScene extends Phaser.Scene {
 
     const dodgeKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     dodgeKey?.on('down', () => {
-      if (!this.dodgeRollManager || !this.dodgeRollManager.canDodgeRoll() || !this.inputManager) {
-        return;
-      }
-
-      const inputState = this.inputManager.getState();
-      const rollDirection = { x: 0, y: 0 };
-
-      if (inputState.up || inputState.down || inputState.left || inputState.right) {
-        if (inputState.right) rollDirection.x += 1;
-        if (inputState.left) rollDirection.x -= 1;
-        if (inputState.down) rollDirection.y += 1;
-        if (inputState.up) rollDirection.y -= 1;
-
-        const magnitude = Math.sqrt(rollDirection.x ** 2 + rollDirection.y ** 2);
-        if (magnitude > 0) {
-          rollDirection.x /= magnitude;
-          rollDirection.y /= magnitude;
-        }
-      } else {
-        const aimAngle = this.inputManager.getAimAngle();
-        rollDirection.x = Math.cos(aimAngle);
-        rollDirection.y = Math.sin(aimAngle);
-      }
-
-      this.wsClient.send({
-        type: 'player:dodge_roll',
-        timestamp: Date.now(),
-        data: { direction: rollDirection },
-      });
+      this.attemptDodgeRoll();
     });
 
     this.ui.createAmmoDisplay(
@@ -458,6 +445,190 @@ export class GameScene extends Phaser.Scene {
     this.ui.createReloadCircleIndicator();
     this.ui.createCrosshair();
     this.ui.setupMinimap();
+  }
+
+  private bindRuntimeBridge(): void {
+    this.unsubscribeMobileIntent?.();
+    this.unsubscribeRuntimeAction?.();
+    this.unsubscribeViewportLayout?.();
+
+    this.unsubscribeMobileIntent = subscribeMobileGameplayIntent((intent) => {
+      this.mobileIntent = intent;
+      this.inputManager?.setExternalIntent(intent);
+      this.setFireHeld('mobile', intent?.fireActive ?? false);
+    });
+
+    this.unsubscribeRuntimeAction = subscribeRuntimeAction((action) => {
+      if (action === 'reload') {
+        this.shootingManager?.reload();
+        return;
+      }
+      if (action === 'pickup') {
+        if (this.nearbyWeaponCrate) {
+          this.wsClient.send({
+            type: 'weapon:pickup_attempt',
+            timestamp: Date.now(),
+            data: { crateId: this.nearbyWeaponCrate.id },
+          });
+        }
+        return;
+      }
+      this.attemptDodgeRoll();
+    });
+
+    this.unsubscribeViewportLayout = subscribeViewportLayout((layout) => {
+      this.viewportLayout = layout;
+      this.applyViewportLayout(layout);
+    });
+  }
+
+  private applyViewportLayout(layout: GameplayViewportLayout): void {
+    this.ui?.setViewportLayout(layout);
+
+    const camera = this.cameras.main;
+    const previousZoom =
+      typeof (camera as Phaser.Cameras.Scene2D.Camera & { zoom?: number }).zoom === 'number'
+        ? (camera as Phaser.Cameras.Scene2D.Camera & { zoom: number }).zoom
+        : DESKTOP_CAMERA_ZOOM;
+    const previousVisibleWidth = camera.width / previousZoom;
+    const previousVisibleHeight = camera.height / previousZoom;
+    const previousCenterX = camera.scrollX + previousVisibleWidth / 2;
+    const previousCenterY = camera.scrollY + previousVisibleHeight / 2;
+    const nextZoom = layout.mode === 'mobile-landscape' ? MOBILE_LANDSCAPE_CAMERA_ZOOM : DESKTOP_CAMERA_ZOOM;
+    if (camera.width !== layout.width || camera.height !== layout.height) {
+      if (typeof camera.setSize === 'function') {
+        camera.setSize(layout.width, layout.height);
+      } else {
+        (camera as Phaser.Cameras.Scene2D.Camera & { width: number; height: number }).width = layout.width;
+        (camera as Phaser.Cameras.Scene2D.Camera & { width: number; height: number }).height = layout.height;
+      }
+    }
+
+    if (typeof camera.setZoom === 'function') {
+      camera.setZoom(nextZoom);
+    } else {
+      (camera as Phaser.Cameras.Scene2D.Camera & { zoom: number }).zoom = nextZoom;
+    }
+
+    if (!this.isCameraFollowing) {
+      const visibleWidth = layout.width / nextZoom;
+      const visibleHeight = layout.height / nextZoom;
+      const maxScrollX = Math.max(this.matchMapContext.width - visibleWidth, 0);
+      const maxScrollY = Math.max(this.matchMapContext.height - visibleHeight, 0);
+      camera.scrollX = clamp(previousCenterX - visibleWidth / 2, 0, maxScrollX);
+      camera.scrollY = clamp(previousCenterY - visibleHeight / 2, 0, maxScrollY);
+    }
+
+    this.spectator?.setViewportSize(layout.width, layout.height);
+
+    const { width, height, insets } = layout;
+    const hudFrameRight = layout.hudFrame.x + layout.hudFrame.width;
+    const topInset = insets.top;
+    const rightInset = insets.right;
+    const bottomInset = insets.bottom;
+    const mobileBottomRightReserve = layout.mode === 'mobile-landscape' ? MOBILE_BOTTOM_RIGHT_HUD_RESERVE : 0;
+
+    this.scoreDisplayUI?.setPosition(hudFrameRight - 10 - rightInset, 10 + topInset);
+    this.killCounterUI?.setPosition(hudFrameRight - 10 - rightInset, 42 + topInset);
+    const hudScale = layout.mode === 'mobile-landscape' ? GameSceneUI.HUD_LAYOUT.MOBILE_HUD_SCALE : 1;
+    this.healthBarUI?.setScale(hudScale);
+    this.scoreDisplayUI?.setScale(hudScale);
+    this.killCounterUI?.setScale(hudScale);
+    this.killFeedUI?.setPosition(hudFrameRight - 10 - rightInset, 100 + topInset);
+    this.dodgeRollCooldownUI?.setPosition(
+      hudFrameRight - 50 - rightInset,
+      height - 50 - bottomInset - mobileBottomRightReserve
+    );
+    this.pickupPromptUI?.setPosition(width / 2, height - 100 - bottomInset);
+    this.pickupNotificationUI?.setPosition(width / 2, height / 2);
+  }
+
+  private isPrimaryFireHeld(): boolean {
+    return this.desktopFireHeld || this.mobileFireHeld;
+  }
+
+  private setFireHeld(source: 'desktop' | 'mobile', isHeld: boolean): void {
+    const wasHeld = this.isPrimaryFireHeld();
+
+    if (source === 'desktop') {
+      this.desktopFireHeld = isHeld;
+    } else {
+      this.mobileFireHeld = isHeld;
+    }
+
+    const isNowHeld = this.isPrimaryFireHeld();
+    if (!wasHeld && isNowHeld) {
+      this.handlePrimaryFireStart();
+    } else if (wasHeld && !isNowHeld) {
+      this.handlePrimaryFireEnd();
+    }
+  }
+
+  private handlePrimaryFireStart(): void {
+    if (!this.shootingManager || !this.inputManager) {
+      return;
+    }
+
+    const aimAngle = this.inputManager.getAimAngle();
+    this.shootingManager.setAimAngle(aimAngle);
+
+    if (this.shootingManager.isMeleeWeapon()) {
+      const didAttack = this.shootingManager.meleeAttack();
+      if (didAttack) {
+        const localPlayerId = this.playerManager.getLocalPlayerId();
+        if (localPlayerId) {
+          const localPos = this.playerManager.getPlayerPosition(localPlayerId);
+          if (localPos) {
+            this.meleeWeaponManager.updatePosition(localPlayerId, localPos);
+            this.meleeWeaponManager.startSwing(localPlayerId, aimAngle);
+          }
+        }
+      }
+      return;
+    }
+
+    const obstructed = this.getObstructedBarrelPosition(aimAngle);
+    const didShoot = this.shootingManager.shoot();
+    if (didShoot && obstructed) {
+      this.ui.showWallSpark(obstructed.x, obstructed.y);
+    }
+  }
+
+  private handlePrimaryFireEnd(): void {
+    this.desktopFireHeld = false;
+    this.mobileFireHeld = false;
+  }
+
+  private attemptDodgeRoll(): void {
+    if (!this.dodgeRollManager || !this.dodgeRollManager.canDodgeRoll() || !this.inputManager) {
+      return;
+    }
+
+    const inputState = this.inputManager.getState();
+    const rollDirection = { x: 0, y: 0 };
+
+    if (inputState.up || inputState.down || inputState.left || inputState.right) {
+      if (inputState.right) rollDirection.x += 1;
+      if (inputState.left) rollDirection.x -= 1;
+      if (inputState.down) rollDirection.y += 1;
+      if (inputState.up) rollDirection.y -= 1;
+
+      const magnitude = Math.sqrt(rollDirection.x ** 2 + rollDirection.y ** 2);
+      if (magnitude > 0) {
+        rollDirection.x /= magnitude;
+        rollDirection.y /= magnitude;
+      }
+    } else {
+      const aimAngle = this.inputManager.getAimAngle();
+      rollDirection.x = Math.cos(aimAngle);
+      rollDirection.y = Math.sin(aimAngle);
+    }
+
+    this.wsClient.send({
+      type: 'player:dodge_roll',
+      timestamp: Date.now(),
+      data: { direction: rollDirection },
+    });
   }
 
   /**
@@ -613,9 +784,14 @@ export class GameScene extends Phaser.Scene {
     if (nearest) {
       this.pickupPromptUI.show(nearest.weaponType);
       this.nearbyWeaponCrate = nearest;
+      setMobilePickupAction({
+        crateId: nearest.id,
+        weaponType: nearest.weaponType,
+      });
     } else {
       this.pickupPromptUI.hide();
       this.nearbyWeaponCrate = null;
+      setMobilePickupAction(null);
     }
   }
 
@@ -732,6 +908,10 @@ export class GameScene extends Phaser.Scene {
     if (this.shootingManager) {
       this.shootingManager.destroy();
     }
+    this.unsubscribeMobileIntent?.();
+    this.unsubscribeRuntimeAction?.();
+    this.unsubscribeViewportLayout?.();
+    setMobilePickupAction(null);
 
     if (this.wsClient) {
       this.wsClient.setGameplayReady(false);

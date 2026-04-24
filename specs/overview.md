@@ -1,7 +1,7 @@
 # Overview
 
-> **Spec Version**: 1.1.0
-> **Last Updated**: 2026-04-07
+> **Spec Version**: 1.2.0
+> **Last Updated**: 2026-04-23
 > **Depends On**: None (root specification)
 > **Depended By**: [constants.md](constants.md), [maps.md](maps.md), [arena.md](arena.md), [player.md](player.md), [networking.md](networking.md), [client-architecture.md](client-architecture.md), [server-architecture.md](server-architecture.md)
 
@@ -58,7 +58,8 @@ Stick Rumble is a top-down multiplayer shooter where stick figure characters bat
 - **Multiplayer**: 2-8 players per match
 - **Fast-paced**: Instant respawns (3 seconds), high mobility
 - **Competitive**: Kill-based scoring with time limits
-- **Accessible**: Simple WASD + mouse controls
+- **Accessible**: Existing desktop keyboard/mouse play plus optional mobile touch mode
+- **Session-stable**: Device-layout changes may alter stage chrome locally, but may not restart or churn an active match session
 
 ### Win Conditions
 
@@ -93,6 +94,7 @@ Each match is played on a selected map loaded from shared configuration files. T
 
 **Why this design:**
 - WASD + mouse mirrors industry-standard FPS controls
+- Optional mobile mode extends the same match to phone play without replacing the desktop baseline
 - Dodge roll adds skill expression and outplay potential
 - Sprint creates risk/reward tradeoff (speed vs accuracy)
 
@@ -230,6 +232,10 @@ stick-rumble-client/
 └── package.json               # Node dependencies
 
 Dev URL: http://localhost:5173
+
+Local development launched from the repository root must start the client dev server with Vite's `--host` flag so the app is reachable from the host network interface, not only the loopback interface. The server side of the same workflow must also bind on the host network interface rather than loopback-only so phones or other devices on the same LAN can reach both the browser app and the WebSocket endpoint during local testing. This applies to the root workflow entry points `make dev` and `make dev-server`.
+
+When no explicit local-development override is provided for the WebSocket URL, the client must derive the default development socket target from the browser's current hostname and connect to port `8080` on that same host. A page loaded from `http://192.168.1.25:5173` must therefore default to `ws://192.168.1.25:8080/ws`, while a page loaded from `http://localhost:5173` still defaults to `ws://localhost:8080/ws`.
 ```
 
 **Manager Pattern:**
@@ -704,6 +710,7 @@ func (s *Server) Serve(ctx context.Context) error {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.2.0 | 2026-04-23 | Updated the root product framing to recognize optional mobile touch mode alongside the unchanged desktop keyboard/mouse baseline. |
 | 1.0.0 | 2026-02-02 | Initial specification |
 | 1.0.1 | 2026-02-16 | Fixed GameServer struct — replaced nonexistent Room/Match/ticker/broadcaster fields with actual callbacks and duration configs from `gameserver.go`. |
 | 1.0.2 | 2026-02-16 | Fixed anti-cheat PlayerShoot pseudocode — no `IsDead` check (only `!exists`), weapon state via `gs.weaponStates` map (not `player.Weapon`). |

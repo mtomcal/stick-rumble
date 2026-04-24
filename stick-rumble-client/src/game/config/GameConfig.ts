@@ -1,10 +1,11 @@
 import Phaser from 'phaser';
 import { GameScene } from '../scenes/GameScene';
+import { DESKTOP_VIEWPORT_HEIGHT, DESKTOP_VIEWPORT_WIDTH } from './viewport';
 
 export const GameConfig: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
-  width: 1280,
-  height: 720,
+  width: DESKTOP_VIEWPORT_WIDTH,
+  height: DESKTOP_VIEWPORT_HEIGHT,
   parent: 'game-container',
   backgroundColor: '#C8CCC8',
   physics: {
@@ -16,7 +17,14 @@ export const GameConfig: Phaser.Types.Core.GameConfig = {
   },
   scene: [GameScene],
   scale: {
-    mode: Phaser.Scale.FIT,
-    autoCenter: Phaser.Scale.CENTER_BOTH,
+    mode: Phaser.Scale.RESIZE,
   },
 };
+
+export function createGameConfig(width: number, height: number): Phaser.Types.Core.GameConfig {
+  return {
+    ...GameConfig,
+    width,
+    height,
+  };
+}

@@ -5,6 +5,7 @@ import { Crosshair } from '../entities/Crosshair';
 import { COLORS, MINIMAP, RELOAD_ARC } from '../../shared/constants';
 import { getDefaultMatchMapContext } from '../../shared/maps';
 import { HudFlexLayout, createHudLayoutItem, type HudLayoutItem } from '../ui/HudFlexLayout';
+import type { GameplayViewportLayout } from '../../shared/types';
 
 /**
  * GameSceneUI - Manages all UI elements for the game scene
@@ -19,6 +20,8 @@ export class GameSceneUI {
     TOP_LEFT_TEXT_COLUMN_X: 28,
     MINIMAP_X: 20,
     MINIMAP_MARGIN_BOTTOM: 20,
+    MOBILE_BOTTOM_CONTROL_RESERVE: 156,
+    MOBILE_HUD_SCALE: 0.88,
   } as const;
 
   private scene: Phaser.Scene;
@@ -30,6 +33,7 @@ export class GameSceneUI {
   private ammoRowY: number = 0;
   private topLeftClusterLayout: HudFlexLayout | null = null;
   private topLeftClusterBackground: Phaser.GameObjects.Rectangle | null = null;
+  private hudScale: number = 1;
 
   /**
    * Check if scene is valid and active for rendering
@@ -48,6 +52,13 @@ export class GameSceneUI {
   private minimapY: number = 0;
   private minimapWorldWidth: number = getDefaultMatchMapContext().width;
   private minimapWorldHeight: number = getDefaultMatchMapContext().height;
+  private viewportLayout: GameplayViewportLayout = {
+    mode: 'desktop',
+    width: 1280,
+    height: 720,
+    insets: { top: 0, right: 0, bottom: 0, left: 0 },
+    hudFrame: { x: 0, y: 0, width: 1280, height: 720 },
+  };
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -598,12 +609,21 @@ export class GameSceneUI {
    * Called once during scene creation.
    */
   setupMinimap(): void {
+    this.redrawMinimapFrame();
+  }
+
+  private redrawMinimapFrame(): void {
     const mapSize = MINIMAP.SIZE; // 170px
 
+    this.minimapStaticGraphics?.clear();
+    this.minimapDynamicGraphics?.clear();
+
     // Static layer — drawn once
-    this.minimapStaticGraphics = this.scene.add.graphics();
-    this.minimapStaticGraphics.setScrollFactor(0);
-    this.minimapStaticGraphics.setDepth(1999);
+    if (!this.minimapStaticGraphics) {
+      this.minimapStaticGraphics = this.scene.add.graphics();
+      this.minimapStaticGraphics.setScrollFactor(0);
+      this.minimapStaticGraphics.setDepth(1999);
+    }
 
     // Background — square, dark gray at 50% alpha
     this.minimapStaticGraphics.fillStyle(MINIMAP.BG_COLOR, 0.5);
@@ -614,9 +634,11 @@ export class GameSceneUI {
     this.minimapStaticGraphics.strokeRect(this.minimapX, this.minimapY, mapSize, mapSize);
 
     // Dynamic layer — cleared and redrawn each frame
-    this.minimapDynamicGraphics = this.scene.add.graphics();
-    this.minimapDynamicGraphics.setScrollFactor(0);
-    this.minimapDynamicGraphics.setDepth(2000);
+    if (!this.minimapDynamicGraphics) {
+      this.minimapDynamicGraphics = this.scene.add.graphics();
+      this.minimapDynamicGraphics.setScrollFactor(0);
+      this.minimapDynamicGraphics.setDepth(2000);
+    }
   }
 
   /**
@@ -775,15 +797,73 @@ export class GameSceneUI {
       return;
     }
 
+    const topInset = GameSceneUI.HUD_LAYOUT.TOP_LEFT_PADDING_Y + this.viewportLayout.insets.top;
+    const leftInset =
+      this.viewportLayout.hudFrame.x +
+      GameSceneUI.HUD_LAYOUT.TOP_LEFT_PADDING_X +
+      this.viewportLayout.insets.left;
     const clusterSize = this.topLeftClusterLayout.measure();
     this.topLeftClusterBackground.setPosition(
-      GameSceneUI.HUD_LAYOUT.TOP_LEFT_PADDING_X,
-      GameSceneUI.HUD_LAYOUT.TOP_LEFT_PADDING_Y
+      leftInset,
+      topInset
     );
     this.topLeftClusterBackground.setDisplaySize(clusterSize.width, clusterSize.height);
+    this.topLeftClusterBackground.setScale(this.hudScale);
     this.topLeftClusterLayout.setPosition(
-      GameSceneUI.HUD_LAYOUT.TOP_LEFT_PADDING_X,
-      GameSceneUI.HUD_LAYOUT.TOP_LEFT_PADDING_Y
+      leftInset,
+      topInset
     );
+  }
+
+  private applyHudScale(scale: number): void {
+    this.hudScale = scale;
+    this.ammoText?.setScale(scale);
+    this.ammoIcon?.setScale(scale);
+    this.matchTimerText?.setScale(scale);
+    this.topLeftClusterBackground?.setScale(scale);
+  }
+
+  setViewportLayout(layout: GameplayViewportLayout): void {
+    this.viewportLayout = {
+      mode: layout.mode,
+      width: layout.width,
+      height: layout.height,
+      insets: { ...layout.insets },
+      hudFrame: { ...layout.hudFrame },
+    };
+
+    const cameraWidth = layout.width;
+    const cameraHeight = layout.height;
+    const topInset = layout.insets.top;
+    const leftInset = layout.insets.left;
+    const bottomInset = layout.insets.bottom;
+    const hudFrameLeft = layout.hudFrame.x;
+    const hudScale =
+      layout.mode === 'mobile-landscape' ? GameSceneUI.HUD_LAYOUT.MOBILE_HUD_SCALE : 1;
+
+    this.applyHudScale(hudScale);
+
+    this.applyTopLeftClusterLayout();
+
+    if (this.matchTimerText) {
+      this.matchTimerText.setPosition(hudFrameLeft + layout.hudFrame.width / 2, 10 + topInset);
+    }
+
+    if (this.damageFlashOverlay) {
+      this.damageFlashOverlay.setPosition(cameraWidth / 2, cameraHeight / 2);
+      this.damageFlashOverlay.setDisplaySize(cameraWidth, cameraHeight);
+    }
+
+    const mobileReserve =
+      layout.mode === 'mobile-landscape' ? GameSceneUI.HUD_LAYOUT.MOBILE_BOTTOM_CONTROL_RESERVE : 0;
+    this.minimapX = hudFrameLeft + GameSceneUI.HUD_LAYOUT.MINIMAP_X + leftInset;
+    this.minimapY = Math.max(
+      topInset + 120,
+      cameraHeight - bottomInset - MINIMAP.SIZE - GameSceneUI.HUD_LAYOUT.MINIMAP_MARGIN_BOTTOM - mobileReserve
+    );
+
+    if (this.minimapStaticGraphics || this.minimapDynamicGraphics) {
+      this.redrawMinimapFrame();
+    }
   }
 }

@@ -36,6 +36,7 @@ const validatePlayerShoot: ValidateFunction<PlayerShootData> = ajv.compile(Playe
 const validateWeaponPickupAttempt: ValidateFunction<WeaponPickupAttemptData> = ajv.compile(
   WeaponPickupAttemptDataSchema
 );
+const MAX_QUEUED_GAMEPLAY_MESSAGES = 256;
 
 export class WebSocketClient {
   private ws: WebSocket | null = null;
@@ -301,7 +302,7 @@ export class WebSocketClient {
     }
 
     if (this.shouldQueueGameplayMessage(message)) {
-      this.queuedGameplayMessages.push(message);
+      this.queueGameplayMessage(message);
       return;
     }
 
@@ -321,6 +322,19 @@ export class WebSocketClient {
     ]);
 
     return !immediateTypes.has(message.type);
+  }
+
+  private queueGameplayMessage(message: Message): void {
+    this.queuedGameplayMessages.push(message);
+
+    if (this.queuedGameplayMessages.length <= MAX_QUEUED_GAMEPLAY_MESSAGES) {
+      return;
+    }
+
+    this.queuedGameplayMessages.splice(
+      0,
+      this.queuedGameplayMessages.length - MAX_QUEUED_GAMEPLAY_MESSAGES
+    );
   }
 
   private dispatchMessage(message: Message): void {

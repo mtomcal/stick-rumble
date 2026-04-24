@@ -61,6 +61,7 @@ describe('GameSceneUI', () => {
             setAlpha: vi.fn().mockReturnThis(),
             setPosition: vi.fn().mockReturnThis(),
             setDisplaySize: vi.fn().mockReturnThis(),
+            setScale: vi.fn().mockReturnThis(),
             destroy: vi.fn(),
           }
           createdRectangles.push(rectangle)
