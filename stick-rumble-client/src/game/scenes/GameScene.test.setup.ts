@@ -56,9 +56,11 @@ export const createMockScene = () => {
     centerY: 540,
     width: 1920,
     height: 1080,
+    zoom: 1,
     scrollX: 0,
     scrollY: 0,
     setBounds: vi.fn(),
+    setZoom: vi.fn().mockReturnThis(),
     startFollow: vi.fn(),
     stopFollow: vi.fn(),
   };

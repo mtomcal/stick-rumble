@@ -55,6 +55,7 @@ export class GameSceneUI {
     width: 1280,
     height: 720,
     insets: { top: 0, right: 0, bottom: 0, left: 0 },
+    hudFrame: { x: 0, y: 0, width: 1280, height: 720 },
   };
 
   constructor(scene: Phaser.Scene) {
@@ -795,7 +796,10 @@ export class GameSceneUI {
     }
 
     const topInset = GameSceneUI.HUD_LAYOUT.TOP_LEFT_PADDING_Y + this.viewportLayout.insets.top;
-    const leftInset = GameSceneUI.HUD_LAYOUT.TOP_LEFT_PADDING_X + this.viewportLayout.insets.left;
+    const leftInset =
+      this.viewportLayout.hudFrame.x +
+      GameSceneUI.HUD_LAYOUT.TOP_LEFT_PADDING_X +
+      this.viewportLayout.insets.left;
     const clusterSize = this.topLeftClusterLayout.measure();
     this.topLeftClusterBackground.setPosition(
       leftInset,
@@ -814,6 +818,7 @@ export class GameSceneUI {
       width: layout.width,
       height: layout.height,
       insets: { ...layout.insets },
+      hudFrame: { ...layout.hudFrame },
     };
 
     const cameraWidth = layout.width;
@@ -821,11 +826,12 @@ export class GameSceneUI {
     const topInset = layout.insets.top;
     const leftInset = layout.insets.left;
     const bottomInset = layout.insets.bottom;
+    const hudFrameLeft = layout.hudFrame.x;
 
     this.applyTopLeftClusterLayout();
 
     if (this.matchTimerText) {
-      this.matchTimerText.setPosition(cameraWidth / 2, 10 + topInset);
+      this.matchTimerText.setPosition(hudFrameLeft + layout.hudFrame.width / 2, 10 + topInset);
     }
 
     if (this.damageFlashOverlay) {
@@ -835,7 +841,7 @@ export class GameSceneUI {
 
     const mobileReserve =
       layout.mode === 'mobile-landscape' ? GameSceneUI.HUD_LAYOUT.MOBILE_BOTTOM_CONTROL_RESERVE : 0;
-    this.minimapX = GameSceneUI.HUD_LAYOUT.MINIMAP_X + leftInset;
+    this.minimapX = hudFrameLeft + GameSceneUI.HUD_LAYOUT.MINIMAP_X + leftInset;
     this.minimapY = Math.max(
       topInset + 120,
       cameraHeight - bottomInset - MINIMAP.SIZE - GameSceneUI.HUD_LAYOUT.MINIMAP_MARGIN_BOTTOM - mobileReserve

@@ -121,7 +121,9 @@ function setTouchPhoneLayout(enabled: boolean): void {
     value: enabled ? 5 : 0,
   })
   window.matchMedia = vi.fn().mockImplementation((query: string) => ({
-    matches: enabled && query === '(pointer: coarse)',
+    matches:
+      (enabled && query === '(pointer: coarse)') ||
+      (query === '(display-mode: standalone)' ? false : false),
     media: query,
     onchange: null,
     addListener: vi.fn(),
@@ -353,6 +355,30 @@ describe('App', () => {
     await waitFor(() =>
       expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'mobile-landscape')
     )
+    expect(document.querySelector('.app-container')).toHaveClass('app-container--mobile-stage')
+    expect(screen.getByTestId('mobile-scroll-affordance')).toBeInTheDocument()
+    expect(screen.getByText('Swipe down to play')).toBeInTheDocument()
+    expect(testState.phaserRenderSpy.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        layout: expect.objectContaining({
+          mode: 'mobile-landscape',
+          width: 1558,
+          height: 720,
+          hudFrame: { x: 139, y: 0, width: 1280, height: 720 },
+        }),
+      }),
+    )
+    expect(testState.phaserRenderSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        layout: expect.objectContaining({
+          mode: 'mobile-landscape',
+          width: 1558,
+          height: 720,
+          hudFrame: { x: 139, y: 0, width: 1280, height: 720 },
+        }),
+      }),
+    )
+    expect(screen.getByTestId('stage-shell')).toHaveStyle({ aspectRatio: '1558 / 720' })
     expect(screen.getByTestId('mobile-controls')).toBeInTheDocument()
     expect(screen.queryByTestId('rotate-device-gate')).not.toBeInTheDocument()
   })

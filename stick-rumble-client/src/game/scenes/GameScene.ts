@@ -39,6 +39,7 @@ import {
   getActiveMatchBootstrap,
   getMobileGameplayIntent,
   getViewportLayout,
+  setMobilePickupAction,
   subscribeMobileGameplayIntent,
   subscribeRuntimeAction,
   subscribeViewportLayout,
@@ -46,6 +47,12 @@ import {
 
 const OBSTACLE_EDGE_INSET_PX = 1;
 const MOBILE_BOTTOM_RIGHT_HUD_RESERVE = 180;
+const DESKTOP_CAMERA_ZOOM = 1;
+const MOBILE_LANDSCAPE_CAMERA_ZOOM = 1.15;
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
 
 export function getObstacleReadableEdgeStrokeRect(obstacle: MapObstacle): {
   x: number;
@@ -289,13 +296,30 @@ export class GameScene extends Phaser.Scene {
       const currentAimAngle = this.inputManager.getAimAngle();
       this.playerManager.updateLocalPlayerAim(currentAimAngle);
 
-      // Handle automatic fire for automatic weapons when pointer held
-      if (this.isPrimaryFireHeld() && this.shootingManager && !this.shootingManager.isMeleeWeapon() && this.shootingManager.isAutomatic()) {
+      // Desktop hold-fire remains automatic-only; mobile hold-fire repeats for all weapons at their normal cadence.
+      const shouldRepeatDesktopFire = this.desktopFireHeld && this.shootingManager?.isAutomatic();
+      const shouldRepeatMobileFire = this.mobileFireHeld;
+      if ((shouldRepeatDesktopFire || shouldRepeatMobileFire) && this.shootingManager) {
         this.shootingManager.setAimAngle(currentAimAngle);
-        const obstructed = this.getObstructedBarrelPosition(currentAimAngle);
-        const didShoot = this.shootingManager.shoot();
-        if (didShoot && obstructed) {
-          this.ui.showWallSpark(obstructed.x, obstructed.y);
+
+        if (this.shootingManager.isMeleeWeapon()) {
+          const didAttack = this.shootingManager.meleeAttack();
+          if (didAttack) {
+            const localPlayerId = this.playerManager.getLocalPlayerId();
+            if (localPlayerId) {
+              const localPos = this.playerManager.getPlayerPosition(localPlayerId);
+              if (localPos) {
+                this.meleeWeaponManager.updatePosition(localPlayerId, localPos);
+                this.meleeWeaponManager.startSwing(localPlayerId, currentAimAngle);
+              }
+            }
+          }
+        } else {
+          const obstructed = this.getObstructedBarrelPosition(currentAimAngle);
+          const didShoot = this.shootingManager.shoot();
+          if (didShoot && obstructed) {
+            this.ui.showWallSpark(obstructed.x, obstructed.y);
+          }
         }
       }
 
@@ -439,6 +463,16 @@ export class GameScene extends Phaser.Scene {
         this.shootingManager?.reload();
         return;
       }
+      if (action === 'pickup') {
+        if (this.nearbyWeaponCrate) {
+          this.wsClient.send({
+            type: 'weapon:pickup_attempt',
+            timestamp: Date.now(),
+            data: { crateId: this.nearbyWeaponCrate.id },
+          });
+        }
+        return;
+      }
       this.attemptDodgeRoll();
     });
 
@@ -451,17 +485,54 @@ export class GameScene extends Phaser.Scene {
   private applyViewportLayout(layout: GameplayViewportLayout): void {
     this.ui?.setViewportLayout(layout);
 
+    const camera = this.cameras.main;
+    const previousZoom =
+      typeof (camera as Phaser.Cameras.Scene2D.Camera & { zoom?: number }).zoom === 'number'
+        ? (camera as Phaser.Cameras.Scene2D.Camera & { zoom: number }).zoom
+        : DESKTOP_CAMERA_ZOOM;
+    const previousVisibleWidth = camera.width / previousZoom;
+    const previousVisibleHeight = camera.height / previousZoom;
+    const previousCenterX = camera.scrollX + previousVisibleWidth / 2;
+    const previousCenterY = camera.scrollY + previousVisibleHeight / 2;
+    const nextZoom = layout.mode === 'mobile-landscape' ? MOBILE_LANDSCAPE_CAMERA_ZOOM : DESKTOP_CAMERA_ZOOM;
+    if (camera.width !== layout.width || camera.height !== layout.height) {
+      if (typeof camera.setSize === 'function') {
+        camera.setSize(layout.width, layout.height);
+      } else {
+        (camera as Phaser.Cameras.Scene2D.Camera & { width: number; height: number }).width = layout.width;
+        (camera as Phaser.Cameras.Scene2D.Camera & { width: number; height: number }).height = layout.height;
+      }
+    }
+
+    if (typeof camera.setZoom === 'function') {
+      camera.setZoom(nextZoom);
+    } else {
+      (camera as Phaser.Cameras.Scene2D.Camera & { zoom: number }).zoom = nextZoom;
+    }
+
+    if (!this.isCameraFollowing) {
+      const visibleWidth = layout.width / nextZoom;
+      const visibleHeight = layout.height / nextZoom;
+      const maxScrollX = Math.max(this.matchMapContext.width - visibleWidth, 0);
+      const maxScrollY = Math.max(this.matchMapContext.height - visibleHeight, 0);
+      camera.scrollX = clamp(previousCenterX - visibleWidth / 2, 0, maxScrollX);
+      camera.scrollY = clamp(previousCenterY - visibleHeight / 2, 0, maxScrollY);
+    }
+
+    this.spectator?.setViewportSize(layout.width, layout.height);
+
     const { width, height, insets } = layout;
+    const hudFrameRight = layout.hudFrame.x + layout.hudFrame.width;
     const topInset = insets.top;
     const rightInset = insets.right;
     const bottomInset = insets.bottom;
     const mobileBottomRightReserve = layout.mode === 'mobile-landscape' ? MOBILE_BOTTOM_RIGHT_HUD_RESERVE : 0;
 
-    this.scoreDisplayUI?.setPosition(width - 10 - rightInset, 10 + topInset);
-    this.killCounterUI?.setPosition(width - 10 - rightInset, 42 + topInset);
-    this.killFeedUI?.setPosition(width - 10 - rightInset, 100 + topInset);
+    this.scoreDisplayUI?.setPosition(hudFrameRight - 10 - rightInset, 10 + topInset);
+    this.killCounterUI?.setPosition(hudFrameRight - 10 - rightInset, 42 + topInset);
+    this.killFeedUI?.setPosition(hudFrameRight - 10 - rightInset, 100 + topInset);
     this.dodgeRollCooldownUI?.setPosition(
-      width - 50 - rightInset,
+      hudFrameRight - 50 - rightInset,
       height - 50 - bottomInset - mobileBottomRightReserve
     );
     this.pickupPromptUI?.setPosition(width / 2, height - 100 - bottomInset);
@@ -709,9 +780,14 @@ export class GameScene extends Phaser.Scene {
     if (nearest) {
       this.pickupPromptUI.show(nearest.weaponType);
       this.nearbyWeaponCrate = nearest;
+      setMobilePickupAction({
+        crateId: nearest.id,
+        weaponType: nearest.weaponType,
+      });
     } else {
       this.pickupPromptUI.hide();
       this.nearbyWeaponCrate = null;
+      setMobilePickupAction(null);
     }
   }
 
@@ -831,6 +907,7 @@ export class GameScene extends Phaser.Scene {
     this.unsubscribeMobileIntent?.();
     this.unsubscribeRuntimeAction?.();
     this.unsubscribeViewportLayout?.();
+    setMobilePickupAction(null);
 
     if (this.wsClient) {
       this.wsClient.setGameplayReady(false);

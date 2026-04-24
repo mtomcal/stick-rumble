@@ -19,6 +19,7 @@ export function createBootstrapWsClient() {
       handlers.get(event)?.delete(handler)
     }),
     send: vi.fn(),
+    sendInputState: vi.fn(),
     setGameplayReady: vi.fn(),
     getTotalHandlerCount: vi.fn(() => [...handlers.values()].reduce((total, set) => total + set.size, 0)),
     emit(event: string, payload: unknown) {

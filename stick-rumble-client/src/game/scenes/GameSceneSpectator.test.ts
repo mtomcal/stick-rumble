@@ -44,6 +44,8 @@ describe('GameSceneSpectator', () => {
       setScrollFactor: vi.fn().mockReturnThis(),
       setDepth: vi.fn().mockReturnThis(),
       setStrokeStyle: vi.fn().mockReturnThis(),
+      setPosition: vi.fn().mockReturnThis(),
+      setDisplaySize: vi.fn().mockReturnThis(),
       destroy: vi.fn(),
     };
 
@@ -52,6 +54,7 @@ describe('GameSceneSpectator', () => {
       setOrigin: vi.fn().mockReturnThis(),
       setScrollFactor: vi.fn().mockReturnThis(),
       setDepth: vi.fn().mockReturnThis(),
+      setPosition: vi.fn().mockReturnThis(),
       destroy: vi.fn(),
     };
 
@@ -72,6 +75,7 @@ describe('GameSceneSpectator', () => {
     mockStatsContainer = {
       setScrollFactor: vi.fn().mockReturnThis(),
       setDepth: vi.fn().mockReturnThis(),
+      setPosition: vi.fn().mockReturnThis(),
       destroy: vi.fn(),
     };
 
@@ -93,6 +97,7 @@ describe('GameSceneSpectator', () => {
     mockTryAgainButton = {
       setScrollFactor: vi.fn().mockReturnThis(),
       setDepth: vi.fn().mockReturnThis(),
+      setPosition: vi.fn().mockReturnThis(),
       destroy: vi.fn(),
     };
 
@@ -362,6 +367,18 @@ describe('GameSceneSpectator', () => {
   });
 
   describe('updateSpectatorMode', () => {
+    it('repositions the death overlay when the viewport changes', () => {
+      spectator.enterSpectatorMode();
+
+      spectator.setViewportSize(1558, 720);
+
+      expect(mockOverlay.setPosition).toHaveBeenCalledWith(779, 360);
+      expect(mockOverlay.setDisplaySize).toHaveBeenCalledWith(1558, 720);
+      expect(mockDiedText.setPosition).toHaveBeenCalledWith(779, 260);
+      expect(mockStatsContainer.setPosition).toHaveBeenCalledWith(779, 360);
+      expect(mockTryAgainButton.setPosition).toHaveBeenCalledWith(779, 440);
+    });
+
     it('should not update camera when not in spectator mode', () => {
       spectator.updateSpectatorMode();
       expect(mockCamera.scrollX).toBe(0);

@@ -131,6 +131,16 @@ interface UIElementPosition {
 - When mobile mode is not detected, gameplay continues to use the existing centered desktop stage behavior.
 - When mobile mode is detected on a phone-sized touch layout, gameplay uses a full-bleed landscape stage that may consume the entire visible app area.
 - Mobile mode must respect `env(safe-area-inset-*)` padding and dynamic viewport height; browser chrome may not cover touch controls or crop HUD elements.
+- On phone landscape layouts, the 16:9 gameplay surface must prioritize using the available width rather than shrinking to fit the currently visible browser-chrome height. If browser chrome makes the page taller than the visible viewport, the page may remain vertically scrollable so the user can scroll Safari chrome away and settle the full gameplay frame into view.
+- The mobile stage should use only minimal non-safe-area padding around the 16:9 surface. Decorative outer margins may not consume a large fraction of phone landscape width.
+- In `mobile-landscape`, the gameplay surface may not present as a desktop-style floating card. Large outer gutters, oversized drop shadows, or rounded-corner framing that visually shrinks the play area are out of contract.
+- No ancestor layout wrapper may horizontally center, max-width clamp, or otherwise shrink the mobile stage below the viewport-safe width. In mobile landscape, the stage should effectively span the viewport width minus only minimal safe-area and padding offsets.
+- Mobile landscape widens the logical gameplay viewport rather than preserving an immutable desktop 16:9 aperture. The extra phone width is used to reveal more world horizontally while keeping the desktop vertical gameplay span.
+- The widened logical mobile viewport applies only to `mobile-landscape`. Desktop and portrait-blocked states keep the desktop baseline viewport contract.
+- Mobile landscape logical viewport height remains fixed at `720`. Logical viewport width is derived from the phone landscape aspect ratio with a minimum of `1280` and no artificial maximum-width cap.
+- The recommended width formula is `max(round(720 * aspectRatio), 1280)`.
+- The widened logical width is stable during play. Browser-chrome show/hide animation may change the visible page height, but it may not continuously widen/narrow the gameplay framing during that chrome motion. Reframing should happen only on meaningful resize/orientation changes.
+- When switching between desktop and widened mobile landscape, the visible framing should expand or contract around the player's current center rather than preserving a raw top-left camera origin.
 - Portrait phone gameplay is out of contract only for mobile mode. In that mode, the app must present a rotate-device screen instead of an active gameplay layout until landscape is restored.
 - The gameplay stage may visually switch between centered and full-bleed presentation by mode, but the match camera and core HUD contract must remain recognizable across both.
 
@@ -210,13 +220,26 @@ The multiplayer mobile mode follows the prototype's phone presentation closely: 
 - The default desktop HUD and keyboard/mouse flow remain authoritative for non-mobile-mode play.
 - Mobile mode is landscape-only.
 - The gameplay surface is full-bleed within the phone-safe area rather than a desktop-style framed card.
+- The widened mobile landscape view may reveal more world horizontally than desktop. This is an accepted tradeoff for using phone landscape width effectively.
 - Top-left HUD ownership remains the same as desktop: minimap plus the survival/combat cluster.
 - Top-right HUD ownership remains the same as desktop: score, kills, timer, and kill feed.
 - Bottom-left becomes a movement control zone in touch mode. The minimap remains in the upper portion of the corner, and the movement stick occupies the lower safe-area-respecting portion.
 - Bottom-right becomes an aim/fire control zone in touch mode. The aim stick owns the lower corner, and any touch buttons such as dodge or reload must stack above or alongside it without covering score-critical HUD.
+- Touch controls stay pinned to the true screen-safe corners. They do not move inward just because the logical world viewport becomes wider.
 - Touch controls are rendered as semi-transparent overlays inside the gameplay stage, not as separate below-stage UI.
+- Active stick drags must continue tracking even after the finger leaves the visible stick ring. Crossing the ring boundary clamps the reported stick distance but may not cancel the drag; only release or cancellation of that same touch ends the control.
 - The aim stick drives the same player-facing reticle/facing contract as desktop aim. Mobile is not a hidden-angle mode.
+- Once the aim stick is engaged outside the aim dead zone, it simultaneously sets the facing/reticle direction and enters held-fire state for ranged weapons. There is no separate inner aim-only band on the stick.
+- Held-fire from the aim stick must be continuous rather than edge-triggered. Ranged weapons keep attempting shots at their normal weapon cadence while the stick remains engaged outside the dead zone. This includes semi-automatic weapons on mobile; sustained stick engagement acts as the mobile substitute for repeated tapping.
+- Mobile melee follows the same sustained-engagement rule: while the aim stick remains engaged outside the dead zone, the client keeps reattempting melee attacks after each cooldown expires. A held stick may not bypass melee cooldowns, but it should produce the next swing as soon as the weapon becomes ready again.
+- Mobile action buttons continue to expose reload and dodge. When the local player is within valid pickup range of an available crate, the action cluster must also expose a context-sensitive pickup button labeled `Pick Up {WEAPON_NAME}`.
+- In browser-tab mobile landscape, the client may reserve artificial vertical slack above the gameplay stage and anchor the stage to the bottom of the document so the user has an easy scroll gesture available to collapse Safari chrome.
+- That browser-tab mobile layout may show lightweight copy such as `Swipe down to play` before the stage. This is guidance, not a gameplay control, and it should disappear naturally once the player scrolls into play.
+- Mobile pickup must remain intentional. Walking into a crate may show pickup affordance, but may not automatically replace the current weapon.
 - Multiplayer chat is not part of the active product and must not claim screen space in mobile mode.
+- In-browser iPhone Safari must be treated as chrome-present: the landscape address bar / tab UI may remain visible, so the gameplay layout must stay safe-area-aware and readable even when Safari keeps its browser controls on screen.
+- Mobile landscape should use a modestly tighter gameplay camera than desktop so the player avatar and nearby combat space are easier to read on phone screens. The mobile zoom increase must be small enough that the wider horizontal framing still materially benefits visibility.
+- To support a true browser-chrome-free launch on iPhone, the client must expose installable web-app metadata (`manifest`, standalone display mode, and Apple mobile-web-app capability tags) so a Home Screen launch can open in standalone web-app mode.
 
 ### Corner Ownership
 
@@ -236,6 +259,11 @@ The HUD must remain spatially stable during gameplay. It may be redesigned, but 
 - Top-right inset handling applies to score, kills, timer, and kill feed.
 - Bottom-right inset handling applies to the dodge/action cluster in desktop mode and to aim/fire plus action controls in mobile mode.
 - Bottom-left inset handling must leave space for the movement control zone in mobile mode.
+- In widened mobile landscape, the world viewport and the HUD frame are distinct.
+- The world camera may widen horizontally up to the mobile cap, but the core HUD does not have to spread to those outermost widened edges.
+- The health/ammo cluster, score/kills/timer cluster, kill feed, and minimap should remain inside a constrained HUD frame that stays closer to current desktop glance positions.
+- The minimap follows that constrained HUD frame rather than pinning itself to the absolute widened world edge.
+- Touch controls are the exception: they remain anchored to the true safe-area corners for thumb reach even when the HUD frame stays inward.
 
 The title banner, connection hint text, gameplay chat log, and Phaser debug overlay are not part of the normal in-match HUD contract.
 

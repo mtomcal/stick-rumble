@@ -70,11 +70,19 @@ export interface ViewportInsets {
   left: number;
 }
 
+export interface GameplayHudFrame {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface GameplayViewportLayout {
   mode: StageMode;
   width: number;
   height: number;
   insets: ViewportInsets;
+  hudFrame: GameplayHudFrame;
 }
 
 export interface JoinErrorPayload {

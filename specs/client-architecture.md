@@ -65,6 +65,8 @@ See [constants.md](constants.md) for all values. Key constants for client archit
 | ARENA_HEIGHT | 1080 | Canonical baseline for the first shipped map; selected map remains authoritative at runtime |
 | WINDOW_WIDTH | 1280 | Default browser window width |
 | WINDOW_HEIGHT | 720 | Default browser window height |
+| MOBILE_VIEWPORT_MIN_WIDTH | 1280 | Minimum logical mobile-landscape width |
+| MOBILE_VIEWPORT_HEIGHT | 720 | Fixed logical mobile-landscape height |
 | SERVER_TICK_RATE | 60 | Server physics updates per second |
 | CLIENT_UPDATE_RATE | 20 | player:move broadcast frequency (Hz) |
 | CLIENT_UPDATE_INTERVAL | 50 | Milliseconds between player:move messages |
@@ -112,6 +114,11 @@ interface MatchSession {
 - `in_match` continues to render the existing centered desktop stage unless mobile mode is automatically detected.
 - When mobile mode is detected on a phone-sized touch layout, `in_match` uses a full-bleed landscape stage with React-owned touch controls in the bottom corners.
 - Mobile mode must use safe-area-aware layout, suppress scrolling/zoom gestures that interfere with play, and reserve the bottom corners for React-owned touch controls.
+- In browser-chrome-constrained phone landscape, the layout should size the 16:9 stage from available width first and allow document-level vertical overflow when necessary so the user can scroll browser chrome away. The stage should not be reduced to a small centered postcard solely to fit inside the currently visible browser bars.
+- In `mobile-landscape`, the rendered gameplay surface should sit nearly edge-to-edge inside the safe area rather than inside a decorative card frame. Large shell padding, pronounced corner rounding, and heavy drop shadows are desktop affordances and should be removed or minimized there.
+- In `mobile-landscape`, the Phaser runtime uses a widened logical viewport rather than the desktop-fixed `1280x720` aperture.
+- That widened mobile viewport keeps logical height fixed at `720` and derives logical width from the mobile aspect ratio with a minimum width of `1280` and no artificial maximum cap.
+- The widened mobile viewport applies only to `mobile-landscape`. Desktop and portrait-blocked states keep the desktop baseline viewport contract.
 - Portrait phone gameplay is blocked by a rotate-device screen only while mobile mode is active, rather than silently degrading the match layout.
 - `match_end` replaces the gameplay surface with a full-screen React results experience.
 
@@ -131,10 +138,14 @@ interface MatchSession {
 - That bridge owns only presentation-local state:
   - active match bootstrap
   - mobile touch intent
-  - viewport layout metadata such as stage mode and safe-area-aware insets
+  - viewport layout metadata such as stage mode, logical viewport size, and safe-area-aware insets
 - The bridge may not become a second source of truth for authoritative gameplay state.
 - React publishes normalized mobile gameplay intent into the bridge, and Phaser consumes that intent through the same movement, aim, shoot, reload, and dodge pathways already used by desktop controls.
 - Updating bridge state during resize, orientation changes, or mobile-control interaction must not recreate the Phaser game instance.
+- In `mobile-landscape`, viewport-layout updates should drive a real Phaser viewport resize path rather than a pure CSS zoom illusion.
+- Mobile logical viewport width should be stable during play. Recompute on meaningful orientation/resize changes, not on every transient Safari chrome animation.
+- When the logical viewport changes between desktop and mobile-landscape widths, the active match should preserve player-centered framing rather than preserving the previous top-left camera origin.
+- In browser-tab mobile landscape, React may provide non-gameplay scroll affordances outside the stage itself, including artificial document height above the stage and instructional copy that teaches the user how to collapse browser chrome. These remain presentation-local and may not alter authoritative gameplay state.
 
 ---
 
@@ -148,8 +159,8 @@ Phaser game configuration object.
 ```typescript
 const GameConfig: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,           // WebGL with Canvas fallback
-  width: 1280,                 // Window width
-  height: 720,                 // Window height
+  width: 1280,                 // Desktop baseline logical viewport width
+  height: 720,                 // Desktop baseline logical viewport height
   parent: 'game-container',    // HTML div ID
   backgroundColor: '#C8CCC8',  // Light gray background (matches arena)
 
@@ -164,7 +175,7 @@ const GameConfig: Phaser.Types.Core.GameConfig = {
   scene: [GameScene],          // Scene classes to load
 
   scale: {
-    mode: Phaser.Scale.FIT,    // Fit to browser window
+    mode: Phaser.Scale.FIT,    // CSS fit behavior after stage-mode viewport selection
     autoCenter: Phaser.Scale.CENTER_BOTH
   }
 };
@@ -173,8 +184,42 @@ const GameConfig: Phaser.Types.Core.GameConfig = {
 **Why:**
 - `Phaser.AUTO` uses WebGL if available, Canvas fallback for compatibility
 - `physics.arcade` with zero gravity enables top-down 2D gameplay
-- `scale.FIT` preserves a consistent 16:9 gameplay aperture across desktop and mobile presentations
+- Desktop keeps the baseline `1280x720` logical aperture
+- Mobile landscape may widen the logical viewport beyond desktop width while preserving the `720`-high gameplay span
+- `scale.FIT` still governs CSS fit behavior after the logical viewport size is chosen for the current stage mode
 - Light gray background (#C8CCC8) matches the arena floor color
+
+### Mobile Landscape Viewport Derivation
+
+In `mobile-landscape`, derive the logical viewport width from the effective mobile aspect ratio while keeping height fixed:
+
+```typescript
+const MOBILE_VIEWPORT_HEIGHT = 720;
+const MOBILE_VIEWPORT_MIN_WIDTH = 1280;
+function getMobileLandscapeViewport(aspectRatio: number) {
+  return {
+    width: Math.max(
+      Math.round(MOBILE_VIEWPORT_HEIGHT * aspectRatio),
+      MOBILE_VIEWPORT_MIN_WIDTH
+    ),
+    height: MOBILE_VIEWPORT_HEIGHT,
+  };
+}
+```
+
+Rules:
+- Apply only to `mobile-landscape`.
+- Use the widened width as the actual logical Phaser viewport width, not just as a CSS display trick.
+- Recompute only on meaningful orientation/resize changes.
+
+### HUD And Control Anchoring Under Widened Mobile View
+
+- The widened mobile landscape viewport primarily benefits world visibility.
+- Core HUD clusters should continue to anchor inside a constrained HUD frame that remains closer to desktop glance positions.
+- The minimap stays inside that constrained HUD frame rather than drifting to the extreme widened edge.
+- Touch controls remain pinned to the true safe-area corners for reachability.
+- Spectator and death overlays use the widened mobile viewport too; they do not snap back to the desktop baseline during an active mobile session.
+- Mobile landscape may also apply a modest camera zoom-in relative to desktop to improve legibility on phones, provided the zoom change does not negate the widened horizontal framing.
 
 ### InputState
 

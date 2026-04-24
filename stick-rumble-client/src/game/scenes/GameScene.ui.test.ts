@@ -56,6 +56,7 @@ describe('GameScene UI flow', () => {
       width: 1280,
       height: 720,
       insets: { top: 0, right: 0, bottom: 0, left: 0 },
+      hudFrame: { x: 0, y: 0, width: 1280, height: 720 },
     })
     vi.clearAllMocks()
   })
@@ -139,21 +140,49 @@ describe('GameScene UI flow', () => {
 
     setViewportLayout({
       mode: 'mobile-landscape',
-      width: 1920,
-      height: 1080,
+      width: 1558,
+      height: 720,
       insets: { top: 24, right: 30, bottom: 48, left: 18 },
+      hudFrame: { x: 139, y: 0, width: 1280, height: 720 },
     })
 
     expect(setViewportLayoutSpy).toHaveBeenCalledWith({
       mode: 'mobile-landscape',
-      width: 1920,
-      height: 1080,
+      width: 1558,
+      height: 720,
       insets: { top: 24, right: 30, bottom: 48, left: 18 },
+      hudFrame: { x: 139, y: 0, width: 1280, height: 720 },
     })
-    expect(scorePositionSpy).toHaveBeenCalledWith(1880, 34)
-    expect(killCounterPositionSpy).toHaveBeenCalledWith(1880, 66)
-    expect(dodgePositionSpy).toHaveBeenCalledWith(1840, 802)
-    expect(clusterBackgroundPositionSpy).toHaveBeenCalledWith(38, 44)
-    expect(minimapFillRectSpy).toHaveBeenCalledWith(38, 662, 170, 170)
+    expect(scorePositionSpy).toHaveBeenCalledWith(1379, 34)
+    expect(killCounterPositionSpy).toHaveBeenCalledWith(1379, 66)
+    expect(dodgePositionSpy).toHaveBeenCalledWith(1339, 442)
+    expect(clusterBackgroundPositionSpy).toHaveBeenCalledWith(177, 44)
+    expect(minimapFillRectSpy).toHaveBeenCalledWith(177, 302, 170, 170)
+  })
+
+  it('applies a modest zoom-in for mobile landscape without using the desktop zoom', () => {
+    const scene = new GameScene()
+    const mockSceneContext = createMockScene()
+    mockSceneContext.input = {
+      ...mockSceneContext.input,
+      mouse: {
+        disableContextMenu: vi.fn(),
+      },
+    } as any
+    Object.assign(scene, mockSceneContext)
+
+    const bootstrap = createBootstrap()
+    setActiveMatchBootstrap(bootstrap)
+    scene.create()
+
+    setViewportLayout({
+      mode: 'mobile-landscape',
+      width: 1558,
+      height: 720,
+      insets: { top: 24, right: 30, bottom: 48, left: 18 },
+      hudFrame: { x: 139, y: 0, width: 1280, height: 720 },
+    })
+
+    expect(mockSceneContext.cameras.main.setZoom).toHaveBeenCalledWith(1.15)
   })
 })

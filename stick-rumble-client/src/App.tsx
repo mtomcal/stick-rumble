@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { PhaserGame } from './ui/common/PhaserGame'
-import { GameConfig } from './game/config/GameConfig'
 import { MatchEndScreen } from './ui/match/MatchEndScreen'
 import { DebugNetworkPanel } from './ui/debug/DebugNetworkPanel'
 import { WebSocketClient } from './game/network/WebSocketClient'
@@ -17,6 +16,11 @@ import type {
 import type { NetworkSimulatorStats } from './game/network/NetworkSimulator'
 import { buildInviteLink, formatReconnectLabel, getInviteCodeFromLocation, getWebSocketUrl } from './game/config/runtimeConfig'
 import { useStageMode } from './ui/common/mobileMode'
+import {
+  buildGameplayViewportLayout,
+  getHudFrame,
+  getLogicalViewportSize,
+} from './game/config/viewport'
 import { MobileControls } from './ui/mobile/MobileControls'
 import { RotateDeviceGate } from './ui/mobile/RotateDeviceGate'
 import './App.css'
@@ -30,8 +34,6 @@ const DEFAULT_STATS: NetworkSimulatorStats = {
 const DISPLAY_NAME_STORAGE_KEY = 'stick-rumble.display-name'
 const DUPLICATE_TAB_TTL_MS = 5000
 const DUPLICATE_TAB_HEARTBEAT_MS = 2000
-const STAGE_VIEWPORT_WIDTH = typeof GameConfig.width === 'number' ? GameConfig.width : 1280
-const STAGE_VIEWPORT_HEIGHT = typeof GameConfig.height === 'number' ? GameConfig.height : 720
 
 type AppViewState =
   | 'join_form'
@@ -97,7 +99,12 @@ function readPixelValue(value: string): number {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
-function buildViewportLayout(stageElement: HTMLElement, stageMode: StageMode): GameplayViewportLayout {
+function buildViewportLayout(
+  stageElement: HTMLElement,
+  stageMode: StageMode,
+  viewportWidth: number,
+  viewportHeight: number
+): GameplayViewportLayout {
   const style = window.getComputedStyle(stageElement)
   const paddingTop = readPixelValue(style.paddingTop)
   const paddingRight = readPixelValue(style.paddingRight)
@@ -105,22 +112,48 @@ function buildViewportLayout(stageElement: HTMLElement, stageMode: StageMode): G
   const paddingLeft = readPixelValue(style.paddingLeft)
   const contentWidth = Math.max(stageElement.clientWidth - paddingLeft - paddingRight, 1)
   const contentHeight = Math.max(stageElement.clientHeight - paddingTop - paddingBottom, 1)
-  const viewportScale = Math.min(
-    STAGE_VIEWPORT_WIDTH / contentWidth,
-    STAGE_VIEWPORT_HEIGHT / contentHeight
-  )
+
+  return buildGameplayViewportLayout({
+    stageMode,
+    viewportWidth,
+    viewportHeight,
+    contentWidth,
+    contentHeight,
+    padding: {
+      top: paddingTop,
+      right: paddingRight,
+      bottom: paddingBottom,
+      left: paddingLeft,
+    },
+  })
+}
+
+function buildInitialViewportLayout(
+  stageMode: StageMode,
+  viewportWidth: number,
+  viewportHeight: number
+): GameplayViewportLayout {
+  const logicalViewport = getLogicalViewportSize(stageMode, viewportWidth, viewportHeight)
 
   return {
     mode: stageMode,
-    width: STAGE_VIEWPORT_WIDTH,
-    height: STAGE_VIEWPORT_HEIGHT,
-    insets: {
-      top: Math.round(paddingTop * viewportScale),
-      right: Math.round(paddingRight * viewportScale),
-      bottom: Math.round(paddingBottom * viewportScale),
-      left: Math.round(paddingLeft * viewportScale),
-    },
+    width: logicalViewport.width,
+    height: logicalViewport.height,
+    insets: { top: 0, right: 0, bottom: 0, left: 0 },
+    hudFrame: getHudFrame(logicalViewport.width, logicalViewport.height),
   }
+}
+
+function detectStandaloneDisplayMode(): boolean {
+  if (typeof window === 'undefined') {
+    return false
+  }
+
+  const navigatorWithStandalone = navigator as Navigator & { standalone?: boolean }
+  return (
+    (window.matchMedia?.('(display-mode: standalone)').matches ?? false) ||
+    navigatorWithStandalone.standalone === true
+  )
 }
 
 function App() {
@@ -150,12 +183,10 @@ function App() {
   const [reconnectIntent, setReconnectIntent] = useState<JoinIntent | null>(null)
   const [debugPanelVisible, setDebugPanelVisible] = useState(false)
   const [networkStats, setNetworkStats] = useState<NetworkSimulatorStats>(DEFAULT_STATS)
-  const { stageMode } = useStageMode()
+  const { stageMode, width: viewportWidth, height: viewportHeight } = useStageMode()
+  const [isStandaloneDisplayMode, setIsStandaloneDisplayMode] = useState(() => detectStandaloneDisplayMode())
   const [viewportLayout, setViewportLayoutState] = useState<GameplayViewportLayout>({
-    mode: 'desktop',
-    width: STAGE_VIEWPORT_WIDTH,
-    height: STAGE_VIEWPORT_HEIGHT,
-    insets: { top: 0, right: 0, bottom: 0, left: 0 },
+    ...buildInitialViewportLayout(stageMode, viewportWidth, viewportHeight),
   })
   const [joinForm, setJoinForm] = useState(() => ({
     displayName: initialSavedDisplayName,
@@ -497,6 +528,20 @@ function App() {
   const inMobileStage = shouldRenderPhaser && stageMode !== 'desktop'
 
   useEffect(() => {
+    const standaloneMediaQuery = window.matchMedia?.('(display-mode: standalone)')
+    const updateStandaloneDisplayMode = () => {
+      setIsStandaloneDisplayMode(detectStandaloneDisplayMode())
+    }
+
+    updateStandaloneDisplayMode()
+    standaloneMediaQuery?.addEventListener?.('change', updateStandaloneDisplayMode)
+
+    return () => {
+      standaloneMediaQuery?.removeEventListener?.('change', updateStandaloneDisplayMode)
+    }
+  }, [])
+
+  useEffect(() => {
     if (!shouldRenderPhaser || !stageShellRef.current) {
       return undefined
     }
@@ -505,7 +550,7 @@ function App() {
       if (!stageShellRef.current) {
         return
       }
-      setViewportLayoutState(buildViewportLayout(stageShellRef.current, stageMode))
+      setViewportLayoutState(buildViewportLayout(stageShellRef.current, stageMode, viewportWidth, viewportHeight))
     }
 
     updateViewportLayout()
@@ -521,7 +566,14 @@ function App() {
       window.removeEventListener('resize', updateViewportLayout)
       resizeObserver?.disconnect()
     }
-  }, [shouldRenderPhaser, stageMode])
+  }, [shouldRenderPhaser, stageMode, viewportWidth, viewportHeight])
+
+  const stageViewportSize = useMemo(
+    () => getLogicalViewportSize(stageMode, viewportWidth, viewportHeight),
+    [stageMode, viewportWidth, viewportHeight]
+  )
+  const showMobileScrollAffordance =
+    shouldRenderPhaser && stageMode === 'mobile-landscape' && !isStandaloneDisplayMode
 
   return (
     <div className={`app-shell${inMobileStage ? ' app-shell--mobile-stage' : ''}`}>
@@ -529,13 +581,21 @@ function App() {
         <h1>Stick Rumble - Multiplayer Arena Shooter</h1>
       </div>
 
-      <div className="app-container">
+      <div className={`app-container${inMobileStage ? ' app-container--mobile-stage' : ''}`}>
+        {showMobileScrollAffordance ? (
+          <div className="mobile-scroll-affordance" data-testid="mobile-scroll-affordance">
+            <p className="mobile-scroll-affordance__title">Swipe down to play</p>
+            <p className="mobile-scroll-affordance__body">Scroll once to collapse Safari chrome and line up the full game view.</p>
+          </div>
+        ) : null}
+
         {shouldRenderPhaser && matchBootstrap && (
           <div
             ref={stageShellRef}
             className={`game-frame game-frame--${stageMode}`}
             data-testid="stage-shell"
             data-stage-mode={stageMode}
+            style={stageMode === 'mobile-landscape' ? { aspectRatio: `${stageViewportSize.width} / ${stageViewportSize.height}` } : undefined}
           >
             <PhaserGame
               bootstrap={matchBootstrap}

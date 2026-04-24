@@ -32,6 +32,7 @@ describe('GameScene cleanup', () => {
       width: 1280,
       height: 720,
       insets: { top: 0, right: 0, bottom: 0, left: 0 },
+      hudFrame: { x: 0, y: 0, width: 1280, height: 720 },
     })
     vi.clearAllMocks()
   })
@@ -65,9 +66,10 @@ describe('GameScene cleanup', () => {
 
     setViewportLayout({
       mode: 'mobile-landscape',
-      width: 1600,
-      height: 900,
+      width: 1558,
+      height: 720,
       insets: { top: 20, right: 24, bottom: 28, left: 16 },
+      hudFrame: { x: 139, y: 0, width: 1280, height: 720 },
     })
 
     expect(scorePositionSpy).not.toHaveBeenCalled()

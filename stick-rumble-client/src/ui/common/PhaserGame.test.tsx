@@ -8,6 +8,10 @@ let mockGameInstances: MockGame[] = []
 class MockGame {
   destroy = mockDestroy
   config: unknown
+  scale = {
+    resize: vi.fn(),
+    refresh: vi.fn(),
+  }
 
   constructor(config: unknown) {
     this.config = config
@@ -53,6 +57,12 @@ const layout = {
     bottom: 0,
     left: 0,
   },
+  hudFrame: {
+    x: 0,
+    y: 0,
+    width: 1280,
+    height: 720,
+  },
 }
 
 describe('PhaserGame', () => {
@@ -72,6 +82,7 @@ describe('PhaserGame', () => {
 
     expect(container.querySelector('#game-container')).not.toBeNull()
     expect(mockGameInstances).toHaveLength(1)
+    expect(mockGameInstances[0]?.config).toEqual(expect.objectContaining({ width: 1280, height: 720 }))
   })
 
   it('stores and clears the active bootstrap around the component lifecycle', () => {
@@ -106,7 +117,9 @@ describe('PhaserGame', () => {
         layout={{
           ...layout,
           mode: 'mobile-landscape',
+          width: 1558,
           insets: { top: 12, right: 16, bottom: 20, left: 16 },
+          hudFrame: { x: 139, y: 0, width: 1280, height: 720 },
         }}
       />
     )
@@ -117,6 +130,7 @@ describe('PhaserGame', () => {
           ...layout,
           mode: 'mobile-portrait-blocked',
           insets: { top: 18, right: 16, bottom: 20, left: 16 },
+          hudFrame: { x: 0, y: 0, width: 1280, height: 720 },
         }}
       />
     )
@@ -125,6 +139,7 @@ describe('PhaserGame', () => {
     expect(mockGameInstances).toHaveLength(1)
     expect(sessionRuntime.getActiveMatchBootstrap()).toEqual(bootstrap)
     expect(mockSetGameplayReady).not.toHaveBeenCalledWith(false)
+    expect(mockGameInstances[0]?.scale.resize).toHaveBeenCalledWith(1558, 720)
   })
 
   it('cleans up the match-end bridge and marks gameplay not ready on unmount', () => {

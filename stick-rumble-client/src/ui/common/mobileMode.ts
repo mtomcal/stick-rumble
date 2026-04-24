@@ -12,11 +12,11 @@ export interface DeviceViewportSnapshot {
 }
 
 function getViewportWidth(): number {
-  return window.visualViewport?.width ?? window.innerWidth
+  return window.innerWidth
 }
 
 function getViewportHeight(): number {
-  return window.visualViewport?.height ?? window.innerHeight
+  return window.innerHeight
 }
 
 export function detectStageMode(width: number, height: number): StageMode {
@@ -66,11 +66,8 @@ export function useStageMode(): DeviceViewportSnapshot {
     }
 
     window.addEventListener('resize', updateSnapshot)
-    window.visualViewport?.addEventListener('resize', updateSnapshot)
-
     return () => {
       window.removeEventListener('resize', updateSnapshot)
-      window.visualViewport?.removeEventListener('resize', updateSnapshot)
     }
   }, [])
 
