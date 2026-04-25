@@ -102,11 +102,14 @@ interface MatchSession {
 **State Ownership Rules:**
 - React owns the pre-match session lifecycle, including `player:hello`, `session:status`, `session:leave`, replay, and recoverable join failures.
 - Phaser is mounted only after the app shell receives `session:status { state: "match_ready" }` and constructs a `MatchSession`.
+- The client Match session flow module owns the transition rules for `join_form`, `joining`, `searching_for_match`, `waiting_for_players`, `in_match`, `match_end`, and `recoverable_error`.
+- React renders the current Match session flow state and performs side effects such as sending `player:hello`, `session:leave`, or replay requests; it should not duplicate the transition logic inline.
 - The `searching_for_match` and `waiting_for_players` screens are app states, not hidden Phaser phases.
 - `match_end` is a full React screen state, not a modal layered over the active canvas.
 - React also owns phone-orientation gating, safe-area-aware stage sizing, and mobile touch control overlays.
 - The existing desktop keyboard/mouse runtime remains the baseline path and may not regress when mobile mode is added.
 - Phaser remains the owner of the match camera, in-canvas HUD, and world rendering; React-owned touch controls feed normalized gameplay intents into that runtime rather than replacing it.
+- Phaser does not own the pre-match session lifecycle. Any Phaser-side `session:status` handling is transitional compatibility only and may mirror already-authorized Match context, but it must not decide join, wait, replay, or recoverable-error states.
 
 **Rendering Rules:**
 - `join_form`, `joining`, `searching_for_match`, `waiting_for_players`, and `recoverable_error` render with no Phaser canvas mounted.
@@ -158,6 +161,23 @@ interface MatchSession {
 - When the logical viewport changes between desktop and mobile-landscape widths, the active match should preserve player-centered framing rather than preserving the previous top-left camera origin.
 - While a settle gate or explicit entry gate is delaying gameplay readiness, the client may buffer only a bounded recent backlog of gameplay traffic. A blocked phone gate may not allow unbounded queued-message growth before the runtime becomes ready.
 - When mobile touch aim becomes idle, the runtime should preserve the last non-null mobile aim heading for facing, dodge direction, and repeat-fire orientation until a new mobile aim heading arrives or desktop pointer aim becomes authoritative again.
+
+### Match Session Flow Module
+
+The Match session flow module is a client-only module that turns transport events and local user actions into one app session state.
+
+**Interface responsibilities:**
+- accept local actions such as begin join, cancel waiting, match end, play again, and recoverable reconnect failure
+- accept authoritative `session:status` snapshots and join error messages from the WebSocket transport
+- derive `MatchSession` only from `session:status { state: "match_ready" }` payloads that include `roomId` and `mapId`
+- preserve the active session key as `roomId:playerId:mapId` so repeated `match_ready` delivery for the same session does not reset the mobile entry gate
+- report when mobile entry must reset because the flow left a Match or entered a different Match
+- expose enough state for React to render the app shell without React re-implementing the transition rules
+
+**Non-responsibilities:**
+- It does not open sockets, send WebSocket messages, mount Phaser, read browser layout, or own authoritative gameplay state.
+- It does not replace the runtime bridge. The runtime bridge still owns presentation-local state for an already-active Match.
+- It does not change the server `session:status` contract.
 
 ---
 

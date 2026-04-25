@@ -4,12 +4,23 @@ import { MatchEndScreen } from './ui/match/MatchEndScreen'
 import { DebugNetworkPanel } from './ui/debug/DebugNetworkPanel'
 import { WebSocketClient } from './game/network/WebSocketClient'
 import type { MatchBootstrap } from './game/sessionRuntime'
+import {
+  applyJoinError,
+  applyMatchEnd,
+  applyReconnectReplayFailed,
+  applySessionStatus,
+  beginJoin,
+  beginReplay,
+  createInitialSessionFlowState,
+  returnToJoinForm,
+  type AppViewState,
+  type MatchSessionFlowState,
+} from './game/sessionFlow'
 import type {
   GameplayViewportLayout,
   JoinErrorPayload,
   JoinIntent,
   MatchEndData,
-  MatchSession,
   StageMode,
   SessionStatusData,
 } from './shared/types'
@@ -35,15 +46,6 @@ const DISPLAY_NAME_STORAGE_KEY = 'stick-rumble.display-name'
 const DUPLICATE_TAB_TTL_MS = 5000
 const DUPLICATE_TAB_HEARTBEAT_MS = 2000
 
-type AppViewState =
-  | 'join_form'
-  | 'joining'
-  | 'searching_for_match'
-  | 'waiting_for_players'
-  | 'in_match'
-  | 'match_end'
-  | 'recoverable_error'
-
 type OverlayMode = 'join' | 'duplicate'
 
 function getBrowserStorage(): Storage | null {
@@ -63,21 +65,6 @@ function getBrowserStorage(): Storage | null {
   }
 
   return null
-}
-
-function toMatchSession(status: SessionStatusData): MatchSession | null {
-  if (status.state !== 'match_ready' || !status.roomId || !status.mapId) {
-    return null
-  }
-
-  return {
-    roomId: status.roomId,
-    playerId: status.playerId,
-    mapId: status.mapId,
-    displayName: status.displayName,
-    joinMode: status.joinMode,
-    code: status.code,
-  }
 }
 
 function formatJoinError(error: JoinErrorPayload | null, currentCode: string): string | null {
@@ -155,7 +142,8 @@ function App() {
     () => getBrowserStorage()?.getItem(DISPLAY_NAME_STORAGE_KEY) ?? '',
     []
   )
-  const clientRef = useRef<WebSocketClient | null>(null)
+  const [activeClient] = useState(() => new WebSocketClient(getWebSocketUrl(), false))
+  const clientRef = useRef<WebSocketClient | null>(activeClient)
   const [tabId] = useState(() => `tab-${globalThis.crypto?.randomUUID?.() ?? Date.now().toString(36)}`)
   const claimIntervalRef = useRef<number | null>(null)
   const claimedInviteKeyRef = useRef<string | null>(null)
@@ -163,17 +151,10 @@ function App() {
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null)
   const duplicateBlockedKeyRef = useRef<string | null>(null)
   const displayNameDirtyRef = useRef(false)
-  const activeMatchSessionKeyRef = useRef<string | null>(null)
 
-  const [viewState, setViewState] = useState<AppViewState>('join_form')
+  const [sessionFlow, setSessionFlow] = useState(() => createInitialSessionFlowState())
   const [isSocketReady, setIsSocketReady] = useState(false)
   const [overlayMode, setOverlayMode] = useState<OverlayMode>('join')
-  const [matchBootstrap, setMatchBootstrap] = useState<MatchBootstrap | null>(null)
-  const [sessionStatus, setSessionStatus] = useState<SessionStatusData | null>(null)
-  const [matchEndData, setMatchEndData] = useState<MatchEndData | null>(null)
-  const [localPlayerId, setLocalPlayerId] = useState<string>('')
-  const [joinError, setJoinError] = useState<JoinErrorPayload | null>(null)
-  const [reconnectIntent, setReconnectIntent] = useState<JoinIntent | null>(null)
   const [debugPanelVisible, setDebugPanelVisible] = useState(false)
   const [networkStats, setNetworkStats] = useState<NetworkSimulatorStats>(DEFAULT_STATS)
   const { stageMode, width: viewportWidth, height: viewportHeight, isSettling } = useStageMode()
@@ -186,9 +167,16 @@ function App() {
     code: inviteCode ?? '',
   }))
 
-  const getSessionKey = useCallback((session: MatchSession): string => {
-    return `${session.roomId}:${session.playerId}:${session.mapId}`
-  }, [])
+  const viewState: AppViewState = sessionFlow.viewState
+  const sessionStatus = sessionFlow.sessionStatus
+  const matchEndData = sessionFlow.matchEndData
+  const localPlayerId = sessionFlow.localPlayerId
+  const joinError = sessionFlow.joinError
+  const reconnectIntent = sessionFlow.reconnectIntent
+  const matchBootstrap: MatchBootstrap | null =
+    sessionFlow.matchSession && activeClient
+      ? { session: sessionFlow.matchSession, wsClient: activeClient }
+      : null
 
   const captureCurrentViewportLayout = useCallback((): GameplayViewportLayout | null => {
     if (!stageShellRef.current) {
@@ -199,6 +187,16 @@ function App() {
   }, [stageMode, viewportWidth, viewportHeight])
 
   const getClient = useCallback(() => clientRef.current, [])
+
+  const updateSessionFlow = useCallback((recipe: (state: MatchSessionFlowState) => MatchSessionFlowState) => {
+    setSessionFlow((prev) => {
+      const next = recipe(prev)
+      if (next.shouldResetMobileEntry) {
+        setMobileGameplayEntered(false)
+      }
+      return next
+    })
+  }, [])
 
   const getNetworkStats = useCallback(() => {
     if (window.getNetworkSimulatorStats) {
@@ -272,95 +270,47 @@ function App() {
     }
 
     setOverlayMode('join')
-    setJoinError(null)
-    setReconnectIntent(null)
-    setSessionStatus(null)
-    setMatchEndData(null)
-    setViewState('joining')
+    updateSessionFlow((prev) => beginJoin(prev))
     client.setGameplayReady(false)
     client.sendHello(intent)
-  }, [claimInviteSlot, getClient, isSocketReady])
+  }, [claimInviteSlot, getClient, isSocketReady, updateSessionFlow])
 
   useEffect(() => {
-    const client = new WebSocketClient(getWebSocketUrl(), false)
+    const client = activeClient
     clientRef.current = client
     client.setConnectionStateHandler((connected) => {
       setIsSocketReady(connected)
     })
     client.setReconnectReplayFailedHandler((intent) => {
-      setReconnectIntent(intent)
-      setJoinError(null)
-      setSessionStatus(null)
-      setViewState('recoverable_error')
+      updateSessionFlow((prev) => applyReconnectReplayFailed(prev, intent))
     })
 
     const onSessionStatus = (payload: unknown) => {
       const status = payload as SessionStatusData
-      setSessionStatus(status)
-      setJoinError(null)
-      setReconnectIntent(null)
       setJoinForm((prev) => ({ ...prev, displayName: status.displayName, code: status.code ?? prev.code }))
       getBrowserStorage()?.setItem(DISPLAY_NAME_STORAGE_KEY, status.displayName)
-
-      if (status.state === 'searching_for_match') {
-        activeMatchSessionKeyRef.current = null
-        setMobileGameplayEntered(false)
-        setMatchBootstrap(null)
-        setViewState('searching_for_match')
-        return
-      }
-
-      if (status.state === 'waiting_for_players') {
-        activeMatchSessionKeyRef.current = null
-        setMobileGameplayEntered(false)
-        setMatchBootstrap(null)
-        setViewState('waiting_for_players')
-        return
-      }
-
-      const nextMatchSession = toMatchSession(status)
-      setMatchEndData(null)
-      setLocalPlayerId(status.playerId)
-      if (nextMatchSession) {
-        const nextSessionKey = getSessionKey(nextMatchSession)
-        if (activeMatchSessionKeyRef.current !== nextSessionKey) {
-          setMobileGameplayEntered(false)
-        }
-        activeMatchSessionKeyRef.current = nextSessionKey
-      } else {
-        activeMatchSessionKeyRef.current = null
-        setMobileGameplayEntered(false)
-      }
-      setMatchBootstrap(
-        nextMatchSession && clientRef.current
-          ? { session: nextMatchSession, wsClient: clientRef.current }
-          : null
-      )
-      setViewState(nextMatchSession ? 'in_match' : 'recoverable_error')
+      updateSessionFlow((prev) => applySessionStatus(prev, status))
     }
 
     const onBadRoomCode = (payload: unknown) => {
-      setJoinError({
+      updateSessionFlow((prev) => applyJoinError(prev, {
         type: 'error:bad_room_code',
         reason: (payload as { reason?: string })?.reason,
-      })
-      setViewState('recoverable_error')
+      }))
     }
 
     const onRoomFull = (payload: unknown) => {
-      setJoinError({
+      updateSessionFlow((prev) => applyJoinError(prev, {
         type: 'error:room_full',
         code: (payload as { code?: string })?.code,
-      })
-      setViewState('recoverable_error')
+      }))
     }
 
     const onNoHello = (payload: unknown) => {
-      setJoinError({
+      updateSessionFlow((prev) => applyJoinError(prev, {
         type: 'error:no_hello',
         offendingType: (payload as { offendingType?: string })?.offendingType,
-      })
-      setViewState('recoverable_error')
+      }))
     }
 
     client.on('session:status', onSessionStatus)
@@ -382,7 +332,7 @@ function App() {
       client.disconnect()
       clientRef.current = null
     }
-  }, [getSessionKey])
+  }, [activeClient, updateSessionFlow])
 
   useEffect(() => {
     window.onNetworkSimulatorToggle = () => {
@@ -474,24 +424,15 @@ function App() {
   }, [initialSavedDisplayName, inviteCode, isSocketReady, submitJoinIntent])
 
   const handleMatchEnd = useCallback((data: MatchEndData, playerId: string) => {
-    activeMatchSessionKeyRef.current = null
-    setLocalPlayerId(playerId)
-    setMatchEndData(data)
-    setMatchBootstrap(null)
-    setViewState('match_end')
-  }, [])
+    updateSessionFlow((prev) => applyMatchEnd(prev, data, playerId))
+  }, [updateSessionFlow])
 
   const handleCancelWaiting = useCallback(() => {
     const client = getClient()
     client?.sendSessionLeave()
     releaseInviteClaim()
-    activeMatchSessionKeyRef.current = null
-    setMobileGameplayEntered(false)
-    setSessionStatus(null)
-    setMatchBootstrap(null)
-    setJoinError(null)
-    setViewState('join_form')
-  }, [getClient, releaseInviteClaim])
+    updateSessionFlow((prev) => returnToJoinForm(prev))
+  }, [getClient, releaseInviteClaim, updateSessionFlow])
 
   const handlePlayAgain = useCallback(() => {
     const client = getClient()
@@ -505,13 +446,9 @@ function App() {
       code: sessionStatus?.code ?? (joinForm.code.trim() || undefined),
     }
 
-    setMatchEndData(null)
-    setJoinError(null)
-    activeMatchSessionKeyRef.current = null
-    setMobileGameplayEntered(false)
-    setViewState('joining')
+    updateSessionFlow((prev) => beginReplay(prev))
     client.restartSession(lastIntent)
-  }, [getClient, joinForm.code, joinForm.displayName, reconnectIntent, sessionStatus])
+  }, [getClient, joinForm.code, joinForm.displayName, reconnectIntent, sessionStatus, updateSessionFlow])
 
   const handleLatencyChange = (latency: number) => {
     if (window.setNetworkSimulatorLatency) {
@@ -716,8 +653,7 @@ function App() {
             matchData={matchEndData}
             localPlayerId={localPlayerId}
             onClose={() => {
-              setMatchEndData(null)
-              setViewState('join_form')
+              updateSessionFlow((prev) => returnToJoinForm(prev))
             }}
             onPlayAgain={handlePlayAgain}
           />
