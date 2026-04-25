@@ -303,21 +303,9 @@ func (h *WebSocketHandler) broadcastMatchTimers() {
 			"remainingSeconds": remainingSeconds,
 		}
 
-		// Validate outgoing message schema (development mode only)
-		if err := h.validateOutgoingMessage("match:timer", data); err != nil {
-			log.Printf("Schema validation failed for match:timer: %v", err)
-		}
-
-		// Create match:timer message
-		timerMessage := Message{
-			Type:      "match:timer",
-			Timestamp: 0,
-			Data:      data,
-		}
-
-		msgBytes, err := json.Marshal(timerMessage)
+		msgBytes, err := h.buildOutgoingMessage("match:timer", data)
 		if err != nil {
-			log.Printf("Error marshaling match:timer message: %v", err)
+			log.Printf("Error building match:timer message: %v", err)
 			continue
 		}
 

@@ -395,6 +395,7 @@ func TestBroadcastMatchTimer(t *testing.T) {
 	// Should receive match:timer messages periodically
 	msg, err := readMessageOfType(t, conn1, "match:timer", 2*time.Second)
 	require.NoError(t, err, "Should receive match:timer")
+	assert.Positive(t, msg.Timestamp, "match:timer should use the outgoing message builder timestamp")
 
 	data, ok := msg.Data.(map[string]interface{})
 	require.True(t, ok)
