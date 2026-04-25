@@ -347,46 +347,15 @@ func (h *WebSocketHandler) sendWeaponState(playerID string) {
 
 	current, max := ws.GetAmmoInfo()
 
-	// Create weapon:state message data
-	data := map[string]interface{}{
-		"currentAmmo": current,
-		"maxAmmo":     max,
-		"isReloading": ws.IsReloading,
-		"canShoot":    ws.CanShoot(),
-		"weaponType":  ws.Weapon.Name,
-		"isMelee":     ws.Weapon.IsMelee(),
-	}
-
-	// Validate outgoing message schema (development mode only)
-	if err := h.validateOutgoingMessage("weapon:state", data); err != nil {
-		log.Printf("Schema validation failed for weapon:state: %v", err)
-	}
-
-	message := Message{
-		Type:      "weapon:state",
-		Timestamp: 0,
-		Data:      data,
-	}
-
-	msgBytes, err := json.Marshal(message)
-	if err != nil {
-		log.Printf("Error marshaling weapon:state message: %v", err)
-		return
-	}
-
-	// Send to the specific player
-	room := h.roomManager.GetRoomByPlayerID(playerID)
-	if room != nil {
-		player := room.GetPlayer(playerID)
-		if player != nil {
-			select {
-			case player.SendChan <- msgBytes:
-			default:
-				log.Printf("Failed to send weapon:state to player %s (channel full)", playerID)
-			}
-		}
-	} else {
-		h.roomManager.SendToWaitingPlayer(playerID, msgBytes)
+	if err := h.publication.SendWeaponState(playerID, weaponStateData{
+		CurrentAmmo: current,
+		MaxAmmo:     max,
+		IsReloading: ws.IsReloading,
+		CanShoot:    ws.CanShoot(),
+		WeaponType:  ws.Weapon.Name,
+		IsMelee:     ws.Weapon.IsMelee(),
+	}); err != nil {
+		log.Printf("Error building weapon:state message: %v", err)
 	}
 }
 
@@ -442,33 +411,15 @@ func (h *WebSocketHandler) broadcastMatchEnded(room *game.Room, world *game.Worl
 	winners := room.Match.GetWinnerSummaries(world)
 	finalScores := room.Match.GetFinalScores(world)
 
-	// Create match:ended message data
-	data := map[string]interface{}{
-		"winners":     winners,
-		"finalScores": finalScores,
-		"reason":      room.Match.EndReason,
-	}
-
-	// Validate outgoing message schema (development mode only)
-	if err := h.validateOutgoingMessage("match:ended", data); err != nil {
-		log.Printf("Schema validation failed for match:ended: %v", err)
-	}
-
-	// Create match:ended message
-	message := Message{
-		Type:      "match:ended",
-		Timestamp: 0,
-		Data:      data,
-	}
-
-	msgBytes, err := json.Marshal(message)
-	if err != nil {
-		log.Printf("Error marshaling match:ended message: %v", err)
+	if err := h.publication.BroadcastMatchEnded(room, matchEndedData{
+		Winners:     winners,
+		FinalScores: finalScores,
+		Reason:      room.Match.EndReason,
+	}); err != nil {
+		log.Printf("Error building match:ended message: %v", err)
 		return
 	}
 
-	// Broadcast to all players in the room
-	room.Broadcast(msgBytes, "")
 	log.Printf("Match ended in room %s - reason: %s, winners: %v", room.ID, room.Match.EndReason, winners)
 }
 
@@ -478,29 +429,15 @@ func (h *WebSocketHandler) broadcastMatchEndedEvent(event game.MatchEndedEvent) 
 		return
 	}
 
-	data := map[string]interface{}{
-		"winners":     event.Winners,
-		"finalScores": event.FinalScores,
-		"reason":      event.Reason,
-	}
-
-	if err := h.validateOutgoingMessage("match:ended", data); err != nil {
-		log.Printf("Schema validation failed for match:ended: %v", err)
-	}
-
-	message := Message{
-		Type:      "match:ended",
-		Timestamp: 0,
-		Data:      data,
-	}
-
-	msgBytes, err := json.Marshal(message)
-	if err != nil {
-		log.Printf("Error marshaling match:ended message: %v", err)
+	if err := h.publication.BroadcastMatchEnded(room, matchEndedData{
+		Winners:     event.Winners,
+		FinalScores: event.FinalScores,
+		Reason:      event.Reason,
+	}); err != nil {
+		log.Printf("Error building match:ended message: %v", err)
 		return
 	}
 
-	room.Broadcast(msgBytes, "")
 	log.Printf("Match ended in room %s - reason: %s, winners: %v", event.RoomID, event.Reason, event.Winners)
 }
 
@@ -691,35 +628,17 @@ func (h *WebSocketHandler) broadcastMeleeHit(attackerID string, victimIDs []stri
 
 // broadcastPlayerDamaged broadcasts player damage event (used by melee attacks)
 func (h *WebSocketHandler) broadcastPlayerDamaged(attackerID, victimID string, damage, newHealth int) {
-	// Create player:damaged message data
-	data := map[string]interface{}{
-		"victimId":   victimID,
-		"attackerId": attackerID,
-		"damage":     damage,
-		"newHealth":  newHealth,
-	}
-
-	// Validate outgoing message schema (development mode only)
-	if err := h.validateOutgoingMessage("player:damaged", data); err != nil {
-		log.Printf("Schema validation failed for player:damaged: %v", err)
-	}
-
-	message := Message{
-		Type:      "player:damaged",
-		Timestamp: time.Now().UnixMilli(),
-		Data:      data,
-	}
-
-	msgBytes, err := json.Marshal(message)
-	if err != nil {
-		log.Printf("Error marshaling player:damaged message: %v", err)
-		return
-	}
-
-	// Broadcast to all players in the room
 	room := h.roomManager.GetRoomByPlayerID(victimID)
 	if room != nil {
-		room.Broadcast(msgBytes, "")
+		if err := h.publication.BroadcastPlayerDamaged(room, playerDamagedData{
+			VictimID:     victimID,
+			AttackerID:   attackerID,
+			Damage:       damage,
+			NewHealth:    newHealth,
+			ProjectileID: "melee",
+		}); err != nil {
+			log.Printf("Error building player:damaged message: %v", err)
+		}
 	}
 }
 
@@ -740,67 +659,29 @@ func (h *WebSocketHandler) processMeleeKill(attackerID, victimID string) {
 		victim.IncrementDeaths()
 	}
 
-	// Create player:death message data
-	deathData := map[string]interface{}{
-		"victimId":   victimID,
-		"attackerId": attackerID,
-	}
-
-	// Validate outgoing message schema (development mode only)
-	if err := h.validateOutgoingMessage("player:death", deathData); err != nil {
-		log.Printf("Schema validation failed for player:death: %v", err)
-	}
-
-	deathMessage := Message{
-		Type:      "player:death",
-		Timestamp: time.Now().UnixMilli(),
-		Data:      deathData,
-	}
-
-	deathBytes, err := json.Marshal(deathMessage)
-	if err != nil {
-		log.Printf("Error marshaling player:death message: %v", err)
-		return
-	}
-
 	room := h.roomManager.GetRoomByPlayerID(victimID)
 	if room != nil {
-		room.Broadcast(deathBytes, "")
-	}
+		if err := h.publication.BroadcastPlayerDeath(room, playerDeathData{
+			VictimID:   victimID,
+			AttackerID: attackerID,
+		}); err != nil {
+			log.Printf("Error building player:death message: %v", err)
+			return
+		}
 
-	// Create player:kill_credit message data
-	killCreditData := map[string]interface{}{
-		"killerId":    attackerID,
-		"victimId":    victimID,
-		"killerKills": 0,
-		"killerXP":    0,
-	}
+		killCredit := playerKillCreditData{
+			KillerID: attackerID,
+			VictimID: victimID,
+		}
+		if attackerExists && attacker != nil {
+			killCredit.KillerKills = attacker.Kills
+			killCredit.KillerXP = attacker.XP
+		}
 
-	if attackerExists && attacker != nil {
-		killCreditData["killerKills"] = attacker.Kills
-		killCreditData["killerXP"] = attacker.XP
-	}
-
-	// Validate outgoing message schema (development mode only)
-	if err := h.validateOutgoingMessage("player:kill_credit", killCreditData); err != nil {
-		log.Printf("Schema validation failed for player:kill_credit: %v", err)
-	}
-
-	// Broadcast kill credit
-	killCreditMessage := Message{
-		Type:      "player:kill_credit",
-		Timestamp: time.Now().UnixMilli(),
-		Data:      killCreditData,
-	}
-
-	creditBytes, err := json.Marshal(killCreditMessage)
-	if err != nil {
-		log.Printf("Error marshaling player:kill_credit message: %v", err)
-		return
-	}
-
-	if room != nil {
-		room.Broadcast(creditBytes, "")
+		if err := h.publication.BroadcastPlayerKillCredit(room, killCredit); err != nil {
+			log.Printf("Error building player:kill_credit message: %v", err)
+			return
+		}
 
 		// Track kill in match and check win conditions
 		room.Match.AddKill(attackerID)

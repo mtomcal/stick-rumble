@@ -2,12 +2,121 @@ package game
 
 import (
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type stubRoomEventPublisher struct {
+	sessionStatuses []sessionStatusCall
+	playerLefts     []string
+	sessionErr      error
+	playerLeftErr   error
+}
+
+type sessionStatusCall struct {
+	playerID string
+	roomID   string
+	state    SessionStatusState
+}
+
+func (p *stubRoomEventPublisher) PublishSessionStatus(player *Player, room *Room, state SessionStatusState) error {
+	if p.sessionErr != nil {
+		return p.sessionErr
+	}
+
+	call := sessionStatusCall{
+		playerID: player.ID,
+		state:    state,
+	}
+	if room != nil {
+		call.roomID = room.ID
+	}
+	p.sessionStatuses = append(p.sessionStatuses, call)
+	return nil
+}
+
+func (p *stubRoomEventPublisher) PublishPlayerLeft(room *Room, playerID string) error {
+	if p.playerLeftErr != nil {
+		return p.playerLeftErr
+	}
+
+	p.playerLefts = append(p.playerLefts, playerID)
+	return nil
+}
+
+type channelRoomEventPublisher struct{}
+
+func newChannelRoomEventPublisher() *channelRoomEventPublisher {
+	return &channelRoomEventPublisher{}
+}
+
+func (p *channelRoomEventPublisher) PublishSessionStatus(player *Player, room *Room, state SessionStatusState) error {
+	data := map[string]any{
+		"state":       state,
+		"playerId":    player.ID,
+		"displayName": player.DisplayName,
+		"joinMode":    string(RoomKindPublic),
+		"minPlayers":  MinPlayersToStart,
+	}
+
+	if room != nil {
+		data["joinMode"] = string(room.Kind)
+		data["roomId"] = room.ID
+		data["rosterSize"] = room.PlayerCount()
+		if room.Kind == RoomKindCode && room.Code != "" {
+			data["code"] = room.Code
+		}
+		if state == SessionStatusMatchReady {
+			data["mapId"] = room.MapID
+		}
+	}
+
+	msgBytes, err := json.Marshal(map[string]any{
+		"type":      "session:status",
+		"timestamp": time.Now().UnixMilli(),
+		"data":      data,
+	})
+	if err != nil {
+		return err
+	}
+
+	return sendLifecycleTestMessage(player, msgBytes)
+}
+
+func (p *channelRoomEventPublisher) PublishPlayerLeft(room *Room, playerID string) error {
+	msgBytes, err := json.Marshal(map[string]any{
+		"type":      "player:left",
+		"timestamp": time.Now().UnixMilli(),
+		"data": map[string]any{
+			"playerId": playerID,
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	room.Broadcast(msgBytes, "")
+	return nil
+}
+
+func sendLifecycleTestMessage(player *Player, msgBytes []byte) (err error) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			err = errors.New("channel closed")
+		}
+	}()
+
+	select {
+	case player.SendChan <- msgBytes:
+		return nil
+	default:
+		return errors.New("channel full")
+	}
+}
 
 func readSessionStatusFromChan(t *testing.T, ch <-chan []byte, expectedState string) map[string]interface{} {
 	deadline := time.After(2 * time.Second)
@@ -123,6 +232,7 @@ func TestRoomManagerCreation(t *testing.T) {
 // TestAutoCreateRoomWithTwoPlayers tests auto-creation when 2 players connect
 func TestAutoCreateRoomWithTwoPlayers(t *testing.T) {
 	manager := NewRoomManager()
+	manager.SetPublisher(newChannelRoomEventPublisher())
 
 	player1Chan := make(chan []byte, 10)
 	player2Chan := make(chan []byte, 10)
@@ -149,6 +259,7 @@ func TestAutoCreateRoomWithTwoPlayers(t *testing.T) {
 // TestRoomJoinedMessage tests that players receive session:status(match_ready)
 func TestRoomJoinedMessage(t *testing.T) {
 	manager := NewRoomManager()
+	manager.SetPublisher(newChannelRoomEventPublisher())
 
 	player1Chan := make(chan []byte, 10)
 	player2Chan := make(chan []byte, 10)
@@ -188,6 +299,7 @@ func TestRoomJoinedMessage(t *testing.T) {
 // TestPlayerDisconnection tests player:left event on disconnection
 func TestPlayerDisconnection(t *testing.T) {
 	manager := NewRoomManager()
+	manager.SetPublisher(newChannelRoomEventPublisher())
 
 	player1Chan := make(chan []byte, 10)
 	player2Chan := make(chan []byte, 10)
@@ -284,6 +396,7 @@ func TestRemoveNonExistentPlayer(t *testing.T) {
 // TestRoomCleanupOnLastPlayerLeave tests room is removed when last player leaves
 func TestRoomCleanupOnLastPlayerLeave(t *testing.T) {
 	manager := NewRoomManager()
+	manager.SetPublisher(newChannelRoomEventPublisher())
 
 	player1Chan := make(chan []byte, 10)
 	player2Chan := make(chan []byte, 10)
@@ -311,6 +424,7 @@ func TestRoomCleanupOnLastPlayerLeave(t *testing.T) {
 // TestSendRoomJoinedMessageWithClosedChannel tests graceful handling when channel is closed
 func TestSendRoomJoinedMessageWithClosedChannel(t *testing.T) {
 	manager := NewRoomManager()
+	manager.SetPublisher(newChannelRoomEventPublisher())
 
 	// Create player with a channel we'll close
 	player1Chan := make(chan []byte, 10)
@@ -329,6 +443,7 @@ func TestSendRoomJoinedMessageWithClosedChannel(t *testing.T) {
 // TestRemovePlayerWithJSONMarshalError tests RemovePlayer handles marshal errors gracefully
 func TestRemovePlayerWithJSONMarshalError(t *testing.T) {
 	manager := NewRoomManager()
+	manager.SetPublisher(newChannelRoomEventPublisher())
 
 	player1Chan := make(chan []byte, 10)
 	player2Chan := make(chan []byte, 10)
@@ -352,6 +467,55 @@ func TestRemovePlayerWithJSONMarshalError(t *testing.T) {
 	msg := <-player2Chan
 	assert.Contains(t, string(msg), "player:left")
 	assert.Contains(t, string(msg), "player1")
+}
+
+func TestRoomManagerUsesPublisherForSessionLifecycleMessages(t *testing.T) {
+	manager := NewRoomManager()
+	publisher := &stubRoomEventPublisher{}
+	manager.SetPublisher(publisher)
+
+	player1 := &Player{ID: "player1", SendChan: make(chan []byte, 4)}
+	player2 := &Player{ID: "player2", SendChan: make(chan []byte, 4)}
+
+	manager.AddPlayer(player1)
+	room := manager.AddPlayer(player2)
+	require.NotNil(t, room)
+
+	require.Len(t, publisher.sessionStatuses, 3)
+	assert.Equal(t, sessionStatusCall{
+		playerID: player1.ID,
+		state:    SessionStatusSearchingForMatch,
+	}, publisher.sessionStatuses[0])
+	assert.Equal(t, sessionStatusCall{
+		playerID: player1.ID,
+		roomID:   room.ID,
+		state:    SessionStatusMatchReady,
+	}, publisher.sessionStatuses[1])
+	assert.Equal(t, sessionStatusCall{
+		playerID: player2.ID,
+		roomID:   room.ID,
+		state:    SessionStatusMatchReady,
+	}, publisher.sessionStatuses[2])
+
+	manager.RemovePlayer(player1.ID)
+	assert.Equal(t, []string{player1.ID}, publisher.playerLefts)
+}
+
+func TestRoomManagerIgnoresPublisherFailures(t *testing.T) {
+	manager := NewRoomManager()
+	manager.SetPublisher(&stubRoomEventPublisher{
+		sessionErr:    errors.New("session failed"),
+		playerLeftErr: errors.New("player left failed"),
+	})
+
+	player1 := &Player{ID: "player1", SendChan: make(chan []byte, 2)}
+	player2 := &Player{ID: "player2", SendChan: make(chan []byte, 2)}
+
+	assert.NotPanics(t, func() {
+		manager.AddPlayer(player1)
+		manager.AddPlayer(player2)
+		manager.RemovePlayer(player1.ID)
+	})
 }
 
 // TestIsEmptyAndPlayerCount tests the new thread-safe helper methods

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -41,6 +40,8 @@ type WebSocketHandler struct {
 	timerInterval     time.Duration // Interval for match timer broadcasts (default 1s)
 	validator         *SchemaValidator
 	outgoingValidator *SchemaValidator
+	outgoingMessages  *outgoingMessageBuilder
+	publication       *serverToClientPublication
 	networkSimulator  *NetworkSimulator // For artificial latency testing (Story 4.6)
 	deltaTracker      *DeltaTracker     // For delta compression (Story 4.4)
 }
@@ -99,6 +100,9 @@ func NewWebSocketHandlerWithConfig(timerInterval time.Duration) *WebSocketHandle
 		networkSimulator:  networkSimulator,
 		deltaTracker:      NewDeltaTracker(),
 	}
+	handler.outgoingMessages = newOutgoingMessageBuilder(handler.outgoingValidator, time.Now)
+	handler.publication = newServerToClientPublication(handler.outgoingMessages, handler.roomManager)
+	handler.roomManager.SetPublisher(handler.publication)
 	handler.gameServer = game.NewGameServerWithConfig(game.GameServerConfig{
 		BroadcastFunc: handler.broadcastPlayerStates,
 		EventSink:     handler,
@@ -177,34 +181,19 @@ func StopGlobalHandler() {
 // Only validates when ENABLE_SCHEMA_VALIDATION environment variable is set to "true"
 // Returns nil if validation passes or is disabled, error if validation fails
 func (h *WebSocketHandler) validateOutgoingMessage(messageType string, data interface{}) (err error) {
-	// Check if schema validation is enabled (development mode only)
-	if !config.Load().EnableSchemaValidation {
-		return nil // Skip validation in production
+	if h.outgoingMessages == nil {
+		return fmt.Errorf("outgoing message builder is not configured")
 	}
 
-	// Recover from any panics in the validator library (e.g., NaN values)
-	defer func() {
-		if r := recover(); r != nil {
-			log.Printf("Schema validator panicked for %s: %v", messageType, r)
-			err = fmt.Errorf("validator panic: %v", r)
-		}
-	}()
+	return h.outgoingMessages.Validate(messageType, data)
+}
 
-	// Map message type to schema name (message:type_subtype → message-type-subtype-data)
-	// Server-to-client schemas follow the pattern: {message-type}-data.json
-	// Replace colons and underscores with hyphens to match filename convention
-	schemaName := strings.ReplaceAll(messageType, ":", "-")
-	schemaName = strings.ReplaceAll(schemaName, "_", "-")
-	schemaName = schemaName + "-data"
-
-	// Validate the data against the schema
-	err = h.outgoingValidator.Validate(schemaName, data)
-	if err != nil {
-		log.Printf("Outgoing message validation failed for %s: %v", messageType, err)
-		return err
+func (h *WebSocketHandler) buildOutgoingMessage(messageType string, data interface{}) ([]byte, error) {
+	if h.outgoingMessages == nil {
+		return nil, fmt.Errorf("outgoing message builder is not configured")
 	}
 
-	return nil
+	return h.outgoingMessages.Build(messageType, data)
 }
 
 // HandleWebSocket upgrades HTTP connection to WebSocket and manages message loop

@@ -69,6 +69,24 @@ type Message struct {
 }
 ```
 
+### Server-To-Client Publication Module
+
+The server-to-client publication module owns construction of every server-to-client envelope before delivery. It accepts typed domain facts for supported events, shapes the payload expected by this catalog, applies the standard timestamp rule, validates the payload against the generated server-to-client schema when validation is enabled, and marshals the final JSON envelope.
+
+**Responsibilities:**
+- preserve the universal message envelope for all server-to-client messages
+- own payload shaping for supported outgoing events so message producers do not hand-assemble ad hoc payload maps at call sites
+- centralize timestamp assignment so message producers do not each choose their own clock behavior
+- centralize outgoing schema validation and marshal error handling
+- expose publication helpers for the common recipient patterns used by the server: direct sends, room broadcasts, waiting-player sends, and room-wide session lifecycle updates
+- return bytes plus an error to the caller for pure envelope-building paths; it does not decide gameplay rules
+
+**Non-responsibilities:**
+- It does not process client-to-server messages.
+- It does not mutate game state.
+- It does not decide whether a gameplay fact should exist at all.
+
+**Why this module exists:** Server-side message producers otherwise repeat the same low-level construction steps and re-encode message contracts in multiple places. Centralizing envelope construction, payload shaping, and recipient helpers keeps the message catalog as the test surface and lets room/network code focus on delivery decisions and gameplay flow.
 **Example:**
 ```json
 {
@@ -136,6 +154,7 @@ type Message struct {
 - Consumers that need a playable match session must wait for `session:status.state == "match_ready"`.
 - Consumers that only need to confirm the player has joined a pre-match session may wait for a non-error `session:status` state such as `searching_for_match` or `waiting_for_players`.
 - `room:joined` remains a legacy compatibility event only. New client flows, app bootstrap logic, and integration tests must not rely on it as the primary synchronization point.
+- The server-to-client publication module owns the envelope and payload shaping for `session:status`, including the searching, waiting, and match-ready states. Room lifecycle code may choose recipients and source domain values, but it must not manually marshal `session:status` envelopes.
 
 **Why make this explicit?** The session-first flow separates "the server accepted my join intent" from "the match is ready to bootstrap." Tests that wait for a ready-room event when the player is still waiting can leak sockets, stall teardown, and misdiagnose correct waiting behavior as a networking failure.
 

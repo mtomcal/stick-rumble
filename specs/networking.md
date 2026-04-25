@@ -42,6 +42,7 @@ For authoritative gameplay, the network layer is an adapter over one emitted gam
 | `stick-rumble-server/internal/network/message_processor.go` | Per-message-type handlers, broadcast callbacks |
 | `stick-rumble-server/internal/network/broadcast_helper.go` | Player state broadcasts with delta compression |
 | `stick-rumble-server/internal/game/gameserver.go` | Emits authoritative runtime outcomes consumed by the network adapter |
+| `stick-rumble-server/internal/network/publication.go` | Server-to-client publication seam for envelope construction, typed payload shaping, and recipient helpers |
 | `stick-rumble-server/internal/network/delta_tracker.go` | Per-client delta compression state tracking |
 | `stick-rumble-server/internal/network/network_simulator.go` | Server-side artificial latency/packet loss |
 | `stick-rumble-server/internal/game/ping_tracker.go` | RTT measurement (circular buffer of 5) |
@@ -107,6 +108,23 @@ type Message struct {
     Data      any    `json:"data,omitempty"`
 }
 ```
+
+### Server-To-Client Publication Seam
+
+All server-to-client messages flow through one publication seam before they are sent to any player.
+
+**Why define a publication seam separately from gameplay logic?** Outgoing traffic has three concerns that must stay consistent across room lifecycle, websocket error paths, and gameplay broadcasts:
+1. envelope construction with the standard timestamp rule
+2. payload shaping that matches the shared message catalog
+3. recipient delivery behavior for direct sends, waiting-player sends, and room broadcasts
+
+The publication seam centralizes those concerns so room and networking code can describe domain facts without re-encoding message contracts or duplicating channel-full handling.
+
+**Required behavior:**
+- supported publication helpers must shape the payload from typed inputs rather than expecting callers to pass prebuilt raw envelopes
+- all supported server-to-client events must use the shared outgoing message builder for timestamps and optional schema validation
+- direct-send helper behavior for room players and waiting players must be implemented in one place
+- room lifecycle paths such as `session:status` and `player:left` must publish through this seam instead of manually marshaling JSON
 
 ### WebSocket Upgrader Configuration
 

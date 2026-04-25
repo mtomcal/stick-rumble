@@ -1,7 +1,6 @@
 package game
 
 import (
-	"encoding/json"
 	"errors"
 	"log"
 	"os"
@@ -215,19 +214,13 @@ type RoomManager struct {
 	codeIndex      map[string]string
 	defaultMapID   string
 	sessionFlow    *RoomSessionFlow
+	publisher      RoomEventPublisher
 	mu             sync.RWMutex
 }
 
-type SessionStatusData struct {
-	State       SessionStatusState `json:"state"`
-	PlayerID    string             `json:"playerId"`
-	DisplayName string             `json:"displayName"`
-	JoinMode    string             `json:"joinMode"`
-	RoomID      string             `json:"roomId,omitempty"`
-	Code        string             `json:"code,omitempty"`
-	RosterSize  int                `json:"rosterSize,omitempty"`
-	MinPlayers  int                `json:"minPlayers,omitempty"`
-	MapID       string             `json:"mapId,omitempty"`
+type RoomEventPublisher interface {
+	PublishSessionStatus(player *Player, room *Room, state SessionStatusState) error
+	PublishPlayerLeft(room *Room, playerID string) error
 }
 
 func NewRoomManager(defaultMapIDs ...string) *RoomManager {
@@ -249,6 +242,13 @@ func NewRoomManager(defaultMapIDs ...string) *RoomManager {
 
 func (rm *RoomManager) SessionFlow() *RoomSessionFlow {
 	return rm.sessionFlow
+}
+
+func (rm *RoomManager) SetPublisher(publisher RoomEventPublisher) {
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+
+	rm.publisher = publisher
 }
 
 func SanitizeDisplayName(raw any) string {
@@ -310,60 +310,15 @@ func (rm *RoomManager) AddCodePlayer(player *Player, normalizedCode string) (*Ro
 	return result.Room, result.Rejection == nil
 }
 
-func (rm *RoomManager) buildSessionStatusData(player *Player, room *Room, state SessionStatusState) SessionStatusData {
-	data := SessionStatusData{
-		State:       state,
-		PlayerID:    player.ID,
-		DisplayName: player.DisplayName,
-		MinPlayers:  MinPlayersToStart,
-	}
-
-	if room == nil {
-		data.JoinMode = string(RoomKindPublic)
-		return data
-	}
-
-	data.JoinMode = string(room.Kind)
-	data.RoomID = room.ID
-	data.RosterSize = room.PlayerCount()
-
-	if room.Kind == RoomKindCode && room.Code != "" {
-		data.Code = room.Code
-	}
-	if state == SessionStatusMatchReady {
-		data.MapID = room.MapID
-	}
-
-	return data
-}
-
 func (rm *RoomManager) sendSessionStatus(player *Player, room *Room, state SessionStatusState) {
-	data := rm.buildSessionStatusData(player, room, state)
-	message := map[string]any{
-		"type":      "session:status",
-		"timestamp": time.Now().UnixMilli(),
-		"data":      data,
-	}
-
-	msgBytes, err := json.Marshal(message)
-	if err != nil {
-		log.Printf("Error marshaling session:status message: %v", err)
+	if rm.publisher == nil {
+		log.Printf("Warning: no room event publisher configured for session:status(%s)", state)
 		return
 	}
 
-	func() {
-		defer func() {
-			if rec := recover(); rec != nil {
-				log.Printf("Warning: Could not send session:status message to player %s (channel closed)", player.ID)
-			}
-		}()
-
-		select {
-		case player.SendChan <- msgBytes:
-		default:
-			log.Printf("Warning: Could not send session:status message to player %s (channel full)", player.ID)
-		}
-	}()
+	if err := rm.publisher.PublishSessionStatus(player, room, state); err != nil {
+		log.Printf("Error publishing session:status for player %s: %v", player.ID, err)
+	}
 }
 
 func (rm *RoomManager) PublishSessionPublications(publications []RoomSessionPublication) {
@@ -402,18 +357,10 @@ func (rm *RoomManager) RemovePlayer(playerID string) {
 
 	room.RemovePlayer(playerID)
 
-	message := map[string]any{
-		"type":      "player:left",
-		"timestamp": time.Now().UnixMilli(),
-		"data": map[string]any{
-			"playerId": playerID,
-		},
-	}
-
-	if msgBytes, err := json.Marshal(message); err != nil {
-		log.Printf("Error marshaling player:left message: %v", err)
-	} else {
-		room.Broadcast(msgBytes, "")
+	if rm.publisher == nil {
+		log.Printf("Warning: no room event publisher configured for player:left(%s)", playerID)
+	} else if err := rm.publisher.PublishPlayerLeft(room, playerID); err != nil {
+		log.Printf("Error publishing player:left for player %s: %v", playerID, err)
 	}
 
 	delete(rm.playerToRoom, playerID)
