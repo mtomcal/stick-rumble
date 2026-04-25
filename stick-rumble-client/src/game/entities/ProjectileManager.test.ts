@@ -221,6 +221,30 @@ describe('ProjectileManager', () => {
       const hasTriangle = graphics.some((g) => g.fillTriangle.mock.calls.length > 0);
       expect(hasTriangle).toBe(true);
     });
+
+    it('should size chevron projectiles from projectile diameter instead of tracer length', () => {
+      const projectileData: ProjectileData = {
+        id: 'proj-1',
+        ownerId: 'player-1',
+        weaponType: 'Pistol',
+        position: { x: 100, y: 200 },
+        velocity: { x: 800, y: 0 },
+      };
+
+      projectileManager.spawnProjectile(projectileData);
+
+      const graphics = Array.from(scene.mockGraphics.values());
+      const projectileGfx = graphics[0];
+      const [tipX, tipY, baseLeftX, baseLeftY, baseRightX, baseRightY] =
+        projectileGfx.fillTriangle.mock.calls[0];
+
+      expect(tipX).toBe(4);
+      expect(tipY).toBe(0);
+      expect(baseLeftX).toBe(-2);
+      expect(baseLeftY).toBeCloseTo(4 / 3, 5);
+      expect(baseRightX).toBe(-2);
+      expect(baseRightY).toBeCloseTo(-(4 / 3), 5);
+    });
   });
 
   describe('update', () => {

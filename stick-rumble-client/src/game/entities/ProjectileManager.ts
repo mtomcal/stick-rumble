@@ -88,13 +88,15 @@ export class ProjectileManager {
     let sprite: Phaser.GameObjects.Arc | Phaser.GameObjects.Graphics;
 
     if (shape === 'chevron') {
+      const chevronSize = Math.max(projectileDiameter, 2);
+
       // Draw directional triangle polygon pointing in velocity direction
       sprite = this.createChevronSprite(
         data.position.x,
         data.position.y,
         data.velocity,
         projectileColor,
-        tracerLength
+        chevronSize
       );
     } else {
       // Default circle sprite
