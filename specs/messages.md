@@ -1,7 +1,7 @@
 # Messages
 
-> **Spec Version**: 1.5.0
-> **Last Updated**: 2026-04-23
+> **Spec Version**: 1.5.1
+> **Last Updated**: 2026-04-25
 > **Depends On**: [constants.md](constants.md), [player.md](player.md)
 > **Depended By**: [networking.md](networking.md), [rooms.md](rooms.md), [weapons.md](weapons.md), [shooting.md](shooting.md), [melee.md](melee.md), [hit-detection.md](hit-detection.md), [match.md](match.md), [client-architecture.md](client-architecture.md), [server-architecture.md](server-architecture.md)
 
@@ -41,6 +41,7 @@ This specification defines the complete WebSocket message catalog for Stick Rumb
 | `events-schema/src/schemas/client-to-server.ts` | Client→Server message schemas |
 | `events-schema/src/schemas/server-to-client.ts` | Server→Client message schemas |
 | `stick-rumble-server/internal/network/message_processor.go` | Server message handling |
+| `stick-rumble-server/internal/network/outgoing_message.go` | Server outgoing message construction and validation |
 | `stick-rumble-client/src/game/scenes/GameSceneEventHandlers.ts` | Client message handling |
 
 ---
@@ -68,6 +69,23 @@ type Message struct {
     Data      any    `json:"data,omitempty"`
 }
 ```
+
+### Server Outgoing Message Module
+
+The server outgoing message module owns construction of every server-to-client envelope before delivery. It accepts a message type and payload, applies the standard timestamp rule, validates the payload against the generated server-to-client schema when validation is enabled, and marshals the final JSON envelope.
+
+**Responsibilities:**
+- preserve the universal message envelope for all server-to-client messages
+- centralize timestamp assignment so message producers do not each choose their own clock behavior
+- centralize outgoing schema validation and marshal error handling
+- return bytes plus an error to the caller; it does not decide room membership, recipient selection, or gameplay rules
+
+**Non-responsibilities:**
+- It does not process client-to-server messages.
+- It does not mutate game state.
+- It does not choose whether a message goes to one player, one room, waiting players, or every room.
+
+**Why this module exists:** Server-side message producers otherwise repeat the same low-level construction steps for every message type. Centralizing the envelope and validation behavior keeps the message catalog as the test surface and lets broadcast code focus on delivery.
 
 **Example:**
 ```json

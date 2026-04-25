@@ -1,7 +1,7 @@
 # Server Architecture
 
-> **Spec Version**: 1.2.0
-> **Last Updated**: 2026-04-07
+> **Spec Version**: 1.2.1
+> **Last Updated**: 2026-04-25
 > **Depends On**: [overview.md](overview.md), [constants.md](constants.md), [networking.md](networking.md), [rooms.md](rooms.md), [messages.md](messages.md), [maps.md](maps.md)
 > **Depended By**: None (leaf spec)
 
@@ -77,6 +77,7 @@ stick-rumble-server/
         ├── delta_tracker.go        # [NEW] Per-client delta compression state
         ├── message_processor.go    # Message routing and handlers
         ├── network_simulator.go    # [NEW] Artificial latency/packet loss
+        ├── outgoing_message.go     # Server outgoing message construction and validation
         ├── schema_loader.go        # JSON schema loading
         ├── schema_validator.go     # Optional message validation
         └── websocket_handler.go    # WebSocket connection lifecycle + ping/pong
@@ -168,6 +169,25 @@ All WebSocket connections share a single handler instance to ensure:
 1. All connections share the same RoomManager (matchmaking state)
 2. All connections share the same GameServer bootstrap and shared map registry
 3. Global broadcasts reach all players correctly
+
+### Outgoing Message Module
+
+The outgoing message module is the network-layer module that converts server-to-client payloads into validated WebSocket message bytes.
+
+**Interface responsibilities:**
+- accept a server-to-client message type and payload
+- assign the standard envelope timestamp from the server clock
+- validate the outgoing payload against the generated schema when validation is configured
+- marshal the final envelope into JSON bytes
+- return errors so callers can log and skip delivery without panicking or blocking the game loop
+
+**Non-responsibilities:**
+- It does not select recipients or perform room broadcasts.
+- It does not make gameplay decisions.
+- It does not mutate room, player, weapon, projectile, or match state.
+
+**Why keep delivery outside this module?**
+Message construction is shared by single-player sends, room broadcasts, waiting-player sends, and global broadcasts. Recipient selection belongs to the room and WebSocket delivery paths, while message construction remains one reusable module.
 
 ### MapRegistry
 
