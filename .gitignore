@@ -31,6 +31,28 @@ trees/
 # loop.sh iteration logs
 .loop-logs/
 
+# Generated/local agent job scaffolding
+PROMPT.md
+ORCHESTRATOR.md
+loop.sh
+Dockerfile.sandbox
+setup-sandbox-network.sh
+teardown-sandbox-network.sh
+
+# Accidental command/package artifacts
+/maxRange
+/package-lock.json
+stick-rumble-client/tsc
+stick-rumble-client/eslint
+stick-rumble-client/stick-rumble-client@*
+
+# Coverage artifacts
+coverage/
+coverage-summary.json
+coverage_*.html
+stick-rumble-client/coverage-summary.json
+stick-rumble-server/coverage_*.html
+
 # Playwright local artifacts
 .playright*
 .playwright*
