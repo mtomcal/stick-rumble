@@ -363,20 +363,9 @@ func (h *WebSocketHandler) sendWeaponState(playerID string) {
 		"isMelee":     ws.Weapon.IsMelee(),
 	}
 
-	// Validate outgoing message schema (development mode only)
-	if err := h.validateOutgoingMessage("weapon:state", data); err != nil {
-		log.Printf("Schema validation failed for weapon:state: %v", err)
-	}
-
-	message := Message{
-		Type:      "weapon:state",
-		Timestamp: 0,
-		Data:      data,
-	}
-
-	msgBytes, err := json.Marshal(message)
+	msgBytes, err := h.buildOutgoingMessage("weapon:state", data)
 	if err != nil {
-		log.Printf("Error marshaling weapon:state message: %v", err)
+		log.Printf("Error building weapon:state message: %v", err)
 		return
 	}
 

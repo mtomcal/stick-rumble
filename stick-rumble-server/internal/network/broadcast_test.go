@@ -286,6 +286,7 @@ func TestBroadcastWeaponState(t *testing.T) {
 	// Player 1 should receive weapon:state
 	msg, err := readMessageOfType(t, conn1, "weapon:state", 2*time.Second)
 	require.NoError(t, err, "Should receive weapon:state")
+	assert.Positive(t, msg.Timestamp, "weapon:state should use the outgoing message builder timestamp")
 
 	data, ok := msg.Data.(map[string]interface{})
 	require.True(t, ok)
