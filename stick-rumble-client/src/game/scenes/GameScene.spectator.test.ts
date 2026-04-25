@@ -53,4 +53,23 @@ describe('GameScene spectator transitions', () => {
 
     expect(exitSpy).toHaveBeenCalledTimes(1)
   })
+
+  it('ignores remote player death and respawn for spectator transitions', () => {
+    const { scene, wsClient } = setupBootstrappedGameScene()
+    const enterSpy = vi.spyOn(scene['spectator'], 'enterSpectatorMode')
+    const exitSpy = vi.spyOn(scene['spectator'], 'exitSpectatorMode')
+
+    wsClient.emit('player:death', {
+      victimId: 'player-2',
+      killerId: 'player-1',
+    })
+    wsClient.emit('player:respawn', {
+      playerId: 'player-2',
+      position: { x: 300, y: 400 },
+      health: 100,
+    })
+
+    expect(enterSpy).not.toHaveBeenCalled()
+    expect(exitSpy).not.toHaveBeenCalled()
+  })
 })

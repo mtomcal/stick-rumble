@@ -74,4 +74,24 @@ describe('GameScene event routing', () => {
       'player-1',
     )
   })
+
+  it('suppresses late gameplay mutations after match:ended', () => {
+    const { scene, wsClient } = setupBootstrappedGameScene()
+    const spawnProjectileSpy = vi.spyOn(scene['projectileManager'], 'spawnProjectile')
+
+    wsClient.emit('match:ended', {
+      winners: [{ playerId: 'player-1', displayName: 'Alice' }],
+      finalScores: [{ playerId: 'player-1', displayName: 'Alice', kills: 5, deaths: 1, xp: 650 }],
+      reason: 'kill_target',
+    })
+    wsClient.emit('projectile:spawn', {
+      id: 'proj-late',
+      ownerId: 'player-1',
+      weaponType: 'AK47',
+      position: { x: 100, y: 200 },
+      velocity: { x: 400, y: 0 },
+    })
+
+    expect(spawnProjectileSpy).not.toHaveBeenCalled()
+  })
 })

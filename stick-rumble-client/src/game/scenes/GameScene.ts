@@ -17,7 +17,7 @@ import { PickupPromptUI } from '../ui/PickupPromptUI';
 import { DodgeRollCooldownUI } from '../ui/DodgeRollCooldownUI';
 import { GameSceneUI } from './GameSceneUI';
 import { GameSceneSpectator } from './GameSceneSpectator';
-import { GameSceneEventHandlers } from './GameSceneEventHandlers';
+import { GameplayEventRouter } from './gameplayEventRouter/GameplayEventRouter';
 import { ScreenShake } from '../effects/ScreenShake';
 import { AudioManager } from '../audio/AudioManager';
 import { AimLine } from '../entities/AimLine';
@@ -90,7 +90,7 @@ export class GameScene extends Phaser.Scene {
   private dodgeRollCooldownUI!: DodgeRollCooldownUI;
   private ui!: GameSceneUI;
   private spectator!: GameSceneSpectator;
-  private eventHandlers!: GameSceneEventHandlers;
+  private eventHandlers!: GameplayEventRouter;
   private screenShake!: ScreenShake;
   private audioManager!: AudioManager;
   private lastDeltaTime: number = 0;
@@ -210,7 +210,7 @@ export class GameScene extends Phaser.Scene {
     this.applyMatchMapContext(getMatchMapContext(bootstrap.session.mapId));
 
     // Initialize event handlers module
-    this.eventHandlers = new GameSceneEventHandlers(
+    this.eventHandlers = new GameplayEventRouter(
       this.wsClient,
       this.playerManager,
       this.projectileManager,
