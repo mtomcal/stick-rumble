@@ -1,7 +1,7 @@
 # Rooms
 
-> **Spec Version**: 1.4.1
-> **Last Updated**: 2026-04-23
+> **Spec Version**: 1.4.2
+> **Last Updated**: 2026-04-25
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [networking.md](networking.md), [messages.md](messages.md), [maps.md](maps.md)
 > **Depended By**: [match.md](match.md), [server-architecture.md](server-architecture.md)
 
@@ -183,6 +183,20 @@ Looking up a code-room by its human code should be O(1) and must not depend on i
 ---
 
 ## Behavior
+
+### Room Session Flow Ownership
+
+Room session lifecycle is split between state ownership and transition policy.
+
+- `RoomManager` remains the single owner of room membership, waiting players, room indexes, and player-to-room lookups.
+- A dedicated room session flow module owns successful hello acceptance, public/code matchmaking transitions, `searching_for_match` / `waiting_for_players` / `match_ready` decisions, and pre-match `session:leave` policy.
+- The room session flow module must not keep its own copy of rooms or waiting queues. It operates against `RoomManager` state and returns outcomes instead of becoming a second state owner.
+- Transport adapters such as the WebSocket handler convert validated socket messages into room session flow actions and publish the returned outcomes.
+
+**Why split it this way?**
+- The repository needs one authoritative room-state owner.
+- Join and leave policy needs direct unit coverage without full transport setup.
+- Transport code should adapt messages, not embed matchmaking policy inline.
 
 ### Join Intent
 
@@ -1295,6 +1309,7 @@ test "tab reload joins existing room":
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.4.2 | 2026-04-25 | Clarified room session flow ownership: `RoomManager` remains the single source of truth for stored room state, while a dedicated room session flow module owns hello and pre-match leave transition policy and returns outcomes for transport publication and gameplay enrollment. |
 | 1.4.0 | 2026-04-17 | Session-first client alignment: documented public `searching_for_match`, named-room `waiting_for_players`, and `match_ready` as explicit `session:status` outcomes after a successful hello; updated client-facing room handling to bootstrap gameplay only from `match_ready`; and switched room/messaging references from `room:joined` to `session:status` / `session:leave`. |
 | 1.3.1 | 2026-04-11 | Friends-MVP pre-mortem fixes: (1) code-room join path now explicitly calls `match.start()` when the joiner crosses `MIN_PLAYERS_TO_START`; (2) room destruction now only deletes `codeIndex[code]` if the index still points at the room being destroyed, preventing a rematch-in-progress room from being unindexed when the old room's stragglers disconnect (new TS-ROOM-018); (3) failed-hello semantics clarified — `error:bad_room_code` / `error:room_full` do not latch `HelloSeen`; (4) added "Accepted Risk: Code Collisions Between Unrelated Groups" section making the collision trade-off explicit; (5) added regression notice for the public tab-reload fast-path now requiring a fresh `player:hello`. |
 | 1.3.0 | 2026-04-11 | Friends-MVP: introduced named rooms (`RoomKindCode`), room-code normalization, join-intent via `player:hello`, display-name sanitization and `PlayerState.DisplayName`, error modes `error:no_hello` / `error:bad_room_code` / `error:room_full { code }`. Added TS-ROOM-011..017. |

@@ -1362,6 +1362,7 @@ func TestConcurrentAccess(t *testing.T) {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.2.1 | 2026-04-25 | Room session flow seam: documented a dedicated server-side module that owns hello acceptance, matchmaking and waiting transitions, `match_ready` decisions, and pre-match `session:leave` policy while `RoomManager` remains the single owner of stored room state. |
 | 1.2.0 | 2026-02-18 | Art style alignment: Documented that Respawn() sets IsInvulnerable=true for 2 seconds, cleared by UpdateInvulnerability(). |
 | 1.1.8 | 2026-02-16 | Fixed ManualClock — `sync.Mutex` → `sync.RWMutex`, field `current` → `currentTime` to match clock.go |
 | 1.1.7 | 2026-02-16 | Added missing `PingTracker *PingTracker` field to Player struct |
