@@ -155,6 +155,7 @@ describe.sequential('WebSocket Player Movement Integration Tests', () => {
 
       it('should receive player positions with nested position and velocity objects', async () => {
         const client = createClient();
+        const peerClient = createClient();
 
         let playerState: any = null;
 
@@ -172,7 +173,7 @@ describe.sequential('WebSocket Player Movement Integration Tests', () => {
           });
         });
 
-        await connectClientToCodeRoom(client);
+        await connectClientsToRoom(client, peerClient);
 
         // Send input to trigger movement
         const inputMessage: Message = {
@@ -310,6 +311,7 @@ describe.sequential('WebSocket Player Movement Integration Tests', () => {
     describe('AC: Server validates movement bounds', () => {
       it('should keep player within arena bounds (0-1920, 0-1080)', async () => {
         const client = createClient();
+        const peerClient = createClient();
 
         const positions: { x: number; y: number }[] = [];
 
@@ -331,7 +333,7 @@ describe.sequential('WebSocket Player Movement Integration Tests', () => {
           });
         });
 
-        await connectClientToCodeRoom(client);
+        await connectClientsToRoom(client, peerClient);
 
         // Send input - player should stay within bounds
         const inputMessage: Message = {

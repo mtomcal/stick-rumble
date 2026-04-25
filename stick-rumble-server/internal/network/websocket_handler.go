@@ -34,12 +34,38 @@ type Message struct {
 // WebSocketHandler manages WebSocket connections and room management
 type WebSocketHandler struct {
 	roomManager       *game.RoomManager
+	sessionFlow       *game.RoomSessionFlow
 	gameServer        *game.GameServer
+	sessionRuntime    roomSessionRuntime
 	timerInterval     time.Duration // Interval for match timer broadcasts (default 1s)
 	validator         *SchemaValidator
 	outgoingValidator *SchemaValidator
 	networkSimulator  *NetworkSimulator // For artificial latency testing (Story 4.6)
 	deltaTracker      *DeltaTracker     // For delta compression (Story 4.4)
+}
+
+type roomSessionRuntime interface {
+	ActivatePlayers(activations []game.RoomSessionActivation)
+	RemovePlayer(playerID string)
+}
+
+type gameSessionRuntime struct {
+	gameServer       *game.GameServer
+	sendWeaponSpawns func(playerID string)
+}
+
+func (r *gameSessionRuntime) ActivatePlayers(activations []game.RoomSessionActivation) {
+	for _, activation := range activations {
+		if _, exists := r.gameServer.GetPlayerState(activation.Player.ID); !exists {
+			r.gameServer.AddPlayer(activation.Player.ID)
+		}
+		r.gameServer.SetPlayerDisplayName(activation.Player.ID, activation.Player.DisplayName)
+		r.sendWeaponSpawns(activation.Player.ID)
+	}
+}
+
+func (r *gameSessionRuntime) RemovePlayer(playerID string) {
+	r.gameServer.RemovePlayer(playerID)
 }
 
 const (
@@ -75,6 +101,11 @@ func NewWebSocketHandlerWithConfig(timerInterval time.Duration) *WebSocketHandle
 
 	// Create game server with broadcast function
 	handler.gameServer = game.NewGameServer(handler.broadcastPlayerStates)
+	handler.sessionFlow = handler.roomManager.SessionFlow()
+	handler.sessionRuntime = &gameSessionRuntime{
+		gameServer:       handler.gameServer,
+		sendWeaponSpawns: handler.sendWeaponSpawns,
+	}
 
 	// Register callback for reload completion to notify clients
 	handler.gameServer.SetOnReloadComplete(handler.onReloadComplete)
@@ -373,47 +404,23 @@ func (h *WebSocketHandler) handlePlayerHello(player *game.Player, data any) {
 		return
 	}
 
-	player.DisplayName = game.FallbackDisplayName
-	if rawDisplayName, exists := dataMap["displayName"]; exists {
-		player.DisplayName = game.SanitizeDisplayName(rawDisplayName)
-	}
-
-	mode, _ := dataMap["mode"].(string)
-	var room *game.Room
-	switch mode {
-	case "public":
-		room = h.roomManager.AddPublicPlayer(player)
-	case "code":
-		code, reason, normalized := game.NormalizeRoomCode(dataMap["code"])
-		if !normalized {
-			h.sendBadRoomCodeError(player, string(reason))
-			return
+	result := h.sessionFlow.HandleHello(player, dataMap)
+	if result.Rejection != nil {
+		switch result.Rejection.Kind {
+		case game.RoomSessionRejectionBadRoomCode:
+			h.sendBadRoomCodeError(player, result.Rejection.Reason)
+		case game.RoomSessionRejectionRoomFull:
+			h.sendRoomFullError(player, result.Rejection.Code)
+		default:
+			log.Printf("Invalid player:hello mode for %s", player.ID)
 		}
-		var joined bool
-		room, joined = h.roomManager.AddCodePlayer(player, code)
-		if !joined {
-			h.sendRoomFullError(player, code)
-			return
-		}
-	default:
-		log.Printf("Invalid player:hello mode for %s: %v", player.ID, mode)
 		return
 	}
 
 	player.HelloSeen = true
-
-	if room == nil {
-		return
-	}
-
-	for _, p := range room.GetPlayers() {
-		if _, exists := h.gameServer.GetPlayerState(p.ID); !exists {
-			h.gameServer.AddPlayer(p.ID)
-		}
-		h.gameServer.SetPlayerDisplayName(p.ID, p.DisplayName)
-	}
-	for _, p := range room.GetPlayers() {
-		h.sendWeaponSpawns(p.ID)
+	h.roomManager.PublishSessionPublications(result.Publications)
+	if len(result.Activations) > 0 {
+		h.sessionRuntime.ActivatePlayers(result.Activations)
 	}
 }
 
@@ -422,11 +429,12 @@ func (h *WebSocketHandler) handleSessionLeave(player *game.Player) {
 		return
 	}
 
-	if !h.roomManager.LeaveSession(player.ID) {
+	result := h.sessionFlow.LeaveSession(player.ID)
+	if !result.LeftSession {
 		return
 	}
-
-	h.gameServer.RemovePlayer(player.ID)
+	h.roomManager.PublishSessionPublications(result.Publications)
+	h.sessionRuntime.RemovePlayer(player.ID)
 	h.deltaTracker.RemoveClient(player.ID)
 	player.HelloSeen = false
 	player.DisplayName = game.FallbackDisplayName

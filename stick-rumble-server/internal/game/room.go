@@ -214,6 +214,7 @@ type RoomManager struct {
 	playerToRoom   map[string]string
 	codeIndex      map[string]string
 	defaultMapID   string
+	sessionFlow    *RoomSessionFlow
 	mu             sync.RWMutex
 }
 
@@ -235,13 +236,19 @@ func NewRoomManager(defaultMapIDs ...string) *RoomManager {
 		defaultMapID = defaultMapIDs[0]
 	}
 
-	return &RoomManager{
+	manager := &RoomManager{
 		rooms:          make(map[string]*Room),
 		waitingPlayers: make([]*Player, 0),
 		playerToRoom:   make(map[string]string),
 		codeIndex:      make(map[string]string),
 		defaultMapID:   defaultMapID,
 	}
+	manager.sessionFlow = NewRoomSessionFlow(manager)
+	return manager
+}
+
+func (rm *RoomManager) SessionFlow() *RoomSessionFlow {
+	return rm.sessionFlow
 }
 
 func SanitizeDisplayName(raw any) string {
@@ -286,51 +293,9 @@ func NormalizeRoomCode(raw any) (string, RoomCodeErrorReason, bool) {
 
 // AddPublicPlayer processes a successful public-mode hello.
 func (rm *RoomManager) AddPublicPlayer(player *Player) *Room {
-	rm.mu.Lock()
-	defer rm.mu.Unlock()
-
-	for _, room := range rm.rooms {
-		if room.Kind == RoomKindPublic && room.PlayerCount() == 1 && !room.Match.IsEnded() {
-			if err := room.AddPlayer(player); err != nil {
-				continue
-			}
-			rm.playerToRoom[player.ID] = room.ID
-			room.Match.RegisterPlayer(player.ID)
-			if room.PlayerCount() >= MinPlayersToStart && !room.Match.IsStarted() {
-				room.Match.Start()
-			}
-			for _, roomPlayer := range room.GetPlayers() {
-				rm.sendSessionStatus(roomPlayer, room, SessionStatusMatchReady)
-			}
-			return room
-		}
-	}
-
-	rm.waitingPlayers = append(rm.waitingPlayers, player)
-	rm.sendSessionStatus(player, nil, SessionStatusSearchingForMatch)
-	if len(rm.waitingPlayers) < MinPlayersToStart {
-		return nil
-	}
-
-	room := NewTypedRoom(RoomKindPublic, "", rm.defaultMapID)
-	player1 := rm.waitingPlayers[0]
-	player2 := rm.waitingPlayers[1]
-	rm.waitingPlayers = rm.waitingPlayers[2:]
-
-	_ = room.AddPlayer(player1)
-	_ = room.AddPlayer(player2)
-	room.Match.RegisterPlayer(player1.ID)
-	room.Match.RegisterPlayer(player2.ID)
-	room.Match.Start()
-
-	rm.rooms[room.ID] = room
-	rm.playerToRoom[player1.ID] = room.ID
-	rm.playerToRoom[player2.ID] = room.ID
-
-	rm.sendSessionStatus(player1, room, SessionStatusMatchReady)
-	rm.sendSessionStatus(player2, room, SessionStatusMatchReady)
-
-	return room
+	result := rm.sessionFlow.joinPublic(player)
+	rm.PublishSessionPublications(result.Publications)
+	return result.Room
 }
 
 // AddPlayer preserves the old public-room API for callers that still use it.
@@ -340,44 +305,9 @@ func (rm *RoomManager) AddPlayer(player *Player) *Room {
 
 // AddCodePlayer processes a successful code-mode hello.
 func (rm *RoomManager) AddCodePlayer(player *Player, normalizedCode string) (*Room, bool) {
-	rm.mu.Lock()
-	defer rm.mu.Unlock()
-
-	if existingRoomID, ok := rm.codeIndex[normalizedCode]; ok {
-		if existingRoom, exists := rm.rooms[existingRoomID]; exists {
-			if existingRoom.Match.IsEnded() {
-				delete(rm.codeIndex, normalizedCode)
-			} else if existingRoom.PlayerCount() >= existingRoom.MaxPlayers {
-				return existingRoom, false
-			} else {
-				if err := existingRoom.AddPlayer(player); err != nil {
-					return existingRoom, false
-				}
-				rm.playerToRoom[player.ID] = existingRoom.ID
-				existingRoom.Match.RegisterPlayer(player.ID)
-				if existingRoom.PlayerCount() >= MinPlayersToStart && !existingRoom.Match.IsStarted() {
-					existingRoom.Match.Start()
-					for _, roomPlayer := range existingRoom.GetPlayers() {
-						rm.sendSessionStatus(roomPlayer, existingRoom, SessionStatusMatchReady)
-					}
-				} else if existingRoom.Match.IsStarted() {
-					rm.sendSessionStatus(player, existingRoom, SessionStatusMatchReady)
-				} else {
-					rm.sendSessionStatus(player, existingRoom, SessionStatusWaitingForPlayers)
-				}
-				return existingRoom, true
-			}
-		}
-	}
-
-	room := NewTypedRoom(RoomKindCode, normalizedCode, rm.defaultMapID)
-	_ = room.AddPlayer(player)
-	room.Match.RegisterPlayer(player.ID)
-	rm.rooms[room.ID] = room
-	rm.playerToRoom[player.ID] = room.ID
-	rm.codeIndex[normalizedCode] = room.ID
-	rm.sendSessionStatus(player, room, SessionStatusWaitingForPlayers)
-	return room, true
+	result := rm.sessionFlow.joinCode(player, normalizedCode)
+	rm.PublishSessionPublications(result.Publications)
+	return result.Room, result.Rejection == nil
 }
 
 func (rm *RoomManager) buildSessionStatusData(player *Player, room *Room, state SessionStatusState) SessionStatusData {
@@ -436,46 +366,16 @@ func (rm *RoomManager) sendSessionStatus(player *Player, room *Room, state Sessi
 	}()
 }
 
+func (rm *RoomManager) PublishSessionPublications(publications []RoomSessionPublication) {
+	for _, publication := range publications {
+		rm.sendSessionStatus(publication.Player, publication.Room, publication.State)
+	}
+}
+
 func (rm *RoomManager) LeaveSession(playerID string) bool {
-	rm.mu.Lock()
-	defer rm.mu.Unlock()
-
-	for i, player := range rm.waitingPlayers {
-		if player.ID != playerID {
-			continue
-		}
-		rm.waitingPlayers = append(rm.waitingPlayers[:i], rm.waitingPlayers[i+1:]...)
-		return true
-	}
-
-	roomID, exists := rm.playerToRoom[playerID]
-	if !exists {
-		return false
-	}
-
-	room, exists := rm.rooms[roomID]
-	if !exists || room.Match.IsStarted() {
-		return false
-	}
-
-	room.RemovePlayer(playerID)
-	delete(rm.playerToRoom, playerID)
-
-	if room.IsEmpty() {
-		delete(rm.rooms, roomID)
-		if room.Kind == RoomKindCode && room.Code != "" {
-			if indexedID, ok := rm.codeIndex[room.Code]; ok && indexedID == room.ID {
-				delete(rm.codeIndex, room.Code)
-			}
-		}
-		return true
-	}
-
-	for _, remainingPlayer := range room.GetPlayers() {
-		rm.sendSessionStatus(remainingPlayer, room, SessionStatusWaitingForPlayers)
-	}
-
-	return true
+	result := rm.sessionFlow.LeaveSession(playerID)
+	rm.PublishSessionPublications(result.Publications)
+	return result.LeftSession
 }
 
 func (rm *RoomManager) RemovePlayer(playerID string) {
@@ -522,8 +422,8 @@ func (rm *RoomManager) RemovePlayer(playerID string) {
 		return
 	}
 
-	// Empty, unstarted code rooms are retained for TTL cleanup.
-	if room.Kind == RoomKindCode && !room.Match.IsStarted() {
+	// Empty pre-match code rooms are retained for TTL cleanup.
+	if room.Kind == RoomKindCode && !room.Match.IsStarted() && !room.Match.IsEnded() {
 		return
 	}
 

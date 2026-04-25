@@ -16,6 +16,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type sessionRuntimeSpy struct {
+	activations [][]game.RoomSessionActivation
+	removed     []string
+}
+
+func (s *sessionRuntimeSpy) ActivatePlayers(activations []game.RoomSessionActivation) {
+	copied := make([]game.RoomSessionActivation, len(activations))
+	copy(copied, activations)
+	s.activations = append(s.activations, copied)
+}
+
+func (s *sessionRuntimeSpy) RemovePlayer(playerID string) {
+	s.removed = append(s.removed, playerID)
+}
+
 // ==========================
 // Test Helpers
 // ==========================
@@ -456,6 +471,138 @@ func TestSessionLeaveIgnoredAfterMatchStart(t *testing.T) {
 	assert.NotNil(t, room.GetPlayer(player1ID))
 	_, _, err := readSessionStatus(t, conn1, "searching_for_match", 250*time.Millisecond)
 	require.Error(t, err, "active player should not be able to re-hello after ignored session:leave")
+}
+
+func TestHandlePlayerHelloActivatesEachNewlyActivePlayerExactlyOnce(t *testing.T) {
+	handler := NewWebSocketHandler()
+	spy := &sessionRuntimeSpy{}
+	handler.sessionRuntime = spy
+
+	player1 := game.NewPlayer("player-1", make(chan []byte, 10))
+	player2 := game.NewPlayer("player-2", make(chan []byte, 10))
+	player3 := game.NewPlayer("player-3", make(chan []byte, 10))
+
+	handler.handlePlayerHello(player1, map[string]any{
+		"displayName": " Alpha ",
+		"mode":        "code",
+		"code":        " pizza ",
+	})
+	assert.Empty(t, spy.activations, "first waiting player should not trigger gameplay activation")
+
+	handler.handlePlayerHello(player2, map[string]any{
+		"displayName": "Bravo",
+		"mode":        "code",
+		"code":        "PIZZA",
+	})
+	require.Len(t, spy.activations, 1)
+	require.Len(t, spy.activations[0], 2)
+	assert.ElementsMatch(t, []string{"player-1", "player-2"}, []string{
+		spy.activations[0][0].Player.ID,
+		spy.activations[0][1].Player.ID,
+	})
+	assert.Equal(t, "Alpha", spy.activations[0][0].Player.DisplayName)
+	assert.Equal(t, "Bravo", spy.activations[0][1].Player.DisplayName)
+
+	handler.handlePlayerHello(player3, map[string]any{
+		"displayName": "Charlie",
+		"mode":        "code",
+		"code":        "PIZZA",
+	})
+	require.Len(t, spy.activations, 2)
+	require.Len(t, spy.activations[1], 1)
+	assert.Equal(t, "player-3", spy.activations[1][0].Player.ID)
+	assert.Equal(t, "Charlie", spy.activations[1][0].Player.DisplayName)
+}
+
+func TestHandlePlayerHelloInvalidPayloadDoesNotLatchOrActivate(t *testing.T) {
+	handler := NewWebSocketHandler()
+	spy := &sessionRuntimeSpy{}
+	handler.sessionRuntime = spy
+
+	player := game.NewPlayer("player-1", make(chan []byte, 10))
+
+	handler.handlePlayerHello(player, "invalid")
+
+	assert.False(t, player.HelloSeen)
+	assert.Equal(t, game.FallbackDisplayName, player.DisplayName)
+	assert.Empty(t, spy.activations)
+	assert.Nil(t, handler.roomManager.GetRoomByPlayerID(player.ID))
+}
+
+func TestHandlePlayerHelloInvalidModeAllowsRetryOnSameConnection(t *testing.T) {
+	handler := NewWebSocketHandler()
+	spy := &sessionRuntimeSpy{}
+	handler.sessionRuntime = spy
+
+	player := game.NewPlayer("player-1", make(chan []byte, 10))
+
+	handler.handlePlayerHello(player, map[string]any{
+		"displayName": "Invalid Mode",
+		"mode":        "mystery",
+	})
+
+	assert.False(t, player.HelloSeen)
+	assert.Equal(t, "Invalid Mode", player.DisplayName)
+	assert.Empty(t, spy.activations)
+	assert.Nil(t, handler.roomManager.GetRoomByPlayerID(player.ID))
+
+	handler.handlePlayerHello(player, map[string]any{
+		"displayName": "Retry Player",
+		"mode":        "code",
+		"code":        " SAFE ",
+	})
+
+	require.True(t, player.HelloSeen)
+	room := handler.roomManager.GetRoomByPlayerID(player.ID)
+	require.NotNil(t, room)
+	assert.Equal(t, game.RoomKindCode, room.Kind)
+	assert.Equal(t, "SAFE", room.Code)
+	assert.Empty(t, spy.activations)
+}
+
+func TestHandleSessionLeaveWithoutHelloDoesNothing(t *testing.T) {
+	handler := NewWebSocketHandler()
+	spy := &sessionRuntimeSpy{}
+	handler.sessionRuntime = spy
+
+	player := game.NewPlayer("player-1", make(chan []byte, 10))
+
+	handler.handleSessionLeave(player)
+
+	assert.False(t, player.HelloSeen)
+	assert.Equal(t, game.FallbackDisplayName, player.DisplayName)
+	assert.Empty(t, spy.removed)
+}
+
+func TestHandleSessionLeaveIgnoredForActivePlayerPreservesSessionState(t *testing.T) {
+	handler := NewWebSocketHandler()
+	spy := &sessionRuntimeSpy{}
+	handler.sessionRuntime = spy
+
+	player1 := game.NewPlayer("player-1", make(chan []byte, 10))
+	player2 := game.NewPlayer("player-2", make(chan []byte, 10))
+
+	handler.handlePlayerHello(player1, map[string]any{
+		"displayName": "Alpha",
+		"mode":        "public",
+	})
+	handler.handlePlayerHello(player2, map[string]any{
+		"displayName": "Bravo",
+		"mode":        "public",
+	})
+
+	require.True(t, player1.HelloSeen)
+	require.True(t, player2.HelloSeen)
+	require.Len(t, spy.activations, 1)
+
+	handler.handleSessionLeave(player1)
+
+	assert.True(t, player1.HelloSeen)
+	assert.Equal(t, "Alpha", player1.DisplayName)
+	assert.Empty(t, spy.removed)
+	room := handler.roomManager.GetRoomByPlayerID(player1.ID)
+	require.NotNil(t, room)
+	assert.NotNil(t, room.GetPlayer(player1.ID))
 }
 
 func TestPlayerDisconnection(t *testing.T) {
