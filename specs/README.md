@@ -82,6 +82,10 @@ For an AI agent recreating Stick Rumble from scratch, read specs in this order:
 
 21. **[deployment.md](deployment.md)** - MVP AWS deployment (EC2 + Caddy for the game server, S3 + CloudFront for the static client)
 
+### Phase 10: Repository Presentation
+
+22. **[repository-presentation.md](repository-presentation.md)** - Public README, docs navigation, root cleanliness, and repository metadata positioning
+
 ---
 
 ## Dependency Graph

@@ -1,203 +1,104 @@
 # Stick Rumble
 
-**A multiplayer arena shooter built to validate AI-assisted development workflows**
+**Playable MVP public alpha:** https://stickrumble.com
 
-Stick Rumble is a real-time multiplayer stick figure arena shooter demonstrating that AI agents can handle complex, stateful systems—including learning new languages (Go) in production.
+Stick Rumble is a browser-based multiplayer stick-figure arena shooter for desktop and phone. It uses a Phaser/React TypeScript client, a Go WebSocket server, and shared schema contracts for real-time multiplayer state.
 
-> *"If the system can handle real-time multiplayer game development, it can handle anything."*
+I started the project in November 2025 as a full-stack enterprise software engineer, not a game developer, to push outside my comfort zone and test AI engineering workflows on a system with real-time state, game feel, rendering, shared contracts, deployment, and production feedback.
 
----
+Current status: live public alpha with public matchmaking, room codes, 2-8 player matches, six weapons, dodge roll, server-authoritative gameplay, desktop controls, and mobile landscape presentation.
 
-## Project Status
+## Current Capabilities
 
-**Current State: Playable Alpha** — The game runs with full combat, 5 weapon types, client-side prediction, and netcode optimizations. Core gameplay loop is solid.
+- Public matchmaking and room-code joins
+- 2-8 player matches with kill target and time limit
+- Server-authoritative movement, combat, deaths, respawns, scoring, and weapon pickups
+- Client-side prediction, interpolation, delta snapshots, and reconciliation for smoother multiplayer feel
+- Six weapons: Pistol, Uzi, AK47, Shotgun, Bat, and Katana
+- Sprint, dodge roll, reloads, health regeneration, melee knockback, and damage feedback
+- Shared TypeBox/JSON Schema message contracts between the TypeScript client and Go server
+- Map configuration and validation through shared map schemas
+- Desktop keyboard/mouse play plus mobile landscape presentation
+- AWS deployment with S3/CloudFront for the client and an EC2/Caddy/Go WebSocket server
 
-### Roadmap
+## Project Scale
 
-| Epic | Name | Status | Description |
-|------|------|--------|-------------|
-| 1 | Foundation | **Complete** | Project setup, WebSocket connection, basic movement |
-| 2 | Core Combat | **Complete** | Shooting, hit detection, health, death/respawn, match flow |
-| 3 | Weapon Systems | **Complete** | 5 weapon types, melee/ranged, sprint, dodge roll, sprites |
-| 4 | Netcode | **Complete** | Client prediction, interpolation, lag compensation, delta compression |
-| 5 | Matchmaking | Not Started | Lobbies, game modes, party system |
-| 6 | Progression | Not Started | Player accounts, XP, unlocks, cosmetics |
-| 7 | Maps | Not Started | Multiple arenas, destructibles, spawn balancing |
-| 8 | Mobile | Not Started | Touch controls, cross-platform play |
-| 9 | Polish | Not Started | Particles, animations, sound design, UI polish |
+| Area | Ballpark |
+|------|----------|
+| Tests | 2,100+ test cases across 120+ test files |
+| Specs | 25+ active spec documents plus 70+ visual reference frames |
+| Runtime | Phaser/React TypeScript client + Go WebSocket server |
+| Contracts | Shared TypeBox schemas with generated JSON Schema validation |
+| Deployment | Public AWS-backed deployment at stickrumble.com |
 
-### What's Been Built (Epics 1-4)
+## Specs as Project Memory
 
-**Combat**: 5 weapons (Pistol, AK47, Shotgun, Bat, Katana) with weapon pickups, reload mechanics, damage falloff, and melee swing animations.
+The `specs/` directory is the central brain of the project.
 
-**Movement**: Sprint, dodge roll with invincibility frames, client-side prediction for instant-feeling controls, and server reconciliation for corrections.
+I use spec changes first as an intention and taste engine: a way to write down what the game should feel like, what tradeoffs matter, and what behavior must stay stable before asking an agent to touch code. That gave the project durable memory across many small sessions and helped avoid expensive hill-climbing where each implementation pass locally improves one thing while drifting away from the larger product direction.
 
-**Netcode**: Full client-side prediction pipeline, smooth interpolation for other players, delta compression for bandwidth optimization, and lag compensation for fair hit detection. Includes an artificial latency testing tool for development.
+The specs are not only feature notes. They capture gameplay contracts, networking behavior, UI expectations, visual direction, deployment decisions, and test obligations.
 
-**Visuals**: Procedural character and weapon sprites, health bars, hit effects, kill feed, and match end screens.
+## Context Management History
 
-### Known Rough Edges
+The repo reflects an evolution in context management as the project grew:
 
-This is an active development project. Current limitations:
+1. **Prototype context** — a client-only single-player prototype from Google AI Studio explored game feel, controls, AI bots, and visual direction.
+2. **BMad/task-plan context** — BMad-generated GDD, architecture, and epic docs were useful for early game planning and helped turn a loose idea into a structured multiplayer rewrite. They were much less useful as implementation context: the docs were large, token-heavy, and inefficient to keep in an agent's working context.
+3. **Spec-first context** — the current workflow in `specs/`, where focused specs act as the central brain for product intent, engineering constraints, acceptance criteria, validation, and agent context.
 
-| Area | Issue | Planned Fix |
-|------|-------|-------------|
-| **Multiplayer** | No lobby system — players auto-matched | Epic 5: Full matchmaking system |
-| **Balance** | Weapon tuning ongoing | Continued iteration with playtesting |
-| **Mobile** | Desktop only, no touch support | Epic 8: Mobile cross-platform |
-| **Polish** | Minimal particles and screen effects | Epic 9: Full polish pass |
+## Architecture
 
----
-
-## Project Highlights
-
-| Metric | Value |
-|--------|-------|
-| **Test Cases** | 2,300+ (1,642 client + 682 server) |
-| **WebSocket Message Types** | 28 (22 server→client, 6 client→server) |
-| **Test Coverage Target** | >90% statement coverage |
-
----
-
-## Architecture Overview
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        STICK RUMBLE ARCHITECTURE                     │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                      │
-│  ┌──────────────────┐         WebSocket          ┌────────────────┐ │
-│  │   PhaserJS 3     │◄─────── JSON/20Hz ────────►│    Go 1.25     │ │
-│  │   + React 19     │                            │    Server      │ │
-│  │                  │  ┌──────────────────────┐  │                │ │
-│  │  Client-Side     │  │  TypeBox Schemas     │  │  Server-Auth   │ │
-│  │  Prediction      │  │  (Shared Validation) │  │  Game State    │ │
-│  └──────────────────┘  └──────────────────────┘  └────────────────┘ │
-│                                                                      │
-│  ┌──────────────────────────────────────────────────────────────────┐   │
-│  │                    VALIDATION INFRASTRUCTURE                  │   │
-│  │  ┌─────────────┐  ┌─────────────┐                              │   │
-│  │  │ Unit Tests  │  │ Integration │                              │   │
-│  │  │ (Vitest)    │  │ Tests       │                              │   │
-│  │  │ 2,000+      │  │ WebSocket   │                              │   │
-│  │  └─────────────┘  └─────────────┘                              │   │
-│  └──────────────────────────────────────────────────────────────┘   │
-│                                                                      │
-└─────────────────────────────────────────────────────────────────────┘
+```text
+Browser client                         Game server
+Phaser 3 + React + TypeScript  <---->  Go + gorilla/websocket
+Client prediction + interpolation       Server-authoritative simulation
+Shared TypeBox message schemas          JSON Schema validation
 ```
 
----
+The server owns authoritative game state. Clients send inputs and render the validated state they receive back. The client predicts local movement for responsiveness, then reconciles against server snapshots.
+
+## Validation
+
+The project is validated through a mix of automated tests, visual review, and real playtesting:
+
+- Vitest unit/integration coverage for the TypeScript client and shared schema packages
+- Go unit tests for game rules, room behavior, WebSocket handling, combat, movement, and server utilities
+- WebSocket integration tests that start a real server and exercise client/server flows
+- Visual reference frames in `specs/visual-spec/` for gameplay readability and UI polish
+- Manual playtesting against the deployed environment
+- Video-driven debugging: record fast gameplay loops, break the footage into frames, and use those frames to trace visual bugs, timing issues, and feel regressions that are hard to catch in traditional web-app test loops
+
+The normal local gate is:
+
+```bash
+make lint && make typecheck && make test
+```
 
 ## Quick Start
 
 ```bash
-# Install dependencies
 make install
-
-# Run development servers (client + server)
 make dev
+```
 
-# Run all tests
+Client: http://localhost:5173
+
+Server: http://localhost:8080
+
+Run the full local test suite:
+
+```bash
 make test
 ```
-
-**Client**: http://localhost:5173
-**Server**: http://localhost:8080
-
----
-
-## Technology Stack
-
-### Frontend
-- **Phaser 3.90** - 2D game engine
-- **React 19** - UI components
-- **TypeScript 5.9** - Type safety
-- **Vite 7** - Build tooling
-- **Vitest** - Unit testing
-
-### Backend
-- **Go 1.25** - Server runtime
-- **gorilla/websocket** - WebSocket handling
-- **Server-authoritative architecture** - Anti-cheat by design
-
-### Shared
-- **TypeBox** - JSON Schema generation from TypeScript
-- **events-schema** - Shared message type definitions
-
-### Testing
-- **Vitest** - Client unit/integration tests
-- **Go testing** - Server unit tests
-
----
-
-## Documentation
-
-| Document | Description |
-|----------|-------------|
-| [Specs](specs/) | Active requirements and game specs (source of truth) |
-| [Architecture](docs/ARCHITECTURE.md) | System design, data flow, and component diagrams (legacy) |
-| [Testing Strategy](docs/TESTING-STRATEGY.md) | Validation infrastructure and testing approach (legacy) |
-| [CLAUDE.md](CLAUDE.md) | AI agent instructions and project context |
-
----
-
-## Key Features
-
-### Server-Authoritative Gameplay
-All game state lives on the server. Clients send inputs, server calculates results. This prevents cheating and ensures consistent gameplay across all connected players.
-
-### Real-Time State Synchronization
-- **20Hz tick rate** for player positions
-- **Custom WebSocket protocol** with 28 message types
-- **Client-side prediction** with server reconciliation for responsive controls
-- **Delta compression** for bandwidth optimization
-- **Lag compensation** for fair hit detection across latencies
-
-### Comprehensive Test Coverage
-- **Unit tests** verify business logic (2,300+ tests)
-- **Integration tests** validate WebSocket communication
-- **Human playtesting** remains essential—real-time games require human perception for final validation
-
----
-
-## Project Structure
-
-```
-stick-rumble/
-├── stick-rumble-client/     # PhaserJS + React frontend
-│   ├── src/
-│   │   ├── game/            # Phaser game code
-│   │   │   ├── entities/    # Player, weapons, projectiles
-│   │   │   ├── scenes/      # Game scenes
-│   │   │   ├── network/     # WebSocket client
-│   │   │   └── ui/          # In-game UI
-│   │   └── ui/              # React components
-│   └── tests/               # Test setup and mocks
-│
-├── stick-rumble-server/     # Go WebSocket server
-│   ├── cmd/server/          # Entry point
-│   └── internal/
-│       ├── game/            # Game logic, physics, weapons
-│       └── network/         # WebSocket handling, broadcasting
-│
-├── events-schema/           # Shared TypeBox message schemas
-│   ├── src/schemas/         # TypeScript definitions
-│   └── schemas/             # Generated JSON schemas for Go validation
-│
-├── specs/                   # Active requirements and game specs
-│
-└── docs/                    # Legacy documentation and archives
-```
-
----
 
 ## Development Commands
 
 ```bash
 # Development
 make dev              # Run client + server
-make dev-client       # Client only (port 5173)
-make dev-server       # Server only (port 8080)
+make dev-client       # Client only
+make dev-server       # Server only
 
 # Testing
 make test             # All tests
@@ -205,7 +106,7 @@ make test-client      # Client unit tests
 make test-server      # Server unit tests
 make test-integration # WebSocket integration tests
 
-# Code Quality
+# Quality
 make lint             # ESLint + go vet + gofmt
 make typecheck        # TypeScript checking
 
@@ -213,7 +114,42 @@ make typecheck        # TypeScript checking
 make build            # Production build
 ```
 
----
+## Repository Map
+
+```text
+.
+├── specs/                # Active project brain and implementation contracts
+├── stick-rumble-client/  # Phaser/React TypeScript client
+├── stick-rumble-server/  # Go WebSocket game server
+├── events-schema/        # Shared WebSocket message schemas
+├── maps-schema/          # Shared map schema definitions
+├── maps/                 # Authored map configs
+├── research/             # Focused implementation investigations
+└── docs/                 # Historical docs, archived planning, and prototype context
+```
+
+## Documentation
+
+| Path | Purpose |
+|------|---------|
+| [`specs/`](specs/) | Active project brain: current behavior contracts, product intent, visual references, deployment notes, and test obligations |
+| [`events-schema/`](events-schema/) | Shared TypeBox message schemas and generated JSON Schema artifacts |
+| [`maps-schema/`](maps-schema/) | Shared map schema definitions and validation |
+| [`docs/`](docs/) | Legacy design docs, early research, archived epics, and historical planning material |
+| [`research/`](research/) | Focused implementation investigations and bug research notes |
+
+## Next Directions
+
+Stick Rumble is live as a playable MVP public alpha. Future work is less about turning it into a product and more about continuing to explore the technical and design surface area of a real multiplayer game.
+
+| Area | Direction |
+|------|-----------|
+| Player identity | Login, player profiles, persistent names, and account-level stats |
+| Progression | XP, unlocks, cosmetics, and reasons to care about repeat matches |
+| Leaderboards | Public rankings, recent match summaries, and competitive history |
+| Match flow | Better lobby flow, room invites, and visibility into active games |
+| Maps and balance | More arenas, weapon tuning, spawn improvements, and playtest-driven adjustments |
+| Infrastructure | Infrastructure as code, safer deploy automation, observability, and production hardening |
 
 ## License
 

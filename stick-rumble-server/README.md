@@ -1,183 +1,47 @@
-# Stick Rumble - Backend Server
+# Stick Rumble Server
 
-Multiplayer game server for Stick Rumble built with Go and WebSocket.
+Go WebSocket game server for Stick Rumble.
 
-## Requirements
+The server owns the authoritative simulation: rooms, matchmaking, movement validation, combat, weapons, health, deaths, respawns, scoring, snapshots, deltas, and WebSocket message handling.
 
-- Go 1.23+ (tested with Go 1.24.1)
-- Network access for dependencies
+Use the root `Makefile` for normal workflows:
 
-## Dependencies
-
-- `github.com/gorilla/websocket@v1.5.3` - WebSocket protocol implementation
-- `github.com/go-pkgz/auth/v2` - OAuth authentication (Epic 6)
-- `github.com/lib/pq` - PostgreSQL driver (Epic 6)
-- `github.com/redis/go-redis/v9` - Redis client (Epic 5)
-- `github.com/stretchr/testify` - Testing assertions
-
-## Project Structure
-
-```
-stick-rumble-server/
-├── cmd/
-│   └── server/
-│       └── main.go                 # Entry point
-├── internal/
-│   ├── game/                       # Game logic (Story 1.4+)
-│   ├── network/
-│   │   └── websocket_handler.go    # WebSocket stub (Story 1.3 will implement)
-│   ├── auth/                       # OAuth (Epic 6)
-│   ├── db/                         # Database (Epic 6)
-│   └── config/                     # Server configuration
-├── go.mod
-├── go.sum
-├── .gitignore
-└── README.md
+```bash
+make install
+make dev-server
+make test-server
+make test-server-verbose
+make test-integration
+make lint
+make build
 ```
 
-## Setup
-
-### Install Dependencies
+Package-specific commands are available when targeted work needs them:
 
 ```bash
 go mod download
-```
-
-### Run Development Server
-
-```bash
 go run cmd/server/main.go
-```
-
-Server will start on port 8080 by default.
-
-### Configure Port
-
-Use the `PORT` environment variable to change the port:
-
-```bash
 PORT=8081 go run cmd/server/main.go
-```
-
-### Environment
-
-Copy values from `.env.example` only when you need to override local defaults.
-
-- `PORT`: HTTP/WebSocket port. Defaults to `8080`.
-- `ENABLE_SCHEMA_VALIDATION`: Enables outgoing schema validation when set to `true`.
-- `GO_ENV`: Future-facing environment flag for deployment wiring. Defaults to `development`.
-- `ALLOWED_ORIGINS`: Optional comma-separated origin allowlist. When unset, MVP development keeps permissive origin handling.
-
-## Endpoints
-
-### Health Check
-
-```bash
-curl http://localhost:8080/health
-```
-
-Expected response: `OK` (HTTP 200)
-
-### WebSocket (Coming in Story 1.3)
-
-```
-ws://localhost:8080/ws
-```
-
-Currently returns HTTP 501 Not Implemented.
-
-## Testing
-
-### Run All Tests
-
-```bash
 go test ./...
-```
-
-### Run Tests with Coverage
-
-```bash
-go test -cover ./...
-```
-
-### Run Tests in Verbose Mode
-
-```bash
-go test -v ./...
-```
-
-## Building
-
-### Build Binary
-
-```bash
+go test ./... -cover
+go vet ./...
 go build -o server cmd/server/main.go
 ```
 
-### Run Binary
+## Endpoints
 
-```bash
-./server
-```
+- `GET /health` returns `OK` for health checks.
+- `GET /ws` upgrades to the game WebSocket protocol.
 
-## Troubleshooting
+## Environment
 
-### Port Already in Use
+Copy values from `.env.example` only when local defaults are not enough.
 
-If port 8080 is already in use:
+- `PORT`: HTTP/WebSocket port. Defaults to `8080`.
+- `HOST`: Bind host. Local root workflows bind to `0.0.0.0` for LAN testing.
+- `ENABLE_SCHEMA_VALIDATION`: Enables outgoing schema validation when set to `true`.
+- `GO_ENV`: Environment flag for deployment wiring. Defaults to `development`.
+- `ALLOWED_ORIGINS`: Optional comma-separated origin allowlist. Production deployments should configure this explicitly.
+- `LOG_LEVEL`: Server log level.
 
-```bash
-PORT=8081 go run cmd/server/main.go
-```
-
-### Module Path Error
-
-Ensure you're using the correct module path in imports:
-
-```go
-import "github.com/mtomcal/stick-rumble-server/internal/network"
-```
-
-### Go Version Error
-
-Ensure Go 1.23+ is installed:
-
-```bash
-go version
-```
-
-### Dependency Issues
-
-If `go get` fails, try setting the proxy:
-
-```bash
-go env -w GOPROXY=https://proxy.golang.org,direct
-go mod download
-```
-
-## Development Notes
-
-- Uses Go standard library `net/http` (no third-party router needed for MVP)
-- `internal/` directory prevents external imports (Go best practice)
-- Environment-based configuration for deployment flexibility
-- Health check endpoint required for monitoring and deployment
-
-## Next Steps
-
-- **Story 1.3**: Implement WebSocket connection handling
-- **Story 1.4**: Add game room management and player synchronization
-- **Story 1.5**: Deploy to cloud VPS for remote testing
-
-## Architecture
-
-Follows the architecture documented in `docs/game-architecture.md`:
-
-- Server-authoritative gameplay
-- 60 Hz tick rate for game logic
-- 20 Hz broadcast rate for client updates
-- WebSocket-based real-time communication
-- JSON message format for MVP
-
-## License
-
-Copyright 2025 - Stick Rumble Game Project
+Current implementation intent lives in [`../specs/`](../specs/).
