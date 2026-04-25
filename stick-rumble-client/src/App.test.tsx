@@ -1,763 +1,271 @@
-import { useEffect } from 'react'
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
-import type { PhaserGameProps } from './ui/common/PhaserGame'
-import type { JoinIntent, MatchEndData, SessionStatusData } from './shared/types'
+import type { MatchAppShellModel } from './game/useMatchAppShell'
+import type { MatchEndData } from './shared/types'
 
 const testState = vi.hoisted(() => ({
+  stageMode: 'desktop' as 'desktop' | 'mobile-landscape' | 'mobile-portrait-blocked',
+  isSettling: false,
+  shell: undefined as MatchAppShellModel | undefined,
   phaserRenderSpy: vi.fn(),
-  phaserMountSpy: vi.fn(),
-  phaserUnmountSpy: vi.fn(),
-  capturedOnMatchEnd: undefined as PhaserGameProps['onMatchEnd'],
-  autoConnectReady: true,
-  connectImplementation: undefined as (() => Promise<void>) | undefined,
-  clientInstances: [] as Array<{
-    emit: (event: string, payload: unknown) => void
-    connect: ReturnType<typeof vi.fn>
-    disconnect: ReturnType<typeof vi.fn>
-    on: ReturnType<typeof vi.fn>
-    off: ReturnType<typeof vi.fn>
-    sendHello: ReturnType<typeof vi.fn>
-    sendSessionLeave: ReturnType<typeof vi.fn>
-    restartSession: ReturnType<typeof vi.fn>
-    setReconnectReplayFailedHandler: ReturnType<typeof vi.fn>
-    setConnectionStateHandler: ReturnType<typeof vi.fn>
-    setGameplayReady: ReturnType<typeof vi.fn>
-    connectionStateHandler?: (connected: boolean) => void
-    onReconnectReplayFailed?: (intent: JoinIntent) => void
-  }>,
+  capturedOnMatchEnd: undefined as ((data: MatchEndData, playerId: string) => void) | undefined,
+}))
+
+vi.mock('./game/useMatchAppShell', () => ({
+  useMatchAppShell: () => {
+    if (!testState.shell) {
+      throw new Error('expected shell state to be configured for the test')
+    }
+    return testState.shell
+  },
+}))
+
+vi.mock('./ui/common/mobileMode', () => ({
+  useStageMode: () => ({
+    stageMode: testState.stageMode,
+    width: 1280,
+    height: 720,
+    isSettling: testState.isSettling,
+  }),
 }))
 
 vi.mock('./ui/common/PhaserGame', () => ({
-  PhaserGame: (props: PhaserGameProps) => {
+  PhaserGame: (props: { onMatchEnd: (data: MatchEndData, playerId: string) => void }) => {
     testState.phaserRenderSpy(props)
     testState.capturedOnMatchEnd = props.onMatchEnd
-
-    useEffect(() => {
-      testState.phaserMountSpy()
-      return () => {
-        testState.phaserUnmountSpy()
-      }
-    }, [])
-
     return <div data-testid="phaser-game">Phaser</div>
   },
+}))
+
+vi.mock('./ui/mobile/MobileControls', () => ({
+  MobileControls: () => <div data-testid="mobile-controls" />,
+}))
+
+vi.mock('./ui/mobile/RotateDeviceGate', () => ({
+  RotateDeviceGate: (props: { actionLabel?: string; onAction?: () => void }) => (
+    <div data-testid="rotate-device-gate">
+      {props.actionLabel ? <button onClick={props.onAction}>{props.actionLabel}</button> : null}
+    </div>
+  ),
+}))
+
+vi.mock('./ui/match/MatchEndScreen', () => ({
+  MatchEndScreen: (props: { onClose: () => void; onPlayAgain: () => void }) => (
+    <div data-testid="match-end-screen">
+      <button onClick={props.onClose}>Close Results</button>
+      <button onClick={props.onPlayAgain}>Play Again</button>
+    </div>
+  ),
 }))
 
 vi.mock('./ui/debug/DebugNetworkPanel', () => ({
   DebugNetworkPanel: () => <div data-testid="debug-panel" />,
 }))
 
-type Handler = (payload: unknown) => void
-
-vi.mock('./game/network/WebSocketClient', () => ({
-  WebSocketClient: class {
-    readonly handlers = new Map<string, Set<Handler>>()
-    readonly connect = vi.fn(() => testState.connectImplementation?.() ?? Promise.resolve(undefined))
-    readonly disconnect = vi.fn()
-    readonly on = vi.fn((event: string, handler: Handler) => {
-      const handlers = this.handlers.get(event) ?? new Set<Handler>()
-      handlers.add(handler)
-      this.handlers.set(event, handlers)
-    })
-    readonly off = vi.fn((event: string, handler: Handler) => {
-      this.handlers.get(event)?.delete(handler)
-    })
-    readonly sendHello = vi.fn()
-    readonly sendSessionLeave = vi.fn()
-    readonly restartSession = vi.fn()
-    readonly setReconnectReplayFailedHandler = vi.fn((handler: (intent: JoinIntent) => void) => {
-      this.onReconnectReplayFailed = handler
-    })
-    readonly setConnectionStateHandler = vi.fn((handler?: (connected: boolean) => void) => {
-      this.connectionStateHandler = handler
-      if (testState.autoConnectReady) {
-        handler?.(true)
-      }
-    })
-    readonly setGameplayReady = vi.fn()
-    connectionStateHandler?: (connected: boolean) => void
-    onReconnectReplayFailed?: (intent: JoinIntent) => void
-
-    constructor() {
-      testState.clientInstances.push(this as never)
-    }
-
-    emit(event: string, payload: unknown): void {
-      this.handlers.get(event)?.forEach((handler) => handler(payload))
-    }
-  },
-}))
-
-function getClient() {
-  const client = testState.clientInstances.at(-1)
-  if (!client) {
-    throw new Error('expected WebSocket client to be created')
-  }
-  return client
-}
-
-function emitSessionStatus(status: SessionStatusData): void {
-  act(() => {
-    getClient().emit('session:status', status)
-  })
-}
-
-function setViewportSize(width: number, height: number): void {
-  Object.defineProperty(window, 'innerWidth', { configurable: true, value: width })
-  Object.defineProperty(window, 'innerHeight', { configurable: true, value: height })
-}
-
-function dispatchResize(width: number, height: number): void {
-  setViewportSize(width, height)
-  act(() => {
-    window.dispatchEvent(new Event('resize'))
-  })
-}
-
-function setTouchPhoneLayout(enabled: boolean): void {
-  Object.defineProperty(navigator, 'maxTouchPoints', {
-    configurable: true,
-    value: enabled ? 5 : 0,
-  })
-  window.matchMedia = vi.fn().mockImplementation((query: string) => ({
-    matches: enabled && query === '(pointer: coarse)',
-    media: query,
-    onchange: null,
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  })) as typeof window.matchMedia
-}
-
-function setUserAgent(userAgent: string): void {
-  Object.defineProperty(window.navigator, 'userAgent', {
-    configurable: true,
-    value: userAgent,
-  })
-}
-
-function setTouchStartSupport(enabled: boolean): void {
-  if (enabled) {
-    Object.defineProperty(window, 'ontouchstart', {
-      configurable: true,
-      value: null,
-    })
-    return
+function createShell(overrides: Partial<MatchAppShellModel> = {}): MatchAppShellModel {
+  const actions = {
+    setDisplayName: vi.fn(),
+    setRoomCode: vi.fn(),
+    submitPublicJoin: vi.fn(),
+    submitCodeJoin: vi.fn(),
+    submitReconnectIntent: vi.fn(),
+    cancelWaiting: vi.fn(),
+    handleMatchEnd: vi.fn(),
+    playAgain: vi.fn(),
+    returnToJoinForm: vi.fn(),
+    copyInviteLink: vi.fn(async () => undefined),
+    confirmMobileEntry: vi.fn(),
   }
 
-  delete (window as Window & { ontouchstart?: unknown }).ontouchstart
+  return {
+    inviteCode: null,
+    joinForm: {
+      displayName: '',
+      code: '',
+    },
+    overlayMode: 'join',
+    isSocketReady: true,
+    viewState: 'join_form',
+    sessionFlow: {
+      viewState: 'join_form',
+      sessionStatus: null,
+      matchSession: null,
+      matchEndData: null,
+      localPlayerId: '',
+      joinError: null,
+      reconnectIntent: null,
+      activeSessionKey: null,
+      shouldResetMobileEntry: false,
+    },
+    sessionStatus: null,
+    matchEndData: null,
+    localPlayerId: '',
+    reconnectIntent: null,
+    errorText: null,
+    reconnectLabel: null,
+    matchBootstrap: null,
+    mobileGameplayEntered: false,
+    actions,
+    ...overrides,
+  }
 }
 
 describe('App', () => {
   beforeEach(() => {
-    testState.clientInstances.length = 0
+    testState.stageMode = 'desktop'
+    testState.isSettling = false
     testState.phaserRenderSpy.mockReset()
-    testState.phaserMountSpy.mockReset()
-    testState.phaserUnmountSpy.mockReset()
     testState.capturedOnMatchEnd = undefined
-    testState.autoConnectReady = true
-    testState.connectImplementation = undefined
-    window.localStorage.clear()
-    window.history.replaceState({}, '', '/')
-    setViewportSize(1280, 720)
-    setTouchPhoneLayout(false)
-    setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)')
-    setTouchStartSupport(false)
+    testState.shell = createShell()
   })
 
   afterEach(() => {
-    vi.useRealTimers()
     vi.clearAllMocks()
   })
 
-  it('renders the join form after the socket connects and keeps Phaser unmounted before match_ready', async () => {
-    render(<App />)
-
-    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
-
-    expect(screen.getByRole('heading', { name: 'Stick Rumble - Multiplayer Arena Shooter' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Play Public' })).toBeEnabled()
-    expect(screen.queryByTestId('phaser-game')).not.toBeInTheDocument()
-  })
-
-  it('renders safari-safe join inputs and actions to avoid iPhone focus zoom', async () => {
-    render(<App />)
-
-    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
-
-    expect(screen.getByRole('textbox', { name: 'Display Name' })).toHaveClass('overlay-card__input')
-    expect(screen.getByRole('textbox', { name: 'Room Code' })).toHaveClass('overlay-card__input')
-    expect(screen.getByRole('button', { name: 'Play Public' })).toHaveClass('overlay-card__button')
-    expect(screen.getByRole('button', { name: 'Join with Code' })).toHaveClass('overlay-card__button')
-  })
-
-  it('prefills the invite code but does not auto-submit without a saved display name', async () => {
-    window.history.replaceState({}, '', '/?invite=PIZZA')
+  it('renders the join form from shell state and forwards join actions', () => {
+    const shell = createShell({
+      inviteCode: 'PIZZA',
+      joinForm: { displayName: 'Alice', code: 'PIZZA' },
+    })
+    testState.shell = shell
 
     render(<App />)
 
-    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
-
-    expect(screen.getByRole('textbox', { name: 'Room Code' })).toHaveValue('PIZZA')
-    expect(getClient().sendHello).not.toHaveBeenCalled()
-  })
-
-  it('auto-submits an invite when a saved display name exists and the socket is ready', async () => {
-    window.localStorage.setItem('stick-rumble.display-name', 'Alice')
-    window.history.replaceState({}, '', '/?invite=PIZZA')
-
-    render(<App />)
-
-    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
-    await waitFor(() =>
-      expect(getClient().sendHello).toHaveBeenCalledWith({
-        displayName: 'Alice',
-        mode: 'code',
-        code: 'PIZZA',
-      }),
-    )
-  })
-
-  it('does not auto-submit an invite after the player edits the prefilled display name before reconnect', async () => {
-    testState.autoConnectReady = false
-    window.localStorage.setItem('stick-rumble.display-name', 'Alice')
-    window.history.replaceState({}, '', '/?invite=PIZZA')
-
-    render(<App />)
-
-    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
-
+    expect(screen.getByRole('heading', { name: 'Join Invite' })).toBeInTheDocument()
     fireEvent.change(screen.getByRole('textbox', { name: 'Display Name' }), {
       target: { value: 'Bob' },
     })
-
-    act(() => {
-      getClient().connectionStateHandler?.(true)
-    })
-
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Join with Code' })).toBeEnabled())
-    expect(getClient().sendHello).not.toHaveBeenCalled()
-  })
-
-  it('renders searching and waiting states from session:status without mounting Phaser', async () => {
-    render(<App />)
-    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
-
-    emitSessionStatus({
-      state: 'searching_for_match',
-      playerId: 'player-1',
-      displayName: 'Alice',
-      joinMode: 'public',
-      rosterSize: 1,
-      minPlayers: 2,
-    })
-
-    expect(screen.getByText(/Searching for match/i)).toBeInTheDocument()
-    expect(screen.queryByTestId('phaser-game')).not.toBeInTheDocument()
-
-    emitSessionStatus({
-      state: 'waiting_for_players',
-      playerId: 'player-1',
-      displayName: 'Alice',
-      joinMode: 'code',
-      code: 'PIZZA',
-      roomId: 'room-1',
-      rosterSize: 1,
-      minPlayers: 2,
-    })
-
-    expect(screen.getByText(/Waiting for players/i)).toBeInTheDocument()
-    expect(screen.queryByTestId('phaser-game')).not.toBeInTheDocument()
-  })
-
-  it('sends session:leave when backing out of a waiting state', async () => {
-    render(<App />)
-    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
-
-    fireEvent.change(screen.getByRole('textbox', { name: 'Display Name' }), {
-      target: { value: 'Alice' },
-    })
     fireEvent.change(screen.getByRole('textbox', { name: 'Room Code' }), {
-      target: { value: 'PIZZA' },
+      target: { value: 'TACOS' },
     })
+    fireEvent.click(screen.getByRole('button', { name: 'Play Public' }))
     fireEvent.click(screen.getByRole('button', { name: 'Join with Code' }))
 
-    emitSessionStatus({
-      state: 'waiting_for_players',
-      playerId: 'player-1',
-      displayName: 'Alice',
-      joinMode: 'code',
-      code: 'PIZZA',
-      roomId: 'room-1',
-      rosterSize: 1,
-      minPlayers: 2,
-    })
-
-    fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
-
-    expect(getClient().sendSessionLeave).toHaveBeenCalledTimes(1)
-    expect(window.localStorage.getItem('stick-rumble.active-invite.PIZZA.alice')).toBeNull()
-    expect(screen.getByRole('button', { name: 'Play Public' })).toBeInTheDocument()
+    expect(shell.actions.setDisplayName).toHaveBeenCalledWith('Bob')
+    expect(shell.actions.setRoomCode).toHaveBeenCalledWith('TACOS')
+    expect(shell.actions.submitPublicJoin).toHaveBeenCalledTimes(1)
+    expect(shell.actions.submitCodeJoin).toHaveBeenCalledTimes(1)
+    expect(screen.queryByTestId('phaser-game')).not.toBeInTheDocument()
   })
 
-  it('disables join actions when the socket readiness handler reports disconnect', async () => {
-    render(<App />)
-    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
-
-    act(() => {
-      getClient().connectionStateHandler?.(false)
-    })
-
-    expect(screen.getByRole('button', { name: 'Play Public' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Join with Code' })).toBeDisabled()
-    expect(screen.getByText('Connecting to game...')).toBeInTheDocument()
-  })
-
-  it('does not show a synthetic no_hello error when the initial socket connect fails', async () => {
-    testState.autoConnectReady = false
-    testState.connectImplementation = () => Promise.reject(new Error('socket failed'))
-
-    render(<App />)
-
-    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
-
-    expect(screen.getByText('Connecting to game...')).toBeInTheDocument()
-    expect(screen.queryByText(/Server rejected .* before hello\./i)).not.toBeInTheDocument()
-
-    act(() => {
-      getClient().connectionStateHandler?.(true)
-    })
-
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Play Public' })).toBeEnabled())
-    expect(screen.queryByText(/Server rejected .* before hello\./i)).not.toBeInTheDocument()
-  })
-
-  it('shows a real no_hello error when the server reports gameplay before hello', async () => {
-    render(<App />)
-    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
-
-    act(() => {
-      getClient().emit('error:no_hello', { offendingType: 'input:state' })
-    })
-
-    expect(screen.getByText('Server rejected input:state before hello.')).toBeInTheDocument()
-  })
-
-  it('mounts Phaser only when match_ready arrives and passes a bootstrap session', async () => {
-    render(<App />)
-    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
-
-    emitSessionStatus({
-      state: 'match_ready',
-      playerId: 'player-1',
-      displayName: 'Alice',
-      joinMode: 'code',
-      code: 'PIZZA',
-      roomId: 'room-1',
-      mapId: 'default_office',
-      rosterSize: 2,
-      minPlayers: 2,
-    })
-
-    expect(screen.getByTestId('phaser-game')).toBeInTheDocument()
-    expect(testState.phaserRenderSpy).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        bootstrap: {
-          session: {
-            roomId: 'room-1',
-            playerId: 'player-1',
-            mapId: 'default_office',
-            displayName: 'Alice',
-            joinMode: 'code',
-            code: 'PIZZA',
-          },
-          wsClient: getClient(),
+  it('renders waiting state from shell state and forwards copy/cancel actions', () => {
+    const shell = createShell({
+      viewState: 'waiting_for_players',
+      sessionFlow: {
+        ...createShell().sessionFlow,
+        viewState: 'waiting_for_players',
+        sessionStatus: {
+          state: 'waiting_for_players',
+          playerId: 'player-1',
+          displayName: 'Alice',
+          joinMode: 'code',
+          code: 'PIZZA',
+          roomId: 'room-1',
+          rosterSize: 1,
+          minPlayers: 2,
         },
-      }),
-    )
+      },
+      sessionStatus: {
+        state: 'waiting_for_players',
+        playerId: 'player-1',
+        displayName: 'Alice',
+        joinMode: 'code',
+        code: 'PIZZA',
+        roomId: 'room-1',
+        rosterSize: 1,
+        minPlayers: 2,
+      },
+    })
+    testState.shell = shell
+
+    render(<App />)
+
+    expect(screen.getByText('Room Code: PIZZA')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Copy Invite Link' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(shell.actions.copyInviteLink).toHaveBeenCalledTimes(1)
+    expect(shell.actions.cancelWaiting).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps the default desktop stage after match_ready on non-phone layouts', async () => {
-    render(<App />)
-    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
-
-    emitSessionStatus({
-      state: 'match_ready',
-      playerId: 'player-1',
-      displayName: 'Alice',
-      joinMode: 'public',
-      roomId: 'room-1',
-      mapId: 'default_office',
+  it('mounts Phaser only for in-match shell state and forwards match-end callbacks', () => {
+    const shell = createShell({
+      viewState: 'in_match',
+      matchBootstrap: {
+        session: {
+          roomId: 'room-1',
+          playerId: 'player-1',
+          mapId: 'default_office',
+          displayName: 'Alice',
+          joinMode: 'public',
+        },
+        wsClient: {} as never,
+      },
     })
+    testState.shell = shell
 
+    render(<App />)
+
+    expect(screen.getByTestId('phaser-game')).toBeInTheDocument()
     expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'desktop')
-    expect(screen.queryByTestId('mobile-controls')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('rotate-device-gate')).not.toBeInTheDocument()
+
+    testState.capturedOnMatchEnd?.({ reason: 'time_limit', winners: [], finalScores: [] }, 'player-1')
+
+    expect(shell.actions.handleMatchEnd).toHaveBeenCalledWith(
+      { reason: 'time_limit', winners: [], finalScores: [] },
+      'player-1',
+    )
   })
 
-  it('auto-detects mobile landscape mode on phone-sized touch layouts', async () => {
-    setViewportSize(844, 390)
-    setTouchPhoneLayout(true)
-    setTouchStartSupport(true)
+  it('keeps Phaser unmounted behind mobile entry and forwards Enter Game', () => {
+    testState.stageMode = 'mobile-landscape'
+    const shell = createShell({
+      viewState: 'in_match',
+      matchBootstrap: {
+        session: {
+          roomId: 'room-1',
+          playerId: 'player-1',
+          mapId: 'default_office',
+          displayName: 'Alice',
+          joinMode: 'public',
+        },
+        wsClient: {} as never,
+      },
+      mobileGameplayEntered: false,
+    })
+    testState.shell = shell
 
     render(<App />)
-    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
 
-    emitSessionStatus({
-      state: 'match_ready',
-      playerId: 'player-1',
-      displayName: 'Alice',
-      joinMode: 'public',
-      roomId: 'room-1',
-      mapId: 'default_office',
-    })
-
-    await waitFor(() =>
-      expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'mobile-landscape')
-    )
-    expect(document.querySelector('.app-container')).toHaveClass('app-container--mobile-stage')
+    expect(screen.queryByTestId('phaser-game')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Enter Game' })).toBeInTheDocument()
-    expect(screen.queryByTestId('phaser-game')).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Enter Game' }))
 
-    await waitFor(() => expect(screen.getByTestId('phaser-game')).toBeInTheDocument())
-    expect(testState.phaserRenderSpy.mock.calls[0]?.[0]).toEqual(
-      expect.objectContaining({
-        layout: expect.objectContaining({
-          mode: 'mobile-landscape',
-          width: 844,
-          height: 390,
-          hudFrame: { x: 0, y: 0, width: 844, height: 390 },
-        }),
-      }),
-    )
-    expect(testState.phaserRenderSpy).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        layout: expect.objectContaining({
-          mode: 'mobile-landscape',
-          width: 844,
-          height: 390,
-          hudFrame: { x: 0, y: 0, width: 844, height: 390 },
-        }),
-      }),
-    )
-    expect(screen.getByTestId('mobile-controls')).toBeInTheDocument()
-    expect(screen.queryByTestId('rotate-device-gate')).not.toBeInTheDocument()
+    expect(shell.actions.confirmMobileEntry).toHaveBeenCalledTimes(1)
   })
 
-  it('shows a rotate-device gate in portrait while keeping Phaser mounted', async () => {
-    setViewportSize(390, 844)
-    setTouchPhoneLayout(true)
-    setTouchStartSupport(true)
+  it('renders match-end state from shell state and forwards replay actions', () => {
+    const shell = createShell({
+      viewState: 'match_end',
+      matchEndData: {
+        reason: 'time_limit',
+        winners: [{ playerId: 'player-1', displayName: 'Alice' }],
+        finalScores: [],
+      },
+      localPlayerId: 'player-1',
+    })
+    testState.shell = shell
 
     render(<App />)
-    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
 
-    emitSessionStatus({
-      state: 'match_ready',
-      playerId: 'player-1',
-      displayName: 'Alice',
-      joinMode: 'public',
-      roomId: 'room-1',
-      mapId: 'default_office',
-    })
+    expect(screen.getByTestId('match-end-screen')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Close Results' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Play Again' }))
 
-    await waitFor(() =>
-      expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'mobile-portrait-blocked')
-    )
-    expect(screen.getByTestId('rotate-device-gate')).toBeInTheDocument()
-    expect(screen.queryByTestId('phaser-game')).not.toBeInTheDocument()
-  })
-
-  it('preserves the mounted gameplay surface across landscape, portrait gate, and desktop transitions', async () => {
-    setViewportSize(844, 390)
-    setTouchPhoneLayout(true)
-    setTouchStartSupport(true)
-
-    render(<App />)
-    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
-
-    emitSessionStatus({
-      state: 'match_ready',
-      playerId: 'player-1',
-      displayName: 'Alice',
-      joinMode: 'public',
-      roomId: 'room-1',
-      mapId: 'default_office',
-    })
-
-    await waitFor(() =>
-      expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'mobile-landscape')
-    )
-    fireEvent.click(screen.getByRole('button', { name: 'Enter Game' }))
-    await waitFor(() => expect(screen.getByTestId('phaser-game')).toBeInTheDocument())
-    expect(testState.phaserMountSpy).toHaveBeenCalledTimes(1)
-
-    dispatchResize(390, 844)
-    expect(screen.getByTestId('rotate-device-gate')).toBeInTheDocument()
-    expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'mobile-portrait-blocked')
-
-    await act(async () => {
-      await new Promise((resolve) => window.setTimeout(resolve, 220))
-    })
-    await waitFor(() => expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'mobile-portrait-blocked'))
-    expect(screen.getByTestId('phaser-game')).toBeInTheDocument()
-
-    dispatchResize(844, 390)
-    await act(async () => {
-      await new Promise((resolve) => window.setTimeout(resolve, 220))
-    })
-    await waitFor(() => expect(screen.getByTestId('phaser-game')).toBeInTheDocument())
-    expect(screen.queryByRole('button', { name: 'Enter Game' })).not.toBeInTheDocument()
-
-    setTouchPhoneLayout(false)
-    dispatchResize(1280, 720)
-    await waitFor(() =>
-      expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'desktop')
-    )
-
-    expect(screen.getByTestId('phaser-game')).toBeInTheDocument()
-    expect(testState.phaserMountSpy).toHaveBeenCalledTimes(1)
-    expect(testState.phaserUnmountSpy).toHaveBeenCalledTimes(0)
-    expect(testState.clientInstances).toHaveLength(1)
-    expect(getClient().sendSessionLeave).not.toHaveBeenCalled()
-    expect(getClient().restartSession).not.toHaveBeenCalled()
-  })
-
-  it('keeps gameplay mounted and resumes without a second enter step after rotating during play', async () => {
-    setViewportSize(844, 390)
-    setTouchPhoneLayout(true)
-    setTouchStartSupport(true)
-
-    render(<App />)
-    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
-
-    emitSessionStatus({
-      state: 'match_ready',
-      playerId: 'player-1',
-      displayName: 'Alice',
-      joinMode: 'public',
-      roomId: 'room-1',
-      mapId: 'default_office',
-    })
-
-    await waitFor(() =>
-      expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'mobile-landscape')
-    )
-    fireEvent.click(screen.getByRole('button', { name: 'Enter Game' }))
-    await waitFor(() => expect(screen.getByTestId('phaser-game')).toBeInTheDocument())
-
-    dispatchResize(390, 844)
-    await act(async () => {
-      await new Promise((resolve) => window.setTimeout(resolve, 220))
-    })
-    await waitFor(() => expect(screen.getByTestId('rotate-device-gate')).toBeInTheDocument())
-    expect(screen.getByTestId('phaser-game')).toBeInTheDocument()
-
-    dispatchResize(844, 390)
-    await act(async () => {
-      await new Promise((resolve) => window.setTimeout(resolve, 220))
-    })
-
-    await waitFor(() =>
-      expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'mobile-landscape')
-    )
-    expect(screen.getByTestId('phaser-game')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Enter Game' })).not.toBeInTheDocument()
-    expect(testState.phaserMountSpy).toHaveBeenCalledTimes(1)
-    expect(testState.phaserUnmountSpy).toHaveBeenCalledTimes(0)
-  })
-
-  it('keeps the entered mobile match mounted when the same session is replayed after reconnect', async () => {
-    setViewportSize(844, 390)
-    setTouchPhoneLayout(true)
-    setTouchStartSupport(true)
-
-    render(<App />)
-    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
-
-    const matchReadyStatus: SessionStatusData = {
-      state: 'match_ready',
-      playerId: 'player-1',
-      displayName: 'Alice',
-      joinMode: 'public',
-      roomId: 'room-1',
-      mapId: 'default_office',
-    }
-
-    emitSessionStatus(matchReadyStatus)
-    await waitFor(() =>
-      expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'mobile-landscape')
-    )
-    fireEvent.click(screen.getByRole('button', { name: 'Enter Game' }))
-    await waitFor(() => expect(screen.getByTestId('phaser-game')).toBeInTheDocument())
-
-    act(() => {
-      getClient().connectionStateHandler?.(false)
-      getClient().connectionStateHandler?.(true)
-    })
-    emitSessionStatus(matchReadyStatus)
-
-    expect(screen.getByTestId('phaser-game')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Enter Game' })).not.toBeInTheDocument()
-    expect(testState.phaserMountSpy).toHaveBeenCalledTimes(1)
-    expect(testState.phaserUnmountSpy).toHaveBeenCalledTimes(0)
-  })
-
-  it('captures the settled landscape viewport when Enter Game is pressed after rotating from portrait', async () => {
-    setViewportSize(390, 844)
-    setTouchPhoneLayout(true)
-    setTouchStartSupport(true)
-
-    render(<App />)
-    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
-
-    emitSessionStatus({
-      state: 'match_ready',
-      playerId: 'player-1',
-      displayName: 'Alice',
-      joinMode: 'public',
-      roomId: 'room-1',
-      mapId: 'default_office',
-    })
-
-    await waitFor(() =>
-      expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'mobile-portrait-blocked')
-    )
-
-    dispatchResize(844, 390)
-    await act(async () => {
-      await new Promise((resolve) => window.setTimeout(resolve, 220))
-    })
-
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Enter Game' })).toBeInTheDocument())
-    fireEvent.click(screen.getByRole('button', { name: 'Enter Game' }))
-
-    await waitFor(() => expect(screen.getByTestId('phaser-game')).toBeInTheDocument())
-    expect(testState.phaserRenderSpy.mock.calls.at(-1)?.[0]).toEqual(
-      expect.objectContaining({
-        layout: expect.objectContaining({
-          mode: 'mobile-landscape',
-          width: 844,
-          height: 390,
-          hudFrame: { x: 0, y: 0, width: 844, height: 390 },
-        }),
-      }),
-    )
-  })
-
-  it('treats Android phone device emulation as mobile during match flow without touch APIs', async () => {
-    setViewportSize(915, 412)
-    setUserAgent(
-      'Mozilla/5.0 (Linux; Android 10; Samsung Galaxy S20) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Mobile Safari/537.36',
-    )
-
-    render(<App />)
-    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
-
-    emitSessionStatus({
-      state: 'match_ready',
-      playerId: 'player-1',
-      displayName: 'Alice',
-      joinMode: 'public',
-      roomId: 'room-1',
-      mapId: 'default_office',
-    })
-
-    await waitFor(() =>
-      expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'mobile-landscape')
-    )
-    expect(screen.getByRole('button', { name: 'Enter Game' })).toBeInTheDocument()
-    expect(screen.queryByTestId('phaser-game')).not.toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Enter Game' }))
-
-    await waitFor(() => expect(screen.getByTestId('phaser-game')).toBeInTheDocument())
-    expect(screen.getByTestId('mobile-controls')).toBeInTheDocument()
-  })
-
-  it('treats phone-sized viewport previews as mobile during match flow even without touch signals', async () => {
-    setViewportSize(915, 412)
-    setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)')
-
-    render(<App />)
-    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
-
-    emitSessionStatus({
-      state: 'match_ready',
-      playerId: 'player-1',
-      displayName: 'Alice',
-      joinMode: 'public',
-      roomId: 'room-1',
-      mapId: 'default_office',
-    })
-
-    await waitFor(() =>
-      expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'mobile-landscape')
-    )
-    expect(screen.getByRole('button', { name: 'Enter Game' })).toBeInTheDocument()
-  })
-
-  it('does not mount the desktop gameplay stage while a phone-sized layout is settling into mobile mode', async () => {
-    render(<App />)
-    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
-
-    dispatchResize(915, 412)
-
-    emitSessionStatus({
-      state: 'match_ready',
-      playerId: 'player-1',
-      displayName: 'Alice',
-      joinMode: 'public',
-      roomId: 'room-1',
-      mapId: 'default_office',
-    })
-
-    await waitFor(() =>
-      expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'mobile-landscape')
-    )
-    await act(async () => {
-      await new Promise((resolve) => window.setTimeout(resolve, 220))
-    })
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Enter Game' })).toBeInTheDocument())
-    expect(screen.queryByTestId('phaser-game')).not.toBeInTheDocument()
-  })
-
-  it('replaces gameplay with the match-end screen when Phaser reports match end', async () => {
-    render(<App />)
-    await waitFor(() => expect(getClient().connect).toHaveBeenCalled())
-
-    emitSessionStatus({
-      state: 'match_ready',
-      playerId: 'player-1',
-      displayName: 'Alice',
-      joinMode: 'public',
-      roomId: 'room-1',
-      mapId: 'default_office',
-      rosterSize: 2,
-      minPlayers: 2,
-    })
-
-    const matchEndData: MatchEndData = {
-      winners: [{ playerId: 'player-1', displayName: 'Alice' }],
-      finalScores: [
-        { playerId: 'player-1', displayName: 'Alice', kills: 5, deaths: 1, xp: 650 },
-        { playerId: 'player-2', displayName: 'Bob', kills: 3, deaths: 4, xp: 350 },
-      ],
-      reason: 'time_limit',
-    }
-
-    act(() => {
-      testState.capturedOnMatchEnd?.(matchEndData, 'player-1')
-    })
-
-    expect(screen.queryByTestId('phaser-game')).not.toBeInTheDocument()
-    expect(screen.getByRole('dialog', { name: 'Match End Results' })).toBeInTheDocument()
-    expect(screen.getByText(/Winner:/i)).toHaveTextContent('Alice')
+    expect(shell.actions.returnToJoinForm).toHaveBeenCalledTimes(1)
+    expect(shell.actions.playAgain).toHaveBeenCalledTimes(1)
   })
 })

@@ -162,9 +162,28 @@ interface MatchSession {
 - While a settle gate or explicit entry gate is delaying gameplay readiness, the client may buffer only a bounded recent backlog of gameplay traffic. A blocked phone gate may not allow unbounded queued-message growth before the runtime becomes ready.
 - When mobile touch aim becomes idle, the runtime should preserve the last non-null mobile aim heading for facing, dodge direction, and repeat-fire orientation until a new mobile aim heading arrives or desktop pointer aim becomes authoritative again.
 
+### Match App Shell
+
+The Match app shell is a client-only seam that owns the browser-side Match session lifecycle for one active app instance. It wraps the Match session flow reducer semantics with the React-facing behavior that still needs browser and transport adapters.
+
+**Interface responsibilities:**
+- expose one React-facing state object for the current app shell, including join form data, duplicate-tab invite blocking state, current session flow state, and whether the active Match should keep or reset mobile entry
+- accept local actions such as join-form edits, begin join, cancel waiting, acknowledge duplicate-tab blocking, match end, play again, and return to join
+- subscribe to transport events such as socket readiness, authoritative `session:status`, join errors, and reconnect replay failure, then fold them into shell state without requiring `App.tsx` to duplicate transition rules
+- own duplicate-tab invite claim policy for code joins, including local claim heartbeat, release, and duplicate-claim rejection behavior
+- preserve the active session key as `roomId:playerId:mapId` so repeated `match_ready` delivery for the same session does not reset the mobile entry gate
+- report when mobile entry must reset because the flow left a Match or entered a different Match
+- reconstruct replay intent from the last authoritative session or current join form when Match-end replay is requested
+- expose imperative callbacks for React to forward to the transport layer, such as `sendHello`, `session:leave`, replay, invite-link copy, and mobile-entry confirmation
+
+**Non-responsibilities:**
+- It does not own viewport measurement, safe-area math, or stage DOM rendering. React still measures the mounted stage and renders the current shell state.
+- It does not mount Phaser or own authoritative gameplay state.
+- It does not change the server `session:status` contract.
+
 ### Match Session Flow Module
 
-The Match session flow module is a client-only module that turns transport events and local user actions into one app session state.
+The Match session flow module is a reducer-level part of the Match app shell. It turns authoritative session snapshots and local Match actions into one app session state.
 
 **Interface responsibilities:**
 - accept local actions such as begin join, cancel waiting, match end, play again, and recoverable reconnect failure
