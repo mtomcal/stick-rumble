@@ -43,6 +43,8 @@ describe('GameScene cleanup', () => {
     const destroyPlayersSpy = vi.spyOn(scene['playerManager'], 'destroy')
     const destroyUiSpy = vi.spyOn(scene['ui'], 'destroy')
 
+    expect(wsClient.getTotalHandlerCount()).toBeGreaterThan(0)
+
     const shutdownHandler = mockSceneContext.events.once.mock.calls.find(
       (call: unknown[]) => call[0] === 'shutdown'
     )?.[1] as (() => void) | undefined
@@ -52,6 +54,7 @@ describe('GameScene cleanup', () => {
     expect(destroyPlayersSpy).toHaveBeenCalledTimes(1)
     expect(destroyUiSpy).toHaveBeenCalledTimes(1)
     expect(wsClient.setGameplayReady).toHaveBeenCalledWith(false)
+    expect(wsClient.getTotalHandlerCount()).toBe(0)
   })
 
   it('stops reacting to viewport bridge updates after cleanup', () => {

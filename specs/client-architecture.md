@@ -1,7 +1,7 @@
 # Client Architecture
 
-> **Spec Version**: 1.5.1
-> **Last Updated**: 2026-04-23
+> **Spec Version**: 1.5.2
+> **Last Updated**: 2026-04-25
 > **Depends On**: [constants.md](constants.md), [messages.md](messages.md), [networking.md](networking.md), [player.md](player.md), [movement.md](movement.md), [weapons.md](weapons.md), [maps.md](maps.md)
 > **Depended By**: [graphics.md](graphics.md), [ui.md](ui.md), [audio.md](audio.md)
 
@@ -1473,87 +1473,68 @@ connect(): Promise<void> {
 
 ---
 
-#### GameSceneEventHandlers
+#### Gameplay Event Router
 
-**Purpose:** Register handlers for all server messages.
+**Purpose:** Own all Phaser-side gameplay message routing behind one seam so `GameScene` only manages lifecycle, Phaser object ownership, runtime bridge binding, and per-frame updates.
 
-**Handler Map:**
-```typescript
-handlerRefs: Map<string, (data: unknown) => void>
-```
+**External contract:**
+- One router instance is created per `GameScene` instance.
+- The scene injects dependencies grouped by concern at construction time instead of mutating the router with scene-only setup knowledge.
+- The router exposes setup/teardown for message subscriptions plus narrowly scoped setters only for runtime-created systems that genuinely appear later in scene creation.
+- `GameScene` must not duplicate gameplay message branching inline once the router is installed.
+
+**Internal event families:**
+- **Match bootstrap:** `session:status`, join-error adaptation, map changes, room readiness, and bounded pre-bootstrap message queues.
+- **Player state sync:** `player:move`, reconciliation, local HUD stat sync, melee-weapon follow state, and roster-size publication.
+- **Combat publication:** projectile, weapon-state, damage, death, respawn, roll, and match-end events.
+- **Presentation effects:** recoil, audio, hit markers, muzzle flash, pickup notifications, spectator transitions, and other view-local reactions that derive from authoritative gameplay events.
+
+**Ordering and authority rules:**
+- Gameplay-only messages that arrive before authoritative `session:status { state: "match_ready" }` are handled by the router, not by the scene. The router may queue only bounded recent gameplay traffic needed for bootstrap.
+- `player:move` messages captured before `match_ready` are stale for the eventual room session and must be discarded once the match bootstrap becomes authoritative.
+- Weapon-spawn publications captured before `match_ready` may be replayed after bootstrap only if still relevant to the now-authoritative match session.
+- After `match:ended`, the router suppresses late gameplay publications that would otherwise mutate world state, local authority state, or HUD counters.
+- Local-weapon authority for recoil, ammo/HUD sync, respawn reset, and projectile presentation is derived from authoritative weapon-state and combat messages inside the router. The scene may render these outcomes but may not infer them separately.
+
+**Typed adaptation rule:**
+- Raw transport payloads are adapted into typed gameplay-event inputs at the router boundary.
+- Internal router modules should operate on typed payloads and concern-specific dependencies rather than repeatedly casting `unknown` inside unrelated handlers.
 
 **Pseudocode:**
 ```
-function setupEventHandlers():
-    // Clear old handlers first (scene restart safety)
-    cleanupHandlers()
+function setup():
+    cleanup()
+    registerMatchBootstrapHandlers()
+    registerPlayerSyncHandlers()
+    registerCombatHandlers()
+    registerPresentationHandlers()
 
-    // Session bootstrap events
-    registerHandler('session:status', (data) => {
-        if data.state !== 'match_ready':
-            return
-        localPlayerId = data.playerId
-        processPendingMessages()
-    })
+function onSessionStatusMatchReady(snapshot):
+    resetLateEventSuppression()
+    publishMapBootstrap(snapshot)
+    establishLocalAuthority(snapshot.playerId)
+    discardQueuedPlayerMoveSnapshots()
+    flushReplayableBootstrapEvents()
 
-    // Player movement (20 Hz)
-    registerHandler('player:move', (data) => {
-        if localPlayerId is null:
-            pendingPlayerMoves.push(data)
-            return
-        playerManager.updatePlayers(data.players)
-    })
+function onPlayerMove(snapshot):
+    if routerHasNoAuthoritativeBootstrap():
+        queueRecentPlayerMove(snapshot)
+        return
+    applyAuthoritativePlayerSync(snapshot)
+    reconcileLocalPrediction(snapshot)
+    syncLocalHud(snapshot)
 
-    // Combat events
-    registerHandler('projectile:spawn', (data) => {
-        projectileManager.spawnProjectile(data)
-        if data.ownerId === localPlayerId:
-            screenShake.shakeOnWeaponFire()
-            audioManager.playWeaponSound(data.weaponType)
-    })
-
-    // ... 13 more message types
-
-function registerHandler(type, handler):
-    handlerRefs.set(type, handler)
-    wsClient.on(type, handler)
-
-function cleanupHandlers():
-    for [type, handler] of handlerRefs:
-        wsClient.off(type, handler)
-    handlerRefs.clear()
-```
-
-**TypeScript:**
-```typescript
-setupEventHandlers(): void {
-  this.cleanupHandlers();
-
-  this.registerHandler('session:status', (data: SessionStatusData) => {
-    if (data.state !== 'match_ready') {
-      return;
-    }
-    this.scene.localPlayerId = data.playerId;
-    this.processPendingMessages();
-  });
-
-  this.registerHandler('player:move', (data: PlayerMoveData) => {
-    if (!this.scene.localPlayerId) {
-      this.pendingPlayerMoves.push(data);
-      return;
-    }
-    this.playerManager.updatePlayers(data.players);
-  });
-
-  // ... more handlers
-}
+function onMatchEnded(result):
+    freezeGameplayInput()
+    enableLateEventSuppression()
+    publishMatchEndPresentation(result)
 ```
 
 **Why:**
-- Handler cleanup prevents accumulation across scene restarts
-- Pending queues handle the race condition where gameplay messages arrive before `session:status { state: "match_ready" }`
-- All handlers in one file for easy maintenance
-- TypeScript types ensure correct data access
+- One router seam keeps setup-order knowledge localized instead of leaking it across `GameScene`.
+- Internal modules stay organized by gameplay-event family rather than by arbitrary file size.
+- Constructor-grouped dependencies make tests exercise bootstrap, sync, and combat logic without a full scene harness.
+- Centralized queueing, late-event suppression, and typed adaptation reduce regression risk during future message additions.
 
 ---
 
