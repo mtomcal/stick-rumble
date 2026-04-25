@@ -8,6 +8,8 @@ I started the project in November 2025 as a full-stack enterprise software engin
 
 Current status: live public alpha with public matchmaking, room codes, 2-8 player matches, six weapons, dodge roll, server-authoritative gameplay, desktop controls, and mobile landscape presentation.
 
+![Stick Rumble gameplay demo](docs/assets/demo.gif)
+
 ## Current Capabilities
 
 - Public matchmaking and room-code joins
