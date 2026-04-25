@@ -1,26 +1,14 @@
 package game
 
 import (
-	"sync"
 	"testing"
 	"time"
 )
 
 func TestGameServerHitDetection(t *testing.T) {
-	hitCount := 0
-	var hitEvent HitEvent
-	var mu sync.Mutex
-
-	onHit := func(hit HitEvent) {
-		mu.Lock()
-		hitCount++
-		hitEvent = hit
-		mu.Unlock()
-	}
-
-	gs := NewGameServer(nil)
+	sink := &recordingGameLoopSink{}
+	gs := newGameServerWithSink(&RealClock{}, sink)
 	setGameServerOpenMap(gs)
-	gs.SetOnHit(onHit)
 
 	// Add two players
 	player1ID := "player-1"
@@ -52,19 +40,13 @@ func TestGameServerHitDetection(t *testing.T) {
 	gs.checkHitDetection()
 
 	// Verify hit was detected
-	mu.Lock()
-	defer mu.Unlock()
-
-	if hitCount != 1 {
-		t.Errorf("Expected 1 hit, got %d", hitCount)
+	event := requireSingleEvent[ProjectileHitResolvedEvent](t, sink.events)
+	if event.Outcome.Hit.VictimID != player2ID {
+		t.Errorf("Expected victim %s, got %s", player2ID, event.Outcome.Hit.VictimID)
 	}
 
-	if hitEvent.VictimID != player2ID {
-		t.Errorf("Expected victim %s, got %s", player2ID, hitEvent.VictimID)
-	}
-
-	if hitEvent.AttackerID != player1ID {
-		t.Errorf("Expected attacker %s, got %s", player1ID, hitEvent.AttackerID)
+	if event.Outcome.Hit.AttackerID != player1ID {
+		t.Errorf("Expected attacker %s, got %s", player1ID, event.Outcome.Hit.AttackerID)
 	}
 
 	// Verify player2 took damage
@@ -82,18 +64,9 @@ func TestGameServerHitDetection(t *testing.T) {
 }
 
 func TestGameServerHitDetection_NoHit(t *testing.T) {
-	hitCount := 0
-	var mu sync.Mutex
-
-	onHit := func(hit HitEvent) {
-		mu.Lock()
-		hitCount++
-		mu.Unlock()
-	}
-
-	gs := NewGameServer(nil)
+	sink := &recordingGameLoopSink{}
+	gs := newGameServerWithSink(&RealClock{}, sink)
 	setGameServerOpenMap(gs)
-	gs.SetOnHit(onHit)
 
 	// Add two players far apart
 	player1ID := "player-1"
@@ -115,11 +88,8 @@ func TestGameServerHitDetection_NoHit(t *testing.T) {
 	// Run hit detection check (should find no hits)
 	gs.checkHitDetection()
 
-	mu.Lock()
-	defer mu.Unlock()
-
-	if hitCount != 0 {
-		t.Errorf("Expected no hits, got %d", hitCount)
+	if len(sink.events) != 0 {
+		t.Errorf("Expected no hits, got %d", len(sink.events))
 	}
 
 	// Verify player2 health unchanged
@@ -130,18 +100,9 @@ func TestGameServerHitDetection_NoHit(t *testing.T) {
 }
 
 func TestGameServerHitDetection_MultipleHits(t *testing.T) {
-	hitCount := 0
-	var mu sync.Mutex
-
-	onHit := func(hit HitEvent) {
-		mu.Lock()
-		hitCount++
-		mu.Unlock()
-	}
-
-	gs := NewGameServer(nil)
+	sink := &recordingGameLoopSink{}
+	gs := newGameServerWithSink(&RealClock{}, sink)
 	setGameServerOpenMap(gs)
-	gs.SetOnHit(onHit)
 
 	// Add two players
 	player1ID := "player-1"
@@ -175,11 +136,8 @@ func TestGameServerHitDetection_MultipleHits(t *testing.T) {
 	}
 
 	// Verify 4 hits
-	mu.Lock()
-	defer mu.Unlock()
-
-	if hitCount != 4 {
-		t.Errorf("Expected 4 hits, got %d", hitCount)
+	if len(sink.events) != 4 {
+		t.Errorf("Expected 4 hits, got %d", len(sink.events))
 	}
 
 	// Verify player2 is dead
@@ -194,18 +152,9 @@ func TestGameServerHitDetection_MultipleHits(t *testing.T) {
 }
 
 func TestGameServerHitDetection_DeadPlayerNoHit(t *testing.T) {
-	hitCount := 0
-	var mu sync.Mutex
-
-	onHit := func(hit HitEvent) {
-		mu.Lock()
-		hitCount++
-		mu.Unlock()
-	}
-
-	gs := NewGameServer(nil)
+	sink := &recordingGameLoopSink{}
+	gs := newGameServerWithSink(&RealClock{}, sink)
 	setGameServerOpenMap(gs)
-	gs.SetOnHit(onHit)
 
 	// Add two players
 	player1ID := "player-1"
@@ -234,10 +183,7 @@ func TestGameServerHitDetection_DeadPlayerNoHit(t *testing.T) {
 	gs.checkHitDetection()
 
 	// Should not register hit
-	mu.Lock()
-	defer mu.Unlock()
-
-	if hitCount != 0 {
+	if len(sink.events) != 0 {
 		t.Error("Should not hit dead players")
 	}
 }

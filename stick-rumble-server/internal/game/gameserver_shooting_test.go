@@ -1,7 +1,6 @@
 package game
 
 import (
-	"sync"
 	"testing"
 	"time"
 )
@@ -146,22 +145,12 @@ func TestGameServerPlayerReload_AlreadyFull(t *testing.T) {
 }
 
 func TestGameServerReloadCompleteCallback(t *testing.T) {
-	var callbackPlayerID string
-	var callbackCalled bool
-	var mu sync.Mutex
+	sink := &recordingGameLoopSink{}
 
 	// Create ManualClock and GameServer with it
 	clock := NewManualClock(time.Now())
-	gs := NewGameServerWithClock(nil, clock)
+	gs := newGameServerWithSink(clock, sink)
 	playerID := "test-player-1"
-
-	// Set the reload complete callback
-	gs.SetOnReloadComplete(func(pID string) {
-		mu.Lock()
-		callbackPlayerID = pID
-		callbackCalled = true
-		mu.Unlock()
-	})
 
 	gs.AddPlayer(playerID)
 
@@ -175,27 +164,17 @@ func TestGameServerReloadCompleteCallback(t *testing.T) {
 		t.Fatal("Reload should start successfully")
 	}
 
-	// Callback should not be called immediately
-	mu.Lock()
-	if callbackCalled {
-		t.Error("Callback should not be called before reload completes")
+	if len(sink.events) != 0 {
+		t.Error("reload event should not be emitted before reload completes")
 	}
-	mu.Unlock()
 
 	// Simulate ticks for 1.7 seconds (reload time is 1.5s)
 	// At 60 ticks/second, 1.7s = 102 ticks
 	simulateTicksShooting(gs, clock, 102, time.Duration(ServerTickInterval)*time.Millisecond)
 
-	// Callback should have been called
-	mu.Lock()
-	defer mu.Unlock()
-
-	if !callbackCalled {
-		t.Error("Reload complete callback should have been called")
-	}
-
-	if callbackPlayerID != playerID {
-		t.Errorf("Callback should receive player ID %s, got %s", playerID, callbackPlayerID)
+	event := requireSingleEvent[ReloadCompletedEvent](t, sink.events)
+	if event.PlayerID != playerID {
+		t.Errorf("Reload complete event should receive player ID %s, got %s", playerID, event.PlayerID)
 	}
 
 	// Ammo should be refilled
@@ -258,10 +237,8 @@ func TestGameServerPlayerShoot_BlockedNearWallStillConsumesAmmoAndCooldown(t *te
 
 	ws := gs.GetWeaponState(playerID)
 	startAmmo := ws.CurrentAmmo
-	hitCalled := false
-	gs.SetOnHit(func(hit HitEvent) {
-		hitCalled = true
-	})
+	sink := &recordingGameLoopSink{}
+	gs.eventSink = sink
 
 	result := gs.PlayerShoot(playerID, 0, clock.Now().UnixMilli())
 	if !result.Success {
@@ -273,7 +250,7 @@ func TestGameServerPlayerShoot_BlockedNearWallStillConsumesAmmoAndCooldown(t *te
 	if ws.CanShoot() {
 		t.Fatal("expected blocked shot to consume fire-rate cooldown")
 	}
-	if hitCalled {
+	if len(sink.events) != 0 {
 		t.Fatal("blocked shot should not emit hit side effects")
 	}
 	if victim.Health != 100 {

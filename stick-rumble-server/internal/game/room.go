@@ -448,6 +448,13 @@ func (rm *RoomManager) GetRoomByPlayerID(playerID string) *Room {
 	return rm.rooms[roomID]
 }
 
+func (rm *RoomManager) GetRoom(roomID string) *Room {
+	rm.mu.RLock()
+	defer rm.mu.RUnlock()
+
+	return rm.rooms[roomID]
+}
+
 func (rm *RoomManager) SendToWaitingPlayer(playerID string, msgBytes []byte) {
 	rm.mu.RLock()
 	defer rm.mu.RUnlock()

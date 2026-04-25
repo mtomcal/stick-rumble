@@ -296,52 +296,46 @@ func (h *WebSocketHandler) broadcastProjectileSpawn(proj *game.Projectile) {
 	h.roomManager.BroadcastToAll(msgBytes)
 }
 
-// broadcastMatchTimers broadcasts timer updates to all active rooms
-func (h *WebSocketHandler) broadcastMatchTimers() {
+// emitMatchTimers evaluates authoritative room timer state and publishes resulting events.
+func (h *WebSocketHandler) emitMatchTimers() {
 	rooms := h.roomManager.GetAllRooms()
 
 	for _, room := range rooms {
-		// Skip if match ended
-		if room.Match.IsEnded() {
-			continue
-		}
-
-		remainingSeconds := room.Match.GetRemainingSeconds()
-
-		// Create match:timer message data
-		data := map[string]interface{}{
-			"remainingSeconds": remainingSeconds,
-		}
-
-		// Validate outgoing message schema (development mode only)
-		if err := h.validateOutgoingMessage("match:timer", data); err != nil {
-			log.Printf("Schema validation failed for match:timer: %v", err)
-		}
-
-		// Create match:timer message
-		timerMessage := Message{
-			Type:      "match:timer",
-			Timestamp: 0,
-			Data:      data,
-		}
-
-		msgBytes, err := json.Marshal(timerMessage)
-		if err != nil {
-			log.Printf("Error marshaling match:timer message: %v", err)
-			continue
-		}
-
-		// Broadcast to all players in room
-		room.Broadcast(msgBytes, "")
-
-		// Check if time limit reached
-		if room.Match.CheckTimeLimit() {
-			room.Match.EndMatch("time_limit")
-			log.Printf("Match ended in room %s: time limit reached", room.ID)
-			// Broadcast match:ended message to all players
-			h.broadcastMatchEnded(room, h.gameServer.GetWorld())
-		}
+		h.matchEvents.EmitRoomTick(room.ID, room.Match, h.gameServer.GetWorld())
 	}
+}
+
+func (h *WebSocketHandler) broadcastMatchTimers() {
+	h.emitMatchTimers()
+}
+
+func (h *WebSocketHandler) broadcastMatchTimerEvent(event game.MatchTimerUpdatedEvent) {
+	data := map[string]interface{}{
+		"remainingSeconds": event.RemainingSeconds,
+	}
+
+	if err := h.validateOutgoingMessage("match:timer", data); err != nil {
+		log.Printf("Schema validation failed for match:timer: %v", err)
+	}
+
+	message := Message{
+		Type:      "match:timer",
+		Timestamp: 0,
+		Data:      data,
+	}
+
+	msgBytes, err := json.Marshal(message)
+	if err != nil {
+		log.Printf("Error marshaling match:timer message: %v", err)
+		return
+	}
+
+	room := h.roomManager.GetRoom(event.RoomID)
+	if room == nil {
+		return
+	}
+
+	room.Broadcast(msgBytes, "")
 }
 
 // sendWeaponState sends weapon state update to a specific player
@@ -476,6 +470,38 @@ func (h *WebSocketHandler) broadcastMatchEnded(room *game.Room, world *game.Worl
 	// Broadcast to all players in the room
 	room.Broadcast(msgBytes, "")
 	log.Printf("Match ended in room %s - reason: %s, winners: %v", room.ID, room.Match.EndReason, winners)
+}
+
+func (h *WebSocketHandler) broadcastMatchEndedEvent(event game.MatchEndedEvent) {
+	room := h.roomManager.GetRoom(event.RoomID)
+	if room == nil {
+		return
+	}
+
+	data := map[string]interface{}{
+		"winners":     event.Winners,
+		"finalScores": event.FinalScores,
+		"reason":      event.Reason,
+	}
+
+	if err := h.validateOutgoingMessage("match:ended", data); err != nil {
+		log.Printf("Schema validation failed for match:ended: %v", err)
+	}
+
+	message := Message{
+		Type:      "match:ended",
+		Timestamp: 0,
+		Data:      data,
+	}
+
+	msgBytes, err := json.Marshal(message)
+	if err != nil {
+		log.Printf("Error marshaling match:ended message: %v", err)
+		return
+	}
+
+	room.Broadcast(msgBytes, "")
+	log.Printf("Match ended in room %s - reason: %s, winners: %v", event.RoomID, event.Reason, event.Winners)
 }
 
 // broadcastWeaponPickup broadcasts weapon pickup event to all clients

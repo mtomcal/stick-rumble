@@ -1,7 +1,7 @@
 # Server Architecture
 
-> **Spec Version**: 1.2.0
-> **Last Updated**: 2026-04-07
+> **Spec Version**: 1.3.0
+> **Last Updated**: 2026-04-25
 > **Depends On**: [overview.md](overview.md), [constants.md](constants.md), [networking.md](networking.md), [rooms.md](rooms.md), [messages.md](messages.md), [maps.md](maps.md)
 > **Depended By**: None (leaf spec)
 
@@ -87,7 +87,7 @@ stick-rumble-server/
 - **`cmd/`** contains only application entry points—no business logic
 - **`internal/`** prevents external packages from importing our code (Go convention)
 - **`game/`** encapsulates all game logic, making it testable without network dependencies
-- **`network/`** handles WebSocket I/O, keeping protocol details separate from game rules
+- **`network/`** handles WebSocket I/O and adapts emitted authoritative outcomes into client-visible messages
 - This separation enables testing game logic with mock clocks and injected broadcasts
 
 ---
@@ -113,18 +113,9 @@ type GameServer struct {
     updateRate         time.Duration             // 50ms (20Hz)
     clock              Clock                     // Injectable for testing
 
-    broadcastFunc func(playerStates []PlayerStateSnapshot)  // Injected for decoupling
-
-    // Event callbacks for network layer
-    onReloadComplete func(playerID string)
-    onHit            func(hit HitEvent)
-    getRTT           func(playerID string) int64
-    onRespawn        func(playerID string, position Vector2)
-    onMatchTimer     func(roomID string, remainingSeconds int)
-    onCheckTimeLimit func()
-    onWeaponPickup   func(playerID, crateID, weaponType string, respawnTime time.Time)
-    onWeaponRespawn  func(crate *WeaponCrate)
-    onRollEnd        func(playerID string, reason string)
+    broadcastFunc func(playerStates []PlayerStateSnapshot) // Injected for decoupling
+    getRTT        func(playerID string) int64             // Authoritative lag-comp lookup
+    eventSink     GameLoopEventSink                       // Single transport-facing outcome seam
 
     running bool
     mu      sync.RWMutex
@@ -132,12 +123,29 @@ type GameServer struct {
 }
 ```
 
-**Why Callbacks?**
+`GameLoopEventSink` consumes authoritative domain outcomes emitted by the runtime. It is transport-agnostic: it receives facts such as projectile-hit outcomes, reload completion, respawn, dodge-roll completion, weapon crate respawn, match timer updates, and match end.
 
-The GameServer is decoupled from network code via callbacks. This allows:
+**Why one emitted outcome seam instead of many callbacks?**
+
+The GameServer remains decoupled from network code, but bootstrapping a working runtime must require one transport-facing subscription rather than a list of unrelated setter calls. This allows:
 1. Unit testing game logic without WebSocket dependencies
-2. Swapping network implementations (e.g., for load testing)
-3. Clear separation of concerns
+2. Swapping or composing adapters around one coherent authoritative surface
+3. Clear separation between authoritative state changes and transport publication
+4. Preventing callback sprawl from reappearing under renamed APIs
+
+### Authoritative Game Loop Outcomes
+
+The authoritative runtime must emit typed outcomes for domain events that matter outside simulation internals. At minimum, the outcome stream covers:
+
+- projectile hit outcomes after authoritative damage/stat processing
+- reload completion outcomes
+- respawn outcomes including authoritative spawn position
+- dodge roll end outcomes including the authoritative reason
+- weapon crate respawn outcomes
+- match timer outcomes for active rooms
+- match end outcomes including room-scoped winners and final scores
+
+The sink may ignore outcomes it does not need, but the runtime must emit them as authoritative facts rather than requiring the network adapter to rediscover them from internal state.
 
 ### WebSocketHandler
 

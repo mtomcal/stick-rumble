@@ -156,13 +156,8 @@ func TestManualReload_FullMagazine(t *testing.T) {
 // TestReloadCompletion tests that reload properly completes and refills ammo
 func TestReloadCompletion(t *testing.T) {
 	clock := NewManualClock(time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC))
-	gs := NewGameServerWithClock(nil, clock)
-
-	// Set up callback to track reload completion
-	reloadCompleted := false
-	gs.SetOnReloadComplete(func(playerID string) {
-		reloadCompleted = true
-	})
+	sink := &recordingGameLoopSink{}
+	gs := newGameServerWithSink(clock, sink)
 
 	// Add player
 	playerID := "player1"
@@ -193,8 +188,9 @@ func TestReloadCompletion(t *testing.T) {
 		t.Errorf("magazine should be full after reload, got %d/%d", ws.CurrentAmmo, ws.Weapon.MagazineSize)
 	}
 
-	if !reloadCompleted {
-		t.Error("reload completion callback should have been called")
+	event := requireSingleEvent[ReloadCompletedEvent](t, sink.events)
+	if event.PlayerID != playerID {
+		t.Errorf("reload event player ID should be %s, got %s", playerID, event.PlayerID)
 	}
 }
 

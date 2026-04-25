@@ -37,6 +37,7 @@ type WebSocketHandler struct {
 	sessionFlow       *game.RoomSessionFlow
 	gameServer        *game.GameServer
 	sessionRuntime    roomSessionRuntime
+	matchEvents       *game.MatchEventEmitter
 	timerInterval     time.Duration // Interval for match timer broadcasts (default 1s)
 	validator         *SchemaValidator
 	outgoingValidator *SchemaValidator
@@ -98,32 +99,17 @@ func NewWebSocketHandlerWithConfig(timerInterval time.Duration) *WebSocketHandle
 		networkSimulator:  networkSimulator,
 		deltaTracker:      NewDeltaTracker(),
 	}
-
-	// Create game server with broadcast function
-	handler.gameServer = game.NewGameServer(handler.broadcastPlayerStates)
+	handler.gameServer = game.NewGameServerWithConfig(game.GameServerConfig{
+		BroadcastFunc: handler.broadcastPlayerStates,
+		EventSink:     handler,
+		RTTProvider:   handler.getPlayerRTT,
+	})
 	handler.sessionFlow = handler.roomManager.SessionFlow()
 	handler.sessionRuntime = &gameSessionRuntime{
 		gameServer:       handler.gameServer,
 		sendWeaponSpawns: handler.sendWeaponSpawns,
 	}
-
-	// Register callback for reload completion to notify clients
-	handler.gameServer.SetOnReloadComplete(handler.onReloadComplete)
-
-	// Register callback for hit events
-	handler.gameServer.SetOnHit(handler.onHit)
-
-	// Register callback for respawn events
-	handler.gameServer.SetOnRespawn(handler.onRespawn)
-
-	// Register callback for weapon respawn events
-	handler.gameServer.SetOnWeaponRespawn(handler.onWeaponRespawn)
-
-	// Register callback for dodge roll end events
-	handler.gameServer.SetOnRollEnd(handler.broadcastRollEnd)
-
-	// Register callback to get player RTT for lag compensation (Story 4.5)
-	handler.gameServer.SetGetRTT(handler.getPlayerRTT)
+	handler.matchEvents = game.NewMatchEventEmitter(&game.RealClock{}, handler)
 
 	return handler
 }
@@ -139,7 +125,7 @@ func (h *WebSocketHandler) matchTimerLoop(ctx context.Context) {
 			log.Println("Match timer loop stopped")
 			return
 		case <-ticker.C:
-			h.broadcastMatchTimers()
+			h.emitMatchTimers()
 		}
 	}
 }

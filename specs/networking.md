@@ -1,7 +1,7 @@
 # Networking
 
-> **Spec Version**: 1.2.0
-> **Last Updated**: 2026-04-11
+> **Spec Version**: 1.3.0
+> **Last Updated**: 2026-04-25
 > **Depends On**: [messages.md](messages.md), [constants.md](constants.md)
 > **Depended By**: [rooms.md](rooms.md), [client-architecture.md](client-architecture.md), [server-architecture.md](server-architecture.md)
 
@@ -10,6 +10,8 @@
 ## Overview
 
 The networking layer provides real-time bidirectional communication between the game client and server using WebSocket connections. It handles connection establishment, message serialization, reconnection logic, graceful shutdown, and error handling.
+
+For authoritative gameplay, the network layer is an adapter over one emitted game-loop outcome seam. It must subscribe once to the authoritative runtime and translate those emitted outcomes into the existing server-to-client message catalog.
 
 **Why WebSocket?** WebSocket provides full-duplex communication over a single TCP connection, enabling low-latency real-time updates essential for multiplayer games. Unlike HTTP polling, WebSocket maintains a persistent connection that reduces overhead and enables server push—critical for broadcasting game state at 20 Hz without client polling.
 
@@ -39,6 +41,7 @@ The networking layer provides real-time bidirectional communication between the 
 | `stick-rumble-server/internal/network/websocket_handler.go` | WebSocket upgrade, message routing, ping/pong RTT |
 | `stick-rumble-server/internal/network/message_processor.go` | Per-message-type handlers, broadcast callbacks |
 | `stick-rumble-server/internal/network/broadcast_helper.go` | Player state broadcasts with delta compression |
+| `stick-rumble-server/internal/game/gameserver.go` | Emits authoritative runtime outcomes consumed by the network adapter |
 | `stick-rumble-server/internal/network/delta_tracker.go` | Per-client delta compression state tracking |
 | `stick-rumble-server/internal/network/network_simulator.go` | Server-side artificial latency/packet loss |
 | `stick-rumble-server/internal/game/ping_tracker.go` | RTT measurement (circular buffer of 5) |
@@ -146,6 +149,27 @@ class WebSocketClient {
 ---
 
 ## Behavior
+
+### Authoritative Outcome Subscription
+
+The WebSocket adapter must attach to the authoritative runtime through one subscription surface rather than by wiring many independent gameplay callbacks.
+
+Required behavior:
+- the runtime emits authoritative domain outcomes after simulation has already decided the fact
+- the network layer translates each outcome into the documented server-to-client messages
+- the adapter may hold room lookup, recipient selection, and JSON-building concerns
+- the adapter must not recompute gameplay facts that the authoritative runtime already determined
+
+Examples:
+- a projectile-hit outcome becomes `player:damaged`, `hit:confirmed`, and, when applicable, `player:death`, `player:kill_credit`, and `match:ended`
+- a reload-complete outcome becomes `weapon:state` for the affected player
+- a respawn outcome becomes `player:respawn` plus an authoritative `weapon:state` refresh for the respawned player
+- a roll-end outcome becomes `roll:end`
+- a weapon-respawn outcome becomes `weapon:respawned`
+- a match-timer outcome becomes `match:timer`
+- a match-ended outcome becomes `match:ended`
+
+**Why require one subscription?** Boot-time wiring is otherwise brittle and obscures ownership. One subscription keeps the transport boundary explicit: the runtime emits authoritative facts, and the network adapter publishes them.
 
 ### Connection Establishment
 
