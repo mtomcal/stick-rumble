@@ -269,26 +269,16 @@ func (h *WebSocketHandler) broadcastProjectileSpawn(proj *game.Projectile) {
 
 	// Create projectile:spawn message data
 	data := map[string]interface{}{
-		"id":       proj.ID,
-		"ownerId":  proj.OwnerID,
-		"position": proj.Position,
-		"velocity": proj.Velocity,
+		"id":         proj.ID,
+		"ownerId":    proj.OwnerID,
+		"weaponType": proj.WeaponType,
+		"position":   proj.Position,
+		"velocity":   proj.Velocity,
 	}
 
-	// Validate outgoing message schema (development mode only)
-	if err := h.validateOutgoingMessage("projectile:spawn", data); err != nil {
-		log.Printf("Schema validation failed for projectile:spawn: %v", err)
-	}
-
-	message := Message{
-		Type:      "projectile:spawn",
-		Timestamp: 0,
-		Data:      data,
-	}
-
-	msgBytes, err := json.Marshal(message)
+	msgBytes, err := h.buildOutgoingMessage("projectile:spawn", data)
 	if err != nil {
-		log.Printf("Error marshaling projectile:spawn message: %v", err)
+		log.Printf("Error building projectile:spawn message: %v", err)
 		return
 	}
 

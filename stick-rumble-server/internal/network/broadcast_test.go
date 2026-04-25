@@ -129,6 +129,7 @@ func TestBroadcastProjectileSpawn(t *testing.T) {
 	require.NoError(t, err, "Should receive projectile:spawn")
 
 	assert.Equal(t, "projectile:spawn", msg.Type)
+	assert.Positive(t, msg.Timestamp, "projectile:spawn should use the outgoing message builder timestamp")
 
 	data, ok := msg.Data.(map[string]interface{})
 	require.True(t, ok)
