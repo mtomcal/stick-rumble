@@ -36,6 +36,7 @@ type WebSocketHandler struct {
 	timerInterval     time.Duration // Interval for match timer broadcasts (default 1s)
 	validator         *SchemaValidator
 	outgoingValidator *SchemaValidator
+	outgoingMessages  *outgoingMessageBuilder
 	networkSimulator  *NetworkSimulator // For artificial latency testing (Story 4.6)
 	deltaTracker      *DeltaTracker     // For delta compression (Story 4.4)
 }
@@ -70,6 +71,7 @@ func NewWebSocketHandlerWithConfig(timerInterval time.Duration) *WebSocketHandle
 		networkSimulator:  networkSimulator,
 		deltaTracker:      NewDeltaTracker(),
 	}
+	handler.outgoingMessages = newOutgoingMessageBuilder(handler.outgoingValidator, time.Now)
 
 	// Create game server with broadcast function
 	handler.gameServer = game.NewGameServer(handler.broadcastPlayerStates)
@@ -158,7 +160,11 @@ func StopGlobalHandler() {
 // Only validates when ENABLE_SCHEMA_VALIDATION environment variable is set to "true"
 // Returns nil if validation passes or is disabled, error if validation fails
 func (h *WebSocketHandler) validateOutgoingMessage(messageType string, data interface{}) (err error) {
-	return newOutgoingMessageBuilder(h.outgoingValidator, time.Now).Validate(messageType, data)
+	return h.outgoingMessages.Validate(messageType, data)
+}
+
+func (h *WebSocketHandler) buildOutgoingMessage(messageType string, data interface{}) ([]byte, error) {
+	return h.outgoingMessages.Build(messageType, data)
 }
 
 // HandleWebSocket upgrades HTTP connection to WebSocket and manages message loop

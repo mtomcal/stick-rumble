@@ -403,20 +403,9 @@ func (h *WebSocketHandler) sendShootFailed(playerID string, reason string) {
 		"reason": reason,
 	}
 
-	// Validate outgoing message schema (development mode only)
-	if err := h.validateOutgoingMessage("shoot:failed", data); err != nil {
-		log.Printf("Schema validation failed for shoot:failed: %v", err)
-	}
-
-	message := Message{
-		Type:      "shoot:failed",
-		Timestamp: 0,
-		Data:      data,
-	}
-
-	msgBytes, err := json.Marshal(message)
+	msgBytes, err := h.buildOutgoingMessage("shoot:failed", data)
 	if err != nil {
-		log.Printf("Error marshaling shoot:failed message: %v", err)
+		log.Printf("Error building shoot:failed message: %v", err)
 		return
 	}
 

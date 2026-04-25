@@ -333,6 +333,7 @@ func TestBroadcastShootFailed(t *testing.T) {
 	// Player 1 should receive shoot:failed
 	msg, err := readMessageOfType(t, conn1, "shoot:failed", 2*time.Second)
 	require.NoError(t, err, "Should receive shoot:failed")
+	assert.Positive(t, msg.Timestamp, "shoot:failed should use the outgoing message builder timestamp")
 
 	data, ok := msg.Data.(map[string]interface{})
 	require.True(t, ok)
