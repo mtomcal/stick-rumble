@@ -3,10 +3,8 @@ package network
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -160,34 +158,7 @@ func StopGlobalHandler() {
 // Only validates when ENABLE_SCHEMA_VALIDATION environment variable is set to "true"
 // Returns nil if validation passes or is disabled, error if validation fails
 func (h *WebSocketHandler) validateOutgoingMessage(messageType string, data interface{}) (err error) {
-	// Check if schema validation is enabled (development mode only)
-	if !config.Load().EnableSchemaValidation {
-		return nil // Skip validation in production
-	}
-
-	// Recover from any panics in the validator library (e.g., NaN values)
-	defer func() {
-		if r := recover(); r != nil {
-			log.Printf("Schema validator panicked for %s: %v", messageType, r)
-			err = fmt.Errorf("validator panic: %v", r)
-		}
-	}()
-
-	// Map message type to schema name (message:type_subtype → message-type-subtype-data)
-	// Server-to-client schemas follow the pattern: {message-type}-data.json
-	// Replace colons and underscores with hyphens to match filename convention
-	schemaName := strings.ReplaceAll(messageType, ":", "-")
-	schemaName = strings.ReplaceAll(schemaName, "_", "-")
-	schemaName = schemaName + "-data"
-
-	// Validate the data against the schema
-	err = h.outgoingValidator.Validate(schemaName, data)
-	if err != nil {
-		log.Printf("Outgoing message validation failed for %s: %v", messageType, err)
-		return err
-	}
-
-	return nil
+	return newOutgoingMessageBuilder(h.outgoingValidator, time.Now).Validate(messageType, data)
 }
 
 // HandleWebSocket upgrades HTTP connection to WebSocket and manages message loop
