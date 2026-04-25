@@ -1,6 +1,6 @@
 # Messages
 
-> **Spec Version**: 1.5.1
+> **Spec Version**: 1.5.2
 > **Last Updated**: 2026-04-25
 > **Depends On**: [constants.md](constants.md), [player.md](player.md)
 > **Depended By**: [networking.md](networking.md), [rooms.md](rooms.md), [weapons.md](weapons.md), [shooting.md](shooting.md), [melee.md](melee.md), [hit-detection.md](hit-detection.md), [match.md](match.md), [client-architecture.md](client-architecture.md), [server-architecture.md](server-architecture.md)
@@ -1255,7 +1255,7 @@ interface PlayerDamagedData {
 
 **Go:**
 
-> **Note:** No shared struct. The projectile hit path (`onHit` in `message_processor.go:112-117`) constructs the map inline with `projectileId`. The melee path (`broadcastPlayerDamaged` in `broadcast_helper.go:669-674`) omits `projectileId` entirely.
+> **Note:** Server-side message construction is centralized by the outgoing message module. Projectile damage uses the projectile ID. Melee damage uses `"melee"` as the `projectileId` sentinel so all `player:damaged` messages satisfy the same schema shape.
 
 ```go
 // Projectile hit path (message_processor.go:112-117):

@@ -1,10 +1,8 @@
 package network
 
 import (
-	"encoding/json"
 	"log"
 	"math"
-	"time"
 
 	"github.com/mtomcal/stick-rumble-server/internal/game"
 )
@@ -28,15 +26,9 @@ func (h *WebSocketHandler) sendRoomFullError(player *game.Player, code string) {
 }
 
 func (h *WebSocketHandler) sendDirectMessage(player *game.Player, messageType string, data map[string]any) {
-	message := Message{
-		Type:      messageType,
-		Timestamp: time.Now().UnixMilli(),
-		Data:      data,
-	}
-
-	msgBytes, err := json.Marshal(message)
+	msgBytes, err := h.buildOutgoingMessage(messageType, data)
 	if err != nil {
-		log.Printf("Error marshaling %s message: %v", messageType, err)
+		log.Printf("Error building %s message: %v", messageType, err)
 		return
 	}
 
@@ -156,21 +148,9 @@ func (h *WebSocketHandler) onHit(hit game.HitEvent) {
 		"projectileId": hit.ProjectileID,
 	}
 
-	// Validate outgoing message schema (development mode only)
-	if err := h.validateOutgoingMessage("player:damaged", damagedData); err != nil {
-		log.Printf("Schema validation failed for player:damaged: %v", err)
-	}
-
-	// Broadcast player:damaged to all players in the room
-	damagedMessage := Message{
-		Type:      "player:damaged",
-		Timestamp: 0,
-		Data:      damagedData,
-	}
-
-	msgBytes, err := json.Marshal(damagedMessage)
+	msgBytes, err := h.buildOutgoingMessage("player:damaged", damagedData)
 	if err != nil {
-		log.Printf("Error marshaling player:damaged message: %v", err)
+		log.Printf("Error building player:damaged message: %v", err)
 		return
 	}
 
@@ -187,21 +167,9 @@ func (h *WebSocketHandler) onHit(hit game.HitEvent) {
 		"projectileId": hit.ProjectileID,
 	}
 
-	// Validate outgoing message schema (development mode only)
-	if err := h.validateOutgoingMessage("hit:confirmed", hitConfirmedData); err != nil {
-		log.Printf("Schema validation failed for hit:confirmed: %v", err)
-	}
-
-	// Send hit confirmation to the attacker
-	hitConfirmedMessage := Message{
-		Type:      "hit:confirmed",
-		Timestamp: 0,
-		Data:      hitConfirmedData,
-	}
-
-	confirmBytes, err := json.Marshal(hitConfirmedMessage)
+	confirmBytes, err := h.buildOutgoingMessage("hit:confirmed", hitConfirmedData)
 	if err != nil {
-		log.Printf("Error marshaling hit:confirmed message: %v", err)
+		log.Printf("Error building hit:confirmed message: %v", err)
 		return
 	}
 
@@ -231,20 +199,9 @@ func (h *WebSocketHandler) onHit(hit game.HitEvent) {
 			"attackerId": hit.AttackerID,
 		}
 
-		// Validate outgoing message schema (development mode only)
-		if err := h.validateOutgoingMessage("player:death", deathData); err != nil {
-			log.Printf("Schema validation failed for player:death: %v", err)
-		}
-
-		deathMessage := Message{
-			Type:      "player:death",
-			Timestamp: 0,
-			Data:      deathData,
-		}
-
-		deathBytes, err := json.Marshal(deathMessage)
+		deathBytes, err := h.buildOutgoingMessage("player:death", deathData)
 		if err != nil {
-			log.Printf("Error marshaling player:death message: %v", err)
+			log.Printf("Error building player:death message: %v", err)
 			return
 		}
 
@@ -266,21 +223,9 @@ func (h *WebSocketHandler) onHit(hit game.HitEvent) {
 			"killerXP":    killerXP,
 		}
 
-		// Validate outgoing message schema (development mode only)
-		if err := h.validateOutgoingMessage("player:kill_credit", killCreditData); err != nil {
-			log.Printf("Schema validation failed for player:kill_credit: %v", err)
-		}
-
-		// Broadcast kill credit with updated stats
-		killCreditMessage := Message{
-			Type:      "player:kill_credit",
-			Timestamp: 0,
-			Data:      killCreditData,
-		}
-
-		creditBytes, err := json.Marshal(killCreditMessage)
+		creditBytes, err := h.buildOutgoingMessage("player:kill_credit", killCreditData)
 		if err != nil {
-			log.Printf("Error marshaling player:kill_credit message: %v", err)
+			log.Printf("Error building player:kill_credit message: %v", err)
 			return
 		}
 
@@ -310,21 +255,9 @@ func (h *WebSocketHandler) onRespawn(playerID string, position game.Vector2) {
 		"health":   game.PlayerMaxHealth,
 	}
 
-	// Validate outgoing message schema (development mode only)
-	if err := h.validateOutgoingMessage("player:respawn", respawnData); err != nil {
-		log.Printf("Schema validation failed for player:respawn: %v", err)
-	}
-
-	// Create player:respawn message
-	respawnMessage := Message{
-		Type:      "player:respawn",
-		Timestamp: 0,
-		Data:      respawnData,
-	}
-
-	msgBytes, err := json.Marshal(respawnMessage)
+	msgBytes, err := h.buildOutgoingMessage("player:respawn", respawnData)
 	if err != nil {
-		log.Printf("Error marshaling player:respawn message: %v", err)
+		log.Printf("Error building player:respawn message: %v", err)
 		return
 	}
 

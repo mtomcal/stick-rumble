@@ -1,7 +1,6 @@
 package network
 
 import (
-	"encoding/json"
 	"log"
 	"math"
 	"time"
@@ -107,10 +106,11 @@ func (h *WebSocketHandler) sendSnapshot(clientID string, playerStates []game.Pla
 	projectileSnapshots := make([]map[string]interface{}, len(projectiles))
 	for i, proj := range projectiles {
 		projectileSnapshots[i] = map[string]interface{}{
-			"id":       proj.ID,
-			"ownerId":  proj.OwnerID,
-			"position": proj.Position,
-			"velocity": proj.Velocity,
+			"id":         proj.ID,
+			"ownerId":    proj.OwnerID,
+			"weaponType": proj.WeaponType,
+			"position":   proj.Position,
+			"velocity":   proj.Velocity,
 		}
 	}
 
@@ -155,20 +155,9 @@ func (h *WebSocketHandler) sendSnapshot(clientID string, playerStates []game.Pla
 		data["correctedPlayers"] = correctedPlayers
 	}
 
-	// Validate outgoing message schema (development mode only)
-	if err := h.validateOutgoingMessage("state:snapshot", data); err != nil {
-		log.Printf("Schema validation failed for state:snapshot: %v", err)
-	}
-
-	message := Message{
-		Type:      "state:snapshot",
-		Timestamp: time.Now().UnixMilli(),
-		Data:      data,
-	}
-
-	msgBytes, err := json.Marshal(message)
+	msgBytes, err := h.buildOutgoingMessage("state:snapshot", data)
 	if err != nil {
-		log.Printf("Error marshaling state:snapshot message: %v", err)
+		log.Printf("Error building state:snapshot message: %v", err)
 		return
 	}
 
@@ -218,10 +207,11 @@ func (h *WebSocketHandler) sendDelta(clientID string, playerStates []game.Player
 		projSnapshots := make([]map[string]interface{}, len(projectilesAdded))
 		for i, proj := range projectilesAdded {
 			projSnapshots[i] = map[string]interface{}{
-				"id":       proj.ID,
-				"ownerId":  proj.OwnerID,
-				"position": proj.Position,
-				"velocity": proj.Velocity,
+				"id":         proj.ID,
+				"ownerId":    proj.OwnerID,
+				"weaponType": proj.WeaponType,
+				"position":   proj.Position,
+				"velocity":   proj.Velocity,
 			}
 		}
 		data["projectilesAdded"] = projSnapshots
@@ -237,20 +227,9 @@ func (h *WebSocketHandler) sendDelta(clientID string, playerStates []game.Player
 		data["correctedPlayers"] = correctedPlayers
 	}
 
-	// Validate outgoing message schema (development mode only)
-	if err := h.validateOutgoingMessage("state:delta", data); err != nil {
-		log.Printf("Schema validation failed for state:delta: %v", err)
-	}
-
-	message := Message{
-		Type:      "state:delta",
-		Timestamp: time.Now().UnixMilli(),
-		Data:      data,
-	}
-
-	msgBytes, err := json.Marshal(message)
+	msgBytes, err := h.buildOutgoingMessage("state:delta", data)
 	if err != nil {
-		log.Printf("Error marshaling state:delta message: %v", err)
+		log.Printf("Error building state:delta message: %v", err)
 		return
 	}
 
@@ -432,20 +411,9 @@ func (h *WebSocketHandler) broadcastWeaponPickup(playerID, crateID, weaponType s
 		"nextRespawnTime": respawnTime.Unix(),
 	}
 
-	// Validate outgoing message schema (development mode only)
-	if err := h.validateOutgoingMessage("weapon:pickup_confirmed", data); err != nil {
-		log.Printf("Schema validation failed for weapon:pickup_confirmed: %v", err)
-	}
-
-	message := Message{
-		Type:      "weapon:pickup_confirmed",
-		Timestamp: time.Now().UnixMilli(),
-		Data:      data,
-	}
-
-	msgBytes, err := json.Marshal(message)
+	msgBytes, err := h.buildOutgoingMessage("weapon:pickup_confirmed", data)
 	if err != nil {
-		log.Printf("Error marshaling weapon:pickup_confirmed message: %v", err)
+		log.Printf("Error building weapon:pickup_confirmed message: %v", err)
 		return
 	}
 
@@ -462,20 +430,9 @@ func (h *WebSocketHandler) broadcastWeaponRespawn(crate *game.WeaponCrate) {
 		"position":   crate.Position,
 	}
 
-	// Validate outgoing message schema (development mode only)
-	if err := h.validateOutgoingMessage("weapon:respawned", data); err != nil {
-		log.Printf("Schema validation failed for weapon:respawned: %v", err)
-	}
-
-	message := Message{
-		Type:      "weapon:respawned",
-		Timestamp: time.Now().UnixMilli(),
-		Data:      data,
-	}
-
-	msgBytes, err := json.Marshal(message)
+	msgBytes, err := h.buildOutgoingMessage("weapon:respawned", data)
 	if err != nil {
-		log.Printf("Error marshaling weapon:respawned message: %v", err)
+		log.Printf("Error building weapon:respawned message: %v", err)
 		return
 	}
 
@@ -505,21 +462,9 @@ func (h *WebSocketHandler) sendWeaponSpawns(playerID string) {
 		"crates": crates,
 	}
 
-	// Validate outgoing message schema (development mode only)
-	if err := h.validateOutgoingMessage("weapon:spawned", data); err != nil {
-		log.Printf("Schema validation failed for weapon:spawned: %v", err)
-	}
-
-	// Create weapon:spawned message
-	message := Message{
-		Type:      "weapon:spawned",
-		Timestamp: time.Now().UnixMilli(),
-		Data:      data,
-	}
-
-	msgBytes, err := json.Marshal(message)
+	msgBytes, err := h.buildOutgoingMessage("weapon:spawned", data)
 	if err != nil {
-		log.Printf("Error marshaling weapon:spawned message: %v", err)
+		log.Printf("Error building weapon:spawned message: %v", err)
 		return
 	}
 
@@ -550,20 +495,9 @@ func (h *WebSocketHandler) broadcastRollStart(playerID string, direction game.Ve
 		"rollStartTime": rollStartTime.UnixMilli(),
 	}
 
-	// Validate outgoing message schema (development mode only)
-	if err := h.validateOutgoingMessage("roll:start", data); err != nil {
-		log.Printf("Schema validation failed for roll:start: %v", err)
-	}
-
-	message := Message{
-		Type:      "roll:start",
-		Timestamp: time.Now().UnixMilli(),
-		Data:      data,
-	}
-
-	msgBytes, err := json.Marshal(message)
+	msgBytes, err := h.buildOutgoingMessage("roll:start", data)
 	if err != nil {
-		log.Printf("Error marshaling roll:start message: %v", err)
+		log.Printf("Error building roll:start message: %v", err)
 		return
 	}
 
@@ -583,20 +517,9 @@ func (h *WebSocketHandler) broadcastMeleeHit(attackerID string, victimIDs []stri
 		"knockbackApplied": knockbackApplied,
 	}
 
-	// Validate outgoing message schema (development mode only)
-	if err := h.validateOutgoingMessage("melee:hit", data); err != nil {
-		log.Printf("Schema validation failed for melee:hit: %v", err)
-	}
-
-	message := Message{
-		Type:      "melee:hit",
-		Timestamp: time.Now().UnixMilli(),
-		Data:      data,
-	}
-
-	msgBytes, err := json.Marshal(message)
+	msgBytes, err := h.buildOutgoingMessage("melee:hit", data)
 	if err != nil {
-		log.Printf("Error marshaling melee:hit message: %v", err)
+		log.Printf("Error building melee:hit message: %v", err)
 		return
 	}
 
@@ -611,26 +534,16 @@ func (h *WebSocketHandler) broadcastMeleeHit(attackerID string, victimIDs []stri
 func (h *WebSocketHandler) broadcastPlayerDamaged(attackerID, victimID string, damage, newHealth int) {
 	// Create player:damaged message data
 	data := map[string]interface{}{
-		"victimId":   victimID,
-		"attackerId": attackerID,
-		"damage":     damage,
-		"newHealth":  newHealth,
+		"victimId":     victimID,
+		"attackerId":   attackerID,
+		"damage":       damage,
+		"newHealth":    newHealth,
+		"projectileId": "melee",
 	}
 
-	// Validate outgoing message schema (development mode only)
-	if err := h.validateOutgoingMessage("player:damaged", data); err != nil {
-		log.Printf("Schema validation failed for player:damaged: %v", err)
-	}
-
-	message := Message{
-		Type:      "player:damaged",
-		Timestamp: time.Now().UnixMilli(),
-		Data:      data,
-	}
-
-	msgBytes, err := json.Marshal(message)
+	msgBytes, err := h.buildOutgoingMessage("player:damaged", data)
 	if err != nil {
-		log.Printf("Error marshaling player:damaged message: %v", err)
+		log.Printf("Error building player:damaged message: %v", err)
 		return
 	}
 
@@ -664,20 +577,9 @@ func (h *WebSocketHandler) processMeleeKill(attackerID, victimID string) {
 		"attackerId": attackerID,
 	}
 
-	// Validate outgoing message schema (development mode only)
-	if err := h.validateOutgoingMessage("player:death", deathData); err != nil {
-		log.Printf("Schema validation failed for player:death: %v", err)
-	}
-
-	deathMessage := Message{
-		Type:      "player:death",
-		Timestamp: time.Now().UnixMilli(),
-		Data:      deathData,
-	}
-
-	deathBytes, err := json.Marshal(deathMessage)
+	deathBytes, err := h.buildOutgoingMessage("player:death", deathData)
 	if err != nil {
-		log.Printf("Error marshaling player:death message: %v", err)
+		log.Printf("Error building player:death message: %v", err)
 		return
 	}
 
@@ -699,21 +601,9 @@ func (h *WebSocketHandler) processMeleeKill(attackerID, victimID string) {
 		killCreditData["killerXP"] = attacker.XP
 	}
 
-	// Validate outgoing message schema (development mode only)
-	if err := h.validateOutgoingMessage("player:kill_credit", killCreditData); err != nil {
-		log.Printf("Schema validation failed for player:kill_credit: %v", err)
-	}
-
-	// Broadcast kill credit
-	killCreditMessage := Message{
-		Type:      "player:kill_credit",
-		Timestamp: time.Now().UnixMilli(),
-		Data:      killCreditData,
-	}
-
-	creditBytes, err := json.Marshal(killCreditMessage)
+	creditBytes, err := h.buildOutgoingMessage("player:kill_credit", killCreditData)
 	if err != nil {
-		log.Printf("Error marshaling player:kill_credit message: %v", err)
+		log.Printf("Error building player:kill_credit message: %v", err)
 		return
 	}
 
@@ -740,20 +630,9 @@ func (h *WebSocketHandler) broadcastRollEnd(playerID string, reason string) {
 		"reason":   reason,
 	}
 
-	// Validate outgoing message schema (development mode only)
-	if err := h.validateOutgoingMessage("roll:end", data); err != nil {
-		log.Printf("Schema validation failed for roll:end: %v", err)
-	}
-
-	message := Message{
-		Type:      "roll:end",
-		Timestamp: time.Now().UnixMilli(),
-		Data:      data,
-	}
-
-	msgBytes, err := json.Marshal(message)
+	msgBytes, err := h.buildOutgoingMessage("roll:end", data)
 	if err != nil {
-		log.Printf("Error marshaling roll:end message: %v", err)
+		log.Printf("Error building roll:end message: %v", err)
 		return
 	}
 

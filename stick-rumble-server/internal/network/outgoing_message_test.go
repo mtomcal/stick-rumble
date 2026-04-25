@@ -2,6 +2,7 @@ package network
 
 import (
 	"encoding/json"
+	"os"
 	"testing"
 	"time"
 
@@ -44,4 +45,13 @@ func TestOutgoingMessageBuilderRejectsUnmarshalablePayload(t *testing.T) {
 	})
 
 	assert.Error(t, err)
+}
+
+func TestOutgoingMessageCallSitesUseBuilder(t *testing.T) {
+	for _, fileName := range []string{"broadcast_helper.go", "message_processor.go"} {
+		source, err := os.ReadFile(fileName)
+		require.NoError(t, err)
+
+		assert.NotContains(t, string(source), "validateOutgoingMessage(")
+	}
 }
