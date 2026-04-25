@@ -229,6 +229,38 @@ func TestBroadcastPlayerDeath(t *testing.T) {
 	conn2.Close()
 }
 
+func TestOnHitAppliesProjectileHitOutcome(t *testing.T) {
+	ts := newTestServer()
+	defer ts.Close()
+
+	conn1, conn2 := ts.connectTwoClients(t)
+	defer conn1.Close()
+	defer conn2.Close()
+
+	attackerID := consumeRoomJoinedAndGetPlayerID(t, conn1)
+	victimID := consumeRoomJoinedAndGetPlayerID(t, conn2)
+
+	weaponState := ts.handler.gameServer.GetWeaponState(attackerID)
+	require.NotNil(t, weaponState)
+	ts.handler.gameServer.DamagePlayer(victimID, game.PlayerMaxHealth-weaponState.Weapon.Damage)
+
+	ts.handler.onHit(game.HitEvent{
+		VictimID:     victimID,
+		AttackerID:   attackerID,
+		ProjectileID: "lethal-projectile",
+	})
+
+	victim, exists := ts.handler.gameServer.GetPlayerState(victimID)
+	require.True(t, exists)
+	assert.Equal(t, 0, victim.Health)
+	assert.Equal(t, 1, victim.Deaths)
+
+	attacker, exists := ts.handler.gameServer.GetPlayerState(attackerID)
+	require.True(t, exists)
+	assert.Equal(t, 1, attacker.Kills)
+	assert.Equal(t, game.KillXPReward, attacker.XP)
+}
+
 func TestBroadcastKillCredit(t *testing.T) {
 	ts := newTestServer()
 	defer ts.Close()

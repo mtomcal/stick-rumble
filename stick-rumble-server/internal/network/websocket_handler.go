@@ -79,8 +79,8 @@ func NewWebSocketHandlerWithConfig(timerInterval time.Duration) *WebSocketHandle
 	// Register callback for reload completion to notify clients
 	handler.gameServer.SetOnReloadComplete(handler.onReloadComplete)
 
-	// Register callback for hit events
-	handler.gameServer.SetOnHit(handler.onHit)
+	// Register callback for hit events after authoritative damage/stat processing
+	handler.gameServer.SetOnProjectileHitOutcome(handler.publishProjectileHitOutcome)
 
 	// Register callback for respawn events
 	handler.gameServer.SetOnRespawn(handler.onRespawn)

@@ -125,27 +125,22 @@ func (h *WebSocketHandler) onReloadComplete(playerID string) {
 
 // onHit is called when a projectile hits a player
 func (h *WebSocketHandler) onHit(hit game.HitEvent) {
-	// Get victim's current state (including updated health)
-	victimState, victimExists := h.gameServer.GetPlayerState(hit.VictimID)
-	if !victimExists {
+	outcome, ok := h.gameServer.ProcessProjectileHit(hit)
+	if !ok {
 		return
 	}
 
-	// Get attacker's weapon to determine damage dealt
-	attackerWeapon := h.gameServer.GetWeaponState(hit.AttackerID)
-	if attackerWeapon == nil {
-		return
-	}
+	h.publishProjectileHitOutcome(outcome)
+}
 
-	damage := attackerWeapon.Weapon.Damage
-
+func (h *WebSocketHandler) publishProjectileHitOutcome(outcome game.ProjectileHitOutcome) {
 	// Create player:damaged message data
 	damagedData := map[string]interface{}{
-		"victimId":     hit.VictimID,
-		"attackerId":   hit.AttackerID,
-		"damage":       damage,
-		"newHealth":    victimState.Health,
-		"projectileId": hit.ProjectileID,
+		"victimId":     outcome.Hit.VictimID,
+		"attackerId":   outcome.Hit.AttackerID,
+		"damage":       outcome.Damage,
+		"newHealth":    outcome.NewHealth,
+		"projectileId": outcome.Hit.ProjectileID,
 	}
 
 	msgBytes, err := h.buildOutgoingMessage("player:damaged", damagedData)
@@ -155,16 +150,16 @@ func (h *WebSocketHandler) onHit(hit game.HitEvent) {
 	}
 
 	// Broadcast to all players in the room
-	room := h.roomManager.GetRoomByPlayerID(hit.VictimID)
+	room := h.roomManager.GetRoomByPlayerID(outcome.Hit.VictimID)
 	if room != nil {
 		room.Broadcast(msgBytes, "")
 	}
 
 	// Create hit:confirmed message data
 	hitConfirmedData := map[string]interface{}{
-		"victimId":     hit.VictimID,
-		"damage":       damage,
-		"projectileId": hit.ProjectileID,
+		"victimId":     outcome.Hit.VictimID,
+		"damage":       outcome.Damage,
+		"projectileId": outcome.Hit.ProjectileID,
 	}
 
 	confirmBytes, err := h.buildOutgoingMessage("hit:confirmed", hitConfirmedData)
@@ -173,30 +168,14 @@ func (h *WebSocketHandler) onHit(hit game.HitEvent) {
 		return
 	}
 
-	h.roomManager.SendToPlayer(hit.AttackerID, confirmBytes)
+	h.roomManager.SendToPlayer(outcome.Hit.AttackerID, confirmBytes)
 
 	// If victim died, mark as dead and broadcast player:death
-	if victimState.Health <= 0 {
-		// Mark player as dead
-		h.gameServer.MarkPlayerDead(hit.VictimID)
-
-		// Update stats: increment attacker kills and victim deaths
-		// NOTE: Must use GetWorld().GetPlayer() to get pointer, not GetPlayerState() which returns a copy!
-		attacker, attackerExists := h.gameServer.GetWorld().GetPlayer(hit.AttackerID)
-		if attackerExists && attacker != nil {
-			attacker.IncrementKills()
-			attacker.AddXP(game.KillXPReward)
-		}
-		// victimState is already a pointer from earlier in this function
-		victim, victimExists := h.gameServer.GetWorld().GetPlayer(hit.VictimID)
-		if victimExists && victim != nil {
-			victim.IncrementDeaths()
-		}
-
+	if outcome.Killed {
 		// Create player:death message data
 		deathData := map[string]interface{}{
-			"victimId":   hit.VictimID,
-			"attackerId": hit.AttackerID,
+			"victimId":   outcome.Hit.VictimID,
+			"attackerId": outcome.Hit.AttackerID,
 		}
 
 		deathBytes, err := h.buildOutgoingMessage("player:death", deathData)
@@ -210,17 +189,11 @@ func (h *WebSocketHandler) onHit(hit game.HitEvent) {
 		}
 
 		// Create player:kill_credit message data
-		killerKills := 0
-		killerXP := 0
-		if attacker != nil {
-			killerKills = attacker.Kills
-			killerXP = attacker.XP
-		}
 		killCreditData := map[string]interface{}{
-			"killerId":    hit.AttackerID,
-			"victimId":    hit.VictimID,
-			"killerKills": killerKills,
-			"killerXP":    killerXP,
+			"killerId":    outcome.Hit.AttackerID,
+			"victimId":    outcome.Hit.VictimID,
+			"killerKills": outcome.KillerKills,
+			"killerXP":    outcome.KillerXP,
 		}
 
 		creditBytes, err := h.buildOutgoingMessage("player:kill_credit", killCreditData)
@@ -233,7 +206,7 @@ func (h *WebSocketHandler) onHit(hit game.HitEvent) {
 			room.Broadcast(creditBytes, "")
 
 			// Track kill in match and check win conditions
-			room.Match.AddKill(hit.AttackerID)
+			room.Match.AddKill(outcome.Hit.AttackerID)
 
 			// Check if kill target reached
 			if room.Match.CheckKillTarget() {

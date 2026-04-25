@@ -46,6 +46,9 @@ type GameServer struct {
 	// Callback for when a projectile hits a player
 	onHit func(hit HitEvent)
 
+	// Callback for when projectile hit effects have been applied
+	onProjectileHitOutcome func(outcome ProjectileHitOutcome)
+
 	// Callback to get a player's RTT for lag compensation
 	getRTT func(playerID string) int64
 
@@ -545,6 +548,10 @@ func (gs *GameServer) SetOnHit(callback func(hit HitEvent)) {
 	gs.onHit = callback
 }
 
+func (gs *GameServer) SetOnProjectileHitOutcome(callback func(outcome ProjectileHitOutcome)) {
+	gs.onProjectileHitOutcome = callback
+}
+
 // SetOnRespawn sets the callback for when a player respawns
 func (gs *GameServer) SetOnRespawn(callback func(playerID string, position Vector2)) {
 	gs.onRespawn = callback
@@ -614,32 +621,15 @@ func (gs *GameServer) checkHitDetection() {
 	// Check for collisions
 	hits := gs.physics.CheckAllProjectileCollisions(projectiles, players)
 
-	// Process each hit
 	for _, hit := range hits {
-		// Get the attacker's weapon to determine damage
-		gs.weaponMu.RLock()
-		weaponState := gs.weaponStates[hit.AttackerID]
-		gs.weaponMu.RUnlock()
-
-		if weaponState == nil {
+		outcome, ok := gs.ProcessProjectileHit(hit)
+		if !ok {
 			continue
 		}
 
-		damage := weaponState.Weapon.Damage
-
-		// Apply damage to victim
-		victim, exists := gs.world.GetPlayer(hit.VictimID)
-		if !exists {
-			continue
-		}
-
-		victim.TakeDamage(damage)
-
-		// Deactivate the projectile
-		gs.projectileManager.RemoveProjectile(hit.ProjectileID)
-
-		// Notify via callback
-		if gs.onHit != nil {
+		if gs.onProjectileHitOutcome != nil {
+			gs.onProjectileHitOutcome(outcome)
+		} else if gs.onHit != nil {
 			gs.onHit(hit)
 		}
 	}
@@ -834,17 +824,19 @@ func (gs *GameServer) processHitscanShot(shooterID string, shooter *PlayerState,
 	}
 	gs.world.mu.RUnlock()
 
-	// Apply damage if hit
 	if hitVictim != nil {
-		hitVictim.TakeDamage(weapon.Damage)
-
-		// Notify via callback
-		if gs.onHit != nil {
-			gs.onHit(HitEvent{
-				ProjectileID: "", // No projectile for hitscan
-				AttackerID:   shooterID,
-				VictimID:     hitVictim.ID,
-			})
+		hit := HitEvent{
+			ProjectileID: "hitscan",
+			AttackerID:   shooterID,
+			VictimID:     hitVictim.ID,
+		}
+		outcome, ok := gs.ProcessProjectileHit(hit)
+		if ok {
+			if gs.onProjectileHitOutcome != nil {
+				gs.onProjectileHitOutcome(outcome)
+			} else if gs.onHit != nil {
+				gs.onHit(hit)
+			}
 		}
 	}
 
