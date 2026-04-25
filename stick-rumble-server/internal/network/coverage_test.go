@@ -43,6 +43,7 @@ func TestBroadcastMatchEnded(t *testing.T) {
 	msg, err := readMessageOfType(t, conn1, "match:ended", 2*time.Second)
 	require.NoError(t, err, "Should receive match:ended")
 	assert.Equal(t, "match:ended", msg.Type)
+	assert.Positive(t, msg.Timestamp, "match:ended should use the outgoing message builder timestamp")
 
 	// Verify message has expected fields
 	data, ok := msg.Data.(map[string]interface{})

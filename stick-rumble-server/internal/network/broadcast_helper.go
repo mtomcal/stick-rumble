@@ -411,21 +411,9 @@ func (h *WebSocketHandler) broadcastMatchEnded(room *game.Room, world *game.Worl
 		"reason":      room.Match.EndReason,
 	}
 
-	// Validate outgoing message schema (development mode only)
-	if err := h.validateOutgoingMessage("match:ended", data); err != nil {
-		log.Printf("Schema validation failed for match:ended: %v", err)
-	}
-
-	// Create match:ended message
-	message := Message{
-		Type:      "match:ended",
-		Timestamp: 0,
-		Data:      data,
-	}
-
-	msgBytes, err := json.Marshal(message)
+	msgBytes, err := h.buildOutgoingMessage("match:ended", data)
 	if err != nil {
-		log.Printf("Error marshaling match:ended message: %v", err)
+		log.Printf("Error building match:ended message: %v", err)
 		return
 	}
 
