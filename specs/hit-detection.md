@@ -1,7 +1,7 @@
 # Hit Detection
 
-> **Spec Version**: 1.3.2
-> **Last Updated**: 2026-04-22
+> **Spec Version**: 1.3.3
+> **Last Updated**: 2026-04-25
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [shooting.md](shooting.md), [arena.md](arena.md), [messages.md](messages.md)
 > **Depended By**: [match.md](match.md), [client-architecture.md](client-architecture.md), [server-architecture.md](server-architecture.md)
 
@@ -115,6 +115,35 @@ interface HitEvent {
   attackerId: string;   // Who fired the projectile
 }
 ```
+
+### ProjectileHitOutcome
+
+**Description**: Represents the authoritative result of applying one projectile hit to game state. Hit detection produces the collision event; the Combat outcome module applies damage, death, kill statistics, XP, and projectile removal, then returns the facts the network layer needs to publish messages.
+
+**Go:**
+```go
+type ProjectileHitOutcome struct {
+    Hit          HitEvent // Original collision fact
+    Damage       int      // Damage applied from attacker's current weapon
+    NewHealth    int      // Victim health after damage
+    Killed       bool     // True when this hit eliminated the victim
+    KillerKills  int      // Attacker kill count after this outcome, if killed
+    KillerXP     int      // Attacker XP after this outcome, if killed
+}
+```
+
+**Responsibilities:**
+- apply damage to the victim exactly once
+- remove the projectile that produced the hit
+- mark the victim dead when health reaches zero
+- increment victim deaths, attacker kills, and attacker XP for killing hits
+
+**Non-responsibilities:**
+- It does not choose WebSocket recipients or marshal messages.
+- It does not decide room membership.
+- It does not evaluate room-level match kill target or time limit rules.
+
+**Why this module exists:** Combat state mutation must remain server-authoritative and testable without WebSocket delivery. Keeping these effects behind one game-layer outcome makes damage, death, and kill-credit rules local while allowing the network layer to remain a publishing adapter.
 
 ### Player Hitbox
 
