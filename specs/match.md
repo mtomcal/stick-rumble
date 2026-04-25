@@ -1,7 +1,7 @@
 # Match System
 
-> **Spec Version**: 1.1.0
-> **Last Updated**: 2026-04-17
+> **Spec Version**: 1.2.0
+> **Last Updated**: 2026-04-25
 > **Depends On**: [constants.md](constants.md), [rooms.md](rooms.md), [player.md](player.md), [messages.md](messages.md)
 > **Depended By**: [test-index.md](test-index.md)
 
@@ -12,6 +12,8 @@
 The match system manages the lifecycle of competitive gameplay within a room. A match tracks win conditions, maintains a countdown timer, records kill statistics, determines winners, and broadcasts final scores when the match concludes.
 
 **WHY**: Matches provide structure and competition. Without win conditions, the game would be an endless sandbox. The match system creates stakes and clear goals, driving player engagement.
+
+The authoritative runtime owns the decision that a room timer tick or match end occurred. Transport code may publish those outcomes, but it must not be the first layer to infer them from shared mutable state.
 
 ---
 
@@ -258,6 +260,24 @@ func (m *Match) Start() {
 - Room might call Start() multiple times if players join rapidly
 - Prevents timer reset if match already running
 - First StartTime is authoritative
+
+### Authoritative Match Outcomes
+
+For every active room, the authoritative runtime must emit room-scoped match outcomes that external adapters can consume without re-deriving match state.
+
+Required emitted outcomes:
+- timer tick outcome with room identity and remaining seconds
+- match ended outcome with room identity, end reason, winners, and final scores
+
+Required timing behavior:
+- timer outcomes are emitted at the configured timer cadence only for active, non-ended matches
+- when the time limit is reached, the runtime ends the match authoritatively and emits the terminal match-ended outcome
+- kill-target endings and time-limit endings use the same match-ended outcome shape
+
+**WHY emit timer and end outcomes from the authoritative runtime**:
+- room-scoped match ownership stays near the state machine that decides wins and losses
+- network code does not need to duplicate time-limit checks
+- tests can assert match behavior through domain outcomes without transport knowledge
 
 ---
 

@@ -39,33 +39,10 @@ type GameServer struct {
 
 	// Broadcast function to send state updates to clients
 	broadcastFunc func(playerStates []PlayerStateSnapshot)
-
-	// Callback for when a player's reload completes
-	onReloadComplete func(playerID string)
-
-	// Callback for when a projectile hits a player
-	onHit func(hit HitEvent)
+	eventSink     GameLoopEventSink
 
 	// Callback to get a player's RTT for lag compensation
 	getRTT func(playerID string) int64
-
-	// Callback for when a player respawns
-	onRespawn func(playerID string, position Vector2)
-
-	// Callback for match timer updates
-	onMatchTimer func(roomID string, remainingSeconds int)
-
-	// Callback for checking time limit across all rooms
-	onCheckTimeLimit func()
-
-	// Callback for when a weapon is picked up
-	onWeaponPickup func(playerID, crateID, weaponType string, respawnTime time.Time)
-
-	// Callback for when a weapon crate respawns
-	onWeaponRespawn func(crate *WeaponCrate)
-
-	// Callback for when a player's dodge roll ends
-	onRollEnd func(playerID string, reason string)
 
 	running bool
 	mu      sync.RWMutex
@@ -79,6 +56,18 @@ func NewGameServer(broadcastFunc func(playerStates []PlayerStateSnapshot)) *Game
 
 // NewGameServerWithClock creates a new game server with a custom clock (for testing)
 func NewGameServerWithClock(broadcastFunc func(playerStates []PlayerStateSnapshot), clock Clock) *GameServer {
+	return NewGameServerWithConfig(GameServerConfig{
+		BroadcastFunc: broadcastFunc,
+		Clock:         clock,
+	})
+}
+
+func NewGameServerWithConfig(config GameServerConfig) *GameServer {
+	clock := config.Clock
+	if clock == nil {
+		clock = &RealClock{}
+	}
+
 	mapRegistry := MustDefaultMapRegistry()
 	mapConfig := mapRegistry.MustGet(DefaultMapID)
 
@@ -92,8 +81,10 @@ func NewGameServerWithClock(broadcastFunc func(playerStates []PlayerStateSnapsho
 		positionHistory:    NewPositionHistory(), // Initialize position history for lag compensation
 		tickRate:           time.Duration(ServerTickInterval) * time.Millisecond,
 		updateRate:         time.Duration(ClientUpdateInterval) * time.Millisecond,
-		broadcastFunc:      broadcastFunc,
+		broadcastFunc:      config.BroadcastFunc,
 		clock:              clock,
+		eventSink:          config.EventSink,
+		getRTT:             config.RTTProvider,
 		running:            false,
 	}
 }
@@ -212,9 +203,11 @@ func (gs *GameServer) updateAllPlayers(deltaTime float64) {
 	for _, player := range players {
 		result := gs.physics.UpdatePlayer(player, deltaTime)
 
-		// If roll was cancelled due to wall collision, notify via callback
-		if result.RollCancelled && gs.onRollEnd != nil {
-			gs.onRollEnd(player.ID, "wall_collision")
+		if result.RollCancelled {
+			gs.emitGameLoopEvent(RollEndedEvent{
+				PlayerID: player.ID,
+				Reason:   "wall_collision",
+			})
 		}
 
 		// Check if correction rate exceeds anti-cheat threshold
@@ -340,11 +333,6 @@ func (gs *GameServer) IsRunning() bool {
 // GetWorld returns the game world
 func (gs *GameServer) GetWorld() *World {
 	return gs.world
-}
-
-// SetOnReloadComplete sets the callback for when a player's reload completes
-func (gs *GameServer) SetOnReloadComplete(callback func(playerID string)) {
-	gs.onReloadComplete = callback
 }
 
 // GetWeaponState returns the weapon state for a player
@@ -527,10 +515,7 @@ func (gs *GameServer) checkReloads() {
 
 	for playerID, ws := range gs.weaponStates {
 		if ws.CheckReloadComplete() {
-			// Reload just completed - notify via callback
-			if gs.onReloadComplete != nil {
-				gs.onReloadComplete(playerID)
-			}
+			gs.emitGameLoopEvent(ReloadCompletedEvent{PlayerID: playerID})
 		}
 	}
 }
@@ -538,31 +523,6 @@ func (gs *GameServer) checkReloads() {
 // GetActiveProjectiles returns snapshots of all active projectiles
 func (gs *GameServer) GetActiveProjectiles() []ProjectileSnapshot {
 	return gs.projectileManager.GetProjectileSnapshots()
-}
-
-// SetOnHit sets the callback for when a projectile hits a player
-func (gs *GameServer) SetOnHit(callback func(hit HitEvent)) {
-	gs.onHit = callback
-}
-
-// SetOnRespawn sets the callback for when a player respawns
-func (gs *GameServer) SetOnRespawn(callback func(playerID string, position Vector2)) {
-	gs.onRespawn = callback
-}
-
-// SetOnWeaponPickup sets the callback for when a weapon is picked up
-func (gs *GameServer) SetOnWeaponPickup(callback func(playerID, crateID, weaponType string, respawnTime time.Time)) {
-	gs.onWeaponPickup = callback
-}
-
-// SetOnWeaponRespawn sets the callback for when a weapon crate respawns
-func (gs *GameServer) SetOnWeaponRespawn(callback func(crate *WeaponCrate)) {
-	gs.onWeaponRespawn = callback
-}
-
-// SetOnRollEnd sets the callback for when a player's dodge roll ends
-func (gs *GameServer) SetOnRollEnd(callback func(playerID string, reason string)) {
-	gs.onRollEnd = callback
 }
 
 // SetGetRTT sets the callback to retrieve a player's RTT for lag compensation
@@ -616,32 +576,12 @@ func (gs *GameServer) checkHitDetection() {
 
 	// Process each hit
 	for _, hit := range hits {
-		// Get the attacker's weapon to determine damage
-		gs.weaponMu.RLock()
-		weaponState := gs.weaponStates[hit.AttackerID]
-		gs.weaponMu.RUnlock()
-
-		if weaponState == nil {
+		outcome, ok := gs.ProcessProjectileHit(hit)
+		if !ok {
 			continue
 		}
 
-		damage := weaponState.Weapon.Damage
-
-		// Apply damage to victim
-		victim, exists := gs.world.GetPlayer(hit.VictimID)
-		if !exists {
-			continue
-		}
-
-		victim.TakeDamage(damage)
-
-		// Deactivate the projectile
-		gs.projectileManager.RemoveProjectile(hit.ProjectileID)
-
-		// Notify via callback
-		if gs.onHit != nil {
-			gs.onHit(hit)
-		}
+		gs.emitGameLoopEvent(ProjectileHitResolvedEvent{Outcome: outcome})
 	}
 
 	for _, proj := range gs.projectileManager.GetProjectilesForHitDetection() {
@@ -673,10 +613,10 @@ func (gs *GameServer) checkRollDuration() {
 			if timeSinceRollStart >= DodgeRollDuration {
 				player.EndDodgeRoll()
 
-				// Notify via callback
-				if gs.onRollEnd != nil {
-					gs.onRollEnd(player.ID, "completed")
-				}
+				gs.emitGameLoopEvent(RollEndedEvent{
+					PlayerID: player.ID,
+					Reason:   "completed",
+				})
 			}
 		}
 	}
@@ -705,10 +645,11 @@ func (gs *GameServer) checkRespawns() {
 			gs.weaponStates[player.ID] = NewWeaponStateWithClock(NewPistol(), gs.clock)
 			gs.weaponMu.Unlock()
 
-			// Notify via callback
-			if gs.onRespawn != nil {
-				gs.onRespawn(player.ID, spawnPos)
-			}
+			gs.emitGameLoopEvent(PlayerRespawnedEvent{
+				PlayerID:  player.ID,
+				Position:  spawnPos,
+				NewHealth: PlayerMaxHealth,
+			})
 		}
 	}
 }
@@ -759,8 +700,12 @@ func (gs *GameServer) checkWeaponRespawns() {
 	// Notify about each respawned crate
 	for _, crateID := range respawnedCrates {
 		crate := gs.weaponCrateManager.GetCrate(crateID)
-		if crate != nil && gs.onWeaponRespawn != nil {
-			gs.onWeaponRespawn(crate)
+		if crate != nil {
+			gs.emitGameLoopEvent(WeaponCrateRespawnedEvent{
+				CrateID:    crate.ID,
+				WeaponType: crate.WeaponType,
+				Position:   crate.Position,
+			})
 		}
 	}
 }
@@ -836,15 +781,14 @@ func (gs *GameServer) processHitscanShot(shooterID string, shooter *PlayerState,
 
 	// Apply damage if hit
 	if hitVictim != nil {
-		hitVictim.TakeDamage(weapon.Damage)
-
-		// Notify via callback
-		if gs.onHit != nil {
-			gs.onHit(HitEvent{
-				ProjectileID: "", // No projectile for hitscan
-				AttackerID:   shooterID,
-				VictimID:     hitVictim.ID,
-			})
+		hit := HitEvent{
+			ProjectileID: "hitscan",
+			AttackerID:   shooterID,
+			VictimID:     hitVictim.ID,
+		}
+		outcome, ok := gs.ProcessProjectileHit(hit)
+		if ok {
+			gs.emitGameLoopEvent(ProjectileHitResolvedEvent{Outcome: outcome})
 		}
 	}
 
@@ -852,6 +796,14 @@ func (gs *GameServer) processHitscanShot(shooterID string, shooter *PlayerState,
 		Success:    true,
 		Projectile: nil, // No projectile for hitscan
 	}
+}
+
+func (gs *GameServer) emitGameLoopEvent(event GameLoopEvent) {
+	if gs.eventSink == nil {
+		return
+	}
+
+	gs.eventSink.HandleGameLoopEvent(event)
 }
 
 // raycastHit checks if a ray from origin at angle hits a circular target
