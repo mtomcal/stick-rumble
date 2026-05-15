@@ -1,7 +1,7 @@
 # Client Architecture
 
-> **Spec Version**: 1.5.2
-> **Last Updated**: 2026-04-25
+> **Spec Version**: 1.5.3
+> **Last Updated**: 2026-05-15
 > **Depends On**: [constants.md](constants.md), [messages.md](messages.md), [networking.md](networking.md), [player.md](player.md), [movement.md](movement.md), [weapons.md](weapons.md), [maps.md](maps.md)
 > **Depended By**: [graphics.md](graphics.md), [ui.md](ui.md), [audio.md](audio.md)
 
@@ -80,14 +80,18 @@ See [constants.md](constants.md) for all values. Key constants for client archit
 **TypeScript:**
 ```typescript
 type AppSessionState =
-  | 'join_form'
+  | 'sign_in'               // Landing page with Google sign-in button
+  | 'join_form'             // Guest play — join without account
   | 'joining'
+  | 'display_name_picker'   // First-login name picker screen
   | 'searching_for_match'
   | 'waiting_for_players'
   | 'match_loading'
   | 'in_match'
   | 'match_end'
-  | 'recoverable_error';
+  | 'recoverable_error'
+  | 'lobby'                 // Pre-match lobby with stats summary
+  | 'profile';              // Full stats dashboard
 
 interface MatchSession {
   playerId: string;
@@ -97,12 +101,74 @@ interface MatchSession {
   mapId: string;
   code?: string;
 }
+
+### Session State Machine Flow
+
+The client manages a session state machine that governs page lifecycle from initial load through gameplay and post-match.
+
 ```
+Page load → check localStorage for token
+  ├── Token found, valid → show lobby
+  └── No token or expired → show sign_in screen
+       ├── User clicks "Sign in with Google" → Google OAuth flow
+       │   ├── Success, has displayName → lobby
+       │   └── Success, no displayName → display_name_picker → PUT name → lobby
+       └── User clicks "Play as Guest" → join_form
+
+From lobby:
+  ├── "Play Public" → joining → searching_for_match → match_loading → in_match
+  └── "Join with Code" → joining → waiting_for_players → match_loading → in_match
+
+In lobby:
+  ├── "Profile" → profile (stats dashboard, back to lobby)
+  └── "Sign Out" → clear localStorage → sign_in
+
+After match:
+  ├── Authed player → match_end → lobby (shows stats summary, level-up toast)
+  └── Guest player → match_end → join_form (with "Sign in to save your stats!" CTA)
+```
+
+**Transition rules:**
+- Page load checks `localStorage` for `stick_rumble_session_token`
+- If token exists: validate by connecting WebSocket with `?token=<token>`. If valid, show lobby. If expired/invalid, show `sign_in`.
+- If no token: show `sign_in` with both sign-in and guest options
+- `sign_in` is the landing page with Google sign-in button and "Play as Guest" link
+- `join_form` is the legacy guest entry point (unchanged)
+- `display_name_picker` appears only after first-time Google auth where the player record has no display name
+- After confirming display name via `PUT /api/player/displayname`, navigate to `lobby`
+- `lobby` always shows after successful auth, before matchmaking
+- Phaser mounts from the lobby's "Play" action (Play Public or Join with Code)
+- After match ends, authed players return to `lobby`; guests return to `join_form`
+```
+
+### Token Storage Strategy
+
+The client stores the session token in `localStorage` using the key `stick_rumble_session_token`.
+
+```typescript
+// On successful sign-in:
+localStorage.setItem('stick_rumble_session_token', response.sessionToken);
+
+// On page load:
+const token = localStorage.getItem('stick_rumble_session_token');
+
+// On sign-out:
+localStorage.removeItem('stick_rumble_session_token');
+```
+
+The token is passed as a query parameter on WebSocket connection:
+```typescript
+const wsUrl = token
+  ? `ws://server:8080/ws?token=${encodeURIComponent(token)}`
+  : `ws://server:8080/ws`;
+```
+
+See [accounts.md → LocalStorage Token Management](accounts.md#localstorage-token-management) for the full lifecycle.
 
 **State Ownership Rules:**
 - React owns the pre-match session lifecycle, including `player:hello`, `session:status`, `session:leave`, replay, and recoverable join failures.
 - Phaser is mounted only after the app shell receives `session:status { state: "match_ready" }` and constructs a `MatchSession`.
-- The client Match session flow module owns the transition rules for `join_form`, `joining`, `searching_for_match`, `waiting_for_players`, `in_match`, `match_end`, and `recoverable_error`.
+- The client Match session flow module owns the transition rules for `sign_in`, `join_form`, `joining`, `display_name_picker`, `lobby`, `profile`, `searching_for_match`, `waiting_for_players`, `in_match`, `match_end`, and `recoverable_error`.
 - React renders the current Match session flow state and performs side effects such as sending `player:hello`, `session:leave`, or replay requests; it should not duplicate the transition logic inline.
 - The `searching_for_match` and `waiting_for_players` screens are app states, not hidden Phaser phases.
 - `match_end` is a full React screen state, not a modal layered over the active canvas.
@@ -112,6 +178,7 @@ interface MatchSession {
 - Phaser does not own the pre-match session lifecycle. Any Phaser-side `session:status` handling is transitional compatibility only and may mirror already-authorized Match context, but it must not decide join, wait, replay, or recoverable-error states.
 
 **Rendering Rules:**
+- `sign_in`, `display_name_picker`, `lobby`, and `profile` render with no Phaser canvas mounted. These are full React screen states.
 - `join_form`, `joining`, `searching_for_match`, `waiting_for_players`, and `recoverable_error` render with no Phaser canvas mounted.
 - `match_loading` is the handoff phase where React prepares the centered stage and mounts Phaser with the completed `MatchSession`.
 - `in_match` continues to render the existing centered desktop stage unless mobile mode is automatically detected.
@@ -409,6 +476,12 @@ stick-rumble-client/
 │   │   ├── types.ts                      # Shared interfaces
 │   │   └── weaponConfig.ts               # Weapon configurations
 │   ├── ui/
+│   │   ├── auth/
+│   │   │   ├── SignInScreen.tsx          # Google sign-in button + "Play as Guest" link
+│   │   │   └── DisplayNamePickerScreen.tsx # First-login name picker
+│   │   ├── lobby/
+│   │   │   ├── LobbyScreen.tsx           # Pre-match lobby with stats and Play buttons
+│   │   │   └── ProfileScreen.tsx         # Full stats dashboard
 │   │   ├── common/
 │   │   │   └── PhaserGame.tsx            # React-Phaser bridge
 │   │   └── match/
@@ -2174,6 +2247,8 @@ it('should follow local player with camera', () => {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.5.3 | 2026-05-15 | Accounts & Progression: added `sign_in`, `display_name_picker`, `lobby`, and `profile` to AppSessionState. Documented the full session state machine flow (page load → token check → sign-in/guest → lobby → match → post-match). Added Token Storage Strategy section (`localStorage` key `stick_rumble_session_token`). Added new React screen components: SignInScreen, DisplayNamePickerScreen, LobbyScreen, ProfileScreen to the Application Structure tree. |
+| 1.5.2 | 2026-04-25 | Room session flow seam: documented a dedicated client-side Match app shell and Match session flow module that own the session lifecycle while React and Phaser own their respective rendering domains. |
 | 1.5.1 | 2026-04-23 | Replaced mobile-mode opt-in language with automatic client-side detection for phone-sized touch layouts, while preserving the unchanged desktop baseline and session continuity. |
 | 1.5.0 | 2026-04-23 | Specified optional mobile mode architecture: React now owns mobile-mode selection, safe-area-aware phone stage behavior, and touch overlays as client-local options while the existing desktop runtime remains the baseline. Also marked chat UI as inactive legacy carry-over rather than active multiplayer contract. |
 | 1.4.1 | 2026-04-23 | Clarified that socket transport failures and reconnect-in-progress notices are app-level connection status, not synthetic join errors; React must not fabricate `error:no_hello` to represent a local connect failure, and transient connection notices must clear when the socket becomes ready again. |

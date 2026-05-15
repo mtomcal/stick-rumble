@@ -1,7 +1,7 @@
 # Rooms
 
-> **Spec Version**: 1.4.2
-> **Last Updated**: 2026-04-25
+> **Spec Version**: 1.5.0
+> **Last Updated**: 2026-05-15
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [networking.md](networking.md), [messages.md](messages.md), [maps.md](maps.md)
 > **Depended By**: [match.md](match.md), [server-architecture.md](server-architecture.md)
 
@@ -263,6 +263,8 @@ function sanitizeDisplayName(raw):
 
 **Why silent fallback instead of an error?**
 An empty or garbage name is almost always a client bug or a user hitting submit too fast, not malice. Blocking the join hurts UX for zero security benefit — the name is a label, not a credential.
+
+**Authed player override:** When a player connects with a valid session token (authed), the display name stored in the `players` database table is authoritative. The server MUST ignore the `displayName` field in `player:hello` for authed players. For guest connections (no token), the existing behavior applies — the display name from `player:hello` is used after sanitization. See [accounts.md → WebSocket Upgrade with Token](accounts.md#websocket-upgrade-with-token) for the full flow.
 
 ### Room Code Normalization
 
@@ -1309,6 +1311,7 @@ test "tab reload joins existing room":
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.5.0 | 2026-05-15 | Added authed player override to Display Name Sanitization: authed connections use the database display name instead of `player:hello` field. See [accounts.md → WebSocket Upgrade with Token](accounts.md#websocket-upgrade-with-token). |
 | 1.4.2 | 2026-04-25 | Clarified room session flow ownership: `RoomManager` remains the single source of truth for stored room state, while a dedicated room session flow module owns hello and pre-match leave transition policy and returns outcomes for transport publication and gameplay enrollment. |
 | 1.4.0 | 2026-04-17 | Session-first client alignment: documented public `searching_for_match`, named-room `waiting_for_players`, and `match_ready` as explicit `session:status` outcomes after a successful hello; updated client-facing room handling to bootstrap gameplay only from `match_ready`; and switched room/messaging references from `room:joined` to `session:status` / `session:leave`. |
 | 1.3.1 | 2026-04-11 | Friends-MVP pre-mortem fixes: (1) code-room join path now explicitly calls `match.start()` when the joiner crosses `MIN_PLAYERS_TO_START`; (2) room destruction now only deletes `codeIndex[code]` if the index still points at the room being destroyed, preventing a rematch-in-progress room from being unindexed when the old room's stragglers disconnect (new TS-ROOM-018); (3) failed-hello semantics clarified — `error:bad_room_code` / `error:room_full` do not latch `HelloSeen`; (4) added "Accepted Risk: Code Collisions Between Unrelated Groups" section making the collision trade-off explicit; (5) added regression notice for the public tab-reload fast-path now requiring a fresh `player:hello`. |

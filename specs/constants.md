@@ -1,7 +1,7 @@
 # Constants
 
-> **Spec Version**: 1.4.2
-> **Last Updated**: 2026-04-22
+> **Spec Version**: 1.5.0
+> **Last Updated**: 2026-05-15
 > **Depends On**: None (foundational spec)
 > **Depended By**: [arena.md](arena.md), [player.md](player.md), [movement.md](movement.md), [dodge-roll.md](dodge-roll.md), [weapons.md](weapons.md), [shooting.md](shooting.md), [melee.md](melee.md), [hit-detection.md](hit-detection.md), [match.md](match.md), [rooms.md](rooms.md), [networking.md](networking.md), [audio.md](audio.md), [ui.md](ui.md), [graphics.md](graphics.md)
 
@@ -844,10 +844,39 @@ if (distance > maxRange * 0.5):
 
 ---
 
+## Progression Constants
+
+| Constant | Value | Unit | Description |
+|----------|-------|------|-------------|
+| XP_PER_KILL | 100 | XP | XP awarded per kill |
+| XP_PER_LEVEL_BASE | 500 | XP | Base XP required for Level 1 |
+
+---
+
+## Auth Constants
+
+| Constant | Value | Unit | Description |
+|----------|-------|------|-------------|
+| SESSION_TOKEN_EXPIRY_DAYS | 30 | days | Session token lifetime |
+| SESSION_TOKEN_BYTES | 32 | bytes | 256-bit opaque token |
+| GOOGLE_TOKEN_VALIDATION_URL | `https://oauth2.googleapis.com/tokeninfo?id_token=` | URL | Google ID token validation endpoint |
+
+---
+
+## Database Constants
+
+| Constant | Value | Unit | Description |
+|----------|-------|------|-------------|
+| DB_MAX_CONNECTIONS | 25 | connections | PostgreSQL connection pool max size |
+| DB_CONNECTION_TIMEOUT | 5 | seconds | Database connection timeout |
+
+---
+
 ## Changelog
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.5.0 | 2026-05-15 | Added Progression Constants (XP_PER_KILL, XP_PER_LEVEL_BASE), Auth Constants (SESSION_TOKEN_EXPIRY_DAYS, SESSION_TOKEN_BYTES, GOOGLE_TOKEN_VALIDATION_URL), and Database Constants (DB_MAX_CONNECTIONS, DB_CONNECTION_TIMEOUT) tables. |
 | 1.4.2 | 2026-04-22 | Updated the authoritative player footprint from 32x32 to 48x48 as the pragmatic top-down midpoint. |
 | 1.4.1 | 2026-04-22 | Changed `PLAYER_HEIGHT` from 64 to 32 so the authoritative player footprint is now 32x32. Updated the rationale to match true top-down player rendering rather than a tall stick-figure silhouette. |
 | 2.1.1 | 2026-04-09 | Updated movement tuning constants to ACCELERATION=6000 and DECELERATION=6000 for prototype-faithful immediate response. Corrected minimap Y constant to bottom-left derived positioning (`viewportHeight - MINIMAP_SIZE - 20`). |

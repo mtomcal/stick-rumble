@@ -1,7 +1,7 @@
 # Networking
 
-> **Spec Version**: 1.3.0
-> **Last Updated**: 2026-04-25
+> **Spec Version**: 1.3.1
+> **Last Updated**: 2026-05-15
 > **Depends On**: [messages.md](messages.md), [constants.md](constants.md)
 > **Depended By**: [rooms.md](rooms.md), [client-architecture.md](client-architecture.md), [server-architecture.md](server-architecture.md)
 
@@ -54,6 +54,7 @@ For authoritative gameplay, the network layer is an adapter over one emitted gam
 
 - [messages.md](messages.md) - Message type definitions and schemas
 - [constants.md](constants.md) - Network timing constants (tick rates, reconnect delays)
+- [accounts.md](accounts.md) - Session token validation at WebSocket upgrade time
 
 ---
 
@@ -193,10 +194,16 @@ Examples:
 
 **Why this flow?** The server generates player IDs to ensure uniqueness and prevent client spoofing. The buffered send channel decouples message generation from socket writes, preventing game loop blocking on slow connections.
 
+The WebSocket URL now supports an optional `?token=` query parameter for authenticated connections. See [Authenticated Connection](#authenticated-connection) below.
+
 **Pseudocode:**
 ```
 Client Connect:
-    ws = new WebSocket("ws://server:port/ws")
+    if sessionToken in localStorage:
+        url = "ws://server:port/ws?token=" + encodeURIComponent(sessionToken)
+    else:
+        url = "ws://server:port/ws"
+    ws = new WebSocket(url)
     on open:
         log "WebSocket connected"
         reset reconnectAttempts to 0
@@ -206,10 +213,19 @@ Client Connect:
         reject connection promise
 
 Server Accept:
+    token = request.query.get("token")
     upgrade HTTP to WebSocket
-    generate UUID for player
+    
+    if token != null and isValidSession(token):
+        player = resolvePlayerFromToken(token)
+        playerID = player.id
+        displayName = player.displayName  // DB authoritative
+    else:
+        playerID = generateUUID()  // Guest
+        displayName = null
+    
     create buffered send channel (256 messages)
-    create Player { ID, SendChan }
+    create Player { ID: playerID, DisplayName: displayName, SendChan }
     log "Client connected: {playerID}"
     add player to RoomManager
     add player to GameServer
@@ -221,7 +237,10 @@ Server Accept:
 ```typescript
 connect(): Promise<void> {
   return new Promise((resolve, reject) => {
-    this.ws = new WebSocket(this.url);
+    const url = this.sessionToken
+      ? `${this.baseUrl}?token=${encodeURIComponent(this.sessionToken)}`
+      : this.baseUrl;
+    this.ws = new WebSocket(url);
 
     this.ws.onopen = () => {
       console.log('WebSocket connected');
@@ -262,17 +281,38 @@ func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Reques
     }
     defer conn.Close()
 
-    // Create player with unique ID
-    playerID := uuid.New().String()
-    sendChan := make(chan []byte, 256)
-    player := &game.Player{
-        ID:       playerID,
-        SendChan: sendChan,
+    // Check for session token in query parameter
+    token := r.URL.Query().Get("token")
+    var playerID string
+    var displayName string
+    var isAuthed bool
+
+    if token != "" {
+        playerID, displayName, err = h.authHandler.ResolveSessionToken(token)
+        if err == nil {
+            isAuthed = true
+            log.Printf("Authenticated client: %s (%s)", playerID, displayName)
+        } else {
+            log.Printf("Invalid session token, falling back to guest: %v", err)
+        }
     }
 
-    log.Printf("Client connected: %s", playerID)
+    if !isAuthed {
+        playerID = uuid.New().String()
+        displayName = ""  // Will be set via player:hello
+    }
 
-    // Add player to room manager (handles room:joined)
+    sendChan := make(chan []byte, 256)
+    player := &game.Player{
+        ID:          playerID,
+        DisplayName: displayName,
+        SendChan:    sendChan,
+        IsAuthed:    isAuthed,  // If true, displayName from DB is authoritative
+    }
+
+    log.Printf("Client connected: %s (authed: %v)", playerID, isAuthed)
+
+    // Add player to room manager
     room := h.roomManager.AddPlayer(player)
     h.gameServer.AddPlayer(playerID)
 
@@ -513,6 +553,45 @@ disconnect(): void {
   this.messageHandlers.clear();
 }
 ```
+
+### Authenticated Connection
+
+When the client has a session token (from Google OAuth sign-in), it passes the token as a query parameter on the WebSocket upgrade URL: `ws://server:8080/ws?token=<session_token>`.
+
+**Server-side behavior during upgrade:**
+1. Extract the `token` query parameter from the HTTP upgrade request
+2. Compute SHA-256 hash of the token
+3. Look up the hash in `session_tokens` table
+4. If found and not expired: resolve the associated `player_id` and `display_name` from `players` table
+5. If not found or expired: treat the connection as a guest (existing behavior)
+
+**Key rules:**
+- Authed players still send `player:hello` for protocol uniformity
+- For authed players, the server ignores the `displayName` field in `player:hello` — the DB-stored name is authoritative
+- For guest players (no token or invalid token), `player:hello` is used as before
+- The `Player` struct gains an `IsAuthed` boolean field to distinguish the two cases
+
+See [accounts.md → WebSocket Upgrade with Token](accounts.md#websocket-upgrade-with-token) for the full token resolution flow.
+
+### Session Expiry Handling
+
+Session tokens expire after 30 days. The server handles expiry in two contexts:
+
+**During WebSocket upgrade:**
+- If the token is expired, the server silently falls back to guest treatment
+- No error is sent to the client — the connection is accepted as a guest
+- The client detects the guest treatment by observing that no lobby/game state is returned for the expected identity
+
+**Mid-session expiry (during an active WebSocket connection):**
+- The current WebSocket connection remains valid until disconnect
+- The server does **not** forcibly disconnect or downgrade the player mid-match
+- Expired tokens only affect new connections, not existing ones
+- This prevents mid-game disruptions for players whose token happens to expire during a match
+
+**Client-side handling:**
+- On page load, the client checks `localStorage` for a session token and passes it on WebSocket upgrade
+- If the server treats the connection as a guest (e.g., expired token), the client's next `player:hello` succeeds as a guest
+- The client detects the mismatch and may show the sign-in screen with a message like "Session expired — sign in again to save your stats"
 
 ### Graceful Server Shutdown
 
@@ -1191,6 +1270,7 @@ func TestGracefulShutdown(t *testing.T) {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.3.1 | 2026-05-15 | Accounts & Progression: documented the `?token=` query parameter on WebSocket upgrade URL. Added Authenticated Connection section (token resolution at upgrade, authed vs guest behavior). Added Session Expiry Handling section (expiry at upgrade vs mid-session). Updated Connection Establishment pseudocode and code examples for both client (TypeScript) and server (Go) to include token-based auth. Updated spec dependencies to include [accounts.md](accounts.md). |
 | 1.2.0 | 2026-04-11 | Friends-MVP alignment: documented the re-handshake contract for reconnecting clients (every new connection must begin with a fresh `player:hello`), and the explicit MVP scope decision that in-progress matches do not resume across reconnects. Cross-references [messages.md](messages.md#player-hello) and [rooms.md](rooms.md#named-room-join). |
 | 1.0.0 | 2026-02-02 | Initial specification |
 | 1.1.1 | 2026-02-16 | Fixed TypeBox version from 0.32.x to 0.34.x to match source |

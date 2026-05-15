@@ -1,7 +1,7 @@
 # Player
 
-> **Spec Version**: 1.4.2
-> **Last Updated**: 2026-04-22
+> **Spec Version**: 1.5.0
+> **Last Updated**: 2026-05-15
 > **Depends On**: [constants.md](constants.md), [arena.md](arena.md)
 > **Depended By**: [movement.md](movement.md), [dodge-roll.md](dodge-roll.md), [weapons.md](weapons.md), [shooting.md](shooting.md), [melee.md](melee.md), [hit-detection.md](hit-detection.md), [match.md](match.md), [graphics.md](graphics.md), [ui.md](ui.md)
 
@@ -586,6 +586,8 @@ func (p *PlayerState) AddXP(amount int) {
 }
 ```
 
+**Lifetime vs per-match XP:** `PlayerState.XP` tracks XP earned in the current match only. On match end, this value is added to `LifetimeStats.total_xp` (see [progression.md → Event to Track](progression.md#event-to-track)) and `PlayerState.XP` is reset to 0 for the next match. The level display in the lobby is computed from `LifetimeStats.total_xp`, not from `PlayerState.XP`.
+
 ### Kill/Death Ratio
 
 Helper function for statistics display.
@@ -973,6 +975,7 @@ func TestOverkillDamage(t *testing.T) {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.5.0 | 2026-05-15 | Added lifetime vs per-match XP distinction: `PlayerState.XP` is match-scoped only, accumulated into `LifetimeStats.total_xp` on match end and reset. Level display uses lifetime XP, not match XP. See [progression.md → Event to Track](progression.md#event-to-track). |
 | 1.4.2 | 2026-04-22 | Updated the player hitbox contract from 32x32 to 48x48 to better match the intended top-down gameplay scale. |
 | 1.4.1 | 2026-04-22 | Updated the player hitbox contract from 32x64 to 32x32 to match the intended top-down gameplay and rendering perspective. |
 | 1.4.0 | 2026-04-11 | Friends-MVP: added `DisplayName` to server and client `PlayerState` (sanitized, 1–16 chars, non-unique). See [rooms.md](rooms.md#display-name-sanitization) for the join-time contract. |

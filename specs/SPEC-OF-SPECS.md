@@ -1,7 +1,7 @@
 # Spec-of-Specs: Stick Rumble Documentation Blueprint
 
-> **Version**: 1.1.0
-> **Last Updated**: 2026-02-16
+> **Version**: 1.2.0
+> **Last Updated**: 2026-05-15
 > **Purpose**: This document defines the structure, content requirements, and templates for all specification files in `specs/`.
 > **Target Audience**: AI agents recreating Stick Rumble from scratch with zero existing code.
 
@@ -29,6 +29,8 @@
    - [networking.md](#networkingmd)
    - [client-architecture.md](#client-architecturemd)
    - [server-architecture.md](#server-architecturemd)
+   - [accounts.md](#accountsmd)
+   - [progression.md](#progressionmd)
    - [audio.md](#audiomd)
    - [graphics.md](#graphicsmd)
    - [ui.md](#uimd)
@@ -1511,6 +1513,43 @@ Organized by category with tables:
 
 ---
 
+### accounts.md
+
+**Purpose**: Google OAuth authentication, session tokens, player records, and lifetime statistics.
+
+**Required Content**:
+
+1. **Overview** — Google OAuth-only auth, no passwords, guest play preserved
+2. **Sign-In Flow** — Google token validation, player record creation/lookup, session token generation
+3. **Database Schema** — PostgreSQL tables for players, session_tokens, lifetime_stats
+4. **WebSocket Upgrade** — Token resolution at connection time, authed vs guest behavior
+5. **HTTP Endpoints** — `POST /api/auth/google`, `PUT /api/player/displayname`
+6. **Error Handling** — Invalid tokens, expired sessions, display name validation
+
+**Test Scenario Prefix**: `TS-ACCT`
+
+**Estimated Length**: 500-600 lines
+
+---
+
+### progression.md
+
+**Purpose**: Leveling system, lifetime stats accumulation, and level-up feedback.
+
+**Required Content**:
+
+1. **Overview** — Visual-only progression in MVP, no gameplay unlocks
+2. **Leveling Curve** — Linear formula: Level N requires N × 500 XP
+3. **Event to Track** — Match-end stats update, weapon breakdown tracking
+4. **Level-Up Detection** — Pre/post match comparison, multi-level gain handling
+5. **Level-Up Toast** — Client-side notification in lobby
+
+**Test Scenario Prefix**: `TS-PROG`
+
+**Estimated Length**: 300-400 lines
+
+---
+
 ### audio.md
 
 **Purpose**: Sound effects and audio system.
@@ -2075,9 +2114,11 @@ For an AI agent recreating from scratch, implement in this order:
 | graphics.md | 1073 |
 | ui.md | 1243 |
 | test-index.md | 645 |
+| accounts.md | 483 |
+| progression.md | 307 |
 | spec-of-specs-plan.md | 1064 |
 | SPEC-OF-SPECS.md | 2074 |
-| **TOTAL** | **~25,229 lines** |
+| **TOTAL** | **~26,019 lines** |
 
 ---
 
@@ -2096,6 +2137,7 @@ After reviewing this spec-of-specs:
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.2.0 | 2026-05-15 | Added accounts.md and progression.md to File Specifications sections, ToC, and line count table. |
 | 1.1.0 | 2026-02-16 | Added spec-of-specs-plan.md to ToC and file specs; added Last Updated and Changelog; fixed C→S count to 6, S→C to 22; updated line count estimates to actual; fixed shooting test scenario descriptions; fixed UI timer thresholds |
 | 1.0.0 | 2026-02-02 | Initial blueprint for all 21 specification documents |
 

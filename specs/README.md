@@ -1,7 +1,7 @@
 # Stick Rumble Specification Suite
 
-> **Version**: 1.4.1
-> **Last Updated**: 2026-04-11
+> **Version**: 1.5.0
+> **Last Updated**: 2026-05-15
 > **Purpose**: Complete specification for recreating Stick Rumble from scratch
 
 ---
@@ -40,51 +40,56 @@ For an AI agent recreating Stick Rumble from scratch, read specs in this order:
 2. **[maps.md](maps.md)** - Shared map configuration contract and validation rules
 3. **[arena.md](arena.md)** - Match-selected world bounds and spatial rules
 
+### Phase 1.5: Accounts & Progression
+
+4. **[accounts.md](accounts.md)** - Google OAuth auth, session tokens, player records, PostgreSQL schema
+5. **[progression.md](progression.md)** - Leveling curve, XP system, lifetime stats, level-up toast
+
 ### Phase 2: Core Entities
 
-4. **[player.md](player.md)** - Player state, health, death, respawn
-5. **[movement.md](movement.md)** - Physics, WASD, sprint, acceleration
+6. **[player.md](player.md)** - Player state, health, death, respawn
+7. **[movement.md](movement.md)** - Physics, WASD, sprint, acceleration
 
 ### Phase 3: Networking
 
-6. **[messages.md](messages.md)** - All WebSocket message types
-7. **[networking.md](networking.md)** - Connection lifecycle, reconnection
-8. **[rooms.md](rooms.md)** - Matchmaking, room management
+8. **[messages.md](messages.md)** - All WebSocket message types
+9. **[networking.md](networking.md)** - Connection lifecycle, reconnection
+10. **[rooms.md](rooms.md)** - Matchmaking, room management
 
 ### Phase 4: Combat
 
-9. **[weapons.md](weapons.md)** - All 6 weapons, stats, recoil, spread
-10. **[shooting.md](shooting.md)** - Ranged attacks, projectiles, reload
-11. **[hit-detection.md](hit-detection.md)** - Collision detection, damage
-12. **[melee.md](melee.md)** - Bat and Katana mechanics, knockback
+11. **[weapons.md](weapons.md)** - All 6 weapons, stats, recoil, spread
+12. **[shooting.md](shooting.md)** - Ranged attacks, projectiles, reload
+13. **[hit-detection.md](hit-detection.md)** - Collision detection, damage
+14. **[melee.md](melee.md)** - Bat and Katana mechanics, knockback
 
 ### Phase 5: Advanced Mechanics
 
-13. **[dodge-roll.md](dodge-roll.md)** - Evasion, i-frames, cooldown
-14. **[match.md](match.md)** - Win conditions, timer, state machine
+15. **[dodge-roll.md](dodge-roll.md)** - Evasion, i-frames, cooldown
+16. **[match.md](match.md)** - Win conditions, timer, state machine
 
 ### Phase 6: Client Implementation
 
-15. **[client-architecture.md](client-architecture.md)** - Phaser scenes, managers
-16. **[graphics.md](graphics.md)** - Procedural rendering
-17. **[ui.md](ui.md)** - HUD elements, kill feed
-18. **[audio.md](audio.md)** - Sound effects and audio system
+17. **[client-architecture.md](client-architecture.md)** - Phaser scenes, managers
+18. **[graphics.md](graphics.md)** - Procedural rendering
+19. **[ui.md](ui.md)** - HUD elements, kill feed
+20. **[audio.md](audio.md)** - Sound effects and audio system
 
 ### Phase 7: Server Implementation
 
-19. **[server-architecture.md](server-architecture.md)** - Game loop, concurrency
+21. **[server-architecture.md](server-architecture.md)** - Game loop, concurrency
 
 ### Phase 8: Verification
 
-20. **[test-index.md](test-index.md)** - All test scenarios cross-reference
+22. **[test-index.md](test-index.md)** - All test scenarios cross-reference
 
 ### Phase 9: Deployment
 
-21. **[deployment.md](deployment.md)** - MVP AWS deployment (EC2 + Caddy for the game server, S3 + CloudFront for the static client)
+23. **[deployment.md](deployment.md)** - MVP AWS deployment (EC2 + Caddy for the game server, S3 + CloudFront for the static client)
 
 ### Phase 10: Repository Presentation
 
-22. **[repository-presentation.md](repository-presentation.md)** - Public README, docs navigation, root cleanliness, and repository metadata positioning
+24. **[repository-presentation.md](repository-presentation.md)** - Public README, docs navigation, root cleanliness, and repository metadata positioning
 
 ---
 
@@ -161,6 +166,33 @@ For an AI agent recreating Stick Rumble from scratch, read specs in this order:
 | graphics.md | constants.md, player.md, weapons.md, arena.md | client-architecture.md, test-index.md |
 | ui.md | constants.md, player.md, weapons.md, match.md, client-architecture.md, graphics.md | test-index.md |
 | audio.md | constants.md, weapons.md, dodge-roll.md, client-architecture.md | - (leaf spec) |
+| accounts.md | constants.md, server-architecture.md, rooms.md | progression.md, client-architecture.md, networking.md |
+| progression.md | constants.md, accounts.md, player.md | client-architecture.md, ui.md |
+
+### Accounts & Progression Deps
+
+```
+                        ┌─────────────────┐
+                        │  constants.md   │
+                        └────────┬────────┘
+                                 │
+                                 ▼
+                        ┌─────────────────┐
+                        │  accounts.md    │
+                        └────────┬────────┘
+                                 │
+                                 ▼
+                        ┌─────────────────┐
+                        │ progression.md  │
+                        └────────┬────────┘
+                                 │
+            ┌────────────────────┼────────────────────┐
+            │                    │                    │
+            ▼                    ▼                    ▼
+┌────────────────────┐ ┌────────────────┐ ┌──────────────────┐
+│ server-arch.md     │ │ client-arch.md│ │  networking.md   │
+└────────────────────┘ └────────────────┘ └──────────────────┘
+```
 
 ---
 
@@ -187,6 +219,8 @@ For an AI agent recreating Stick Rumble from scratch, read specs in this order:
 | [graphics.md](graphics.md) | Procedural stick figures, weapons, effects, death visuals | ~1070 | 2.0.0 |
 | [ui.md](ui.md) | HUD elements, kill feed, scoreboard, match end screen | ~1260 | 1.2.0 |
 | [audio.md](audio.md) | Positional audio, weapon sounds, UI feedback | ~910 | 1.1.0 |
+| [accounts.md](accounts.md) | Google OAuth auth, session tokens, player records, PostgreSQL schema | ~500 | 1.0.0 |
+| [progression.md](progression.md) | Leveling curve, XP system, lifetime stats, level-up toast | ~400 | 1.0.0 |
 | [overview.md](overview.md) | Architecture philosophy, prediction/reconciliation patterns | ~710 | 1.1.0 |
 | [test-index.md](test-index.md) | Cross-reference of all test scenarios across specs | ~650 | 1.2.0 |
 | [deployment.md](deployment.md) | MVP AWS deployment: EC2 + Caddy + EIP, S3 + CloudFront, TLS pre-flight, strict CheckOrigin | ~440 | 1.0.1 |
@@ -205,6 +239,11 @@ Use this checklist when implementing Stick Rumble from scratch:
 - [ ] 20 Hz client broadcast loop
 - [ ] Room manager with auto-matchmaking
 - [ ] Graceful shutdown on SIGTERM/SIGINT
+- [ ] PostgreSQL connection pool and migration
+- [ ] `internal/auth/` — Google OAuth token validation, session management
+- [ ] `internal/db/` — PlayerStore, SessionStore, StatsStore
+- [ ] `POST /api/auth/google` endpoint
+- [ ] `PUT /api/player/displayname` endpoint
 
 ### Client Setup
 
@@ -212,6 +251,11 @@ Use this checklist when implementing Stick Rumble from scratch:
 - [ ] Phaser 3 game with single scene
 - [ ] WebSocket client with reconnect logic
 - [ ] Input manager for WASD + mouse
+- [ ] Google OAuth sign-in button integration
+- [ ] Display name picker screen
+- [ ] Lobby screen with stats summary
+- [ ] Profile screen with full stats dashboard
+- [ ] `localStorage` session token management
 
 ### Core Gameplay
 
@@ -378,6 +422,7 @@ Test scenarios use the format `TS-{SPEC}-{NUMBER}`:
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.5.0 | 2026-05-15 | Added accounts and progression system: accounts.md 1.0.0 (Google OAuth, session tokens, player records, PostgreSQL schema), progression.md 1.0.0 (leveling curve, XP system, lifetime stats, level-up toast). Added Phase 1.5 to reading order, new Quick Reference Table entries, accounts/progression dependency subgraph, and implementation checklist items. |
 | 1.4.1 | 2026-04-11 | Friends-MVP pre-mortem pass: patched rooms.md → 1.3.1 (codeIndex destruction race, code-room match.start, collision-risk section), messages.md → 1.3.1 (failed-hello latching, reconnect contract, breaking-change posture), networking.md → 1.2.0 (re-handshake contract on reconnect), deployment.md → 1.0.1 (Elastic IP mandatory, CheckOrigin semantics fully specified, TLS pre-flight, exam-relevance quarantined as non-normative appendix). |
 | 1.4.0 | 2026-04-11 | Friends-MVP: bumped player.md to 1.4.0, rooms.md to 1.3.0, messages.md to 1.3.0 (display names, named rooms, `player:hello`, error messages). Added deployment.md 1.0.0 to the Quick Reference Table and a new "Phase 9: Deployment" in the reading order. |
 | 1.2.0 | 2026-02-16 | Updated spec versions for pre-BMM visual port. Added 16 new visual system checklist items. Updated 9 spec version references. |

@@ -1,0 +1,724 @@
+# Accounts System
+
+> **Spec Version**: 1.0.0
+> **Last Updated**: 2026-05-15
+> **Depends On**: [constants.md](constants.md), [server-architecture.md](server-architecture.md), [rooms.md](rooms.md)
+> **Depended By**: [progression.md](progression.md), [client-architecture.md](client-architecture.md), [networking.md](networking.md)
+
+---
+
+## Overview
+
+The accounts system provides persistent player identity, session management, and lifetime statistics via Google OAuth-only authentication. There are no passwords — Google is the sole identity provider. Guest play (no account) is preserved as the default entry path for casual players.
+
+**Why Google OAuth-only?** Eliminates password management, password resets, and account security surface area. Google's token verification API validates the user's identity on the server side, so the server never sees or stores a password. The trade-off is that players without a Google account cannot sign in, but guest play remains fully functional without any account.
+
+**Why long-lived session tokens instead of OAuth on every request?** The OAuth token is used exactly once during the initial sign-in handshake (a `POST` to `/api/auth/google`). The server issues its own opaque 256-bit session token that the client stores in `localStorage`. On subsequent page loads, the client presents this token to the WebSocket server (via `?token=` query parameter) for identity resolution. This avoids repeated OAuth round-trips on every page load and every WebSocket reconnect.
+
+---
+
+## Dependencies
+
+### Technology Dependencies
+
+| Technology | Version | Purpose |
+|------------|---------|---------|
+| Go | 1.25 | Server-side auth handling |
+| PostgreSQL | 15+ | Persistent storage for players, sessions, stats |
+| Google OAuth2 API | - | Token validation |
+| TypeScript | 5.9.3 | Client-side auth UI and token management |
+
+### Spec Dependencies
+
+- [constants.md](constants.md) - Auth constants (token expiry, token bytes, validation URL)
+- [server-architecture.md](server-architecture.md) - AuthHandler, StatsStore, HTTP endpoints
+- [rooms.md](rooms.md) - Display name sanitization rules
+- [progression.md](progression.md) - Lifetime stats accumulation
+
+---
+
+## Constants
+
+All auth constants are defined in [constants.md](constants.md#auth-constants).
+
+| Constant | Value | Description |
+|----------|-------|-------------|
+| SESSION_TOKEN_EXPIRY_DAYS | 30 | Session token lifetime |
+| SESSION_TOKEN_BYTES | 32 | 256-bit opaque token |
+| GOOGLE_TOKEN_VALIDATION_URL | `https://oauth2.googleapis.com/tokeninfo?id_token=` | Google ID token validation endpoint |
+
+---
+
+## Data Structures
+
+### PlayerRecord
+
+Persistent player identity stored in PostgreSQL.
+
+**Why `google_sub` as the unique identity key?** Google's `sub` claim is a stable, per-user, per-application identifier that never changes. Using `display_name` as the identity key would break when a player changes their name. Using `player_id` (UUID) as the primary key allows the system to reference players without coupling to either Google's identifier or the player's display name.
+
+**Go:**
+```go
+type PlayerRecord struct {
+    PlayerID    string     `db:"player_id"`     // UUID primary key
+    GoogleSub   string     `db:"google_sub"`    // Google's stable user ID (unique)
+    DisplayName *string    `db:"display_name"`   // null until first login name picker
+    CreatedAt   time.Time  `db:"created_at"`
+    LastSeenAt  time.Time  `db:"last_seen_at"`
+}
+```
+
+### SessionToken
+
+Persistent session token stored in PostgreSQL.
+
+**Why SHA-256 of opaque token?** The server never stores the raw token. Only the hash is stored. If the database is compromised, attackers cannot impersonate active sessions because they would need to reverse the SHA-256 hash.
+
+**Go:**
+```go
+type SessionToken struct {
+    TokenHash string    `db:"token_hash"`  // SHA-256 of opaque 256-bit token (primary key)
+    PlayerID  string    `db:"player_id"`   // FK to players
+    ExpiresAt time.Time `db:"expires_at"`
+    CreatedAt time.Time `db:"created_at"`
+}
+```
+
+### LifetimeStats
+
+Persistent lifetime statistics stored in PostgreSQL.
+
+**Why separate from PlayerRecord?** Player identity and stats have different access patterns. Stats are updated on every match end (write-heavy). Player identity is read on every WebSocket upgrade (read-heavy). Keeping them in separate tables avoids lock contention and allows independent tuning.
+
+**Go:**
+```go
+type LifetimeStats struct {
+    PlayerID       string         `db:"player_id"`        // PK/FK to players
+    TotalKills     int            `db:"total_kills"`      // lifetime kills
+    TotalDeaths    int            `db:"total_deaths"`     // lifetime deaths
+    TotalXP        int            `db:"total_xp"`         // lifetime XP
+    TotalGames     int            `db:"total_games"`      // matches played
+    TotalWins      int            `db:"total_wins"`       // matches won
+    PerWeaponKills map[string]int `db:"per_weapon_kills"` // JSONB: {"pistol": 15, "ak47": 42}
+    UpdatedAt      time.Time      `db:"updated_at"`
+}
+```
+
+---
+
+## Behavior
+
+### Sign-In Flow (Google OAuth)
+
+**Pseudocode:**
+```
+function googleSignIn(googleIdToken):
+    // 1. Server validates token with Google
+    googleClaims = validateWithGoogle(googleIdToken)
+    if googleClaims == null:
+        return { error: "invalid_token", status: 401 }
+
+    // 2. Look up or create player record
+    player = findPlayerByGoogleSub(googleClaims.sub)
+    if player == null:
+        player = createPlayer(
+            playerId: generateUUID(),
+            googleSub: googleClaims.sub,
+            displayName: null  // first login, name picker required
+        )
+        createLifetimeStats(player.playerId)
+        log "Created new player: {player.playerId}"
+    else:
+        updateLastSeenAt(player.playerId)
+
+    // 3. Generate session token
+    opaqueToken = generateRandomBytes(32)  // 256-bit
+    tokenHash = sha256(opaqueToken)
+    expiresAt = now() + 30 days
+
+    storeSessionToken(tokenHash, player.playerId, expiresAt)
+
+    // 4. Return session info to client
+    hasDisplayName = player.displayName != null
+
+    return {
+        sessionToken: base64(opaqueToken),
+        expiresAt: expiresAt.epochMs,
+        player: {
+            playerId: player.playerId,
+            displayName: player.displayName or null,
+            createdAt: player.createdAt.epochMs
+        }
+    }
+```
+
+**Go:**
+```go
+func (h *AuthHandler) HandleGoogleSignIn(googleIDToken string) (*SignInResponse, error) {
+    // Validate Google token
+    claims, err := h.validateGoogleToken(googleIDToken)
+    if err != nil {
+        return nil, ErrInvalidToken
+    }
+
+    // Look up or create player
+    player, err := h.playerStore.FindByGoogleSub(claims.Sub)
+    if err == ErrPlayerNotFound {
+        player = &PlayerRecord{
+            PlayerID:  uuid.New().String(),
+            GoogleSub: claims.Sub,
+        }
+        if err := h.playerStore.Create(player); err != nil {
+            return nil, err
+        }
+        if err := h.statsStore.CreateForPlayer(player.PlayerID); err != nil {
+            return nil, err
+        }
+    } else if err != nil {
+        return nil, err
+    } else {
+        h.playerStore.UpdateLastSeen(player.PlayerID)
+    }
+
+    // Generate session token
+    opaqueToken := make([]byte, SessionTokenBytes)
+    if _, err := rand.Read(opaqueToken); err != nil {
+        return nil, err
+    }
+    tokenHash := sha256.Sum256(opaqueToken)
+    expiresAt := time.Now().Add(SessionTokenExpiryDays * 24 * time.Hour)
+
+    session := &SessionToken{
+        TokenHash: hex.EncodeToString(tokenHash[:]),
+        PlayerID:  player.PlayerID,
+        ExpiresAt: expiresAt,
+    }
+    if err := h.sessionStore.Create(session); err != nil {
+        return nil, err
+    }
+
+    return &SignInResponse{
+        SessionToken: base64.StdEncoding.EncodeToString(opaqueToken),
+        ExpiresAt:    expiresAt.UnixMilli(),
+        Player: PlayerInfo{
+            PlayerID:    player.PlayerID,
+            DisplayName: player.DisplayName,
+            CreatedAt:   player.CreatedAt.UnixMilli(),
+        },
+    }, nil
+}
+```
+
+### Display Name Picker (First Login)
+
+**Pseudocode:**
+```
+function setDisplayName(playerId, sessionToken, rawDisplayName):
+    // 1. Validate session token
+    tokenHash = sha256(sessionToken)
+    session = findSessionByHash(tokenHash)
+    if session == null or session.expiresAt < now():
+        return { error: "session_expired", status: 401 }
+    if session.playerId != playerId:
+        return { error: "unauthorized", status: 403 }
+
+    // 2. Sanitize display name (same rules as rooms.md)
+    sanitized = sanitizeDisplayName(rawDisplayName)
+    if sanitized is "Guest" and rawDisplayName was not empty:
+        return { error: "bad_display_name", reason: "After sanitization the name was empty" }
+    if length(sanitized) < 1 or length(sanitized) > 16:
+        return { error: "bad_display_name", reason: "Display name must be 1-16 characters" }
+
+    // 3. Update player record
+    player.displayName = sanitized
+    savePlayer(player)
+
+    return { displayName: sanitized }
+```
+
+**Go:**
+```go
+func (h *AuthHandler) HandleSetDisplayName(playerID string, rawName string) (*SetDisplayNameResponse, error) {
+    sanitized := sanitizeDisplayName(rawName)
+    if sanitized == FallbackDisplayName && rawName != "" {
+        return nil, ErrBadDisplayName
+    }
+    if len(sanitized) < 1 || len(sanitized) > MaxDisplayNameLen {
+        return nil, ErrBadDisplayName
+    }
+
+    if err := h.playerStore.UpdateDisplayName(playerID, sanitized); err != nil {
+        return nil, err
+    }
+
+    return &SetDisplayNameResponse{DisplayName: sanitized}, nil
+}
+```
+
+### Display Name Sanitization
+
+Uses the same sanitization rules as [rooms.md → Display Name Sanitization](rooms.md#display-name-sanitization):
+
+```
+function sanitizeDisplayName(raw):
+    if raw is null or not a string:
+        return FALLBACK_DISPLAY_NAME
+    name = raw.trim()
+    name = stripControlCharacters(name)
+    name = collapseInternalWhitespace(name)
+    if name.length == 0:
+        return FALLBACK_DISPLAY_NAME
+    if name.length > MAX_DISPLAY_NAME_LEN:
+        name = name.slice(0, MAX_DISPLAY_NAME_LEN)
+    return name
+```
+
+Uniqueness is **not** enforced — display names are labels, not identities.
+
+### WebSocket Upgrade with Token
+
+**Pseudocode:**
+```
+function handleWebSocketUpgrade(request):
+    token = request.query.get("token")
+    player = null
+
+    if token != null and token != "":
+        // Validate session token
+        tokenHash = sha256(token)
+        session = findSessionByHash(tokenHash)
+        if session != null and session.expiresAt > now():
+            player = findPlayer(session.playerId)
+            if player != null:
+                // Upgrade with authed identity
+                upgrade(
+                    playerId  = player.playerId,
+                    displayName = player.displayName  // authoritative from DB
+                )
+                return
+
+        // Token invalid or expired — fall through to guest
+        log "Session token invalid or expired, falling back to guest"
+
+    // Guest connection (existing behavior)
+    upgrade(
+        playerId = generateUUID(),
+        displayName = null  // will be set via player:hello
+    )
+```
+
+**Key rules:**
+- If token is present and valid: player is authed. `player_id` and `display_name` come from the database.
+- If token is absent or invalid: player is a guest. Server generates a fresh `player_id`.
+- Authed players still send `player:hello` (protocol uniformity), but the server ignores the `displayName` field — the DB name is authoritative.
+- Guest players send `player:hello` as before; display name from the hello is used normally (sanitized per rooms.md rules).
+- See [networking.md → Authenticated Connection](networking.md#authenticated-connection) for the full WebSocket upgrade contract.
+
+### LocalStorage Token Management
+
+**Pseudocode:**
+```
+function onPageLoad():
+    token = localStorage.getItem("stick_rumble_session_token")
+    if token != null:
+        // Attempt to use token on WebSocket connection
+        wsUrl = "ws://server:8080/ws?token=" + encodeURIComponent(token)
+        connectWebSocket(wsUrl)
+        // If server rejects (expired), fall back to guest
+    else:
+        // No token, show join_form (guest path)
+        showJoinForm()
+
+function onGoogleSignInSuccess(response):
+    // 1. Exchange Google token for session token
+    result = post("/api/auth/google", { googleIdToken: response.idToken })
+    if result.error:
+        showError(result.error)
+        return
+
+    // 2. Store session token
+    localStorage.setItem("stick_rumble_session_token", result.sessionToken)
+
+    // 3. Check if display name is needed
+    if result.player.displayName == null:
+        navigateTo("display_name_picker")
+    else:
+        navigateTo("lobby")
+
+function onSignOut():
+    localStorage.removeItem("stick_rumble_session_token")
+    // WebSocket must reconnect as guest
+    disconnectWebSocket()
+    navigateTo("join_form")
+```
+
+### Match End Stats Update
+
+When a match ends, the match system posts per-player stats to the accounts system for lifetime tracking. See [progression.md → Event to Track](progression.md#event-to-track) for the full specification of what data is posted and how level-up detection works.
+
+**Pseudocode:**
+```
+function onMatchEnd(room):
+    for each player in room:
+        preMatchXP = player.preMatchXP  // captured at match start
+        postMatchXP = player.xp          // current XP from match
+
+        // Update lifetime stats
+        lifetimeStats = lifetimeStatsFor(player.playerId)
+        lifetimeStats.totalKills += player.kills
+        lifetimeStats.totalDeaths += player.deaths
+        lifetimeStats.totalXP += (postMatchXP - preMatchXP)
+        lifetimeStats.totalGames += 1
+        if player is winner:
+            lifetimeStats.totalWins += 1
+        updatePerWeaponKills(lifetimeStats, player.weaponBreakdown)
+        saveLifetimeStats(lifetimeStats)
+
+        // Level-up detection
+        preLevel = levelForXp(preMatchXP + lifetimeStatsBeforeMatch.totalXP)
+        postLevel = levelForXp(postMatchXP + lifetimeStatsAfterUpdate.totalXP)
+        if postLevel > preLevel:
+            notifyLevelUp(player.playerId, postLevel)
+```
+
+See [progression.md → Leveling Curve](progression.md#leveling-curve) for the XP-to-level formulas and [progression.md → Level-Up Toast](progression.md#level-up-toast-client-side) for the client-side display.
+
+---
+
+## PostgreSQL Schema
+
+```sql
+CREATE TABLE players (
+    player_id    UUID PRIMARY KEY,
+    google_sub   TEXT NOT NULL UNIQUE,
+    display_name TEXT,  -- null until first login name picker
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE session_tokens (
+    token_hash  TEXT PRIMARY KEY,  -- SHA-256 of opaque token
+    player_id   UUID NOT NULL REFERENCES players(player_id) ON DELETE CASCADE,
+    expires_at  TIMESTAMPTZ NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE lifetime_stats (
+    player_id       UUID PRIMARY KEY REFERENCES players(player_id) ON DELETE CASCADE,
+    total_kills     INTEGER NOT NULL DEFAULT 0,
+    total_deaths    INTEGER NOT NULL DEFAULT 0,
+    total_xp        INTEGER NOT NULL DEFAULT 0,
+    total_games     INTEGER NOT NULL DEFAULT 0,
+    total_wins      INTEGER NOT NULL DEFAULT 0,
+    per_weapon_kills JSONB NOT NULL DEFAULT '{}',
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+**Why `ON DELETE CASCADE`?** If a player record is ever removed (e.g., data deletion request), all associated sessions and stats are automatically cleaned up. This prevents orphaned rows and simplifies data lifecycle management.
+
+---
+
+## HTTP Endpoints
+
+### `POST /api/auth/google`
+
+**Request Body:**
+```json
+{
+  "googleIdToken": "<Google OAuth ID token>"
+}
+```
+
+**Success Response (200):**
+```json
+{
+  "sessionToken": "<base64-opaque-token>",
+  "expiresAt": 1715788800000,
+  "player": {
+    "playerId": "550e8400-e29b-41d4-a716-446655440000",
+    "displayName": null,
+    "createdAt": 1715702400000
+  }
+}
+```
+
+**Error Responses:**
+| Status | Body | Condition |
+|--------|------|-----------|
+| 401 | `{ "error": "invalid_token" }` | Google token validation failed |
+| 500 | `{ "error": "internal_error" }` | Database or server error |
+
+### `PUT /api/player/displayname`
+
+**Request Headers:**
+- `Authorization: Bearer <session_token>`
+
+**Request Body:**
+```json
+{
+  "displayName": "chosen_name"
+}
+```
+
+**Success Response (200):**
+```json
+{
+  "displayName": "chosen_name"
+}
+```
+
+**Error Responses:**
+| Status | Body | Condition |
+|--------|------|-----------|
+| 400 | `{ "error": "bad_display_name", "reason": "..." }` | Name too short/long or empty after sanitization |
+| 401 | `{ "error": "session_expired" }` | Session token expired or invalid |
+
+---
+
+## Error Handling
+
+### Invalid Google Token
+
+**Trigger**: Client sends a `googleIdToken` that fails Google's validation API
+**Detection**: Google API returns error response or token is malformed
+**Response**: 401 `{ "error": "invalid_token" }`
+**Recovery**: Client re-prompts the user to sign in with Google again
+
+### Expired Session Token
+
+**Trigger**: Client presents a session token whose `expires_at` has passed
+**Detection**: Server checks `expires_at` on lookup; if expired, deletes the stale token
+**Response**: On WebSocket upgrade: treat as guest connection (no error sent). On `PUT /api/player/displayname`: 401 `{ "error": "session_expired" }`
+**Recovery**: Client clears `localStorage` token and shows the sign-in screen
+
+### Display Name Too Short/Long
+
+**Trigger**: Client sends a display name < 1 character or > 16 characters after sanitization
+**Detection**: Server computes sanitized length and returns error
+**Response**: 400 `{ "error": "bad_display_name", "reason": "..." }`
+**Recovery**: Client shows inline validation and asks the user to choose a different name
+
+### Display Name Collision
+
+**Trigger**: Two players choose the same display name
+**Detection**: Not detected — names are labels, not identities
+**Response**: Both names are accepted; no error
+**Why allowed?** The server-generated `player_id` is the true identity key. Display names are rendering labels only. Collisions are harmless and expected in a system with no uniqueness enforcement.
+
+### Guest Cannot Use Protected Endpoints
+
+**Trigger**: Guest player (no session token) attempts `PUT /api/player/displayname`
+**Detection**: No bearer token or invalid token in Authorization header
+**Response**: 401 `{ "error": "unauthorized" }`
+**Recovery**: Client navigates to sign-in screen
+
+---
+
+## Implementation Notes
+
+### TypeScript (Client)
+
+1. **Token Storage**: Use `localStorage` with key `stick_rumble_session_token`. On page load, read the token and pass it as `?token=` query parameter when establishing the WebSocket connection.
+2. **Token Refresh**: Session tokens expire after 30 days. There is no automatic refresh — the user must sign in again. The client may add automatic refresh in a future iteration.
+3. **Sign Out**: Clear `localStorage` and reconnect WebSocket as a guest. No server-side invalidation is required (the token expires naturally).
+4. **Google Sign-In Button**: Use the Google Identity Services library (`google.accounts.id.initialize()` and `google.accounts.id.renderButton()`). The callback receives a `CredentialResponse` with an `idToken` that is sent to `POST /api/auth/google`.
+
+### Go (Server)
+
+1. **AuthHandler**: Manages Google token validation, session token creation, player record lookup, and display name updates. Uses the database connection pool for all persistence.
+2. **StatsStore**: Manages lifetime stats reads and writes. Called by the match system on match end to persist per-player stats.
+3. **Database Connection**: Use `database/sql` with a PostgreSQL driver (`lib/pq` or `pgx`). Initialize the connection pool at server startup and inject it into `AuthHandler` and `StatsStore`.
+4. **Google Token Validation**: Use Google's tokeninfo endpoint: `GET https://oauth2.googleapis.com/tokeninfo?id_token=<token>`. Validate the response includes the expected `aud` (client ID) and `iss` (`https://accounts.google.com`).
+5. **HTTPS Requirement**: The Google OAuth flow requires a secure context. The server must be served over HTTPS in production. For local development, `http://localhost` is treated as a secure context by browsers.
+
+---
+
+## Test Scenarios
+
+### TS-ACCT-001: First-Time Google Auth Creates Player Record
+
+**Category**: Integration
+**Priority**: Critical
+
+**Preconditions:**
+- No existing player with the given Google `sub`
+- Valid Google ID token
+
+**Input:**
+- `POST /api/auth/google` with `{ "googleIdToken": "<valid_token>" }`
+
+**Expected Output:**
+- 200 response with session token
+- Player record created in `players` table with `google_sub` matching token
+- `display_name` is null (first login)
+- `LifetimeStats` row created for the player
+- Session token stored in `session_tokens` table
+- `expiresAt` is approximately 30 days from now
+
+### TS-ACCT-002: Returning Auth Returns Existing Player Record
+
+**Category**: Integration
+**Priority**: Critical
+
+**Preconditions:**
+- Existing player record with known `google_sub`
+- Valid Google ID token for the same `google_sub`
+
+**Input:**
+- `POST /api/auth/google` with `{ "googleIdToken": "<valid_token>" }`
+
+**Expected Output:**
+- 200 response with session token
+- Player record `player_id` matches existing record
+- `last_seen_at` is updated
+- `created_at` is unchanged
+- No duplicate player records created
+
+### TS-ACCT-003: Session Token Stored and Retrieved from localStorage
+
+**Category**: Unit
+**Priority**: High
+
+**Preconditions:**
+- Auth handler returns valid session token
+
+**Input:**
+- Client stores `result.sessionToken` to `localStorage.setItem("stick_rumble_session_token", token)`
+
+**Expected Output:**
+- `localStorage.getItem("stick_rumble_session_token")` returns the token
+- Token persists across page reloads
+
+### TS-ACCT-004: Display Name Picker Saves Name via PUT
+
+**Category**: Integration
+**Priority**: Critical
+
+**Preconditions:**
+- Valid session token (player with null display name)
+- New player record with no display name set
+
+**Input:**
+- `PUT /api/player/displayname` with `Authorization: Bearer <session_token>` and body `{ "displayName": "Alice" }`
+
+**Expected Output:**
+- 200 response with `{ "displayName": "Alice" }`
+- Player record `display_name` updated to "Alice"
+- Subsequent `POST /api/auth/google` returns `displayName: "Alice"` (not null)
+
+### TS-ACCT-005: Guest Connection Works Without Token
+
+**Category**: Integration
+**Priority**: Critical
+
+**Preconditions:**
+- Server running with auth enabled
+
+**Input:**
+- Client connects to `ws://server:8080/ws` (no `?token=` query parameter)
+- Client sends `player:hello { mode: "public", displayName: "Bob" }`
+
+**Expected Output:**
+- Server accepts the connection as a guest
+- Server assigns a fresh `player_id` (UUID)
+- Server uses the display name from `player:hello` (sanitized)
+- Player can play a match normally
+
+### TS-ACCT-006: Authed Connection with Valid Token Skips Name Picker
+
+**Category**: Integration
+**Priority**: High
+
+**Preconditions:**
+- Player exists with non-null `display_name` ("Charlie")
+- Valid session token for this player
+
+**Input:**
+- Client connects to `ws://server:8080/ws?token=<valid_token>`
+- Client sends `player:hello { mode: "public", displayName: "DifferentName" }`
+
+**Expected Output:**
+- Server identifies the player as authed (resolves `player_id` and `display_name` from DB)
+- Server uses `display_name` = "Charlie" (DB authoritative), ignores "DifferentName" from hello
+- Player skips display name picker and goes directly to lobby
+
+### TS-ACCT-007: Expired Token Falls Back to Guest
+
+**Category**: Integration
+**Priority**: High
+
+**Preconditions:**
+- Expired session token in `session_tokens` table
+- Client has expired token in `localStorage`
+
+**Input:**
+- Client connects to `ws://server:8080/ws?token=<expired_token>`
+
+**Expected Output:**
+- Server detects expired token
+- Server treats connection as guest
+- Server assigns a fresh `player_id`
+- Server does not return the DB display name
+- Stale token row may be cleaned up
+
+### TS-ACCT-008: Invalid Google Token Returns 401
+
+**Category**: Integration
+**Priority**: High
+
+**Preconditions:**
+- Server running
+
+**Input:**
+- `POST /api/auth/google` with `{ "googleIdToken": "clearly_invalid" }`
+
+**Expected Output:**
+- 401 response with `{ "error": "invalid_token" }`
+- No player record created
+- No session token issued
+
+### TS-ACCT-009: Display Name Sanitization Follows Rooms.md Rules
+
+**Category**: Unit
+**Priority**: Medium
+
+**Preconditions:**
+- Valid session token
+
+**Input:**
+- `PUT /api/player/displayname` with `{ "displayName": "  A  B  " }` (contains internal whitespace and leading/trailing spaces)
+
+**Expected Output:**
+- Server sanitizes to "A B" (trimmed, internal whitespace collapsed)
+- 200 response with `{ "displayName": "A B" }`
+- Player record updated to "A B"
+
+### TS-ACCT-010: Sign Out Clears Token and Returns to Guest State
+
+**Category**: Unit
+**Priority**: Medium
+
+**Preconditions:**
+- Client is signed in with a session token in `localStorage`
+- WebSocket is connected with the token
+
+**Input:**
+- User clicks "Sign Out"
+- Client calls `localStorage.removeItem("stick_rumble_session_token")`
+- Client disconnects WebSocket
+- Client reconnects to `ws://server:8080/ws` (no token)
+
+**Expected Output:**
+- `localStorage` no longer contains the session token
+- WebSocket reconnects as a guest
+- New `player_id` assigned
+- Client navigates to join_form
+
+---
+
+## Changelog
+
+| Version | Date | Changes |
+|---------|------|---------|
+| 1.0.0 | 2026-05-15 | Initial specification |

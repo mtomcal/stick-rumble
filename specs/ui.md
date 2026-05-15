@@ -1,8 +1,8 @@
 # UI System
 
-> **Spec Version**: 2.6.2
-> **Last Updated**: 2026-04-23
-> **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [match.md](match.md), [client-architecture.md](client-architecture.md), [graphics.md](graphics.md)
+> **Spec Version**: 2.7.1
+> **Last Updated**: 2026-05-15
+> **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [match.md](match.md), [client-architecture.md](client-architecture.md), [graphics.md](graphics.md), [accounts.md](accounts.md), [progression.md](progression.md)
 > **Depended By**: [test-index.md](test-index.md)
 
 ---
@@ -1304,7 +1304,7 @@ export function MatchEndScreen({ matchData, localPlayerId, onClose, onPlayAgain 
 
 **Trigger**: `player:death` event for local player
 
-> **Note:** This is distinct from the [Match End Screen](#match-end-screen-react-modal), which is a React modal triggered by `match:ended`. The Death Screen Overlay is a Phaser-rendered overlay shown on each individual death during the match.
+> **Note:** This is distinct from the [Match End Screen](#match-end-screen-react-full-screen), which is a React modal triggered by `match:ended`. The Death Screen Overlay is a Phaser-rendered overlay shown on each individual death during the match.
 
 **Why separate from Match End?** Players die multiple times per match. Each death needs immediate feedback without blocking the game permanently. The match end screen only appears once when the entire match concludes.
 
@@ -1859,10 +1859,305 @@ it('should use shared rank for equal-kill players', () => {
 
 ---
 
+## Application Screens (Auth & Progression)
+
+### Lobby Screen
+
+**Position**: Full React screen state — no Phaser canvas mounted.
+
+**Why this screen?** The lobby is the landing page for authenticated players. It replaces `join_form` as the home screen when the player has a valid session token. It shows the player's identity, progression, and provides access to matchmaking and profile.
+
+The lobby uses the shared [Design Language & Theme](#design-language--theme) — dark `#0A0A0A` background, gold `#FFD700` accents, and `#141414` surface cards.
+
+**Layout (top-to-bottom):**
+1. **Nav bar** — `STICK RUMBLE logo (gradient)` | `PLAY` | `PROFILE` | `Avatar + dropdown`
+2. **Hero section** — Stats/identity card (avatar, 4 stat cards, hexagon level badge, XP bar)
+3. **CTA row** — "PLAY PUBLIC" button (primary, gold fill) and "JOIN WITH CODE" button (secondary, gold outline)
+4. **Room code section** — Auto-generated room code with copy button
+
+No game screenshot is shown — the lobby is a functional utility page.
+
+#### Nav Bar
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  STICK RUMBLE        PLAY    PROFILE      [Avatar  ▾]  │
+│  (gradient gold)                                        │
+└──────────────────────────────────────────────────────────┘
+```
+
+| Element | Spec |
+|---------|------|
+| Logo | "STICK RUMBLE" in gold gradient (`#FFD700` → `#FFA500`), 20px bold, `background-clip: text` |
+| PLAY link | 16px, `#00FFFF` (cyan), hover: white underline. Navigates to matchmaking |
+| PROFILE link | 16px, `#00FFFF` (cyan), hover: white underline. Navigates to profile screen |
+| Avatar | 36×36 px, Google profile picture, circle clipped via `border-radius: 50%` |
+| Dropdown | Toggled on avatar click. Items: "Profile" → navigate to profile, "Sign Out" → clear token → navigate to sign_in screen |
+| Background | `#0A0A0A`, 80px height, bottom border: `1px solid #333333` |
+
+Other nav items from the marketing mockup (HOW TO PLAY, WEAPONS, ROADMAP, BULLS, ABOUT) are not active in the MVP lobby.
+
+#### Hero Section (Stats/Identity Card)
+
+The hero section replaces the game screenshot from the marketing page with the player's identity and stats. It is a single dark surface card (`#141414`, `12px` border radius, `1px solid #333333` border).
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                                                         │
+│  [Avatar 64px]  Sticks_Pro_42                           │
+│                                                         │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌─────────┐│
+│  │  KILLS   │  │ DEATHS   │  │   K/D    │  │   XP    ││
+│  │   127    │  │   98     │  │   1.30   │  │  2,450  ││
+│  └──────────┘  └──────────┘  └──────────┘  └─────────┘│
+│                                                         │
+│  [🔶 Hexagon]  LEVEL 7                                  │
+│  XP ████████████░░░░░░  1,250 / 2,500 XP                │
+│                                                         │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Avatar Row:**
+- Google profile picture: 64×64 px, circle clipped via `border-radius: 50%`
+- Display name: 24px bold, white (`#FFFFFF`)
+- Below avatar row: `8px` gap to stat cards
+
+**Stats Cluster (4 cards):**
+- Four equal-width cards in a horizontal row
+- Gap between cards: `24px`
+- Each card: `#141414` background, `12px` border radius, `1px solid #333333` border, `24px` padding
+- Value: 28px bold, white (`#FFFFFF`)
+- Label: 12px uppercase, `#999999`
+- Data sources:
+  - `KILLS` = `lifetimeStats.totalKills`
+  - `DEATHS` = `lifetimeStats.totalDeaths`
+  - `K/D` = `lifetimeStats.totalKills / lifetimeStats.totalDeaths` (or kills if deaths == 0), formatted to 2 decimal places
+  - `XP` = `lifetimeStats.totalXP`, formatted with commas
+
+**Level Hexagon Badge:**
+
+```
+     ┌──────────┐
+    ╱            ╲
+   │      7      │  ← White, bold, ~36px
+   │   LEVEL     │  ← Small uppercase label above number, #999999
+    ╲            ╱
+     └──────────┘
+```
+
+| Property | Value |
+|----------|-------|
+| Shape | Regular hexagon (6-sided polygon) |
+| Width | ~80px (flat-to-flat) |
+| Fill | `#141414` |
+| Border | `2px solid #FFD700` (gold) |
+| Level number | White (`#FFFFFF`), ~36px bold, centered |
+| "LEVEL" label | `#999999`, 10px uppercase, positioned above level number inside hexagon |
+| Position | Left of XP bar, vertically centered |
+
+**XP Progress Bar:**
+- Position: Right of hexagon badge, vertically centered
+- Bar dimensions: `250×16px`, rounded corners (`8px` border radius)
+- Background: `#333333`
+- Fill: `#FFD700` (gold), width proportional to `(currentXPInLevel / xpForLevel(currentLevel))`
+- Text below bar: "1,250 / 2,500 XP" — 14px, `#999999`
+- Level computation: See [progression.md → Leveling Curve](progression.md#leveling-curve)
+
+#### CTA Row
+
+Two buttons side by side, centered below the stats card. Gap between buttons: `24px`.
+
+**"PLAY PUBLIC" button (primary):**
+- Style: Gold fill (`#FFD700`), black text (`#000000`), `8px` border radius, `48px` height, `16px 32px` padding
+- Font: 16px bold, uppercase
+- Hover: Brightness `1.1`, cursor pointer
+- Action: Starts public matchmaking (sends `player:hello` with `mode: "public"`) — same flow as existing join_form
+
+**"JOIN WITH CODE" button (secondary):**
+- Style: `#0A0A0A` fill, gold border (`2px solid #FFD700`), gold text (`#FFD700`), `8px` border radius, `48px` height, `16px 32px` padding
+- Font: 16px bold, uppercase
+- Hover: Fill becomes gold, text becomes black
+- Action: Expands or navigates to room code input (see [rooms.md → Named Room Join](rooms.md#named-room-join))
+
+#### Room Code Section
+
+Below the CTA row, a dedicated section showing the player's current room code. A room code is auto-generated when the player enters the lobby.
+
+```
+─── or send a code ───
+
+┌──────────────────────────────────────────┐
+│                                          │
+│              47FX                   [📋] │
+│                                          │
+│   Make a room, send a code, settle it   │
+│                                          │
+└──────────────────────────────────────────┘
+```
+
+| Element | Spec |
+|---------|------|
+| Divider text | "─── or send a code ───" — 14px, `#666666`, centered |
+| Section card | `#141414` fill, `12px` border radius, `1px solid #333333` border, `32px` padding |
+| Room code | 48px monospace, `#FFD700` (gold), centered, letter-spaced |
+| Copy button | 40×40 px icon button, gold outline on hover, copies code to clipboard |
+| Instruction text | "Make a room, send a code, settle it" — 16px, `#CCCCCC`, centered, italic |
+
+**Behavior:**
+1. When the player enters the lobby, a room code is generated and displayed
+2. Player shares this code with friends out of band (chat, voice, text)
+3. Friends enter the code on their own lobby or join form to join the same room
+4. "Copy" button copies the code to clipboard and shows a brief "Copied!" tooltip
+5. The room code is the same `code` used in the `player:hello { mode: "code", code: "..." }` flow (see [rooms.md → Named Room Join](rooms.md#named-room-join))
+
+#### Post-Match State
+- When the player returns from a match, the stat cards, XP bar, and level hexagon reflect the updated `LifetimeStats`
+- If the player leveled up, the [Level-Up Toast](progression.md#level-up-toast-client-side) appears as an overlay, auto-dismissing after 3 seconds
+- The toast follows the golden accent theme: gold text, dark background
+
+### Profile Screen
+
+**Position**: Full React screen state — no Phaser canvas mounted. Accessed from the lobby's `PROFILE` nav link or dropdown menu.
+
+**Why this screen?** The profile screen provides detailed lifetime statistics, weapon breakdowns, and progression status. It is the "nice page" where players see their full history. The profile screen follows the same [Design Language & Theme](#design-language--theme) as the lobby.
+
+**Layout (top-to-bottom):**
+1. **Nav bar** — `← Back to Lobby` | `DISPLAY NAME centered` | *(no right-side elements)*
+2. **Stats overview** — 4 stat cards in a row: KILLS, DEATHS, K/D, TOTAL XP
+3. **Level section** — Large level hexagon badge with full XP progress bar
+4. **Weapon stats** — Per-weapon kill count table
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  ← Back to Lobby         Sticks_Pro_42                  │
+│                                                         │
+│  ┌──────┐  ┌──────┐  ┌──────┐  ┌──────┐              │
+│  │KILLS │  │DEATHS│  │ K/D  │  │ XP   │              │
+│  │ 127  │  │  98  │  │ 1.30 │  │2,450 │              │
+│  └──────┘  └──────┘  └──────┘  └──────┘              │
+│                                                         │
+│     ┌──────────┐                                       │
+│    ╱            ╲                                       │
+│   │      7      │   LEVEL 7                             │
+│   │   LEVEL     │   XP ████████████░░░░  1,250/2,500   │
+│    ╲            ╱                                       │
+│     └──────────┘                                       │
+│                                                         │
+│  ┌── WEAPON STATS ──────────────────────────────┐      │
+│  │  WEAPON                  KILLS               │      │
+│  │  ─────────────────────────────────────────   │      │
+│  │  AK47                    42                  │      │
+│  │  Pistol                  38                  │      │
+│  │  Shotgun                 25                  │      │
+│  │  Bat                     12                  │      │
+│  │  Katana                  10                  │      │
+│  │  Uzi                      3                  │      │
+│  └──────────────────────────────────────────────┘      │
+└─────────────────────────────────────────────────────────┘
+```
+
+#### Navigation Bar
+
+| Element | Spec |
+|---------|------|
+| Back arrow | "← Back to Lobby" — 16px, `#999999`, hover: `#FFFFFF`. Navigates to lobby |
+| Display name | 20px bold, white (`#FFFFFF`), centered |
+| Background | `#0A0A0A`, `80px` height, bottom border: `1px solid #333333` |
+
+#### Stats Overview
+
+- 4 cards in a horizontal row, equal width
+- Gap between cards: `24px`
+- Each card: `#141414` background, `12px` border radius, `1px solid #333333` border, `24px` padding, minimum width `150px`
+- Value: 24px bold, white (`#FFFFFF`)
+- Label: 12px uppercase, `#999999`
+- Data sources: Same as lobby — from `LifetimeStats`
+
+#### Level Section
+
+- Same [hexagon badge](#level-hexagon-badge) as lobby, but larger: `~100px` flat-to-flat
+- Level number: ~48px bold, white, centered inside hexagon
+- XP progress bar: `400×20px`, `#333333` background, `#FFD700` fill, `8px` border radius
+- XP text below bar: "X / Y XP" — 14px, `#999999`, centered
+- Position: Centered below stat cards, `32px` vertical gap
+
+#### Weapon Stats Table
+
+| Element | Spec |
+|---------|------|
+| Container | `#141414` background, `12px` border radius, `1px solid #333333` border, `24px` padding |
+| Title | "WEAPON STATS" — 16px bold, white (`#FFFFFF`), uppercase, left-aligned |
+| Table layout | Two columns: WEAPON (left) and KILLS (right) |
+| Header row | 12px uppercase, `#999999`, bottom border `1px solid #333333` |
+| Weapon names | 16px, white (`#FFFFFF`) |
+| Kill counts | 16px bold, white (`#FFFFFF`), right-aligned |
+| Row highlight | Most-used weapon row gets gold (`#FFD700`) kill count or left gold border accent |
+| Weapons | Pistol, Uzi, AK47, Shotgun, Bat, Katana — ordered by kills descending |
+| Gap between rows | `8px` row padding with subtle `1px solid #2A2A2A` row separator |
+| Empty state | If a weapon has 0 kills, show "0"
+
+### Display Name Picker Screen
+
+**Position**: Full React screen state — no Phaser canvas mounted.
+
+**Trigger**: Displayed after successful Google OAuth sign-in when the player record has no display name (first-time login).
+
+**Why this screen?** Players must choose their in-game display name before entering the lobby. The name is sanitized server-side per rooms.md rules.
+
+**Visual Specification:**
+
+Layout:
+- Title: "Choose Your Name" (32px bold, white, centered)
+- Subtitle: "This is how other players will see you in-game" (14px, gray #AAAAAA)
+- Input field: 300×40 px, rounded, background #333333, white text 18px, placeholder "Enter a name..."
+- Character counter: N/16 (14px, gray #AAAAAA), turns red at 16
+- "Confirm" button: 200×44 px, rounded, gold (`#FFD700`) background, black (`#000000`) text 16px bold
+- Disabled state: Button grayed out (#555555) when input is empty or invalid
+- Inline validation: Red text below input if name fails server validation
+
+Behavior:
+1. Player types display name (max 16 characters, input is live-validated for length)
+2. Character counter updates in real time
+3. "Confirm" button enabled only when name is 1-16 chars (non-whitespace)
+4. On confirm: POST `PUT /api/player/displayname` with `Authorization: Bearer <session_token>`
+5. On success: navigate to lobby
+6. On error (400 bad name): show inline error message, keep screen
+7. On error (401 session expired): navigate to sign_in screen
+
+### Sign In Screen
+
+**Position**: Full React screen state — no Phaser canvas mounted. This is the first screen a new visitor sees.
+
+**Why this screen?** The sign-in screen offers two entry paths: sign in with Google for persistent stats, or play as a guest for instant drop-in play.
+
+**Visual Specification:**
+
+Layout:
+- Game logo/title: "STICK RUMBLE" (48px bold, white, centered, with stick figure icon or typographic flair)
+- Subtitle: "A multiplayer stick figure arena shooter" (16px, gray #AAAAAA)
+- Google sign-in button: Standard Google sign-in button (Google Identity Services rendered button), centered
+- Divider: "— or —" (14px, gray #666666)
+- "Play as Guest" link: 16px, gold (`#FFD700`), underlined on hover
+- Footer: Tiny credit/version text (12px, #555555)
+
+Behavior:
+1. Google sign-in button triggers Google OAuth popup via `google.accounts.id` library
+2. On successful OAuth: POST Google id_token to `POST /api/auth/google`
+3. If displayName is null → navigate to display_name_picker
+4. If displayName is set → navigate to lobby
+5. On OAuth error: show inline error message ("Sign-in failed. Please try again.")
+6. "Play as Guest" navigates to `join_form` (existing behavior, no auth needed)
+
+For the Lobby and Profile sections, note that stat values are loaded via a new WebSocket message or HTTP endpoint when the player enters these screens. The lobby loads LifetimeStats when first entered. The match system posts match results on match end (see progression.md → Event to Track), and the lobby displays the latest stats on arrival.
+
+---
+
 ## Changelog
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.7.0 | 2026-05-15 | Added authentication and progression screens: Lobby Screen (level card, stats cluster, Google avatar, play CTA), Profile Screen (full lifetime stats, weapon breakdown), Display Name Picker Screen (first-time name selection), and Sign In Screen (Google OAuth + guest drop-in). See [accounts.md](accounts.md) and [progression.md](progression.md) for the supporting infrastructure. |
+| 2.7.1 | 2026-05-15 | Design language pass: added Design Language & Theme section with color palette, typography, spacing scale, card/button styling, and gradient text treatment derived from the marketing landing page mockup. Updated Lobby Screen: replaced green buttons with gold (`#FFD700`), added STICK RUMBLE logo nav with PLAY/PROFILE links, changed stat cluster from 3 cards to 4 (KILLS, DEATHS, K/D, XP), added hexagon level badge spec, added room code section. Updated Profile Screen: applied dark-surface card language, added hexagon level badge, aligned table styling with design theme. Updated Display Name Picker and Sign In buttons to use gold accent. |
 | 2.6.2 | 2026-04-23 | Replaced mobile-mode opt-in language with automatic detection: phone-sized touch layouts should enter mobile mode without a gameplay button, while desktop layouts continue using the existing centered stage. |
 | 2.6.1 | 2026-04-23 | Added explicit mobile-mode selection rules: mobile mode is a client-local optional mode that must not silently replace desktop behavior or remount an active match when toggled. |
 | 2.6.0 | 2026-04-23 | Added mobile gameplay mode as an optional desktop-parity overlay mode: full-bleed landscape phone stage, safe-area-aware touch controls, preserved top HUD ownership, and no in-match multiplayer chat footprint. |

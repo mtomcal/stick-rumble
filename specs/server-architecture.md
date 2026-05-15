@@ -1,7 +1,7 @@
 # Server Architecture
 
-> **Spec Version**: 1.3.0
-> **Last Updated**: 2026-04-25
+> **Spec Version**: 1.3.1
+> **Last Updated**: 2026-05-15
 > **Depends On**: [overview.md](overview.md), [constants.md](constants.md), [networking.md](networking.md), [rooms.md](rooms.md), [messages.md](messages.md), [maps.md](maps.md)
 > **Depended By**: None (leaf spec)
 
@@ -32,7 +32,8 @@ The server uses a **dual-loop architecture**: a 60Hz physics tick for accurate s
 | gorilla/websocket | v1.5.3 | WebSocket protocol implementation |
 | google/uuid | v1.6.0 | Player and room ID generation |
 | kaptinlin/jsonschema | v0.6.6 | Optional message schema validation |
-| Standard library | - | net/http, sync, time, context |
+| lib/pq or pgx | - | PostgreSQL driver for auth and stats persistence |
+| Standard library | - | net/http, sync, time, context, database/sql |
 
 ### Spec Dependencies
 
@@ -42,6 +43,8 @@ The server uses a **dual-loop architecture**: a 60Hz physics tick for accurate s
 - [rooms.md](rooms.md) - Room management and matchmaking logic
 - [messages.md](messages.md) - Complete message catalog
 - [maps.md](maps.md) - Shared map registry, room-level `mapId`, and obstacle semantics
+- [accounts.md](accounts.md) - Authentication, session tokens, lifetime stats
+- [progression.md](progression.md) - Leveling curve, match-end stats processing
 
 ---
 
@@ -53,25 +56,32 @@ stick-rumble-server/
 │   └── server/
 │       └── main.go           # Entry point, HTTP server, graceful shutdown
 └── internal/
+    ├── auth/
+    │   └── handler.go             # Google OAuth token validation, session token management
+    ├── db/
+    │   ├── connection.go          # PostgreSQL connection pool initialization
+    │   ├── player_store.go        # PlayerRecord CRUD
+    │   ├── session_store.go       # SessionToken CRUD
+    │   └── stats_store.go         # LifetimeStats read/write
     ├── game/
-    │   ├── clock.go           # Time abstraction for testing
-    │   ├── constants.go       # Game constants
-    │   ├── gameserver.go      # Dual-loop game engine
-    │   ├── maps.go            # Shared map registry loading and validation
-    │   ├── match.go           # Match lifecycle and win conditions
-    │   ├── melee_attack.go    # Melee hit detection
-    │   ├── physics.go         # Movement and collision
-    │   ├── ping_tracker.go    # [NEW] RTT measurement (circular buffer of 5)
-    │   ├── player.go          # PlayerState and InputState
-    │   ├── position_history.go # [NEW] Position rewind buffer for lag compensation
-    │   ├── projectile.go      # Projectile lifecycle
-    │   ├── ranged_attack.go   # Ranged attack processing
-    │   ├── room.go            # Room and RoomManager
-    │   ├── weapon.go          # Weapon and WeaponState
-    │   ├── weapon_config.go   # Weapon stat loading
-    │   ├── weapon_crate.go    # Weapon spawn management
-    │   ├── weapon_factory.go  # [NEW] Weapon creation factory
-    │   └── world.go           # World state and spawn points
+    │   ├── clock.go               # Time abstraction for testing
+    │   ├── constants.go           # Game constants
+    │   ├── gameserver.go          # Dual-loop game engine
+    │   ├── maps.go                # Shared map registry loading and validation
+    │   ├── match.go               # Match lifecycle and win conditions
+    │   ├── melee_attack.go        # Melee hit detection
+    │   ├── physics.go             # Movement and collision
+    │   ├── ping_tracker.go        # [NEW] RTT measurement (circular buffer of 5)
+    │   ├── player.go              # PlayerState and InputState
+    │   ├── position_history.go    # [NEW] Position rewind buffer for lag compensation
+    │   ├── projectile.go          # Projectile lifecycle
+    │   ├── ranged_attack.go       # Ranged attack processing
+    │   ├── room.go                # Room and RoomManager
+    │   ├── weapon.go              # Weapon and WeaponState
+    │   ├── weapon_config.go       # Weapon stat loading
+    │   ├── weapon_crate.go        # Weapon spawn management
+    │   ├── weapon_factory.go      # [NEW] Weapon creation factory
+    │   └── world.go               # World state and spawn points
     └── network/
         ├── broadcast_helper.go     # Message broadcast with delta compression
         ├── delta_tracker.go        # [NEW] Per-client delta compression state
@@ -149,7 +159,9 @@ The sink may ignore outcomes it does not need, but the runtime must emit them as
 
 ### WebSocketHandler
 
-Manages WebSocket connections and routes messages to the game server.
+Manages WebSocket connections and routes messages to the game server. Also handles token-based authentication during the HTTP-to-WebSocket upgrade.
+
+The upgrade handler checks for an optional `?token=` query parameter. If present and valid, the player is authed and the DB-stored `displayName` is authoritative. If absent or invalid, the player is a guest (existing behavior). See [accounts.md → WebSocket Upgrade with Token](accounts.md#websocket-upgrade-with-token) and [networking.md → Authenticated Connection](networking.md#authenticated-connection) for the full contract.
 
 **Go:**
 ```go
@@ -176,6 +188,44 @@ All WebSocket connections share a single handler instance to ensure:
 1. All connections share the same RoomManager (matchmaking state)
 2. All connections share the same GameServer bootstrap and shared map registry
 3. Global broadcasts reach all players correctly
+4. Token-based auth resolution uses the same AuthHandler and DB connection pool
+
+### AuthHandler
+
+Manages Google OAuth token validation, session token creation, player record lookup, and display name updates.
+
+**Go:**
+```go
+type AuthHandler struct {
+    playerStore  *PlayerStore
+    sessionStore *SessionStore
+    db           *sql.DB
+    googleClientID string  // Expected Google OAuth client ID for audience validation
+}
+```
+
+**Required behavior:**
+- validate Google ID tokens by calling `https://oauth2.googleapis.com/tokeninfo?id_token=<token>`
+- resolve Google `sub` to `PlayerRecord` (create if new, update `last_seen_at` if existing)
+- generate 256-bit opaque session tokens, store SHA-256 hashes in `session_tokens` table
+- validate session tokens on WebSocket upgrade and display name updates
+
+### StatsStore
+
+Manages lifetime stats reads and writes for the progression system.
+
+**Go:**
+```go
+type StatsStore struct {
+    db *sql.DB
+}
+```
+
+**Required behavior:**
+- create a `lifetime_stats` row for a new player
+- retrieve `LifetimeStats` by `player_id`
+- update `LifetimeStats` with match-end results (kills, deaths, XP, games, wins, per-weapon-kills)
+- called by the match system on match end (see [progression.md → Event to Track](progression.md#event-to-track))
 
 ### MapRegistry
 
@@ -772,6 +822,8 @@ func startServer(ctx context.Context) error {
         w.Write([]byte("OK"))
     })
     mux.HandleFunc("/ws", network.HandleWebSocket) // global singleton
+    mux.HandleFunc("/api/auth/google", authHandler.HandleGoogleSignIn)      // POST: Google OAuth sign-in
+    mux.HandleFunc("/api/player/displayname", authHandler.HandleSetDisplayName) // PUT: set display name
 
     server := &http.Server{
         Addr:         host + ":" + port,
@@ -1370,6 +1422,7 @@ func TestConcurrentAccess(t *testing.T) {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.3.1 | 2026-05-15 | Accounts & Progression: added `auth/` and `db/` directories to application folder structure tree (now real, not planned). Added `AuthHandler` and `StatsStore` data structures. Added `POST /api/auth/google` and `PUT /api/player/displayname` HTTP endpoints to the server mux. Added PostgreSQL driver to technology dependencies. Updated WebSocketHandler description to mention token-based auth. Added [accounts.md](accounts.md) and [progression.md](progression.md) to spec dependencies. |
 | 1.2.1 | 2026-04-25 | Room session flow seam: documented a dedicated server-side module that owns hello acceptance, matchmaking and waiting transitions, `match_ready` decisions, and pre-match `session:leave` policy while `RoomManager` remains the single owner of stored room state. |
 | 1.2.0 | 2026-02-18 | Art style alignment: Documented that Respawn() sets IsInvulnerable=true for 2 seconds, cleared by UpdateInvulnerability(). |
 | 1.1.8 | 2026-02-16 | Fixed ManualClock — `sync.Mutex` → `sync.RWMutex`, field `current` → `currentTime` to match clock.go |
