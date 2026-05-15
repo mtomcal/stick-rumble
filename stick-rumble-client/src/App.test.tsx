@@ -371,8 +371,7 @@ describe('App', () => {
   })
 
   it('Play Public from Lobby → App enters matchMode → MatchShell renders join_form overlay', async () => {
-    const { getSessionToken } = await import('./game/network/sessionToken')
-    getSessionToken.mockReturnValue('test-auth-token')
+    vi.mocked(getSessionToken).mockReturnValue('test-auth-token')
     testState.shell = createShell({ viewState: 'join_form' })
 
     render(
@@ -414,8 +413,7 @@ describe('App', () => {
 
   it('MatchShell mounts fresh → WebSocketClient constructed with encoded token (authed) or no token (guest)', async () => {
     // Authed path
-    const { getSessionToken } = await import('./game/network/sessionToken')
-    getSessionToken.mockReturnValue('test-auth-token')
+    vi.mocked(getSessionToken).mockReturnValue('test-auth-token')
     testState.shell = createShell({ viewState: 'join_form' })
 
     render(
@@ -439,8 +437,7 @@ describe('App', () => {
   })
 
   it('Match end (authed) → MatchEndScreen close → onExitToLobby → App exits matchMode → renders /lobby', async () => {
-    const { getSessionToken } = await import('./game/network/sessionToken')
-    getSessionToken.mockReturnValue('test-auth-token')
+    vi.mocked(getSessionToken).mockReturnValue('test-auth-token')
     const shell = createShell({
       viewState: 'match_end',
       matchEndData: {
