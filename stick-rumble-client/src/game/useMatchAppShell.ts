@@ -58,6 +58,8 @@ export interface MatchAppShellOptions {
   storage?: Storage | null
   tabId?: string
   createBroadcastChannel?: (name: string) => BroadcastChannelLike | null
+  sessionToken?: string
+  isAuthed?: boolean
 }
 
 export interface MatchAppShellModel {
@@ -112,8 +114,8 @@ function getBrowserStorage(): Storage | null {
   return null
 }
 
-function createDefaultClient(): MatchAppShellClient {
-  return new WebSocketClient(getWebSocketUrl(), false)
+function createDefaultClient(sessionToken?: string): MatchAppShellClient {
+  return new WebSocketClient(getWebSocketUrl(), false, undefined, sessionToken)
 }
 
 function createDefaultBroadcastChannel(name: string): BroadcastChannelLike | null {
@@ -147,7 +149,7 @@ export function useMatchAppShell(options: MatchAppShellOptions = {}): MatchAppSh
     () => options.initialSavedDisplayName ?? storage?.getItem(DISPLAY_NAME_STORAGE_KEY) ?? '',
     [options.initialSavedDisplayName, storage],
   )
-  const [client] = useState<MatchAppShellClient>(() => options.client ?? createDefaultClient())
+  const [client] = useState<MatchAppShellClient>(() => options.client ?? createDefaultClient(options.sessionToken))
   const [tabId] = useState(
     () => options.tabId ?? `tab-${globalThis.crypto?.randomUUID?.() ?? Date.now().toString(36)}`,
   )

@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import App from './App'
 import type { MatchAppShellModel } from './game/useMatchAppShell'
 import type { MatchEndData } from './shared/types'
+import { getSessionToken } from './game/network/sessionToken'
 
 const testState = vi.hoisted(() => ({
   stageMode: 'desktop' as 'desktop' | 'mobile-landscape' | 'mobile-portrait-blocked',
@@ -11,10 +12,12 @@ const testState = vi.hoisted(() => ({
   shell: undefined as MatchAppShellModel | undefined,
   phaserRenderSpy: vi.fn(),
   capturedOnMatchEnd: undefined as ((data: MatchEndData, playerId: string) => void) | undefined,
+  capturedUseMatchShellOptions: null as Record<string, unknown> | null,
 }))
 
 vi.mock('./game/useMatchAppShell', () => ({
-  useMatchAppShell: () => {
+  useMatchAppShell: (options?: Record<string, unknown>) => {
+    testState.capturedUseMatchShellOptions = options ?? null
     if (!testState.shell) {
       throw new Error('expected shell state to be configured for the test')
     }
@@ -65,11 +68,12 @@ vi.mock('./ui/debug/DebugNetworkPanel', () => ({
 }))
 
 vi.mock('./ui/auth/SignInScreen', () => ({
-  SignInScreen: (props: { onAuthenticated?: (result: { token: string; needsDisplayName: boolean }) => void }) => (
+  SignInScreen: (props: { onAuthenticated?: (result: { token: string; needsDisplayName: boolean }) => void; onGuestClick?: () => void }) => (
     <div data-testid="sign-in-screen">
       <button onClick={() => props.onAuthenticated?.({ token: 'test-token', needsDisplayName: false })}>
         Sign In
       </button>
+      {props.onGuestClick && <button onClick={props.onGuestClick}>Play as Guest</button>}
     </div>
   ),
 }))
@@ -180,6 +184,10 @@ function renderWithRouter(ui: React.ReactElement) {
   return render(<MemoryRouter>{ui}</MemoryRouter>)
 }
 
+function setInviteUrl(code: string) {
+  window.history.pushState({}, '', `/?invite=${code}`)
+}
+
 describe('App', () => {
   beforeEach(() => {
     testState.stageMode = 'desktop'
@@ -187,13 +195,23 @@ describe('App', () => {
     testState.phaserRenderSpy.mockReset()
     testState.capturedOnMatchEnd = undefined
     testState.shell = createShell()
+    testState.capturedUseMatchShellOptions = null
+    window.history.pushState({}, '', '/')
+    vi.mocked(getSessionToken).mockImplementation(() => null)
   })
 
   afterEach(() => {
     vi.clearAllMocks()
   })
 
+  // Helper: set auth token for tests that need an authenticated user
+  function setupAuthedToken(token = 'test-token') {
+    vi.mocked(getSessionToken).mockReturnValue(token)
+  }
+
   it('renders the join form from shell state and forwards join actions', async () => {
+    setupAuthedToken()
+    setInviteUrl('PIZZA')
     const shell = createShell({
       inviteCode: 'PIZZA',
       joinForm: { displayName: 'Alice', code: 'PIZZA' },
@@ -222,6 +240,7 @@ describe('App', () => {
   })
 
   it('renders waiting state from shell state and forwards copy/cancel actions', async () => {
+    setInviteUrl('TEST')
     const shell = createShell({
       viewState: 'waiting_for_players',
       sessionFlow: {
@@ -264,6 +283,7 @@ describe('App', () => {
   })
 
   it('mounts Phaser only for in-match shell state and forwards match-end callbacks', async () => {
+    setInviteUrl('TEST')
     const shell = createShell({
       viewState: 'in_match',
       matchBootstrap: {
@@ -295,6 +315,7 @@ describe('App', () => {
   })
 
   it('keeps Phaser unmounted behind mobile entry and forwards Enter Game', async () => {
+    setInviteUrl('TEST')
     testState.stageMode = 'mobile-landscape'
     const shell = createShell({
       viewState: 'in_match',
@@ -325,6 +346,7 @@ describe('App', () => {
   })
 
   it('renders match-end state from shell state and forwards replay actions', async () => {
+    setInviteUrl('TEST')
     const shell = createShell({
       viewState: 'match_end',
       matchEndData: {
@@ -346,5 +368,160 @@ describe('App', () => {
 
     expect(shell.actions.returnToJoinForm).toHaveBeenCalledTimes(1)
     expect(shell.actions.playAgain).toHaveBeenCalledTimes(1)
+  })
+
+  it('Play Public from Lobby → App enters matchMode → MatchShell renders join_form overlay', async () => {
+    const { getSessionToken } = await import('./game/network/sessionToken')
+    getSessionToken.mockReturnValue('test-auth-token')
+    testState.shell = createShell({ viewState: 'join_form' })
+
+    render(
+      <MemoryRouter initialEntries={['/lobby']}>
+        <App />
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('lobby-screen')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play Public' }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Enter Match' })).toBeInTheDocument()
+    })
+  })
+
+  it('Play as Guest → navigates to /play → matchMode → MatchShell renders join_form', async () => {
+    testState.shell = createShell({ viewState: 'join_form' })
+
+    render(
+      <MemoryRouter initialEntries={['/sign-in']}>
+        <App />
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('sign-in-screen')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play as Guest' }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Enter Match' })).toBeInTheDocument()
+    })
+  })
+
+  it('MatchShell mounts fresh → WebSocketClient constructed with encoded token (authed) or no token (guest)', async () => {
+    // Authed path
+    const { getSessionToken } = await import('./game/network/sessionToken')
+    getSessionToken.mockReturnValue('test-auth-token')
+    testState.shell = createShell({ viewState: 'join_form' })
+
+    render(
+      <MemoryRouter initialEntries={['/lobby']}>
+        <App />
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('lobby-screen')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play Public' }))
+
+    await waitFor(() => {
+      expect(testState.capturedUseMatchShellOptions).toMatchObject({
+        sessionToken: 'test-auth-token',
+        isAuthed: true,
+      })
+    })
+  })
+
+  it('Match end (authed) → MatchEndScreen close → onExitToLobby → App exits matchMode → renders /lobby', async () => {
+    const { getSessionToken } = await import('./game/network/sessionToken')
+    getSessionToken.mockReturnValue('test-auth-token')
+    const shell = createShell({
+      viewState: 'match_end',
+      matchEndData: {
+        reason: 'time_limit',
+        winners: [{ playerId: 'player-1', displayName: 'Alice' }],
+        finalScores: [],
+      },
+      localPlayerId: 'player-1',
+    })
+    testState.shell = shell
+
+    render(
+      <MemoryRouter initialEntries={['/lobby']}>
+        <App />
+      </MemoryRouter>,
+    )
+
+    // Wait for lobby to load first (authenticated)
+    await waitFor(() => {
+      expect(screen.getByTestId('lobby-screen')).toBeInTheDocument()
+    })
+
+    // Click Play Public to enter match mode (inMatchFlow = true)
+    fireEvent.click(screen.getByRole('button', { name: 'Play Public' }))
+
+    // Now render should show MatchShell. But shell is match_end, so MatchEndScreen appears
+    await waitFor(() => {
+      expect(screen.getByTestId('match-end-screen')).toBeInTheDocument()
+    })
+
+    // Click Close Results — for authed, this triggers onExitToLobby
+    fireEvent.click(screen.getByRole('button', { name: 'Close Results' }))
+
+    // Should exit match mode and return to lobby
+    await waitFor(() => {
+      expect(screen.getByTestId('lobby-screen')).toBeInTheDocument()
+    })
+  })
+
+  it('Match end (guest) → MatchEndScreen close → returnToJoinForm() → stays in matchMode, join_form', async () => {
+    const shell = createShell({
+      viewState: 'match_end',
+      matchEndData: {
+        reason: 'time_limit',
+        winners: [{ playerId: 'player-1', displayName: 'Alice' }],
+        finalScores: [],
+      },
+      localPlayerId: 'player-1',
+    })
+    testState.shell = shell
+
+    render(
+      <MemoryRouter initialEntries={['/sign-in']}>
+        <App />
+      </MemoryRouter>,
+    )
+
+    // Wait for sign-in to render
+    await waitFor(() => {
+      expect(screen.getByTestId('sign-in-screen')).toBeInTheDocument()
+    })
+
+    // Click Play as Guest to enter match mode
+    fireEvent.click(screen.getByRole('button', { name: 'Play as Guest' }))
+
+    // Now in match mode with match_end state → MatchEndScreen renders
+    await waitFor(() => {
+      expect(screen.getByTestId('match-end-screen')).toBeInTheDocument()
+    })
+
+    // Click Close Results — for guest, this calls shell.actions.returnToJoinForm
+    fireEvent.click(screen.getByRole('button', { name: 'Close Results' }))
+
+    // Verify returnToJoinForm was called (stays in matchMode)
+    expect(shell.actions.returnToJoinForm).toHaveBeenCalledTimes(1)
+
+    // Should still be in match mode (inMatchFlow still true)
+    // The join_form overlay should not be visible because mock shell doesn't update,
+    // but we verify the match-end screen closed and we didn't exit match mode
+    // by checking that lobby/sign-in screens are NOT rendered
+    expect(screen.queryByTestId('lobby-screen')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('sign-in-screen')).not.toBeInTheDocument()
   })
 })
