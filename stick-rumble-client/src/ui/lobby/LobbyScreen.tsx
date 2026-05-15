@@ -7,9 +7,10 @@ import type { PlayerInfo } from '../../shared/types';
 interface LobbyScreenProps {
   onPlayPublic: () => void;
   onSignOut: () => void;
+  onNavigateProfile?: () => void;
 }
 
-export function LobbyScreen({ onPlayPublic, onSignOut }: LobbyScreenProps) {
+export function LobbyScreen({ onPlayPublic, onSignOut, onNavigateProfile }: LobbyScreenProps) {
   const token = getSessionToken();
   const [player, setPlayer] = useState<PlayerInfo | null>(null);
   const [loading, setLoading] = useState(!!token);
@@ -21,8 +22,8 @@ export function LobbyScreen({ onPlayPublic, onSignOut }: LobbyScreenProps) {
     }
 
     fetchPlayerMe(token).then((result) => {
-      if (result) {
-        setPlayer(result);
+      if (result.status === 'ok') {
+        setPlayer(result.player);
         setError('');
       } else {
         setError('Could not load player data.');
@@ -114,6 +115,11 @@ export function LobbyScreen({ onPlayPublic, onSignOut }: LobbyScreenProps) {
         <button className="lobby-play-public" onClick={onPlayPublic}>
           Play Public
         </button>
+        {onNavigateProfile && (
+          <button className="lobby-profile-button" onClick={onNavigateProfile}>
+            Profile
+          </button>
+        )}
         <button className="lobby-sign-out" onClick={onSignOut}>
           Sign Out
         </button>

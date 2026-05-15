@@ -19,7 +19,7 @@ describe('LobbyScreen', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockFetchPlayerMe.mockResolvedValue({
+    mockFetchPlayerMe.mockResolvedValue({ status: 'ok', player: {
       playerId: 'abc-123',
       displayName: 'TestPlayer',
       avatarUrl: 'https://example.com/avatar.jpg',
@@ -34,7 +34,7 @@ describe('LobbyScreen', () => {
         totalXp: 5000,
         damageDealt: 10000,
       },
-    });
+    } });
   });
 
   it('renders loading state initially', () => {

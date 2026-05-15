@@ -1,5 +1,6 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { MemoryRouter } from 'react-router-dom'
 import App from './App'
 import type { MatchAppShellModel } from './game/useMatchAppShell'
 import type { MatchEndData } from './shared/types'
@@ -63,6 +64,70 @@ vi.mock('./ui/debug/DebugNetworkPanel', () => ({
   DebugNetworkPanel: () => <div data-testid="debug-panel" />,
 }))
 
+vi.mock('./ui/auth/SignInScreen', () => ({
+  SignInScreen: (props: { onAuthenticated?: (result: { token: string; needsDisplayName: boolean }) => void }) => (
+    <div data-testid="sign-in-screen">
+      <button onClick={() => props.onAuthenticated?.({ token: 'test-token', needsDisplayName: false })}>
+        Sign In
+      </button>
+    </div>
+  ),
+}))
+
+vi.mock('./ui/auth/DisplayNamePickerScreen', () => ({
+  DisplayNamePickerScreen: (props: { onConfirm?: () => void }) => (
+    <div data-testid="display-name-picker-screen">
+      <button onClick={() => props.onConfirm?.()}>Confirm Name</button>
+    </div>
+  ),
+}))
+
+vi.mock('./ui/lobby/LobbyScreen', () => ({
+  LobbyScreen: (props: { onPlayPublic: () => void; onSignOut: () => void; onNavigateProfile?: () => void }) => (
+    <div data-testid="lobby-screen">
+      <button onClick={props.onPlayPublic}>Play Public</button>
+      <button onClick={props.onSignOut}>Sign Out</button>
+      {props.onNavigateProfile && <button onClick={props.onNavigateProfile}>Profile</button>}
+    </div>
+  ),
+}))
+
+vi.mock('./ui/profile/ProfileScreen', () => ({
+  ProfileScreen: (props: { onBack: () => void }) => (
+    <div data-testid="profile-screen">
+      <button onClick={props.onBack}>Back to Lobby</button>
+    </div>
+  ),
+}))
+
+vi.mock('./game/network/sessionToken', () => ({
+  getSessionToken: vi.fn(() => null),
+  storeSessionToken: vi.fn(),
+  clearSessionToken: vi.fn(),
+  hasSessionToken: vi.fn(() => false),
+}))
+
+vi.mock('./game/network/playerApi', () => ({
+  fetchPlayerMe: vi.fn(() => Promise.resolve({
+    status: 'ok',
+    player: {
+      playerId: 'abc-123',
+      displayName: 'TestPlayer',
+      level: 4,
+      currentLevelXp: 500,
+      xpForNextLevel: 2500,
+      lifetimeStats: {
+        kills: 100,
+        deaths: 50,
+        wins: 20,
+        gamesPlayed: 80,
+        totalXp: 5000,
+        damageDealt: 10000,
+      },
+    },
+  })),
+}))
+
 function createShell(overrides: Partial<MatchAppShellModel> = {}): MatchAppShellModel {
   const actions = {
     setDisplayName: vi.fn(),
@@ -111,6 +176,10 @@ function createShell(overrides: Partial<MatchAppShellModel> = {}): MatchAppShell
   }
 }
 
+function renderWithRouter(ui: React.ReactElement) {
+  return render(<MemoryRouter>{ui}</MemoryRouter>)
+}
+
 describe('App', () => {
   beforeEach(() => {
     testState.stageMode = 'desktop'
@@ -124,16 +193,18 @@ describe('App', () => {
     vi.clearAllMocks()
   })
 
-  it('renders the join form from shell state and forwards join actions', () => {
+  it('renders the join form from shell state and forwards join actions', async () => {
     const shell = createShell({
       inviteCode: 'PIZZA',
       joinForm: { displayName: 'Alice', code: 'PIZZA' },
     })
     testState.shell = shell
 
-    render(<App />)
+    renderWithRouter(<App />)
 
-    expect(screen.getByRole('heading', { name: 'Join Invite' })).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Join Invite' })).toBeInTheDocument()
+    })
     fireEvent.change(screen.getByRole('textbox', { name: 'Display Name' }), {
       target: { value: 'Bob' },
     })
@@ -150,7 +221,7 @@ describe('App', () => {
     expect(screen.queryByTestId('phaser-game')).not.toBeInTheDocument()
   })
 
-  it('renders waiting state from shell state and forwards copy/cancel actions', () => {
+  it('renders waiting state from shell state and forwards copy/cancel actions', async () => {
     const shell = createShell({
       viewState: 'waiting_for_players',
       sessionFlow: {
@@ -180,9 +251,11 @@ describe('App', () => {
     })
     testState.shell = shell
 
-    render(<App />)
+    renderWithRouter(<App />)
 
-    expect(screen.getByText('Room Code: PIZZA')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('Room Code: PIZZA')).toBeInTheDocument()
+    })
     fireEvent.click(screen.getByRole('button', { name: 'Copy Invite Link' }))
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
 
@@ -190,7 +263,7 @@ describe('App', () => {
     expect(shell.actions.cancelWaiting).toHaveBeenCalledTimes(1)
   })
 
-  it('mounts Phaser only for in-match shell state and forwards match-end callbacks', () => {
+  it('mounts Phaser only for in-match shell state and forwards match-end callbacks', async () => {
     const shell = createShell({
       viewState: 'in_match',
       matchBootstrap: {
@@ -206,9 +279,11 @@ describe('App', () => {
     })
     testState.shell = shell
 
-    render(<App />)
+    renderWithRouter(<App />)
 
-    expect(screen.getByTestId('phaser-game')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByTestId('phaser-game')).toBeInTheDocument()
+    })
     expect(screen.getByTestId('stage-shell')).toHaveAttribute('data-stage-mode', 'desktop')
 
     testState.capturedOnMatchEnd?.({ reason: 'time_limit', winners: [], finalScores: [] }, 'player-1')
@@ -219,7 +294,7 @@ describe('App', () => {
     )
   })
 
-  it('keeps Phaser unmounted behind mobile entry and forwards Enter Game', () => {
+  it('keeps Phaser unmounted behind mobile entry and forwards Enter Game', async () => {
     testState.stageMode = 'mobile-landscape'
     const shell = createShell({
       viewState: 'in_match',
@@ -237,17 +312,19 @@ describe('App', () => {
     })
     testState.shell = shell
 
-    render(<App />)
+    renderWithRouter(<App />)
 
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Enter Game' })).toBeInTheDocument()
+    })
     expect(screen.queryByTestId('phaser-game')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Enter Game' })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Enter Game' }))
 
     expect(shell.actions.confirmMobileEntry).toHaveBeenCalledTimes(1)
   })
 
-  it('renders match-end state from shell state and forwards replay actions', () => {
+  it('renders match-end state from shell state and forwards replay actions', async () => {
     const shell = createShell({
       viewState: 'match_end',
       matchEndData: {
@@ -259,9 +336,11 @@ describe('App', () => {
     })
     testState.shell = shell
 
-    render(<App />)
+    renderWithRouter(<App />)
 
-    expect(screen.getByTestId('match-end-screen')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByTestId('match-end-screen')).toBeInTheDocument()
+    })
     fireEvent.click(screen.getByRole('button', { name: 'Close Results' }))
     fireEvent.click(screen.getByRole('button', { name: 'Play Again' }))
 

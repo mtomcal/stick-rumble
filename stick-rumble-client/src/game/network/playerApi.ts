@@ -1,8 +1,12 @@
-import { clearSessionToken } from './sessionToken';
 import { getApiBaseUrl } from '../config/runtimeConfig';
 import type { PlayerInfo } from '../../shared/types';
 
-export async function fetchPlayerMe(token: string): Promise<PlayerInfo | null> {
+export type FetchPlayerMeResult = 
+  | { status: 'ok'; player: PlayerInfo }
+  | { status: 'unauthorized' }
+  | { status: 'error'; error: string };
+
+export async function fetchPlayerMe(token: string): Promise<FetchPlayerMeResult> {
   try {
     const response = await fetch(`${getApiBaseUrl()}/player/me`, {
       headers: {
@@ -11,18 +15,16 @@ export async function fetchPlayerMe(token: string): Promise<PlayerInfo | null> {
     });
 
     if (response.status === 401) {
-      clearSessionToken();
-      return null;
+      return { status: 'unauthorized' };
     }
 
     if (!response.ok) {
-      console.error('fetchPlayerMe returned', response.status);
-      return null;
+      return { status: 'error', error: `Server returned ${response.status}` };
     }
 
-    return await response.json();
+    const player: PlayerInfo = await response.json();
+    return { status: 'ok', player };
   } catch (err) {
-    console.error('fetchPlayerMe error:', err);
-    return null;
+    return { status: 'error', error: err instanceof Error ? err.message : 'Unknown error' };
   }
 }

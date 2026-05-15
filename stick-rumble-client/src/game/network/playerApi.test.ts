@@ -1,11 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fetchPlayerMe } from './playerApi';
-import { clearSessionToken } from './sessionToken';
-
-// Mock sessionToken module
-vi.mock('./sessionToken', () => ({
-  clearSessionToken: vi.fn(),
-}));
 
 vi.mock('../config/runtimeConfig', () => ({
   getApiBaseUrl: () => '/api',
@@ -38,23 +32,22 @@ describe('fetchPlayerMe', () => {
     expect(mockFetch).toHaveBeenCalledWith('/api/player/me', {
       headers: { Authorization: 'Bearer test-token' },
     });
-    expect(result).toEqual(playerInfo);
+    expect(result).toEqual({ status: 'ok', player: playerInfo });
   });
 
-  it('returns null and clears token on 401', async () => {
+  it('returns unauthorized on 401', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: false,
       status: 401,
     });
 
     const result = await fetchPlayerMe('bad-token');
-    expect(clearSessionToken).toHaveBeenCalled();
-    expect(result).toBeNull();
+    expect(result).toEqual({ status: 'unauthorized' });
   });
 
-  it('returns null on network error', async () => {
+  it('returns error on network error', async () => {
     mockFetch.mockRejectedValueOnce(new Error('Network failure'));
     const result = await fetchPlayerMe('test-token');
-    expect(result).toBeNull();
+    expect(result).toEqual({ status: 'error', error: 'Network failure' });
   });
 });

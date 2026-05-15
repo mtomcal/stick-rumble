@@ -6,17 +6,23 @@ import type { PlayerInfo } from '../../shared/types';
 
 interface ProfileScreenProps {
   onBack: () => void;
+  player?: PlayerInfo | null;
 }
 
-export function ProfileScreen({ onBack }: ProfileScreenProps) {
+export function ProfileScreen({ onBack, player: propPlayer }: ProfileScreenProps) {
   const token = getSessionToken();
-  const [player, setPlayer] = useState<PlayerInfo | null>(null);
-  const [loading, setLoading] = useState(!!token);
+  const [localPlayer, setLocalPlayer] = useState<PlayerInfo | null>(propPlayer ?? null);
+  const [loading, setLoading] = useState(!propPlayer && !!token);
   const [error, setError] = useState<string | null>(
     !token ? 'Not authenticated.' : null
   );
 
   useEffect(() => {
+    // If propPlayer is provided, we already have the data — no need to fetch
+    if (propPlayer) {
+      return;
+    }
+
     if (!token) {
       return;
     }
@@ -33,13 +39,15 @@ export function ProfileScreen({ onBack }: ProfileScreenProps) {
         return res.json();
       })
       .then((data: PlayerInfo) => {
-        setPlayer(data);
+        setLocalPlayer(data);
         setLoading(false);
       })
       .catch((err: Error) => {
         setError(err.message);
         setLoading(false);
       });
+    // We intentionally depend on token only; propPlayer changes force re-mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   if (loading) {
@@ -55,7 +63,7 @@ export function ProfileScreen({ onBack }: ProfileScreenProps) {
     );
   }
 
-  if (!player) {
+  if (!localPlayer) {
     return (
       <div className="profile-screen" data-testid="profile-empty">
         <p>No player data available.</p>
@@ -66,33 +74,33 @@ export function ProfileScreen({ onBack }: ProfileScreenProps) {
 
   return (
     <div className="profile-screen" data-testid="profile-screen">
-      <h1 className="profile-display-name">{player.displayName}</h1>
-      <div className="profile-level">Level {player.level}</div>
+      <h1 className="profile-display-name">{localPlayer.displayName}</h1>
+      <div className="profile-level">Level {localPlayer.level}</div>
 
       <div className="profile-stats">
         <div className="profile-stat">
           <span className="profile-stat-label">Kills</span>
-          <span className="profile-stat-value">{player.lifetimeStats.kills}</span>
+          <span className="profile-stat-value">{localPlayer.lifetimeStats.kills}</span>
         </div>
         <div className="profile-stat">
           <span className="profile-stat-label">Deaths</span>
-          <span className="profile-stat-value">{player.lifetimeStats.deaths}</span>
+          <span className="profile-stat-value">{localPlayer.lifetimeStats.deaths}</span>
         </div>
         <div className="profile-stat">
           <span className="profile-stat-label">Wins</span>
-          <span className="profile-stat-value">{player.lifetimeStats.wins}</span>
+          <span className="profile-stat-value">{localPlayer.lifetimeStats.wins}</span>
         </div>
         <div className="profile-stat">
           <span className="profile-stat-label">Games Played</span>
-          <span className="profile-stat-value">{player.lifetimeStats.gamesPlayed}</span>
+          <span className="profile-stat-value">{localPlayer.lifetimeStats.gamesPlayed}</span>
         </div>
         <div className="profile-stat">
           <span className="profile-stat-label">Total XP</span>
-          <span className="profile-stat-value">{player.lifetimeStats.totalXp}</span>
+          <span className="profile-stat-value">{localPlayer.lifetimeStats.totalXp}</span>
         </div>
         <div className="profile-stat">
           <span className="profile-stat-label">Damage Dealt</span>
-          <span className="profile-stat-value">{player.lifetimeStats.damageDealt}</span>
+          <span className="profile-stat-value">{localPlayer.lifetimeStats.damageDealt}</span>
         </div>
       </div>
 

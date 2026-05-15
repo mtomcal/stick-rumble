@@ -3,7 +3,8 @@ import { getApiBaseUrl } from '../../game/config/runtimeConfig';
 import './AuthStyles.css';
 
 interface SignInScreenProps {
-  onGuestClick: () => void;
+  onGuestClick?: () => void;
+  onAuthenticated?: (result: { token: string; needsDisplayName: boolean }) => void;
 }
 
 declare global {
@@ -26,7 +27,7 @@ declare global {
   }
 }
 
-export function SignInScreen({ onGuestClick }: SignInScreenProps) {
+export function SignInScreen({ onGuestClick, onAuthenticated }: SignInScreenProps) {
   const googleButtonRef = useRef<HTMLDivElement>(null);
   const [gisError, setGisError] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -58,15 +59,11 @@ export function SignInScreen({ onGuestClick }: SignInScreenProps) {
               }
 
               const data = await apiResp.json();
-              const { storeSessionToken } = await import('../../game/network/sessionToken');
-              storeSessionToken(data.token);
 
-              // Navigate based on whether display name is set
-              if (data.isNewPlayer || !data.displayName || data.displayName === 'Player') {
-                window.location.hash = '#/display-name';
-              } else {
-                window.location.hash = '#/lobby';
-              }
+              onAuthenticated?.({
+                token: data.token,
+                needsDisplayName: !!(data.isNewPlayer || !data.displayName || data.displayName === 'Player'),
+              });
             } catch {
               setAuthError('Authentication error. Please try again.');
             }
@@ -87,7 +84,7 @@ export function SignInScreen({ onGuestClick }: SignInScreenProps) {
         script.parentNode.removeChild(script);
       }
     };
-  }, []);
+  }, [onAuthenticated]);
 
   return (
     <div className="sign-in-screen">
@@ -98,9 +95,11 @@ export function SignInScreen({ onGuestClick }: SignInScreenProps) {
         <p className="error">Google Sign-In is temporarily unavailable. Please try again later or play as guest.</p>
       )}
       {authError && <p className="error">{authError}</p>}
-      <button onClick={onGuestClick} className="guest-button">
-        Play as Guest
-      </button>
+      {onGuestClick && (
+        <button onClick={onGuestClick} className="guest-button">
+          Play as Guest
+        </button>
+      )}
     </div>
   );
 }

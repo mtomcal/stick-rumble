@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { PhaserGame } from './ui/common/PhaserGame'
 import { MatchEndScreen } from './ui/match/MatchEndScreen'
 import { DebugNetworkPanel } from './ui/debug/DebugNetworkPanel'
@@ -13,6 +14,14 @@ import {
 import { MobileControls } from './ui/mobile/MobileControls'
 import { RotateDeviceGate } from './ui/mobile/RotateDeviceGate'
 import { useMatchAppShell } from './game/useMatchAppShell'
+import { SignInScreen } from './ui/auth/SignInScreen'
+import { DisplayNamePickerScreen } from './ui/auth/DisplayNamePickerScreen'
+import { LobbyScreen } from './ui/lobby/LobbyScreen'
+import { ProfileScreen } from './ui/profile/ProfileScreen'
+import { ROUTES } from './ui/auth/routes'
+import { getSessionToken, storeSessionToken, clearSessionToken } from './game/network/sessionToken'
+import { fetchPlayerMe } from './game/network/playerApi'
+import type { PlayerInfo } from './shared/types'
 import './App.css'
 
 const DEFAULT_STATS: NetworkSimulatorStats = {
@@ -20,6 +29,12 @@ const DEFAULT_STATS: NetworkSimulatorStats = {
   latency: 0,
   packetLoss: 0,
 }
+
+type AuthState =
+  | { status: 'loading' }
+  | { status: 'loading_with_error'; error: string }
+  | { status: 'unauthenticated' }
+  | { status: 'authenticated'; token: string; player: PlayerInfo; needsDisplayName?: boolean }
 
 function readPixelValue(value: string): number {
   const parsed = Number.parseFloat(value)
@@ -75,7 +90,105 @@ function buildInitialViewportLayout(
   }
 }
 
+function getInitialAuthState(storedToken: string | null): AuthState {
+  if (!storedToken) {
+    return { status: 'unauthenticated' }
+  }
+  return { status: 'loading' }
+}
+
 function App() {
+  const [storedToken] = useState(() => getSessionToken())
+  const [authState, setAuthState] = useState<AuthState>(() => getInitialAuthState(storedToken))
+  const [inMatchFlow, setInMatchFlow] = useState(false)
+  const navigate = useNavigate()
+
+  // Page-load hydration: check stored token → fetchPlayerMe → set authState
+  useEffect(() => {
+    if (!storedToken) {
+      return
+    }
+
+    fetchPlayerMe(storedToken).then((result) => {
+      if (result.status === 'ok') {
+        setAuthState({
+          status: 'authenticated',
+          token: storedToken,
+          player: result.player,
+          needsDisplayName: !result.player.displayName || result.player.displayName === 'Player',
+        })
+      } else if (result.status === 'unauthorized') {
+        clearSessionToken()
+        setAuthState({ status: 'unauthenticated' })
+      } else {
+        // Server/network error — keep token, show loading with error
+        console.error('fetchPlayerMe error:', result.error)
+        setAuthState({ status: 'loading_with_error', error: result.error })
+      }
+    })
+  }, [storedToken])
+
+  const handleAuthenticated = useCallback(async (authResult: { token: string; needsDisplayName: boolean }) => {
+    storeSessionToken(authResult.token)
+
+    const result = await fetchPlayerMe(authResult.token)
+    if (result.status === 'ok') {
+      setAuthState({
+        status: 'authenticated',
+        token: authResult.token,
+        player: result.player,
+        needsDisplayName: authResult.needsDisplayName,
+      })
+
+      if (authResult.needsDisplayName) {
+        navigate(ROUTES.DISPLAY_NAME)
+      } else {
+        navigate(ROUTES.LOBBY)
+      }
+    } else if (result.status === 'unauthorized') {
+      clearSessionToken()
+      setAuthState({ status: 'unauthenticated' })
+    } else {
+      // Error fetching player after sign-in — keep token but show loading with error
+      setAuthState({ status: 'loading_with_error', error: result.error })
+    }
+  }, [navigate])
+
+  const refreshAuthState = useCallback(async () => {
+    const storedToken = getSessionToken()
+    if (!storedToken) {
+      setAuthState({ status: 'unauthenticated' })
+      return
+    }
+
+    const result = await fetchPlayerMe(storedToken)
+    if (result.status === 'ok') {
+      setAuthState({
+        status: 'authenticated',
+        token: storedToken,
+        player: result.player,
+        needsDisplayName: !result.player.displayName || result.player.displayName === 'Player',
+      })
+      navigate(ROUTES.LOBBY)
+    } else if (result.status === 'unauthorized') {
+      clearSessionToken()
+      setAuthState({ status: 'unauthenticated' })
+    } else {
+      setAuthState({ status: 'loading_with_error', error: result.error })
+    }
+  }, [navigate])
+
+  const handleSignOut = useCallback(() => {
+    clearSessionToken()
+    setAuthState({ status: 'unauthenticated' })
+    setInMatchFlow(false)
+    navigate(ROUTES.SIGN_IN)
+  }, [navigate])
+
+  const handlePlayPublic = useCallback(() => {
+    setInMatchFlow(true)
+  }, [])
+
   const stageShellRef = useRef<HTMLDivElement | null>(null)
   const [debugPanelVisible, setDebugPanelVisible] = useState(false)
   const [networkStats, setNetworkStats] = useState<NetworkSimulatorStats>(DEFAULT_STATS)
@@ -135,7 +248,15 @@ function App() {
     }
   }
 
-  const shouldShowGameplayStage = shell.viewState === 'in_match' && shell.matchBootstrap
+  // Auto-detect match flow from shell state (for backward compat with invite links, etc.)
+  const hasActiveMatchFlow = inMatchFlow ||
+    shell.inviteCode !== null ||
+    shell.sessionStatus !== null ||
+    shell.matchBootstrap !== null ||
+    shell.matchEndData !== null ||
+    shell.reconnectIntent !== null
+
+  const shouldShowGameplayStage = hasActiveMatchFlow && shell.viewState === 'in_match' && shell.matchBootstrap
   const shouldRenderPhaser =
     shouldShowGameplayStage &&
     (stageMode === 'desktop' || shell.mobileGameplayEntered)
@@ -168,155 +289,270 @@ function App() {
     }
   }, [shouldRenderPhaser, stageMode, viewportWidth, viewportHeight])
 
-  return (
-    <div className={`app-shell${inMobileStage ? ' app-shell--mobile-stage' : ''}`}>
-      <div className={`app-header${inMobileStage ? ' app-header--hidden' : ''}`}>
-        <h1>Stick Rumble - Multiplayer Arena Shooter</h1>
-      </div>
-
-      <div className={`app-container${inMobileStage ? ' app-container--mobile-stage' : ''}`}>
-        {shouldShowGameplayStage && shell.matchBootstrap && (
-          <div
-            ref={stageShellRef}
-            className={`game-frame game-frame--${stageMode}`}
-            data-testid="stage-shell"
-            data-stage-mode={stageMode}
-          >
-            {shouldRenderPhaser ? (
+  // Loading state
+  if (authState.status === 'loading' || authState.status === 'loading_with_error') {
+    return (
+      <div className="app-shell" data-testid="app-loading">
+        <div className="app-container">
+          <div className="overlay-card">
+            <h2>Loading...</h2>
+            {authState.status === 'loading_with_error' && (
               <>
-                <PhaserGame
-                  bootstrap={shell.matchBootstrap}
-                  layout={viewportLayout.mode === stageMode ? viewportLayout : { ...viewportLayout, mode: stageMode }}
-                  onMatchEnd={shell.actions.handleMatchEnd}
-                />
-                {stageMode === 'mobile-landscape' ? <MobileControls /> : null}
-              </>
-            ) : null}
-            {stageMode === 'mobile-portrait-blocked' || (stageMode !== 'desktop' && isSettling) ? (
-              <RotateDeviceGate />
-            ) : null}
-            {stageMode === 'mobile-landscape' && !isSettling && !shell.mobileGameplayEntered ? (
-              <RotateDeviceGate
-                title="Enter Game"
-                body="Landscape is ready. Tap to enter with the final phone viewport."
-                actionLabel="Enter Game"
-                onAction={() => {
-                  const nextLayout = captureCurrentViewportLayout()
-                  if (nextLayout) {
-                    setViewportLayoutState(nextLayout)
-                  }
-                  shell.actions.confirmMobileEntry()
-                }}
-              />
-            ) : null}
-          </div>
-        )}
-
-        {shell.overlayMode === 'duplicate' ? (
-          <div className="overlay-card">
-            <h2>Invite Already Open</h2>
-            <p>This browser profile already claimed this invite in another tab. Return to the original tab to keep playing.</p>
-          </div>
-        ) : null}
-
-        {shell.overlayMode === 'join' && (shell.viewState === 'join_form' || shell.viewState === 'joining' || shell.viewState === 'recoverable_error') ? (
-          <div className="overlay-card">
-            <h2>{shell.inviteCode ? 'Join Invite' : 'Enter Match'}</h2>
-            <label>
-              Display Name
-              <input
-                aria-label="Display Name"
-                className="overlay-card__input"
-                value={shell.joinForm.displayName}
-                onChange={(event) => shell.actions.setDisplayName(event.target.value)}
-                placeholder="Guest"
-              />
-            </label>
-            <label>
-              Room Code
-              <input
-                aria-label="Room Code"
-                className="overlay-card__input"
-                value={shell.joinForm.code}
-                onChange={(event) => shell.actions.setRoomCode(event.target.value)}
-                placeholder="PIZZA"
-              />
-            </label>
-            {shell.errorText ? <p className="overlay-error">{shell.errorText}</p> : null}
-            {!shell.isSocketReady ? <p className="overlay-status">Connecting to game...</p> : null}
-            {shell.viewState === 'joining' ? <p className="overlay-status">Joining...</p> : null}
-            {shell.reconnectIntent ? <p className="overlay-status">Reconnect failed. Choose a new action.</p> : null}
-            <div className="overlay-actions">
-              <button
-                className="overlay-card__button"
-                disabled={!shell.isSocketReady || shell.viewState === 'joining'}
-                onClick={shell.actions.submitPublicJoin}
-              >
-                Play Public
-              </button>
-              <button
-                className="overlay-card__button"
-                disabled={!shell.isSocketReady || shell.viewState === 'joining'}
-                onClick={shell.actions.submitCodeJoin}
-              >
-                Join with Code
-              </button>
-            </div>
-            {shell.reconnectIntent ? (
-              <div className="overlay-actions">
-                <button className="overlay-card__button" onClick={shell.actions.submitReconnectIntent}>
-                  {shell.reconnectLabel}
+                <p className="overlay-error">{authState.error}</p>
+                <button
+                  onClick={() => {
+                    setAuthState({ status: 'loading' })
+                    const storedToken = getSessionToken()
+                    if (storedToken) {
+                      fetchPlayerMe(storedToken).then((result) => {
+                        if (result.status === 'ok') {
+                          setAuthState({
+                            status: 'authenticated',
+                            token: storedToken,
+                            player: result.player,
+                            needsDisplayName: !result.player.displayName || result.player.displayName === 'Player',
+                          })
+                        } else if (result.status === 'unauthorized') {
+                          clearSessionToken()
+                          setAuthState({ status: 'unauthenticated' })
+                        } else {
+                          setAuthState({ status: 'loading_with_error', error: result.error })
+                        }
+                      })
+                    }
+                  }}
+                >
+                  Retry
                 </button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Match flow mode — render the match shell (join form, waiting, Phaser, etc.)
+  if (hasActiveMatchFlow) {
+    return (
+      <div className={`app-shell${inMobileStage ? ' app-shell--mobile-stage' : ''}`}>
+        <div className={`app-header${inMobileStage ? ' app-header--hidden' : ''}`}>
+          <h1>Stick Rumble - Multiplayer Arena Shooter</h1>
+        </div>
+
+        <div className={`app-container${inMobileStage ? ' app-container--mobile-stage' : ''}`}>
+          {shouldShowGameplayStage && shell.matchBootstrap && (
+            <div
+              ref={stageShellRef}
+              className={`game-frame game-frame--${stageMode}`}
+              data-testid="stage-shell"
+              data-stage-mode={stageMode}
+            >
+              {shouldRenderPhaser ? (
+                <>
+                  <PhaserGame
+                    bootstrap={shell.matchBootstrap}
+                    layout={viewportLayout.mode === stageMode ? viewportLayout : { ...viewportLayout, mode: stageMode }}
+                    onMatchEnd={shell.actions.handleMatchEnd}
+                  />
+                  {stageMode === 'mobile-landscape' ? <MobileControls /> : null}
+                </>
+              ) : null}
+              {stageMode === 'mobile-portrait-blocked' || (stageMode !== 'desktop' && isSettling) ? (
+                <RotateDeviceGate />
+              ) : null}
+              {stageMode === 'mobile-landscape' && !isSettling && !shell.mobileGameplayEntered ? (
+                <RotateDeviceGate
+                  title="Enter Game"
+                  body="Landscape is ready. Tap to enter with the final phone viewport."
+                  actionLabel="Enter Game"
+                  onAction={() => {
+                    const nextLayout = captureCurrentViewportLayout()
+                    if (nextLayout) {
+                      setViewportLayoutState(nextLayout)
+                    }
+                    shell.actions.confirmMobileEntry()
+                  }}
+                />
+              ) : null}
+            </div>
+          )}
+
+          {shell.overlayMode === 'duplicate' ? (
+            <div className="overlay-card">
+              <h2>Invite Already Open</h2>
+              <p>This browser profile already claimed this invite in another tab. Return to the original tab to keep playing.</p>
+            </div>
+          ) : null}
+
+          {shell.overlayMode === 'join' && (shell.viewState === 'join_form' || shell.viewState === 'joining' || shell.viewState === 'recoverable_error') ? (
+            <div className="overlay-card">
+              <h2>{shell.inviteCode ? 'Join Invite' : 'Enter Match'}</h2>
+              <label>
+                Display Name
+                <input
+                  aria-label="Display Name"
+                  className="overlay-card__input"
+                  value={shell.joinForm.displayName}
+                  onChange={(event) => shell.actions.setDisplayName(event.target.value)}
+                  placeholder="Guest"
+                />
+              </label>
+              <label>
+                Room Code
+                <input
+                  aria-label="Room Code"
+                  className="overlay-card__input"
+                  value={shell.joinForm.code}
+                  onChange={(event) => shell.actions.setRoomCode(event.target.value)}
+                  placeholder="PIZZA"
+                />
+              </label>
+              {shell.errorText ? <p className="overlay-error">{shell.errorText}</p> : null}
+              {!shell.isSocketReady ? <p className="overlay-status">Connecting to game...</p> : null}
+              {shell.viewState === 'joining' ? <p className="overlay-status">Joining...</p> : null}
+              {shell.reconnectIntent ? <p className="overlay-status">Reconnect failed. Choose a new action.</p> : null}
+              <div className="overlay-actions">
                 <button
                   className="overlay-card__button"
+                  disabled={!shell.isSocketReady || shell.viewState === 'joining'}
                   onClick={shell.actions.submitPublicJoin}
                 >
                   Play Public
                 </button>
+                <button
+                  className="overlay-card__button"
+                  disabled={!shell.isSocketReady || shell.viewState === 'joining'}
+                  onClick={shell.actions.submitCodeJoin}
+                >
+                  Join with Code
+                </button>
               </div>
-            ) : null}
-          </div>
-        ) : null}
-
-        {shell.viewState === 'searching_for_match' && shell.sessionStatus ? (
-          <div className="overlay-card">
-            <h2>Searching For Match</h2>
-            <p>Display Name: {shell.sessionStatus.displayName}</p>
-            <button onClick={shell.actions.cancelWaiting}>Back</button>
-          </div>
-        ) : null}
-
-        {shell.viewState === 'waiting_for_players' && shell.sessionStatus ? (
-          <div className="overlay-card">
-            <h2>Waiting For Players</h2>
-            <p>Display Name: {shell.sessionStatus.displayName}</p>
-            <p>Room Code: {shell.sessionStatus.code}</p>
-            <p>Players: {shell.sessionStatus.rosterSize ?? 0}/{shell.sessionStatus.minPlayers ?? 2}</p>
-            <div className="overlay-actions">
-              <button onClick={() => void shell.actions.copyInviteLink()}>Copy Invite Link</button>
-              <button onClick={shell.actions.cancelWaiting}>Cancel</button>
+              {shell.reconnectIntent ? (
+                <div className="overlay-actions">
+                  <button className="overlay-card__button" onClick={shell.actions.submitReconnectIntent}>
+                    {shell.reconnectLabel}
+                  </button>
+                  <button
+                    className="overlay-card__button"
+                    onClick={shell.actions.submitPublicJoin}
+                  >
+                    Play Public
+                  </button>
+                </div>
+              ) : null}
             </div>
-          </div>
-        ) : null}
+          ) : null}
 
-        {shell.viewState === 'match_end' && shell.matchEndData ? (
-          <MatchEndScreen
-            matchData={shell.matchEndData}
-            localPlayerId={shell.localPlayerId}
-            onClose={shell.actions.returnToJoinForm}
-            onPlayAgain={shell.actions.playAgain}
-          />
-        ) : null}
+          {shell.viewState === 'searching_for_match' && shell.sessionStatus ? (
+            <div className="overlay-card">
+              <h2>Searching For Match</h2>
+              <p>Display Name: {shell.sessionStatus.displayName}</p>
+              <button onClick={shell.actions.cancelWaiting}>Back</button>
+            </div>
+          ) : null}
+
+          {shell.viewState === 'waiting_for_players' && shell.sessionStatus ? (
+            <div className="overlay-card">
+              <h2>Waiting For Players</h2>
+              <p>Display Name: {shell.sessionStatus.displayName}</p>
+              <p>Room Code: {shell.sessionStatus.code}</p>
+              <p>Players: {shell.sessionStatus.rosterSize ?? 0}/{shell.sessionStatus.minPlayers ?? 2}</p>
+              <div className="overlay-actions">
+                <button onClick={() => void shell.actions.copyInviteLink()}>Copy Invite Link</button>
+                <button onClick={shell.actions.cancelWaiting}>Cancel</button>
+              </div>
+            </div>
+          ) : null}
+
+          {shell.viewState === 'match_end' && shell.matchEndData ? (
+            <MatchEndScreen
+              matchData={shell.matchEndData}
+              localPlayerId={shell.localPlayerId}
+              onClose={shell.actions.returnToJoinForm}
+              onPlayAgain={shell.actions.playAgain}
+            />
+          ) : null}
+        </div>
+
+        <DebugNetworkPanel
+          isVisible={debugPanelVisible}
+          onClose={() => setDebugPanelVisible(false)}
+          stats={networkStats}
+          onLatencyChange={handleLatencyChange}
+          onPacketLossChange={handlePacketLossChange}
+          onEnabledChange={handleEnabledChange}
+        />
       </div>
+    )
+  }
 
-      <DebugNetworkPanel
-        isVisible={debugPanelVisible}
-        onClose={() => setDebugPanelVisible(false)}
-        stats={networkStats}
-        onLatencyChange={handleLatencyChange}
-        onPacketLossChange={handlePacketLossChange}
-        onEnabledChange={handleEnabledChange}
-      />
+  // Auth mode — render route-based screens
+  if (authState.status === 'unauthenticated') {
+    return (
+      <div className="app-shell" data-testid="app-auth-shell">
+        <div className="app-container">
+          <Routes>
+            <Route
+              path={ROUTES.SIGN_IN}
+              element={
+                <SignInScreen onAuthenticated={handleAuthenticated} />
+              }
+            />
+            <Route path="*" element={<Navigate to={ROUTES.SIGN_IN} replace />} />
+          </Routes>
+        </div>
+      </div>
+    )
+  }
+
+  // Authenticated — lobby, profile, display-name routes
+  return (
+    <div className="app-shell" data-testid="app-auth-shell">
+      <div className="app-container">
+        <Routes>
+          <Route
+            path={ROUTES.LOBBY}
+            element={
+              authState.needsDisplayName ? (
+                <Navigate to={ROUTES.DISPLAY_NAME} replace />
+              ) : (
+                <LobbyScreen
+                  onPlayPublic={handlePlayPublic}
+                  onSignOut={handleSignOut}
+                  onNavigateProfile={() => navigate(ROUTES.PROFILE)}
+                />
+              )
+            }
+          />
+          <Route
+            path={ROUTES.PROFILE}
+            element={
+              <ProfileScreen
+                onBack={() => navigate(ROUTES.LOBBY)}
+                player={authState.player}
+              />
+            }
+          />
+          <Route
+            path={ROUTES.DISPLAY_NAME}
+            element={
+              authState.needsDisplayName ? (
+                <DisplayNamePickerScreen
+                  token={authState.token}
+                  onConfirm={async () => {
+                    await refreshAuthState()
+                  }}
+                />
+              ) : (
+                <Navigate to={ROUTES.LOBBY} replace />
+              )
+            }
+          />
+          <Route path={ROUTES.SIGN_IN} element={<Navigate to={ROUTES.LOBBY} replace />} />
+          <Route path="*" element={<Navigate to={ROUTES.LOBBY} replace />} />
+        </Routes>
+      </div>
     </div>
   )
 }
