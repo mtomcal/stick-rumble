@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import './LobbyStyles.css';
 import { fetchPlayerMe } from '../../game/network/playerApi';
 import { getSessionToken } from '../../game/network/sessionToken';
 import type { PlayerInfo } from '../../shared/types';

@@ -5,8 +5,8 @@
   margin: 0;
   background:
     radial-gradient(circle at top, rgba(255, 196, 120, 0.18), transparent 28%),
-    linear-gradient(180deg, #16181c 0%, #0d0f12 100%);
-  color: #f3efe3;
+    linear-gradient(180deg, var(--color-bg-primary) 0%, var(--color-bg-primary) 100%);
+  color: var(--color-text-primary);
 }
 
 .app-shell {
@@ -41,11 +41,15 @@
   font-size: clamp(2rem, 5vw, 3.5rem);
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  background: linear-gradient(135deg, var(--color-accent-primary), var(--color-accent-secondary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .app-header p {
   margin: 0.5rem 0 0;
-  color: #c6bca4;
+  color: var(--color-text-secondary);
 }
 
 .app-container {
@@ -141,9 +145,9 @@
   inset: 50% auto auto 50%;
   width: min(360px, calc(100% - 2rem));
   transform: translate(-50%, -50%);
-  border: 1px solid rgba(255, 235, 188, 0.18);
-  border-radius: 16px;
-  background: rgba(13, 15, 18, 0.92);
+  border: 1px solid color-mix(in srgb, var(--color-accent-primary) 20%, transparent);
+  border-radius: var(--border-radius-lg);
+  background: var(--color-bg-surface);
   backdrop-filter: blur(14px);
   padding: 1rem;
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
@@ -163,44 +167,44 @@
 .overlay-card label {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: var(--spacing-sm);
   margin-bottom: 0.8rem;
-  color: #c6bca4;
+  color: var(--color-text-secondary);
 }
 
 .overlay-card__input {
-  border: 1px solid rgba(255, 235, 188, 0.16);
-  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--color-accent-primary) 16%, transparent);
+  border-radius: var(--border-radius);
   background: rgba(255, 255, 255, 0.05);
-  color: #f3efe3;
+  color: var(--color-text-primary);
   padding: 0.75rem 0.9rem;
-  font-size: 16px;
+  font-size: var(--font-size-base);
   line-height: 1.25;
 }
 
 .overlay-actions {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--spacing-md);
 }
 
 .overlay-card__button,
 .overlay-card button {
   border: 0;
-  border-radius: 10px;
-  background: #e3a84e;
+  border-radius: var(--border-radius);
+  background: var(--color-accent-primary);
   color: #141414;
   cursor: pointer;
   font-weight: 700;
   padding: 0.75rem 0.9rem;
-  font-size: 16px;
+  font-size: var(--font-size-base);
 }
 
 .overlay-error {
-  color: #ff9074;
+  color: var(--color-error);
 }
 
 .overlay-status {
-  color: #c6bca4;
+  color: var(--color-text-secondary);
 }
 
 .mobile-controls {

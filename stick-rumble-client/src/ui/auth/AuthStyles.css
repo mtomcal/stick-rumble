@@ -11,53 +11,53 @@
 
 .sign-in-screen h1,
 .display-name-picker-screen h1 {
-  font-size: 2rem;
+  font-size: var(--font-size-2xl);
   margin-bottom: 0.5rem;
 }
 
 .guest-button {
   padding: 0.75rem 1.5rem;
-  font-size: 1rem;
-  border: 2px solid #555;
+  font-size: var(--font-size-base);
+  border: 2px solid color-mix(in srgb, var(--color-accent-primary) 40%, transparent);
   border-radius: 24px;
   background: transparent;
-  color: #fff;
+  color: var(--color-text-primary);
   cursor: pointer;
   margin-top: 1rem;
 }
 
 .guest-button:hover {
-  background: #333;
+  background: var(--color-bg-surface);
 }
 
 .display-name-picker-screen input {
   padding: 0.75rem;
-  font-size: 1rem;
-  border: 2px solid #555;
-  border-radius: 8px;
-  background: #222;
-  color: #fff;
+  font-size: var(--font-size-base);
+  border: 2px solid color-mix(in srgb, var(--color-accent-primary) 40%, transparent);
+  border-radius: var(--border-radius);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
   width: 100%;
   max-width: 300px;
 }
 
 .display-name-picker-screen .error {
-  color: #ff4444;
-  font-size: 0.875rem;
+  color: var(--color-error);
+  font-size: var(--font-size-sm);
 }
 
 .display-name-picker-screen button {
   padding: 0.75rem 1.5rem;
-  font-size: 1rem;
-  border: 2px solid #555;
+  font-size: var(--font-size-base);
+  border: 2px solid color-mix(in srgb, var(--color-accent-primary) 40%, transparent);
   border-radius: 24px;
   background: transparent;
-  color: #fff;
+  color: var(--color-text-primary);
   cursor: pointer;
 }
 
 .display-name-picker-screen button:hover:not(:disabled) {
-  background: #333;
+  background: var(--color-bg-surface);
 }
 
 .display-name-picker-screen button:disabled {

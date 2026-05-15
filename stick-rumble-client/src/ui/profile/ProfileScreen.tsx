@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import './ProfileStyles.css';
 import { getSessionToken } from '../../game/network/sessionToken';
 import { getApiBaseUrl } from '../../game/config/runtimeConfig';
 import type { PlayerInfo } from '../../shared/types';
