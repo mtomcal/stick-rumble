@@ -176,6 +176,11 @@ func StartGlobalHandler(ctx context.Context) {
 	getGlobalHandler().Start(ctx)
 }
 
+// SetGlobalHandlerDB sets the database connection on the global handler for auth resolution
+func SetGlobalHandlerDB(db *sql.DB) {
+	getGlobalHandler().db = db
+}
+
 // StopGlobalHandler stops the global handler's game server
 func StopGlobalHandler() {
 	getGlobalHandler().Stop()

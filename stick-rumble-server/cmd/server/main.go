@@ -83,6 +83,8 @@ func startServer(ctx context.Context) error {
 
 	// Start game server (global handler)
 	network.StartGlobalHandler(ctx)
+	// Wire database to global handler for WebSocket token validation
+	network.SetGlobalHandlerDB(database)
 
 	// Channel to capture server errors
 	serverErrors := make(chan error, 1)
