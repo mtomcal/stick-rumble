@@ -376,9 +376,9 @@ function onGoogleSignInSuccess(response):
 
 function onSignOut():
     localStorage.removeItem("stick_rumble_session_token")
-    // WebSocket must reconnect as guest
+    // WebSocket must disconnect — no guest reconnect needed when leaving to sign-in
     disconnectWebSocket()
-    navigateTo("join_form")
+    navigateTo("/sign-in")
 ```
 
 ### Match End Stats Update
@@ -404,6 +404,31 @@ function onMatchEnd(room):
 See [progression.md → Leveling Curve](progression.md#leveling-curve) for the XP-to-level formulas and [progression.md → Level-Up Toast](progression.md#level-up-toast-client-side) for the client-side display.
 
 Level-up notifications are delivered to the client via the `GET /api/player/me` response after match end. The match system calls into the accounts system to update lifetime stats, and the lobby polls or receives the updated data on the next `GET /api/player/me` call. A future iteration may add a dedicated `progression:level_up` WebSocket message for real-time notification.
+
+### Match-End Redirect Behavior
+
+After a match concludes (the match system has processed stats updates), the client navigates to the appropriate screen based on auth state:
+
+- **Authenticated player (has session token, `AccountID` is set):** Navigate to the lobby (`/lobby`). The lobby screen re-fetches `GET /api/player/me` to display updated lifetime stats, XP progress, and level-up notifications.
+- **Guest player (no session token, `AccountID === null`):** Navigate to the join form (`join_form`). A CTA banner saying "Sign in to save your stats!" may be shown to encourage account creation.
+
+**Client behavior on match end:**
+```typescript
+function onMatchEnd(data: MatchEndData): void {
+  const token = localStorage.getItem('stick_rumble_session_token');
+  if (token) {
+    // Authed player → lobby
+    navigateTo('/lobby');
+  } else {
+    // Guest player → join_form
+    navigateTo('join_form');
+  }
+}
+```
+
+**Why separate destinations?** Authenticated players have persistent stats that accumulate across sessions, so returning to the lobby lets them see updated totals. Guest players have no persistent identity, so returning to the join form with a guest-play CTA provides the clearest next action.
+
+**Post-match level-up toast (authed only):** When the client re-fetches `GET /api/player/me` and detects the player leveled up in the previous match, a level-up toast overlay appears in the lobby (see [progression.md → Level-Up Toast](progression.md#level-up-toast-client-side)).
 
 ---
 
@@ -458,6 +483,7 @@ CREATE TABLE lifetime_stats (
 {
   "sessionToken": "<base64url-no-padding-session-token>",
   "expiresAt": 1715788800000,
+  "needsDisplayName": true,
   "player": {
     "playerId": "550e8400-e29b-41d4-a716-446655440000",
     "displayName": null,
@@ -466,6 +492,11 @@ CREATE TABLE lifetime_stats (
   }
 }
 ```
+
+**The `needsDisplayName` field** (`boolean`):
+- `true` when `player.displayName === null` (first-time Google sign-in). The client should navigate to the display name picker screen at `/display-name`.
+- `false` when `player.displayName` is set. The client should navigate to the lobby at `/lobby`.
+- This field saves the client from making an additional `GET /api/player/me` call after sign-in just to check display name status.
 
 **Error Responses:**
 | Status | Body | Condition |
@@ -755,7 +786,7 @@ CREATE TABLE lifetime_stats (
 - 200 response with `{ "displayName": "A B" }`
 - Player record updated to "A B"
 
-### TS-ACCT-010: Sign Out Clears Token and Returns to Guest State
+### TS-ACCT-010: Sign Out Clears Token and Redirects to /sign-in
 
 **Category**: Unit
 **Priority**: Medium
@@ -768,13 +799,14 @@ CREATE TABLE lifetime_stats (
 - User clicks "Sign Out"
 - Client calls `localStorage.removeItem("stick_rumble_session_token")`
 - Client disconnects WebSocket
-- Client reconnects to `ws://server:8080/ws` (no token)
+- Client navigates to `/sign-in` (the sign-in landing screen with Google sign-in and guest play options)
 
 **Expected Output:**
 - `localStorage` no longer contains the session token
-- WebSocket reconnects as a guest
-- New ephemeral `Player.ID` assigned and `AccountID = null`
-- Client navigates to join_form
+- WebSocket is disconnected (no reconnect needed — `authMode` owns the screen, no socket)
+- Client navigates to `/sign-in`
+- `AuthState` transitions to `'unauthenticated'`
+- No Phaser canvas and no WebSocket are active in this state
 
 ---
 

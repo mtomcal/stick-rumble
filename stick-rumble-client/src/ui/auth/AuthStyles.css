@@ -19,7 +19,7 @@
   padding: 0.75rem 1.5rem;
   font-size: var(--font-size-base);
   border: 2px solid color-mix(in srgb, var(--color-accent-primary) 40%, transparent);
-  border-radius: 24px;
+  border-radius: var(--border-radius);
   background: transparent;
   color: var(--color-text-primary);
   cursor: pointer;
@@ -50,7 +50,7 @@
   padding: 0.75rem 1.5rem;
   font-size: var(--font-size-base);
   border: 2px solid color-mix(in srgb, var(--color-accent-primary) 40%, transparent);
-  border-radius: 24px;
+  border-radius: var(--border-radius);
   background: transparent;
   color: var(--color-text-primary);
   cursor: pointer;

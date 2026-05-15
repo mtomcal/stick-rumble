@@ -165,12 +165,86 @@ The "STICK RUMBLE" logo in the nav bar uses the mockup's gradient:
 - Vertical gradient: `#FFD700` (top) → `#FFA500` (bottom)
 - Applied via CSS `background-clip: text` with `-webkit-text-fill-color: transparent`
 
+#### CSS Custom Properties
+
+The design tokens are encoded as CSS custom properties in a shared `:root` block. These variables are consumed by all auth-mode React screens and are the single source of truth for the lobby, profile, sign-in, and display name picker appearance.
+
+```css
+:root {
+  --color-bg-primary:       #16181c;
+  --color-bg-surface:       #141414;
+  --color-bg-input:         #333333;
+  --color-accent-primary:   #e3a84e;
+  --color-accent-secondary: #d4892f;
+  --color-text-primary:     #f3efe3;
+  --color-text-secondary:   #cccccc;
+  --color-text-tertiary:    #999999;
+  --color-text-muted:       #666666;
+  --color-border:           #333333;
+  --color-button-text:      #000000;
+  --color-disabled:         #555555;
+  --color-error:            #ff3333;
+
+  --font-heading-primary:   32px;
+  --font-heading-secondary: 24px;
+  --font-body:              14px;
+  --font-label:             12px;
+  --font-small:             12px;
+
+  --space-1x: 8px;
+  --space-2x: 16px;
+  --space-3x: 24px;
+  --space-4x: 32px;
+  --space-5x: 40px;
+  --space-6x: 48px;
+  --space-8x: 80px;
+
+  --radius-card:   12px;
+  --radius-button: 8px;
+
+  --gradient-logo: linear-gradient(180deg, #e3a84e 0%, #d4892f 100%);
+}
+```
+
+**Token value notes:**
+- `--color-bg-primary` (`#16181c`) is a near-black with a warm tint that distinguishes it from pure `#000000`, giving the dark theme depth.
+- `--color-accent-primary` (`#e3a84e`) is a warm gold, slightly less saturated than pure `#FFD700` for better readability on dark backgrounds.
+- `--color-text-primary` (`#f3efe3`) is a warm off-white that reads softer than pure white against a dark background.
+- The gradient `--gradient-logo` is applied to the STICK RUMBLE logo via `background-clip: text`.
+
+#### LobbyStyles.css Responsibilities
+
+File: `src/ui/lobby/LobbyStyles.css`
+
+Owns all styling for the lobby screen and its sub-components:
+- Nav bar: logo gradient, PLAY/PROFILE links (cyan `#00FFFF` with white underline on hover), avatar dropdown, sign-out interaction.
+- Hero section (stats identity card): avatar circle clip, display name typography, four stat cards (KILLS, DEATHS, K/D, XP) with uniform spacing and surface styling.
+- Level hexagon badge: hexagon polygon via `clip-path`, gold `2px` border, level number and LEVEL label positioning.
+- XP progress bar: background track (`#333333`), gold fill (`#e3a84e`), rounded caps, XP text below.
+- CTA row: primary gold-filled PLAY PUBLIC button and secondary gold-outline JOIN WITH CODE button with hover transitions.
+- Room code section: divider line, room code card (monospace gold text), copy button, instructional text.
+- Post-match level-up toast overlay.
+
+References the shared CSS custom properties from `:root`. Must not duplicate token values.
+
+#### ProfileStyles.css Responsibilities
+
+File: `src/ui/lobby/ProfileStyles.css`
+
+Owns all styling for the profile screen:
+- Nav bar: back-to-lobby link, centered display name.
+- Stats overview row: four stat cards with the same surface styling and spacing as the lobby.
+- Level section: enlarged hexagon badge (~100px flat-to-flat), wider XP progress bar (`400px`).
+- Weapon stats table: dark surface card, two-column layout (WEAPON / KILLS), sorted by kills descending, most-used weapon gold accent, row separators.
+
+Shares the same `:root` CSS custom properties and card/surface patterns as the lobby. Differences from `LobbyStyles.css` are limited to layout and scale (larger hexagon, wider XP bar, table layout) rather than introducing new design tokens.
+
 #### Accessibility Notes
 
-- All gold-on-dark text combinations MUST maintain a minimum contrast ratio of 4.5:1 against `#0A0A0A` background
+- All gold-on-dark text combinations MUST maintain a minimum contrast ratio of 4.5:1 against `--color-bg-primary` (`#16181c`) background
 - Disabled states use `#555555` background with `#888888` text
 - Interactive elements (buttons, links) MUST have visible hover and focus states
-- The hexagon level badge text (white on `#141414` fill) does not need AA compliance since it is decorative/supplemental
+- The hexagon level badge text (white on `--color-bg-surface` fill) does not need AA compliance since it is decorative/supplemental
 
 ---
 

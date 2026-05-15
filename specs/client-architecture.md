@@ -270,7 +270,202 @@ The Match session flow module is a reducer-level part of the Match app shell. It
 
 ---
 
-## Data Structures
+### Route Table (HashRouter)
+
+The application uses `HashRouter` for client-side routing. React Router `HashRouter` maps URL hash fragments to React screens. The Phaser canvas is never mounted under auth routes.
+
+| Path | Screen Component | Auth Required | Notes |
+|------|------------------|---------------|-------|
+| `/sign-in` | `SignInScreen` | None (unauthenticated) | Landing page with Google sign-in and guest play link. Default redirect destination for catch-all and unauthenticated access attempts. |
+| `/display-name` | `DisplayNamePickerScreen` | Authenticated, `needsDisplayName === true` | First-login name picker. Guard rejects if already authenticated with a display name set. |
+| `/lobby` | `LobbyScreen` | Authenticated, `needsDisplayName === false` | Pre-match lobby with stats and play buttons. Main authenticated home screen. |
+| `/profile` | `ProfileScreen` | Authenticated, `needsDisplayName === false` | Full stats dashboard with weapon breakdown. |
+| `/play` | `MatchShell` | Authenticated (or guest re-routed) | Routes through matchmaking into gameplay. May be accessed from lobby play buttons. |
+| Catch-all (`*`) | Redirect → `/sign-in` | None | Any unrecognized hash navigates to sign-in. |
+
+**Why HashRouter instead of BrowserRouter?** The client is served as a single-page application without server-side route rewriting. Hash fragments (`#/lobby`, `#/play`) work correctly without a backend fallback route.
+
+### Route Guards
+
+Each route defines which auth state is required before rendering. The app enforces guards in a centralized route wrapper.
+
+```typescript
+interface RouteGuard {
+  /** Auth states that may access this route */
+  allowedStates: AuthState[];
+  /** Redirect target if the current auth state is not allowed */
+  redirectTo: string;
+}
+
+const routeGuards: Record<string, RouteGuard> = {
+  '/sign-in':      { allowedStates: ['unauthenticated'],               redirectTo: '/lobby' },
+  '/display-name': { allowedStates: ['needs_display_name'],             redirectTo: '/sign-in' },
+  '/lobby':        { allowedStates: ['authenticated', 'loading'],       redirectTo: '/sign-in' },
+  '/profile':      { allowedStates: ['authenticated', 'loading'],       redirectTo: '/sign-in' },
+  '/play':         { allowedStates: ['authenticated', 'loading'],       redirectTo: '/sign-in' },
+};
+```
+
+**Guard behavior:**
+- `unauthenticated` routes (sign-in) redirect to `/lobby` when an authenticated session is found.
+- `authenticated` routes (lobby, profile, play) redirect to `/sign-in` when unauthenticated.
+- `needs_display_name` routes redirect to `/sign-in` when unauthenticated, and to `/lobby` when authenticated with a display name already set.
+- While auth state is `loading` or `loading_with_error`, the guard renders a loading indicator instead of redirecting.
+
+### Page-Load Auth Validation Flow (Hydration)
+
+On application boot, the app runs a synchronous hydration check before rendering any route.
+
+```
+App mount
+  │
+  ├─ Read localStorage for stick_rumble_session_token
+  │
+  ├─ No token found
+  │   └─ AuthState = 'unauthenticated'
+  │   └─ Render <HashRouter> → <Route path="/sign-in">
+  │   └─ No Phaser, no WebSocket
+  │
+  └─ Token found
+      ├─ Call GET /api/player/me (Authorization: Bearer <token>)
+      │
+      ├─ 401 response (expired or invalid)
+      │   ├─ localStorage.removeItem('stick_rumble_session_token')
+      │   ├─ AuthState = 'unauthenticated'
+      │   └─ Navigate to /sign-in
+      │
+      ├─ Server error (500, network failure)
+      │   ├─ AuthState = 'loading_with_error'
+      │   ├─ Show error screen with retry
+      │   └─ No Phaser, no WebSocket
+      │
+      └─ 200 OK (valid session)
+          ├─ AuthState = 'authenticated'
+          ├─ Store fetched player data (PlayerRecord + LifetimeStats)
+          ├─ If player.displayName === null:
+          │     AuthState = 'needs_display_name'
+          │     Navigate to /display-name
+          └─ If player.displayName !== null:
+                AuthState = 'authenticated'
+                Navigate to /lobby
+```
+
+**TypeScript:**
+```typescript
+type AuthState =
+  | 'loading'                  // Token found, awaiting GET /api/player/me
+  | 'loading_with_error'       // Server error during hydration
+  | 'unauthenticated'          // No token or 401 response
+  | 'needs_display_name'       // Authenticated but no display name set
+  | 'authenticated';           // Valid token + display name resolved
+
+type AppMode = 'authMode' | 'matchMode';
+```
+
+**Key rules:**
+- The hydration endpoint is `GET /api/player/me`, **not** a WebSocket upgrade. WebSocket connections are only made for gameplay sessions after matchmaking begins.
+- `loading_with_error` shows a user-facing error with a retry button. It does not auto-redirect or silently fall back to unauthenticated.
+- If hydration fails due to a transient server error, the app stays in a retryable state rather than silently clearing the token.
+- After successful hydration with `needs_display_name`, navigating to `/display-name` triggers the display name picker flow. On successful name save, the app re-fetches `GET /api/player/me` and transitions to `authenticated`.
+
+### needsDisplayName Field
+
+The `POST /api/auth/google` response includes a `needsDisplayName` boolean field so the client can decide the post-sign-in destination without a second round-trip.
+
+```typescript
+interface SignInResponse {
+  sessionToken: string;
+  expiresAt: number;          // epoch ms
+  needsDisplayName: boolean;  // true if player.displayName is null
+  player: {
+    playerId: string;
+    displayName: string | null;
+    avatarUrl: string | null;
+    createdAt: number;        // epoch ms
+  };
+}
+```
+
+**Client behavior:**
+- `needsDisplayName === true` → navigate to `/display-name`
+- `needsDisplayName === false` → navigate to `/lobby`
+
+The `GET /api/player/me` response (used during hydration) already carries `displayName` directly; the client derives the same `needsDisplayName` check from `displayName === null`.
+
+### Two-Mode App Architecture
+
+The application operates in one of two mutually exclusive modes. Only one mode renders at a time.
+
+```
+┌──────────────────────────────────────────────────────┐
+│                    App.tsx                            │
+│                                                       │
+│  mode === 'authMode'                                  │
+│  ┌────────────────────┐                               │
+│  │  <HashRouter>      │                               │
+│  │  ├─ /sign-in       │  No Phaser, no WebSocket     │
+│  │  ├─ /display-name  │                               │
+│  │  ├─ /lobby         │                               │
+│  │  ├─ /profile       │                               │
+│  │  └─ catch-all →    │                               │
+│  │      /sign-in      │                               │
+│  └────────────────────┘                               │
+│                                                       │
+│  mode === 'matchMode'                                 │
+│  ┌──────────────────────────┐                         │
+│  │  <MatchShell>            │  Phaser mounted         │
+│  │  ├─ PhaserGame           │  WebSocket connected    │
+│  │  └─ MatchEndScreen       │                         │
+│  └──────────────────────────┘                         │
+└──────────────────────────────────────────────────────┘
+```
+
+**authMode:**
+- The app renders `HashRouter` with all authentication and navigation routes.
+- The Phaser canvas is **not** mounted.
+- No WebSocket connection is established.
+- All screens are full React page states.
+- Auth routes fetch data via HTTP (`GET /api/player/me`, `POST /api/auth/google`, `PUT /api/player/displayname`).
+
+**matchMode:**
+- The app renders `MatchShell`, which owns match lifecycle.
+- Phaser is mounted inside `MatchShell`.
+- WebSocket is connected for gameplay.
+- The `HashRouter` is unmounted (no URL-based navigation during a match).
+- Match-end transitions back to `authMode` by calling `onExitToLobby`.
+
+**Mode transition rules:**
+- `authMode → matchMode`: When the user clicks "Play Public" or "Join with Code" from the lobby, the app switches to `matchMode` and mounts `MatchShell`.
+- `matchMode → authMode`: When the match ends and the player exits to lobby (`onExitToLobby`), or on explicit sign-out, the app unmounts `MatchShell` and returns to `authMode` with route `/lobby` (authed) or `/sign-in` (guest).
+
+### MatchShell Extraction
+
+`MatchShell` is a standalone component that encapsulates the entire match lifecycle. It is rendered only in `matchMode`.
+
+```typescript
+interface MatchShellProps {
+  /** Session token for authenticated players, undefined for guests */
+  sessionToken?: string;
+  /** Whether the current player is authenticated */
+  isAuthed: boolean;
+  /** Callback when the player exits the match back to lobby */
+  onExitToLobby: () => void;
+}
+```
+
+**Responsibilities:**
+- Creates and manages the WebSocket connection.
+- Mounts `<PhaserGame>` once the match session is ready (`session:status { state: "match_ready" }`).
+- Manages match states: joining → searching_for_match → waiting_for_players → match_loading → in_match → match_end.
+- Handles match-end flow and exposes `onExitToLobby` for post-match navigation.
+- Cleans up WebSocket and Phaser on unmount.
+
+**Non-responsibilities:**
+- Does not handle auth screens or route navigation (those belong to `authMode`).
+- Does not call `GET /api/player/me` or manage auth tokens.
+- Does not render the HashRouter.
+
+The `MatchShell` replacement makes it possible to test the full match lifecycle without the auth route layer, and to embed the game in different hosting contexts.
 
 ### GameConfig
 
