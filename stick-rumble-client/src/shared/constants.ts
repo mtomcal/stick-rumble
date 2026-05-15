@@ -4,6 +4,16 @@
  */
 
 /**
+ * Session token key used for localStorage persistence
+ */
+export const SESSION_TOKEN_KEY = 'stick_rumble_session_token';
+
+/**
+ * Base URL for API requests
+ */
+export const API_BASE_URL = '/api';
+
+/**
  * Color palette constants (prototype art style)
  */
 export const COLORS = {

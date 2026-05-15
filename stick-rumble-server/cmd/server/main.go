@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"log"
 	"net/http"
 	"os"
@@ -9,14 +10,50 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mtomcal/stick-rumble-server/internal/auth"
 	"github.com/mtomcal/stick-rumble-server/internal/config"
+	"github.com/mtomcal/stick-rumble-server/internal/db"
 	"github.com/mtomcal/stick-rumble-server/internal/network"
 )
+
+// initDatabase connects to PostgreSQL, runs migrations, and returns the connection pool.
+// Returns nil if the database URL is empty or connection fails (non-fatal for testing).
+func initDatabase(databaseURL string) *sql.DB {
+	if databaseURL == "" {
+		log.Println("No DATABASE_URL set; skipping database initialization")
+		return nil
+	}
+
+	database, err := db.Connect(databaseURL)
+	if err != nil {
+		log.Printf("Failed to connect to database: %v (continuing without DB)", err)
+		return nil
+	}
+
+	log.Println("Running database migrations...")
+	if err := db.RunMigrationsWithDefaults(database); err != nil {
+		database.Close()
+		log.Printf("Failed to run migrations: %v (continuing without DB)", err)
+		return nil
+	}
+	log.Println("Database migrations complete")
+
+	return database
+}
 
 // startServer initializes and starts the HTTP server with health and WebSocket endpoints
 // Returns when context is cancelled or server encounters an error
 func startServer(ctx context.Context) error {
 	runtimeConfig := config.Load()
+
+	// Initialize database connection (optional; will be nil if unavailable)
+	database := initDatabase(runtimeConfig.DatabaseURL)
+	if database != nil {
+		defer database.Close()
+	}
+
+	// Create auth handler with DB connection
+	authHandler := auth.NewAuthHandler(database, runtimeConfig.GoogleClientID, runtimeConfig.SessionTokenExpiryDays)
 
 	// Create HTTP server with routes
 	mux := http.NewServeMux()
@@ -26,6 +63,11 @@ func startServer(ctx context.Context) error {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	})
+
+	// Auth endpoints
+	mux.HandleFunc("/api/auth/google", authHandler.HandleGoogleSignIn)
+	mux.HandleFunc("/api/player/displayname", authHandler.HandleSetDisplayName)
+	mux.HandleFunc("/api/player/me", authHandler.HandleGetPlayerInfo)
 
 	// WebSocket endpoint
 	mux.HandleFunc("/ws", network.HandleWebSocket)

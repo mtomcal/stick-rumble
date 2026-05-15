@@ -51,14 +51,16 @@ var (
 
 // Player represents a connected player.
 type Player struct {
-	ID          string
-	DisplayName string
-	HelloSeen   bool
-	SendChan    chan []byte
-	PingTracker *PingTracker // Tracks RTT for lag compensation
+	ID          string       `json:"id"`
+	DisplayName string       `json:"displayName"`
+	AccountID   *string      `json:"-"` // Set when player is authenticated; never serialized to JSON
+	IsAuthed    bool         `json:"-"` // Whether the player has proven identity; never serialized to JSON
+	HelloSeen   bool         `json:"-"`
+	SendChan    chan []byte  `json:"-"`
+	PingTracker *PingTracker `json:"-"` // Tracks RTT for lag compensation
 }
 
-// NewPlayer creates a new player with initialized ping tracker.
+// NewPlayer creates a new guest player with initialized ping tracker.
 func NewPlayer(id string, sendChan chan []byte) *Player {
 	return &Player{
 		ID:          id,
@@ -66,6 +68,25 @@ func NewPlayer(id string, sendChan chan []byte) *Player {
 		SendChan:    sendChan,
 		PingTracker: NewPingTracker(),
 	}
+}
+
+// NewPlayerWithAccount creates a new authenticated player with account identity.
+func NewPlayerWithAccount(id string, sendChan chan []byte, accountID *string, displayName string, isAuthed bool) *Player {
+	return &Player{
+		ID:          id,
+		DisplayName: displayName,
+		AccountID:   accountID,
+		IsAuthed:    isAuthed,
+		SendChan:    sendChan,
+		PingTracker: NewPingTracker(),
+	}
+}
+
+// SetAccountIdentity updates the player's identity after construction.
+func (p *Player) SetAccountIdentity(accountID *string, displayName string, isAuthed bool) {
+	p.AccountID = accountID
+	p.DisplayName = displayName
+	p.IsAuthed = isAuthed
 }
 
 // Room represents a game room with multiple players.

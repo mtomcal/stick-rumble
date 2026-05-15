@@ -72,6 +72,13 @@ const (
 	KillXPReward = 100
 )
 
+// Progression constants
+const (
+	// XpPerLevelBase is the base XP multiplier per level.
+	// Each level N requires N * XpPerLevelBase XP to advance from N to N+1.
+	XpPerLevelBase = 500
+)
+
 // Health regeneration
 const (
 	// HealthRegenerationDelay is the time in seconds before health starts regenerating after taking damage

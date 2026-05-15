@@ -66,6 +66,7 @@ type PlayerStateSnapshot struct {
 // PlayerState represents a player's physics state in the game world
 type PlayerState struct {
 	ID                     string          `json:"id"`
+	AccountID              *string         `json:"-"` // Internal account ID, never serialized to clients
 	DisplayName            string          `json:"displayName"`
 	Position               Vector2         `json:"position"`
 	Velocity               Vector2         `json:"velocity"`
@@ -89,9 +90,14 @@ type PlayerState struct {
 	mu                     sync.RWMutex
 }
 
-// NewPlayerState creates a new player state with default spawn position and real clock
-func NewPlayerState(id string) *PlayerState {
-	return NewPlayerStateWithClock(id, &RealClock{})
+// NewPlayerState creates a new player state with default spawn position and real clock.
+// An optional display name can be provided as a second argument.
+func NewPlayerState(id string, displayName ...string) *PlayerState {
+	ps := NewPlayerStateWithClock(id, &RealClock{})
+	if len(displayName) > 0 {
+		ps.DisplayName = displayName[0]
+	}
+	return ps
 }
 
 // NewPlayerStateWithClock creates a new player state with a custom clock (for testing)
@@ -159,6 +165,22 @@ func (p *PlayerState) SetAimAngle(angle float64) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.AimAngle = angle
+}
+
+// SetAccountID sets the player's account ID (thread-safe).
+// Pass nil to clear (marks player as guest).
+func (p *PlayerState) SetAccountID(accountID *string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.AccountID = accountID
+}
+
+// GetAccountID returns the player's account ID (thread-safe).
+// Returns nil for guest players.
+func (p *PlayerState) GetAccountID() *string {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.AccountID
 }
 
 // GetAimAngle retrieves the player's aim angle (thread-safe)

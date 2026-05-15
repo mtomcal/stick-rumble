@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -16,6 +17,9 @@ type RuntimeConfig struct {
 	EnableSchemaValidation bool
 	GoEnv                  string
 	AllowedOrigins         []string
+	DatabaseURL            string
+	GoogleClientID         string
+	SessionTokenExpiryDays int
 }
 
 func Load() RuntimeConfig {
@@ -29,13 +33,22 @@ func Load() RuntimeConfig {
 		port = DefaultPort
 	}
 
-	return RuntimeConfig{
+	cfg := RuntimeConfig{
 		Host:                   host,
 		Port:                   port,
 		EnableSchemaValidation: strings.EqualFold(strings.TrimSpace(os.Getenv("ENABLE_SCHEMA_VALIDATION")), "true"),
 		GoEnv:                  defaultString(strings.TrimSpace(os.Getenv("GO_ENV")), "development"),
 		AllowedOrigins:         splitCSV(os.Getenv("ALLOWED_ORIGINS")),
+		DatabaseURL:            defaultString(strings.TrimSpace(os.Getenv("DATABASE_URL")), "postgres://stickrumble:stickrumble_dev@localhost:5432/stickrumble?sslmode=disable"),
+		GoogleClientID:         defaultString(strings.TrimSpace(os.Getenv("GOOGLE_CLIENT_ID")), ""),
+		SessionTokenExpiryDays: defaultInt(os.Getenv("SESSION_TOKEN_EXPIRY_DAYS"), 30),
 	}
+
+	if cfg.SessionTokenExpiryDays <= 0 {
+		cfg.SessionTokenExpiryDays = 30 // fallback to default
+	}
+
+	return cfg
 }
 
 func (c RuntimeConfig) AllowsOrigin(origin string) bool {
@@ -54,6 +67,17 @@ func (c RuntimeConfig) AllowsOrigin(origin string) bool {
 	}
 
 	return false
+}
+
+func defaultInt(raw string, fallback int) int {
+	if strings.TrimSpace(raw) == "" {
+		return fallback
+	}
+	val, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil {
+		return fallback
+	}
+	return val
 }
 
 func defaultString(value, fallback string) string {

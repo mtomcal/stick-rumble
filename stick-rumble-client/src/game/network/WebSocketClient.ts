@@ -60,8 +60,8 @@ export class WebSocketClient {
   private gameplayReady = true;
   private queuedGameplayMessages: Message[] = [];
 
-  constructor(url: string, debugMode = false, networkSimulator?: NetworkSimulator) {
-    this.url = url;
+  constructor(url: string, debugMode = false, networkSimulator?: NetworkSimulator, sessionToken?: string) {
+    this.url = sessionToken ? `${url}?token=${encodeURIComponent(sessionToken)}` : url;
     this.debugMode = debugMode;
     this.clientId = `client-${Math.random().toString(36).substring(7)}`;
     this.networkSimulator = networkSimulator || new NetworkSimulator();

@@ -1,0 +1,11 @@
+CREATE TABLE IF NOT EXISTS lifetime_stats (
+    player_id UUID PRIMARY KEY REFERENCES players(id) ON DELETE CASCADE,
+    kills INTEGER NOT NULL DEFAULT 0,
+    deaths INTEGER NOT NULL DEFAULT 0,
+    wins INTEGER NOT NULL DEFAULT 0,
+    games_played INTEGER NOT NULL DEFAULT 0,
+    total_xp INTEGER NOT NULL DEFAULT 0,
+    damage_dealt INTEGER NOT NULL DEFAULT 0,
+    per_weapon_kills JSONB NOT NULL DEFAULT '{}'::jsonb,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

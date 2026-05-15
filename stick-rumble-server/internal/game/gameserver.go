@@ -258,6 +258,17 @@ func (gs *GameServer) SetPlayerDisplayName(playerID string, displayName string) 
 	return true
 }
 
+// SetPlayerAccountID sets the account ID for a player (thread-safe).
+// Pass nil to mark as guest.
+func (gs *GameServer) SetPlayerAccountID(playerID string, accountID *string) bool {
+	player, exists := gs.world.GetPlayer(playerID)
+	if !exists {
+		return false
+	}
+	player.SetAccountID(accountID)
+	return true
+}
+
 // RemovePlayer removes a player from the game world
 func (gs *GameServer) RemovePlayer(playerID string) {
 	gs.world.RemovePlayer(playerID)

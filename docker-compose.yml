@@ -1,0 +1,38 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: stickrumble-db
+    environment:
+      POSTGRES_DB: stickrumble
+      POSTGRES_USER: stickrumble
+      POSTGRES_PASSWORD: stickrumble_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./stick-rumble-server/internal/migrations:/migrations
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stickrumble -d stickrumble"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  server:
+    build:
+      context: ./stick-rumble-server
+      dockerfile: Dockerfile
+    container_name: stickrumble-server
+    environment:
+      DATABASE_URL: "postgres://stickrumble:stickrumble_dev@postgres:5432/stickrumble?sslmode=disable"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./stick-rumble-server/internal/migrations:/app/internal/migrations
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:

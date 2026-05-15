@@ -14,6 +14,10 @@ export type AppViewState =
   | 'in_match'
   | 'match_end'
   | 'recoverable_error'
+  | 'sign_in'
+  | 'display_name_picker'
+  | 'lobby'
+  | 'profile'
 
 export interface MatchSessionFlowState {
   viewState: AppViewState
@@ -30,6 +34,20 @@ export interface MatchSessionFlowState {
 export function createInitialSessionFlowState(): MatchSessionFlowState {
   return {
     viewState: 'join_form',
+    sessionStatus: null,
+    matchSession: null,
+    matchEndData: null,
+    localPlayerId: '',
+    joinError: null,
+    reconnectIntent: null,
+    activeSessionKey: null,
+    shouldResetMobileEntry: false,
+  }
+}
+
+export function createInitialAppState(hasToken: boolean): MatchSessionFlowState {
+  return {
+    viewState: hasToken ? 'lobby' : 'sign_in',
     sessionStatus: null,
     matchSession: null,
     matchEndData: null,

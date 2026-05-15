@@ -2,10 +2,22 @@ import type { JoinIntent } from '../../shared/types';
 
 const INVITE_PARAM = 'invite';
 
+/** Extracted for testability — returns the current hostname from the browser location. */
+export function getLocationHostname(): string | undefined {
+  return globalThis.location?.hostname;
+}
+
+/** Extracted for testability — returns the current protocol from the browser location. */
+export function getLocationProtocol(): string {
+  return globalThis.location?.protocol || 'http:';
+}
+
 function getDefaultWebSocketUrl(): string {
-  if (typeof globalThis !== 'undefined' && globalThis.location?.hostname) {
-    const protocol = globalThis.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    return `${protocol}//${globalThis.location.hostname}:8080/ws`;
+  const hostname = getLocationHostname();
+  if (hostname) {
+    const protocol = getLocationProtocol();
+    const wsProtocol = protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${wsProtocol}//${hostname}:8080/ws`;
   }
 
   return 'ws://localhost:8080/ws';
@@ -13,6 +25,10 @@ function getDefaultWebSocketUrl(): string {
 
 export function getWebSocketUrl(): string {
   return import.meta.env.VITE_WS_URL || getDefaultWebSocketUrl();
+}
+
+export function getApiBaseUrl(): string {
+  return import.meta.env.VITE_API_BASE_URL || '/api';
 }
 
 export function getClientBaseUrl(): string {

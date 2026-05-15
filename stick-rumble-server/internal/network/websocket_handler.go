@@ -2,6 +2,7 @@ package network
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/mtomcal/stick-rumble-server/internal/auth"
 	"github.com/mtomcal/stick-rumble-server/internal/config"
 	"github.com/mtomcal/stick-rumble-server/internal/game"
 )
@@ -44,6 +46,7 @@ type WebSocketHandler struct {
 	publication       *serverToClientPublication
 	networkSimulator  *NetworkSimulator // For artificial latency testing (Story 4.6)
 	deltaTracker      *DeltaTracker     // For delta compression (Story 4.4)
+	db                *sql.DB           // Database connection for auth resolution
 }
 
 type roomSessionRuntime interface {
@@ -62,6 +65,7 @@ func (r *gameSessionRuntime) ActivatePlayers(activations []game.RoomSessionActiv
 			r.gameServer.AddPlayer(activation.Player.ID)
 		}
 		r.gameServer.SetPlayerDisplayName(activation.Player.ID, activation.Player.DisplayName)
+		r.gameServer.SetPlayerAccountID(activation.Player.ID, activation.Player.AccountID)
 		r.sendWeaponSpawns(activation.Player.ID)
 	}
 }
@@ -212,6 +216,14 @@ func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Reques
 	// If buffer fills (slow/unresponsive client), messages are dropped with log warning.
 	sendChan := make(chan []byte, 256)
 	player := game.NewPlayer(playerID, sendChan)
+
+	// Resolve auth token from query parameter, if present
+	if token := r.URL.Query().Get("token"); token != "" && h.db != nil {
+		if playerRecord, err := auth.ResolveSessionToken(h.db, token); err == nil && playerRecord != nil {
+			player.SetAccountIdentity(&playerRecord.ID, playerRecord.DisplayName, true)
+			log.Printf("Client %s authenticated as player %s", playerID, playerRecord.ID)
+		}
+	}
 
 	log.Printf("Client connected: %s", playerID)
 	_ = conn.SetReadDeadline(time.Now().Add(pongWait))
@@ -377,6 +389,14 @@ func (h *WebSocketHandler) handlePlayerHello(player *game.Player, data any) {
 	if !ok {
 		log.Printf("Invalid player:hello payload for %s", player.ID)
 		return
+	}
+
+	// For authed players, use the DB display name and ignore the client-supplied name
+	if player.IsAuthed && player.AccountID != nil && h.db != nil {
+		// Override the client-supplied display name with the one from the DB
+		if dbPlayer, err := auth.FindPlayerByID(h.db, *player.AccountID); err == nil && dbPlayer != nil {
+			dataMap["displayName"] = dbPlayer.DisplayName
+		}
 	}
 
 	result := h.sessionFlow.HandleHello(player, dataMap)

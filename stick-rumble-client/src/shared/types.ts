@@ -49,6 +49,26 @@ export interface MatchSession {
   displayName: string;
   joinMode: JoinMode;
   code?: string;
+  accountId?: string;
+}
+
+export interface LifetimeStats {
+  kills: number;
+  deaths: number;
+  wins: number;
+  gamesPlayed: number;
+  totalXp: number;
+  damageDealt: number;
+}
+
+export interface PlayerInfo {
+  playerId: string;
+  displayName: string;
+  avatarUrl?: string;
+  lifetimeStats: LifetimeStats;
+  level: number;
+  currentLevelXp: number;
+  xpForNextLevel: number;
 }
 
 export type StageMode = 'desktop' | 'mobile-landscape' | 'mobile-portrait-blocked'

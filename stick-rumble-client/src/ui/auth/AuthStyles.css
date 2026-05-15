@@ -1,0 +1,66 @@
+.sign-in-screen,
+.display-name-picker-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  gap: 1rem;
+  padding: 2rem;
+}
+
+.sign-in-screen h1,
+.display-name-picker-screen h1 {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.guest-button {
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  border: 2px solid #555;
+  border-radius: 24px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  margin-top: 1rem;
+}
+
+.guest-button:hover {
+  background: #333;
+}
+
+.display-name-picker-screen input {
+  padding: 0.75rem;
+  font-size: 1rem;
+  border: 2px solid #555;
+  border-radius: 8px;
+  background: #222;
+  color: #fff;
+  width: 100%;
+  max-width: 300px;
+}
+
+.display-name-picker-screen .error {
+  color: #ff4444;
+  font-size: 0.875rem;
+}
+
+.display-name-picker-screen button {
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  border: 2px solid #555;
+  border-radius: 24px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+
+.display-name-picker-screen button:hover:not(:disabled) {
+  background: #333;
+}
+
+.display-name-picker-screen button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

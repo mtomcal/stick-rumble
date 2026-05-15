@@ -6,6 +6,8 @@ import (
 	"math"
 	"time"
 
+	"github.com/mtomcal/stick-rumble-server/internal/auth"
+	"github.com/mtomcal/stick-rumble-server/internal/db"
 	"github.com/mtomcal/stick-rumble-server/internal/game"
 )
 
@@ -421,6 +423,9 @@ func (h *WebSocketHandler) broadcastMatchEnded(room *game.Room, world *game.Worl
 	}
 
 	log.Printf("Match ended in room %s - reason: %s, winners: %v", room.ID, room.Match.EndReason, winners)
+
+	// Process match stats for all players within a single DB transaction
+	h.processMatchEndStats(finalScores, winners)
 }
 
 func (h *WebSocketHandler) broadcastMatchEndedEvent(event game.MatchEndedEvent) {
@@ -439,6 +444,58 @@ func (h *WebSocketHandler) broadcastMatchEndedEvent(event game.MatchEndedEvent) 
 	}
 
 	log.Printf("Match ended in room %s - reason: %s, winners: %v", event.RoomID, event.Reason, event.Winners)
+
+	// Process match stats for all players within a single DB transaction
+	h.processMatchEndStats(event.FinalScores, event.Winners)
+}
+
+// processMatchEndStats processes lifetime stats for all authenticated players in a match.
+// Uses a single DB transaction for atomicity.
+func (h *WebSocketHandler) processMatchEndStats(finalScores []game.PlayerScore, winners []game.WinnerSummary) {
+	if h.db == nil {
+		log.Println("Stats processing skipped: no database connection")
+		return
+	}
+
+	tx, err := h.db.Begin()
+	if err != nil {
+		log.Printf("Failed to begin transaction for match stats: %v", err)
+		return
+	}
+	defer tx.Rollback()
+
+	// Build winner ID list from winner summaries
+	winnerIDs := make([]string, 0, len(winners))
+	for _, w := range winners {
+		winnerIDs = append(winnerIDs, w.PlayerID)
+	}
+
+	for i := range finalScores {
+		score := &finalScores[i]
+		if score.AccountID == nil || *score.AccountID == "" {
+			continue
+		}
+
+		stats, err := db.GetLifetimeStatsTx(tx, *score.AccountID)
+		if err != nil {
+			log.Printf("Failed to get lifetime stats for %s: %v", *score.AccountID, err)
+			continue
+		}
+
+		if err := auth.ProcessMatchEndStats(score.AccountID, score.Kills, score.Deaths, score.XP, winnerIDs, stats); err != nil {
+			log.Printf("Failed to process match stats for %s: %v", *score.AccountID, err)
+			continue
+		}
+
+		if err := db.SaveLifetimeStatsTx(tx, stats); err != nil {
+			log.Printf("Failed to save lifetime stats for %s: %v", *score.AccountID, err)
+			continue
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		log.Printf("Failed to commit transaction for match stats: %v", err)
+	}
 }
 
 // broadcastWeaponPickup broadcasts weapon pickup event to all clients

@@ -1163,7 +1163,56 @@ describe('WebSocketClient', () => {
     });
   });
 
-  describe('NetworkSimulator integration', () => {
+  describe('session token', () => {
+  it('constructor accepts optional session token parameter', () => {
+    const client = new WebSocketClient('ws://localhost:8080/ws', false, undefined, 'my-token');
+    expect(client).toBeDefined();
+  });
+
+  it('appends token as query param when token is present', async () => {
+    const client = new WebSocketClient('ws://localhost:8080/ws', false, undefined, 'abc123');
+
+    const connectPromise = client.connect();
+
+    if (mockWebSocketInstance.onopen) {
+      mockWebSocketInstance.onopen({});
+    }
+
+    await connectPromise;
+
+    expect(mockWebSocket).toHaveBeenCalledWith('ws://localhost:8080/ws?token=abc123');
+  });
+
+  it('does not append query param when token is absent', async () => {
+    const client = new WebSocketClient('ws://localhost:8080/ws');
+
+    const connectPromise = client.connect();
+
+    if (mockWebSocketInstance.onopen) {
+      mockWebSocketInstance.onopen({});
+    }
+
+    await connectPromise;
+
+    expect(mockWebSocket).toHaveBeenCalledWith('ws://localhost:8080/ws');
+  });
+
+  it('encodes special characters in token', async () => {
+    const client = new WebSocketClient('ws://localhost:8080/ws', false, undefined, 'token/with+special&chars=');
+
+    const connectPromise = client.connect();
+
+    if (mockWebSocketInstance.onopen) {
+      mockWebSocketInstance.onopen({});
+    }
+
+    await connectPromise;
+
+    expect(mockWebSocket).toHaveBeenCalledWith('ws://localhost:8080/ws?token=token%2Fwith%2Bspecial%26chars%3D');
+  });
+});
+
+describe('NetworkSimulator integration', () => {
     beforeEach(() => {
       vi.useFakeTimers();
     });

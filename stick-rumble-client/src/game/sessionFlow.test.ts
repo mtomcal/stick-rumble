@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { MatchEndData, SessionStatusData } from '../shared/types'
 import {
+  type AppViewState,
   applyJoinError,
   applyMatchEnd,
   applyReconnectReplayFailed,
@@ -8,6 +9,7 @@ import {
   beginJoin,
   beginReplay,
   createInitialSessionFlowState,
+  createInitialAppState,
   returnToJoinForm,
 } from './sessionFlow'
 
@@ -24,6 +26,40 @@ const matchReadyStatus: SessionStatusData = {
 }
 
 describe('sessionFlow', () => {
+  it('AppViewState can include sign_in, display_name_picker, lobby, profile', () => {
+    // Test each state is assignable
+    const states: AppViewState[] = ['sign_in', 'display_name_picker', 'lobby', 'profile'];
+    states.forEach(s => {
+      expect(s).toBeDefined();
+    });
+  });
+
+  it('createInitialAppState returns lobby when token exists', () => {
+    const state = createInitialAppState(true);
+    expect(state.viewState).toBe('lobby');
+  });
+
+  it('createInitialAppState returns sign_in when no token', () => {
+    const state = createInitialAppState(false);
+    expect(state.viewState).toBe('sign_in');
+  });
+
+  it('initial state helper returns sign_in when no token, lobby when token found', () => {
+    const noToken = createInitialAppState(false);
+    expect(noToken.viewState).toBe('sign_in');
+    expect(noToken.sessionStatus).toBeNull();
+    expect(noToken.matchSession).toBeNull();
+    expect(noToken.joinError).toBeNull();
+    expect(noToken.activeSessionKey).toBeNull();
+
+    const hasToken = createInitialAppState(true);
+    expect(hasToken.viewState).toBe('lobby');
+    expect(hasToken.sessionStatus).toBeNull();
+    expect(hasToken.matchSession).toBeNull();
+    expect(hasToken.joinError).toBeNull();
+    expect(hasToken.activeSessionKey).toBeNull();
+  });
+
   it('enters joining without clearing active match identity until the server replies', () => {
     const inMatch = applySessionStatus(createInitialSessionFlowState(), matchReadyStatus)
     const next = beginJoin(inMatch)

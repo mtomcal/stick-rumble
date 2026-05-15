@@ -12,6 +12,9 @@ func TestLoadDefaults(t *testing.T) {
 	t.Setenv("ENABLE_SCHEMA_VALIDATION", "")
 	t.Setenv("GO_ENV", "")
 	t.Setenv("ALLOWED_ORIGINS", "")
+	t.Setenv("DATABASE_URL", "")
+	t.Setenv("GOOGLE_CLIENT_ID", "")
+	t.Setenv("SESSION_TOKEN_EXPIRY_DAYS", "")
 
 	cfg := Load()
 
@@ -20,6 +23,9 @@ func TestLoadDefaults(t *testing.T) {
 	assert.False(t, cfg.EnableSchemaValidation)
 	assert.Equal(t, "development", cfg.GoEnv)
 	assert.Nil(t, cfg.AllowedOrigins)
+	assert.Equal(t, "postgres://stickrumble:stickrumble_dev@localhost:5432/stickrumble?sslmode=disable", cfg.DatabaseURL)
+	assert.Equal(t, "", cfg.GoogleClientID)
+	assert.Equal(t, 30, cfg.SessionTokenExpiryDays)
 }
 
 func TestLoadConfiguredValues(t *testing.T) {
@@ -28,6 +34,9 @@ func TestLoadConfiguredValues(t *testing.T) {
 	t.Setenv("ENABLE_SCHEMA_VALIDATION", "true")
 	t.Setenv("GO_ENV", "production")
 	t.Setenv("ALLOWED_ORIGINS", "https://stickrumble.example, https://cdn.example")
+	t.Setenv("DATABASE_URL", "postgres://user:pass@prod:5432/stickrumble")
+	t.Setenv("GOOGLE_CLIENT_ID", "my-client-id.apps.googleusercontent.com")
+	t.Setenv("SESSION_TOKEN_EXPIRY_DAYS", "14")
 
 	cfg := Load()
 
@@ -36,6 +45,9 @@ func TestLoadConfiguredValues(t *testing.T) {
 	assert.True(t, cfg.EnableSchemaValidation)
 	assert.Equal(t, "production", cfg.GoEnv)
 	assert.Equal(t, []string{"https://stickrumble.example", "https://cdn.example"}, cfg.AllowedOrigins)
+	assert.Equal(t, "postgres://user:pass@prod:5432/stickrumble", cfg.DatabaseURL)
+	assert.Equal(t, "my-client-id.apps.googleusercontent.com", cfg.GoogleClientID)
+	assert.Equal(t, 14, cfg.SessionTokenExpiryDays)
 }
 
 func TestAllowsOrigin(t *testing.T) {
