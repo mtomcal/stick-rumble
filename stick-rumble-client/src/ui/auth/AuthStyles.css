@@ -28,6 +28,12 @@
 
 .guest-button:hover {
   background: var(--color-bg-surface);
+  filter: brightness(1.1);
+}
+
+.guest-button:focus-visible {
+  outline: 2px solid var(--color-accent-primary);
+  outline-offset: 2px;
 }
 
 .display-name-picker-screen input {
@@ -58,6 +64,12 @@
 
 .display-name-picker-screen button:hover:not(:disabled) {
   background: var(--color-bg-surface);
+  filter: brightness(1.1);
+}
+
+.display-name-picker-screen button:focus-visible:not(:disabled) {
+  outline: 2px solid var(--color-accent-primary);
+  outline-offset: 2px;
 }
 
 .display-name-picker-screen button:disabled {

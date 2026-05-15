@@ -118,6 +118,12 @@
 
 .lobby-play-public:hover {
   background: var(--color-accent-secondary);
+  filter: brightness(1.1);
+}
+
+.lobby-play-public:focus-visible {
+  outline: 2px solid var(--color-accent-primary);
+  outline-offset: 2px;
 }
 
 .lobby-sign-out {
@@ -133,4 +139,10 @@
 .lobby-sign-out:hover {
   color: var(--color-text-primary);
   border-color: var(--color-text-primary);
+  filter: brightness(1.1);
+}
+
+.lobby-sign-out:focus-visible {
+  outline: 2px solid var(--color-accent-primary);
+  outline-offset: 2px;
 }

@@ -65,4 +65,10 @@
 .profile-back-button:hover {
   color: var(--color-text-primary);
   border-color: var(--color-text-primary);
+  filter: brightness(1.1);
+}
+
+.profile-back-button:focus-visible {
+  outline: 2px solid var(--color-accent-primary);
+  outline-offset: 2px;
 }
