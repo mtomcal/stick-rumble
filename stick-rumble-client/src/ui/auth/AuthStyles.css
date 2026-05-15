@@ -24,6 +24,7 @@
   color: var(--color-text-primary);
   cursor: pointer;
   margin-top: 1rem;
+  transition: filter 0.2s ease, background-color 0.2s ease;
 }
 
 .guest-button:hover {
@@ -33,6 +34,11 @@
 }
 
 .guest-button:focus-visible {
+  outline: 2px solid var(--color-accent-primary);
+  outline-offset: 2px;
+}
+
+.display-name-picker-screen input:focus-visible {
   outline: 2px solid var(--color-accent-primary);
   outline-offset: 2px;
 }
@@ -61,6 +67,7 @@
   background: transparent;
   color: var(--color-text-primary);
   cursor: pointer;
+  transition: filter 0.2s ease, background-color 0.2s ease;
 }
 
 .display-name-picker-screen button:hover:not(:disabled) {

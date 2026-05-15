@@ -186,6 +186,11 @@ h1, h2, h3 {
   line-height: 1.25;
 }
 
+.overlay-card__input:focus-visible {
+  outline: 2px solid var(--color-accent-primary);
+  outline-offset: 2px;
+}
+
 .overlay-actions {
   display: flex;
   gap: var(--spacing-md);
@@ -201,6 +206,7 @@ h1, h2, h3 {
   font-weight: 700;
   padding: 0.75rem 0.9rem;
   font-size: var(--font-size-base);
+  transition: filter 0.2s ease;
 }
 
 .overlay-card__button:hover,

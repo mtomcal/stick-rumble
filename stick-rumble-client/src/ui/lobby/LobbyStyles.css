@@ -114,10 +114,10 @@
   font-size: var(--font-size-lg);
   font-weight: 700;
   cursor: pointer;
+  transition: filter 0.2s ease;
 }
 
 .lobby-play-public:hover {
-  background: var(--color-accent-secondary);
   filter: brightness(1.1);
 }
 
@@ -134,6 +134,7 @@
   color: var(--color-text-secondary);
   font-size: var(--font-size-base);
   cursor: pointer;
+  transition: filter 0.2s ease, color 0.2s ease, border-color 0.2s ease;
 }
 
 .lobby-sign-out:hover {
