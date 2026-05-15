@@ -28,6 +28,7 @@
 
 .guest-button:hover {
   background: var(--color-bg-surface);
+  border-color: var(--color-accent-primary);
   filter: brightness(1.1);
 }
 
@@ -64,6 +65,7 @@
 
 .display-name-picker-screen button:hover:not(:disabled) {
   background: var(--color-bg-surface);
+  border-color: var(--color-accent-primary);
   filter: brightness(1.1);
 }
 
