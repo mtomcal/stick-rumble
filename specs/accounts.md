@@ -1,6 +1,6 @@
 # Accounts System
 
-> **Spec Version**: 1.0.0
+> **Spec Version**: 1.0.1
 > **Last Updated**: 2026-05-15
 > **Depends On**: [constants.md](constants.md), [server-architecture.md](server-architecture.md), [rooms.md](rooms.md)
 > **Depended By**: [progression.md](progression.md), [client-architecture.md](client-architecture.md), [networking.md](networking.md)
@@ -44,7 +44,7 @@ All auth constants are defined in [constants.md](constants.md#auth-constants).
 | Constant | Value | Description |
 |----------|-------|-------------|
 | SESSION_TOKEN_EXPIRY_DAYS | 30 | Session token lifetime |
-| SESSION_TOKEN_BYTES | 32 | 256-bit opaque token |
+| SESSION_TOKEN_BYTES | 32 | 256-bit random bytes encoded as a base64url session token with no padding |
 | GOOGLE_TOKEN_VALIDATION_URL | `https://oauth2.googleapis.com/tokeninfo?id_token=` | Google ID token validation endpoint |
 
 ---
@@ -63,6 +63,7 @@ type PlayerRecord struct {
     PlayerID    string     `db:"player_id"`     // UUID primary key
     GoogleSub   string     `db:"google_sub"`    // Google's stable user ID (unique)
     DisplayName *string    `db:"display_name"`   // null until first login name picker
+    AvatarURL   *string    `db:"avatar_url"`     // null if Google profile has no picture
     CreatedAt   time.Time  `db:"created_at"`
     LastSeenAt  time.Time  `db:"last_seen_at"`
 }
@@ -72,12 +73,12 @@ type PlayerRecord struct {
 
 Persistent session token stored in PostgreSQL.
 
-**Why SHA-256 of opaque token?** The server never stores the raw token. Only the hash is stored. If the database is compromised, attackers cannot impersonate active sessions because they would need to reverse the SHA-256 hash.
+**Why SHA-256 of the encoded session token?** The server never stores the raw bearer token string. It generates 256-bit random bytes, encodes them as base64url with no padding, and stores only the SHA-256 hash of that encoded string. If the database is compromised, attackers cannot impersonate active sessions because they would need to reverse the SHA-256 hash.
 
 **Go:**
 ```go
 type SessionToken struct {
-    TokenHash string    `db:"token_hash"`  // SHA-256 of opaque 256-bit token (primary key)
+    TokenHash string    `db:"token_hash"`  // SHA-256 of base64url session token string (primary key)
     PlayerID  string    `db:"player_id"`   // FK to players
     ExpiresAt time.Time `db:"expires_at"`
     CreatedAt time.Time `db:"created_at"`
@@ -124,7 +125,8 @@ function googleSignIn(googleIdToken):
         player = createPlayer(
             playerId: generateUUID(),
             googleSub: googleClaims.sub,
-            displayName: null  // first login, name picker required
+            displayName: null,  // first login, name picker required
+            avatarUrl: googleClaims.picture or null
         )
         createLifetimeStats(player.playerId)
         log "Created new player: {player.playerId}"
@@ -132,8 +134,9 @@ function googleSignIn(googleIdToken):
         updateLastSeenAt(player.playerId)
 
     // 3. Generate session token
-    opaqueToken = generateRandomBytes(32)  // 256-bit
-    tokenHash = sha256(opaqueToken)
+    rawTokenBytes = generateRandomBytes(32)  // 256-bit
+    sessionToken = base64urlNoPadding(rawTokenBytes)
+    tokenHash = sha256(sessionToken)
     expiresAt = now() + 30 days
 
     storeSessionToken(tokenHash, player.playerId, expiresAt)
@@ -142,11 +145,12 @@ function googleSignIn(googleIdToken):
     hasDisplayName = player.displayName != null
 
     return {
-        sessionToken: base64(opaqueToken),
+        sessionToken: sessionToken,
         expiresAt: expiresAt.epochMs,
         player: {
             playerId: player.playerId,
             displayName: player.displayName or null,
+            avatarUrl: player.avatarUrl or null,
             createdAt: player.createdAt.epochMs
         }
     }
@@ -167,6 +171,7 @@ func (h *AuthHandler) HandleGoogleSignIn(googleIDToken string) (*SignInResponse,
         player = &PlayerRecord{
             PlayerID:  uuid.New().String(),
             GoogleSub: claims.Sub,
+            AvatarURL: claims.Picture,
         }
         if err := h.playerStore.Create(player); err != nil {
             return nil, err
@@ -181,11 +186,12 @@ func (h *AuthHandler) HandleGoogleSignIn(googleIDToken string) (*SignInResponse,
     }
 
     // Generate session token
-    opaqueToken := make([]byte, SessionTokenBytes)
-    if _, err := rand.Read(opaqueToken); err != nil {
+    rawTokenBytes := make([]byte, SessionTokenBytes)
+    if _, err := rand.Read(rawTokenBytes); err != nil {
         return nil, err
     }
-    tokenHash := sha256.Sum256(opaqueToken)
+    sessionToken := base64.RawURLEncoding.EncodeToString(rawTokenBytes)
+    tokenHash := sha256.Sum256([]byte(sessionToken))
     expiresAt := time.Now().Add(SessionTokenExpiryDays * 24 * time.Hour)
 
     session := &SessionToken{
@@ -198,11 +204,12 @@ func (h *AuthHandler) HandleGoogleSignIn(googleIDToken string) (*SignInResponse,
     }
 
     return &SignInResponse{
-        SessionToken: base64.StdEncoding.EncodeToString(opaqueToken),
+        SessionToken: sessionToken,
         ExpiresAt:    expiresAt.UnixMilli(),
         Player: PlayerInfo{
             PlayerID:    player.PlayerID,
             DisplayName: player.DisplayName,
+            AvatarURL:   player.AvatarURL,
             CreatedAt:   player.CreatedAt.UnixMilli(),
         },
     }, nil
@@ -213,14 +220,16 @@ func (h *AuthHandler) HandleGoogleSignIn(googleIDToken string) (*SignInResponse,
 
 **Pseudocode:**
 ```
-function setDisplayName(playerId, sessionToken, rawDisplayName):
-    // 1. Validate session token
+function setDisplayName(authorizationHeader, rawDisplayName):
+    // 1. Validate bearer token and derive player identity server-side
+    sessionToken = parseBearerToken(authorizationHeader)
+    if sessionToken == null:
+        return { error: "unauthorized", status: 401 }
     tokenHash = sha256(sessionToken)
     session = findSessionByHash(tokenHash)
     if session == null or session.expiresAt < now():
         return { error: "session_expired", status: 401 }
-    if session.playerId != playerId:
-        return { error: "unauthorized", status: 403 }
+    playerId = session.playerId
 
     // 2. Sanitize display name (same rules as rooms.md)
     sanitized = sanitizeDisplayName(rawDisplayName)
@@ -238,20 +247,37 @@ function setDisplayName(playerId, sessionToken, rawDisplayName):
 
 **Go:**
 ```go
-func (h *AuthHandler) HandleSetDisplayName(playerID string, rawName string) (*SetDisplayNameResponse, error) {
+func (h *AuthHandler) HandleSetDisplayName(w http.ResponseWriter, r *http.Request) {
+    sessionToken, err := parseBearerToken(r.Header.Get("Authorization"))
+    if err != nil {
+        writeJSON(w, http.StatusUnauthorized, ErrorResponse{Error: "unauthorized"})
+        return
+    }
+
+    session, err := h.sessionStore.FindByHash(sha256Hex(sessionToken))
+    if err != nil || session.ExpiresAt.Before(time.Now()) {
+        writeJSON(w, http.StatusUnauthorized, ErrorResponse{Error: "session_expired"})
+        return
+    }
+    playerID := session.PlayerID
+
+    rawName := readDisplayNameFromBody(r)
     sanitized := sanitizeDisplayName(rawName)
     if sanitized == FallbackDisplayName && rawName != "" {
-        return nil, ErrBadDisplayName
+        writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "bad_display_name"})
+        return
     }
     if len(sanitized) < 1 || len(sanitized) > MaxDisplayNameLen {
-        return nil, ErrBadDisplayName
+        writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "bad_display_name"})
+        return
     }
 
     if err := h.playerStore.UpdateDisplayName(playerID, sanitized); err != nil {
-        return nil, err
+        writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "internal_error"})
+        return
     }
 
-    return &SetDisplayNameResponse{DisplayName: sanitized}, nil
+    writeJSON(w, http.StatusOK, SetDisplayNameResponse{DisplayName: sanitized})
 }
 ```
 
@@ -284,15 +310,17 @@ function handleWebSocketUpgrade(request):
     player = null
 
     if token != null and token != "":
-        // Validate session token
+        // Validate session token by hashing the presented base64url token string
         tokenHash = sha256(token)
         session = findSessionByHash(tokenHash)
         if session != null and session.expiresAt > now():
             player = findPlayer(session.playerId)
             if player != null:
-                // Upgrade with authed identity
+                // Upgrade with authed identity. The gameplay connection ID remains ephemeral;
+                // the persistent database UUID is stored separately as AccountID.
                 upgrade(
-                    playerId  = player.playerId,
+                    connectionPlayerId = generateUUID(),
+                    accountId = player.playerId,
                     displayName = player.displayName  // authoritative from DB
                 )
                 return
@@ -302,14 +330,15 @@ function handleWebSocketUpgrade(request):
 
     // Guest connection (existing behavior)
     upgrade(
-        playerId = generateUUID(),
+        connectionPlayerId = generateUUID(),
+        accountId = null,
         displayName = null  // will be set via player:hello
     )
 ```
 
 **Key rules:**
-- If token is present and valid: player is authed. `player_id` and `display_name` come from the database.
-- If token is absent or invalid: player is a guest. Server generates a fresh `player_id`.
+- If token is present and valid: player is authed. `AccountID` and `display_name` come from the database; the gameplay `Player.ID` remains a fresh ephemeral UUID for this socket session.
+- If token is absent or invalid: player is a guest. Server generates a fresh ephemeral `Player.ID` and leaves `AccountID = null`.
 - Authed players still send `player:hello` (protocol uniformity), but the server ignores the `displayName` field — the DB name is authoritative.
 - Guest players send `player:hello` as before; display name from the hello is used normally (sanitized per rooms.md rules).
 - See [networking.md → Authenticated Connection](networking.md#authenticated-connection) for the full WebSocket upgrade contract.
@@ -360,28 +389,21 @@ When a match ends, the match system posts per-player stats to the accounts syste
 ```
 function onMatchEnd(room):
     for each player in room:
-        preMatchXP = player.preMatchXP  // captured at match start
-        postMatchXP = player.xp          // current XP from match
-
-        // Update lifetime stats
+        // Update lifetime stats. player.xp is the XP earned in this match.
         lifetimeStats = lifetimeStatsFor(player.playerId)
         lifetimeStats.totalKills += player.kills
         lifetimeStats.totalDeaths += player.deaths
-        lifetimeStats.totalXP += (postMatchXP - preMatchXP)
+        lifetimeStats.totalXP += player.xp
         lifetimeStats.totalGames += 1
         if player is winner:
             lifetimeStats.totalWins += 1
         updatePerWeaponKills(lifetimeStats, player.weaponBreakdown)
         saveLifetimeStats(lifetimeStats)
-
-        // Level-up detection
-        preLevel = levelForXp(preMatchXP + lifetimeStatsBeforeMatch.totalXP)
-        postLevel = levelForXp(postMatchXP + lifetimeStatsAfterUpdate.totalXP)
-        if postLevel > preLevel:
-            notifyLevelUp(player.playerId, postLevel)
 ```
 
 See [progression.md → Leveling Curve](progression.md#leveling-curve) for the XP-to-level formulas and [progression.md → Level-Up Toast](progression.md#level-up-toast-client-side) for the client-side display.
+
+Level-up notifications are delivered to the client via the `GET /api/player/me` response after match end. The match system calls into the accounts system to update lifetime stats, and the lobby polls or receives the updated data on the next `GET /api/player/me` call. A future iteration may add a dedicated `progression:level_up` WebSocket message for real-time notification.
 
 ---
 
@@ -392,12 +414,13 @@ CREATE TABLE players (
     player_id    UUID PRIMARY KEY,
     google_sub   TEXT NOT NULL UNIQUE,
     display_name TEXT,  -- null until first login name picker
+    avatar_url   TEXT,  -- null if Google profile has no picture
     created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE session_tokens (
-    token_hash  TEXT PRIMARY KEY,  -- SHA-256 of opaque token
+    token_hash  TEXT PRIMARY KEY,  -- SHA-256 of base64url session token string
     player_id   UUID NOT NULL REFERENCES players(player_id) ON DELETE CASCADE,
     expires_at  TIMESTAMPTZ NOT NULL,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -433,11 +456,12 @@ CREATE TABLE lifetime_stats (
 **Success Response (200):**
 ```json
 {
-  "sessionToken": "<base64-opaque-token>",
+  "sessionToken": "<base64url-no-padding-session-token>",
   "expiresAt": 1715788800000,
   "player": {
     "playerId": "550e8400-e29b-41d4-a716-446655440000",
     "displayName": null,
+    "avatarUrl": "https://lh3.googleusercontent.com/a/example",
     "createdAt": 1715702400000
   }
 }
@@ -473,6 +497,42 @@ CREATE TABLE lifetime_stats (
 |--------|------|-----------|
 | 400 | `{ "error": "bad_display_name", "reason": "..." }` | Name too short/long or empty after sanitization |
 | 401 | `{ "error": "session_expired" }` | Session token expired or invalid |
+
+### `GET /api/player/me`
+
+**Purpose:** Used by the lobby and profile screens to load player data and validate a stored session token without going through matchmaking. This avoids using a WebSocket upgrade as the token-validation mechanism.
+
+**Request Headers:**
+- `Authorization: Bearer <session_token>`
+
+**Success Response (200):**
+```json
+{
+  "player": {
+    "playerId": "550e8400-e29b-41d4-a716-446655440000",
+    "displayName": "Alice",
+    "avatarUrl": "https://lh3.googleusercontent.com/a/example",
+    "createdAt": 1715702400000
+  },
+  "lifetimeStats": {
+    "totalKills": 42,
+    "totalDeaths": 31,
+    "totalXP": 10750,
+    "totalGames": 12,
+    "totalWins": 4,
+    "perWeaponKills": { "pistol": 10, "ak47": 20 }
+  },
+  "level": 7,
+  "currentLevelXp": 1250,
+  "xpForNextLevel": 2500
+}
+```
+
+**Error Responses:**
+| Status | Body | Condition |
+|--------|------|-----------|
+| 401 | `{ "error": "unauthorized" }` | Missing, invalid, or expired bearer token |
+| 500 | `{ "error": "internal_error" }` | Database or server error |
 
 ---
 
@@ -621,7 +681,7 @@ CREATE TABLE lifetime_stats (
 
 **Expected Output:**
 - Server accepts the connection as a guest
-- Server assigns a fresh `player_id` (UUID)
+- Server assigns a fresh ephemeral `Player.ID` (UUID) with `AccountID = null`
 - Server uses the display name from `player:hello` (sanitized)
 - Player can play a match normally
 
@@ -639,7 +699,8 @@ CREATE TABLE lifetime_stats (
 - Client sends `player:hello { mode: "public", displayName: "DifferentName" }`
 
 **Expected Output:**
-- Server identifies the player as authed (resolves `player_id` and `display_name` from DB)
+- Server identifies the player as authed (sets `AccountID` from DB `player_id` and resolves `display_name` from DB)
+- Server still assigns a fresh ephemeral `Player.ID` for the socket session
 - Server uses `display_name` = "Charlie" (DB authoritative), ignores "DifferentName" from hello
 - Player skips display name picker and goes directly to lobby
 
@@ -658,7 +719,7 @@ CREATE TABLE lifetime_stats (
 **Expected Output:**
 - Server detects expired token
 - Server treats connection as guest
-- Server assigns a fresh `player_id`
+- Server assigns a fresh ephemeral `Player.ID` with `AccountID = null`
 - Server does not return the DB display name
 - Stale token row may be cleaned up
 
@@ -712,7 +773,7 @@ CREATE TABLE lifetime_stats (
 **Expected Output:**
 - `localStorage` no longer contains the session token
 - WebSocket reconnects as a guest
-- New `player_id` assigned
+- New ephemeral `Player.ID` assigned and `AccountID = null`
 - Client navigates to join_form
 
 ---
@@ -721,4 +782,5 @@ CREATE TABLE lifetime_stats (
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.0.1 | 2026-05-15 | Fixed session token hashing to hash the base64url token string, added `avatarUrl`, corrected match-end XP accumulation, made display-name updates derive identity from the bearer token, added `GET /api/player/me`, and documented level-up delivery via player info refresh. |
 | 1.0.0 | 2026-05-15 | Initial specification |

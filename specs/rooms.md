@@ -1,6 +1,6 @@
 # Rooms
 
-> **Spec Version**: 1.5.0
+> **Spec Version**: 1.5.1
 > **Last Updated**: 2026-05-15
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [networking.md](networking.md), [messages.md](messages.md), [maps.md](maps.md)
 > **Depended By**: [match.md](match.md), [server-architecture.md](server-architecture.md)
@@ -91,11 +91,13 @@ A minimal player representation used for room membership and message routing.
 **Go:**
 ```go
 type Player struct {
-    ID          string       // UUID assigned on connection
-    DisplayName string       // [NEW] Sanitized label from player:hello, passed to PlayerState on room entry
+    ID          string       // Ephemeral UUID assigned to this WebSocket connection
+    AccountID   *string      // Persistent database player_id for authed users; nil for guests
+    DisplayName string       // Sanitized guest label or DB-authoritative authed label, passed to PlayerState on room entry
     SendChan    chan []byte  // Buffered channel for outgoing messages
     PingTracker *PingTracker // Per-player RTT measurement for lag compensation
     HelloSeen   bool         // [NEW] True once a valid player:hello has been processed; blocks gameplay until set
+    IsAuthed    bool         // True when a valid account session token was resolved at WebSocket upgrade
 }
 ```
 
@@ -492,6 +494,8 @@ A named-room host is explicitly inviting friends — making them sit in an empty
 A code-room whose match has ended is in teardown. The cleanest behavior is to treat that code as "available again" so the next player to type it spins up a fresh match. This also avoids a race where the first joiner after match-end would otherwise get stuck in a room that is about to be destroyed.
 
 **Full-room behavior:** Named rooms use the same `MAX_PLAYERS_PER_ROOM` cap as public rooms. A 9th player trying to use a full code gets `error:room_full` and the connection stays open so they can submit a different code or switch to public matchmaking.
+
+**Lobby-generated room codes:** Lobby-generated room codes (shown in the lobby's Room Code section) are suggestions — the server does not reserve a room until `player:hello { mode: "code", code: "..." }` is received. If the code collides with an existing active room, the server creates a fresh room. Multiple lobbies may display the same suggested code simultaneously; the first player to send a hello with that code claims it.
 
 ### Room Destruction
 
@@ -1311,6 +1315,7 @@ test "tab reload joins existing room":
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.5.1 | 2026-05-15 | Added `IsAuthed` and `AccountID` to the network-context `Player` structure and clarified lobby-generated room code reservation semantics. |
 | 1.5.0 | 2026-05-15 | Added authed player override to Display Name Sanitization: authed connections use the database display name instead of `player:hello` field. See [accounts.md → WebSocket Upgrade with Token](accounts.md#websocket-upgrade-with-token). |
 | 1.4.2 | 2026-04-25 | Clarified room session flow ownership: `RoomManager` remains the single source of truth for stored room state, while a dedicated room session flow module owns hello and pre-match leave transition policy and returns outcomes for transport publication and gameplay enrollment. |
 | 1.4.0 | 2026-04-17 | Session-first client alignment: documented public `searching_for_match`, named-room `waiting_for_players`, and `match_ready` as explicit `session:status` outcomes after a successful hello; updated client-facing room handling to bootstrap gameplay only from `match_ready`; and switched room/messaging references from `room:joined` to `session:status` / `session:leave`. |

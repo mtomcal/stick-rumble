@@ -1,7 +1,7 @@
 # Messages
 
-> **Spec Version**: 1.5.0
-> **Last Updated**: 2026-04-23
+> **Spec Version**: 1.5.2
+> **Last Updated**: 2026-05-15
 > **Depends On**: [constants.md](constants.md), [player.md](player.md)
 > **Depended By**: [networking.md](networking.md), [rooms.md](rooms.md), [weapons.md](weapons.md), [shooting.md](shooting.md), [melee.md](melee.md), [hit-detection.md](hit-detection.md), [match.md](match.md), [client-architecture.md](client-architecture.md), [server-architecture.md](server-architecture.md)
 
@@ -462,6 +462,8 @@ At upgrade time the server has no idea whether the player wants to play with str
 
 **Reconnection and match resume (MVP scope):** Reconnecting to the *same* in-progress match is explicitly out of scope for Friends-MVP. A reconnect starts a brand-new `player:hello` handshake and the client is free to rejoin a public queue or re-submit a code. If the code-room's match is still running with capacity, the player will land back in it; if it has ended, the code releases per [rooms.md § Named Room Join](rooms.md#named-room-join). There is no server-side session stickiness — this is a regression relative to pre-MVP tab-reload behavior for public rooms, and is accepted for MVP because the alternative requires a persistent session identifier the server does not currently keep.
 
+For authed connections (identified by a valid session token at WebSocket upgrade time), the server MUST ignore the `displayName` field in `player:hello` and use the display name stored in the database. For guest connections, the existing behavior applies — the display name from `player:hello` is sanitized and used.
+
 **Data Schema:**
 
 **TypeScript:**
@@ -513,7 +515,7 @@ type PlayerHelloData struct {
 
 **Server Processing:**
 1. Validate message against schema
-2. Sanitize `displayName` per [rooms.md → Display Name Sanitization](rooms.md#display-name-sanitization); store on `Player.DisplayName`
+2. For authed connections, ignore `displayName` from the message and keep the DB-authoritative `Player.DisplayName`; for guest connections, sanitize `displayName` per [rooms.md → Display Name Sanitization](rooms.md#display-name-sanitization) and store it on `Player.DisplayName`
 3. If `mode == "public"`: route to public auto-matchmaking (`AddPublicPlayer`)
 4. If `mode == "code"`: normalize code per [rooms.md → Room Code Normalization](rooms.md#room-code-normalization) and route to `JoinCodedRoom`. On normalization failure, send `error:bad_room_code` and leave the player unrouted
 5. On successful room assignment, set `Player.HelloSeen = true` and send `session:status`
@@ -2256,6 +2258,7 @@ Client                          Server
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.5.2 | 2026-05-15 | Clarified that authed `player:hello` messages ignore client-supplied `displayName` and use the DB-authoritative display name resolved during WebSocket upgrade. |
 | 1.5.1 | 2026-04-23 | Clarified client handling for `error:no_hello`: it remains a real server protocol rejection only, and clients must not fabricate it to represent local WebSocket connect/reconnect transport failures. |
 | 1.5.0 | 2026-04-23 | Merged the April contract changes: `session:leave` and `session:status` define the session-first bootstrap flow, `match:ended` winners and final scores are display-ready with `displayName` while `playerId` remains non-visible identity data, `player:move` documents authoritative per-player `weaponType` for remote held-weapon presentation, `weapon:pickup_confirmed` is room feedback rather than equip authority, `player:kill_credit` only updates local HUD stats for the local killer, and `match:ended` freezes later stat-facing UI updates. |
 | 1.3.1 | 2026-04-11 | Friends-MVP pre-mortem fixes: (1) `player:hello` latching tightened — only **successful** hellos set `HelloSeen`; failed hellos (`error:bad_room_code`, `error:room_full`) leave the connection free to send another hello; (2) reconnection contract made explicit — every new connection must begin with a fresh `player:hello`, in-progress match resume is out of scope for MVP; (3) `room:joined` compatibility posture documented as breaking (no pre-MVP client support, atomic client+server deploy required); (4) `error:no_hello` / `error:bad_room_code` / `error:room_full` server-behavior blocks updated to explicitly state `HelloSeen` stays `false`. |

@@ -1,6 +1,6 @@
 # Client Architecture
 
-> **Spec Version**: 1.5.3
+> **Spec Version**: 1.6.0
 > **Last Updated**: 2026-05-15
 > **Depends On**: [constants.md](constants.md), [messages.md](messages.md), [networking.md](networking.md), [player.md](player.md), [movement.md](movement.md), [weapons.md](weapons.md), [maps.md](maps.md)
 > **Depended By**: [graphics.md](graphics.md), [ui.md](ui.md), [audio.md](audio.md)
@@ -94,7 +94,8 @@ type AppSessionState =
   | 'profile';              // Full stats dashboard
 
 interface MatchSession {
-  playerId: string;
+  playerId: string;      // Ephemeral gameplay ID
+  accountId?: string;    // Persistent DB UUID for authenticated players
   displayName: string;
   joinMode: 'public' | 'code';
   roomId: string;
@@ -111,6 +112,7 @@ Page load → check localStorage for token
   ├── Token found, valid → show lobby
   └── No token or expired → show sign_in screen
        ├── User clicks "Sign in with Google" → Google OAuth flow
+       │   ├── Google OAuth response includes `avatarUrl` which is stored in the player record and displayed in the lobby and profile screens
        │   ├── Success, has displayName → lobby
        │   └── Success, no displayName → display_name_picker → PUT name → lobby
        └── User clicks "Play as Guest" → join_form
@@ -130,7 +132,8 @@ After match:
 
 **Transition rules:**
 - Page load checks `localStorage` for `stick_rumble_session_token`
-- If token exists: validate by connecting WebSocket with `?token=<token>`. If valid, show lobby. If expired/invalid, show `sign_in`.
+- If token exists: call `GET /api/player/me` with the token as Bearer authorization. If valid, show lobby. If expired/invalid (401), clear the token and show `sign_in`.
+- The WebSocket with `?token=` query parameter is only needed for gameplay sessions after matchmaking is initiated, not for page-load session validation.
 - If no token: show `sign_in` with both sign-in and guest options
 - `sign_in` is the landing page with Google sign-in button and "Play as Guest" link
 - `join_form` is the legacy guest entry point (unchanged)
@@ -2247,6 +2250,7 @@ it('should follow local player with camera', () => {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.6.0 | 2026-05-15 | Fixed page-load session validation: replaced WebSocket `?token=` validation with `GET /api/player/me` HTTP call, noting WebSocket token is only for gameplay sessions. Added `accountId` field to `MatchSession` for persistent DB UUID. Documented Google OAuth `avatarUrl` field in session flow. |
 | 1.5.3 | 2026-05-15 | Accounts & Progression: added `sign_in`, `display_name_picker`, `lobby`, and `profile` to AppSessionState. Documented the full session state machine flow (page load → token check → sign-in/guest → lobby → match → post-match). Added Token Storage Strategy section (`localStorage` key `stick_rumble_session_token`). Added new React screen components: SignInScreen, DisplayNamePickerScreen, LobbyScreen, ProfileScreen to the Application Structure tree. |
 | 1.5.2 | 2026-04-25 | Room session flow seam: documented a dedicated client-side Match app shell and Match session flow module that own the session lifecycle while React and Phaser own their respective rendering domains. |
 | 1.5.1 | 2026-04-23 | Replaced mobile-mode opt-in language with automatic client-side detection for phone-sized touch layouts, while preserving the unchanged desktop baseline and session continuity. |

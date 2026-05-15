@@ -1,7 +1,7 @@
 # Test Index
 
-> **Spec Version**: 1.4.1
-> **Last Updated**: 2026-04-22
+> **Spec Version**: 1.4.2
+> **Last Updated**: 2026-05-15
 > **Depends On**: All specs (cross-reference document)
 > **Depended By**: None (reference document)
 
@@ -29,21 +29,21 @@ When implementing from scratch, AI agents need to:
 
 | Metric | Value |
 |--------|-------|
-| **Total Test Scenarios** | 259 |
-| **Specs with Tests** | 20 (+Epic 4 cross-spec) |
-| **Average Tests per Spec** | 13.0 |
-| **Critical Priority Tests** | 82 |
-| **High Priority Tests** | 115 |
-| **Medium Priority Tests** | 62 |
+| **Total Test Scenarios** | 274 |
+| **Specs with Tests** | 22 (+Epic 4 cross-spec) |
+| **Average Tests per Spec** | 12.5 |
+| **Critical Priority Tests** | 88 |
+| **High Priority Tests** | 120 |
+| **Medium Priority Tests** | 66 |
 | **Low Priority Tests** | 0 |
 
 ### By Category
 
 | Category | Count | Percentage |
 |----------|-------|------------|
-| Unit | 159 | 64% |
-| Integration | 68 | 26% |
-| Visual | 32 | 13% |
+| Unit | 166 | 61% |
+| Integration | 76 | 28% |
+| Visual | 32 | 12% |
 
 ### By Spec (Sorted by Count)
 
@@ -67,12 +67,29 @@ When implementing from scratch, AI agents need to:
 | rooms.md | 10 | 2 | 6 | 2 | 0 |
 | server-architecture.md | 10 | 6 | 4 | 0 | 0 |
 | weapons.md | 10 | 3 | 5 | 2 | 0 |
+| accounts.md | 10 | 4 | 4 | 2 | 0 |
 | constants.md | 5 | 2 | 2 | 1 | 0 |
 | overview.md | 5 | 2 | 3 | 0 | 0 |
+| progression.md | 5 | 2 | 1 | 2 | 0 |
 
 ---
 
 ## Complete Test Catalog by Spec
+
+### Accounts Tests (accounts.md)
+
+| ID | Category | Priority | Description |
+|----|----------|----------|-------------|
+| TS-ACCT-001 | Integration | Critical | First-time Google auth creates player record |
+| TS-ACCT-002 | Integration | Critical | Returning auth returns existing player record |
+| TS-ACCT-003 | Unit | High | Session token stored and retrieved from localStorage |
+| TS-ACCT-004 | Integration | Critical | Display name picker saves name via PUT |
+| TS-ACCT-005 | Integration | Critical | Guest connection works without token |
+| TS-ACCT-006 | Integration | High | Authed connection with valid token skips name picker |
+| TS-ACCT-007 | Integration | High | Expired token falls back to guest |
+| TS-ACCT-008 | Integration | High | Invalid Google token returns 401 |
+| TS-ACCT-009 | Unit | Medium | Display name sanitization follows rooms.md rules |
+| TS-ACCT-010 | Unit | Medium | Sign out clears token and returns to guest state |
 
 ### Arena Tests (arena.md)
 
@@ -343,6 +360,16 @@ When implementing from scratch, AI agents need to:
 | TS-PLAYER-013 | Integration | High | Respawn resets all combat state |
 | TS-PLAYER-014 | Unit | Medium | Regeneration accumulator handles fractional HP |
 
+### Progression Tests (progression.md)
+
+| ID | Category | Priority | Description |
+|----|----------|----------|-------------|
+| TS-PROG-001 | Unit | Critical | XP converts to correct level |
+| TS-PROG-002 | Unit | High | Level-up detection fires on crossing threshold |
+| TS-PROG-003 | Integration | Critical | Lifetime stats accumulate across matches |
+| TS-PROG-004 | Unit | Medium | Per-weapon kills track correctly |
+| TS-PROG-005 | Unit | Medium | Level-up toast only shows once per level |
+
 ### Rooms Tests (rooms.md)
 
 | ID | Category | Priority | Description |
@@ -500,17 +527,27 @@ When implementing from scratch, execute tests in this order to verify core funct
 2. **Match** (TS-MATCH-001 to TS-MATCH-013)
    - Win conditions
 
-### Phase 6: Client/Server Architecture (18 tests)
+### Phase 6: Accounts and Progression (15 tests)
+
+**Priority**: Persistent identity and progression validation.
+
+1. **Accounts** (TS-ACCT-001 to TS-ACCT-010)
+   - Auth, sessions, display names, guest fallback
+
+2. **Progression** (TS-PROG-001 to TS-PROG-005)
+   - XP, levels, lifetime stats
+
+### Phase 7: Client/Server Architecture (20 tests)
 
 **Priority**: System architecture validation.
 
 1. **Server Architecture** (TS-SERVER-001 to TS-SERVER-010)
    - Backend systems
 
-2. **Client Architecture** (TS-CLIENT-001 to TS-CLIENT-008)
+2. **Client Architecture** (TS-CLIENT-001 to TS-CLIENT-010)
    - Frontend systems
 
-### Phase 7: Polish (53 tests)
+### Phase 8: Polish (53 tests)
 
 **Priority**: Visual and audio feedback.
 
@@ -527,7 +564,7 @@ When implementing from scratch, execute tests in this order to verify core funct
 
 ## Tests by Category
 
-### Unit Tests (154 tests)
+### Unit Tests (166 tests)
 
 Tests that verify individual component behavior without external dependencies.
 
@@ -543,7 +580,7 @@ Tests that verify individual component behavior without external dependencies.
 - Damage formulas (TS-PLAYER-001, TS-WEAP-010)
 - State machines (TS-ROLL-001 to 004, TS-MATCH-002)
 
-### Integration Tests (68 tests)
+### Integration Tests (76 tests)
 
 Tests that verify multiple systems working together.
 
@@ -607,7 +644,7 @@ Tests that verify rendering output using Playwright screenshots.
 
 ## Tests by Priority
 
-### Critical (82 tests)
+### Critical (88 tests)
 
 **Must pass for the game to be playable.**
 
@@ -619,7 +656,7 @@ These tests verify:
 
 **If any critical test fails:** Game is broken and unplayable.
 
-### High (115 tests)
+### High (120 tests)
 
 **Must pass for the game to be fun.**
 
@@ -632,7 +669,7 @@ These tests verify:
 
 **If any high test fails:** Game is playable but feature is broken.
 
-### Medium (62 tests)
+### Medium (66 tests)
 
 **Should pass for polish.**
 
@@ -678,6 +715,10 @@ Use this checklist to track test implementation progress:
 - [ ] TS-ROLL-001 through TS-ROLL-014 (14 tests)
 - [ ] TS-MATCH-001 through TS-MATCH-013 (13 tests)
 
+### Accounts and Progression
+- [ ] TS-ACCT-001 through TS-ACCT-010 (10 tests)
+- [ ] TS-PROG-001 through TS-PROG-005 (5 tests)
+
 ### Architecture
 - [ ] TS-SERVER-001 through TS-SERVER-010 (10 tests)
 - [ ] TS-CLIENT-001 through TS-CLIENT-010 (10 tests)
@@ -693,6 +734,7 @@ Use this checklist to track test implementation progress:
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.4.2 | 2026-05-15 | Added Accounts (TS-ACCT-001 through TS-ACCT-010) and Progression (TS-PROG-001 through TS-PROG-005) test catalog entries and updated summary counts. |
 | 1.0.0 | 2026-02-02 | Initial specification |
 | 1.1.0 | 2026-02-15 | Added 15 Epic 4 Netcode test scenarios (prediction, reconciliation, interpolation, delta compression, lag compensation, network simulator). Updated total from 179 to 194 tests. Fixed deceleration reference from 50 to 1500 px/s². |
 | 1.1.1 | 2026-02-16 | Fixed test priorities/categories for shooting.md, rooms.md, server-architecture.md, match.md, and messages.md to match source spec definitions. Corrected systematically inflated Critical counts. Removed phantom Low priority count (0 Low tests exist). Flagged 15 netcode test IDs as index-only (no source spec entries). |

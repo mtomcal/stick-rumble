@@ -1,6 +1,6 @@
 # Server Architecture
 
-> **Spec Version**: 1.3.1
+> **Spec Version**: 1.3.2
 > **Last Updated**: 2026-05-15
 > **Depends On**: [overview.md](overview.md), [constants.md](constants.md), [networking.md](networking.md), [rooms.md](rooms.md), [messages.md](messages.md), [maps.md](maps.md)
 > **Depended By**: None (leaf spec)
@@ -207,8 +207,8 @@ type AuthHandler struct {
 **Required behavior:**
 - validate Google ID tokens by calling `https://oauth2.googleapis.com/tokeninfo?id_token=<token>`
 - resolve Google `sub` to `PlayerRecord` (create if new, update `last_seen_at` if existing)
-- generate 256-bit opaque session tokens, store SHA-256 hashes in `session_tokens` table
-- validate session tokens on WebSocket upgrade and display name updates
+- generate 256-bit random session tokens encoded as base64url with no padding, store SHA-256 hashes of the encoded token strings in `session_tokens` table
+- validate session tokens on WebSocket upgrade, display name updates, and `GET /api/player/me`
 
 ### StatsStore
 
@@ -681,9 +681,11 @@ Each player has a buffered send channel:
 **Go:**
 ```go
 type Player struct {
-    ID          string
-    SendChan    chan []byte    // 256-message buffer
-    PingTracker *PingTracker  // Tracks RTT for lag compensation
+    ID          string       // Ephemeral UUID for this WebSocket connection
+    AccountID   *string      // Persistent database player_id for authed users; nil for guests
+    IsAuthed    bool         // True when a valid account session token was resolved at upgrade
+    SendChan    chan []byte  // 256-message buffer
+    PingTracker *PingTracker // Tracks RTT for lag compensation
 }
 
 // Non-blocking send (prevents slowdown from one slow client)
@@ -824,6 +826,7 @@ func startServer(ctx context.Context) error {
     mux.HandleFunc("/ws", network.HandleWebSocket) // global singleton
     mux.HandleFunc("/api/auth/google", authHandler.HandleGoogleSignIn)      // POST: Google OAuth sign-in
     mux.HandleFunc("/api/player/displayname", authHandler.HandleSetDisplayName) // PUT: set display name
+    mux.HandleFunc("/api/player/me", authHandler.HandleGetPlayerInfo)       // GET: current player/profile info
 
     server := &http.Server{
         Addr:         host + ":" + port,
@@ -1422,6 +1425,7 @@ func TestConcurrentAccess(t *testing.T) {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.3.2 | 2026-05-15 | Added authed connection fields (`IsAuthed`, `AccountID`) to the Player structure and registered `GET /api/player/me` in the HTTP mux. |
 | 1.3.1 | 2026-05-15 | Accounts & Progression: added `auth/` and `db/` directories to application folder structure tree (now real, not planned). Added `AuthHandler` and `StatsStore` data structures. Added `POST /api/auth/google` and `PUT /api/player/displayname` HTTP endpoints to the server mux. Added PostgreSQL driver to technology dependencies. Updated WebSocketHandler description to mention token-based auth. Added [accounts.md](accounts.md) and [progression.md](progression.md) to spec dependencies. |
 | 1.2.1 | 2026-04-25 | Room session flow seam: documented a dedicated server-side module that owns hello acceptance, matchmaking and waiting transitions, `match_ready` decisions, and pre-match `session:leave` policy while `RoomManager` remains the single owner of stored room state. |
 | 1.2.0 | 2026-02-18 | Art style alignment: Documented that Respawn() sets IsInvulnerable=true for 2 seconds, cleared by UpdateInvulnerability(). |

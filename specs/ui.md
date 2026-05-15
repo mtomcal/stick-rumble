@@ -1,6 +1,6 @@
 # UI System
 
-> **Spec Version**: 2.7.1
+> **Spec Version**: 2.8.0
 > **Last Updated**: 2026-05-15
 > **Depends On**: [constants.md](constants.md), [player.md](player.md), [weapons.md](weapons.md), [match.md](match.md), [client-architecture.md](client-architecture.md), [graphics.md](graphics.md), [accounts.md](accounts.md), [progression.md](progression.md)
 > **Depended By**: [test-index.md](test-index.md)
@@ -69,6 +69,108 @@ All UI constants are defined here and referenced in [constants.md](constants.md#
 | DAMAGE_NUMBER_FLOAT_DISTANCE | 50 | px | Float-up distance |
 | DAMAGE_NUMBER_DURATION | 800 | ms | Animation duration |
 | MATCH_END_COUNTDOWN | 10 | s | Auto-restart countdown |
+
+---
+
+### Design Language & Theme
+
+The logged-in application screens (lobby, profile, display name picker, sign in) use a shared visual language derived from the Stick Rumble marketing landing page mockup.
+
+**Why a shared design language?** All React-rendered application screens should feel like they belong to the same product. The dark background, gold accent, and bold typography create a consistent high-energy arcade identity that distinguishes pre-match screens from the in-game Phaser HUD.
+
+#### Color Palette
+
+| Token | Value | Usage |
+|-------|-------|-------|
+| `COLOR_BG_PRIMARY` | `#0A0A0A` | Primary page background |
+| `COLOR_BG_SURFACE` | `#141414` | Card/surface background |
+| `COLOR_BG_INPUT` | `#333333` | Input field background |
+| `COLOR_ACCENT_PRIMARY` | `#FFD700` | Primary accent (gold) — buttons, borders, highlights |
+| `COLOR_ACCENT_SECONDARY` | `#FFA500` | Secondary accent (orange) — gradients, hover states |
+| `COLOR_LINK` | `#00FFFF` | Cyan — navigation links, interactive text |
+| `COLOR_TEXT_PRIMARY` | `#FFFFFF` | Primary text — headings, values |
+| `COLOR_TEXT_SECONDARY` | `#CCCCCC` | Secondary text — body copy |
+| `COLOR_TEXT_TERTIARY` | `#999999` | Tertiary text — labels, hints |
+| `COLOR_TEXT_MUTED` | `#666666` | Muted text — footers, disclaimers |
+| `COLOR_BORDER` | `#333333` | Card borders, dividers |
+| `COLOR_BUTTON_TEXT` | `#000000` | Text on gold-filled buttons |
+| `COLOR_DISABLED` | `#555555` | Disabled button/surface |
+| `COLOR_ERROR` | `#FF3333` | Error text |
+
+#### Typography
+
+| Token | Value | Usage |
+|-------|-------|-------|
+| `FONT_HEADING_PRIMARY` | 32-48px, bold, white | Section titles, page headings |
+| `FONT_HEADING_SECONDARY` | 24px, bold, white | Subheadings |
+| `FONT_VALUE_LARGE` | 28px, bold, white | Stat values (lobby, profile) |
+| `FONT_VALUE_SMALL` | 14-16px, bold, white | Smaller numbers, totals |
+| `FONT_BODY` | 14-16px, regular, `#CCCCCC` | Description text, instructions |
+| `FONT_LABEL` | 12px, uppercase, `#999999` | Stat labels, table headers |
+| `FONT_SMALL` | 12px, regular, `#666666` | Footer, disclaimers |
+| `FONT_CODE` | 48px, monospace, `#FFD700` | Room code display |
+
+#### Spacing Scale
+
+| Token | Value |
+|-------|-------|
+| Space 1x | 8px |
+| Space 2x | 16px |
+| Space 3x | 24px |
+| Space 4x | 32px |
+| Space 5x | 40px |
+| Space 6x | 48px |
+| Space 8x | 80px |
+
+#### Card/Surface Styling
+
+All card surfaces follow:
+- Background: `#141414`
+- Border radius: `12px`
+- Border: `1px solid #333333` (subtle)
+- Padding: `24px` (interior)
+- Gap between cards: `24px`
+
+#### Button Styling
+
+**Primary button** (Play Public Match):
+- Background: `#FFD700` (solid gold)
+- Text color: `#000000` (black)
+- Border: none
+- Border radius: `8px`
+- Height: `48px`
+- Padding: `16px 24px`
+- Font: `16px bold, uppercase`
+- Hover: Brightness increase, subtle scale
+
+**Secondary button** (Create Room, Join with Code):
+- Background: `#0A0A0A` or `#141414`
+- Text color: `#FFD700` (gold)
+- Border: `2px solid #FFD700`
+- Border radius: `8px`
+- Height: `48px`
+- Padding: `16px 24px`
+- Font: `16px bold, uppercase`
+- Hover: Fill with gold, text becomes black
+
+**Disabled button:**
+- Background: `#555555`
+- Text: `#888888`
+- Border: none
+- Cursor: not-allowed
+
+#### Gradient Text Treatment
+
+The "STICK RUMBLE" logo in the nav bar uses the mockup's gradient:
+- Vertical gradient: `#FFD700` (top) → `#FFA500` (bottom)
+- Applied via CSS `background-clip: text` with `-webkit-text-fill-color: transparent`
+
+#### Accessibility Notes
+
+- All gold-on-dark text combinations MUST maintain a minimum contrast ratio of 4.5:1 against `#0A0A0A` background
+- Disabled states use `#555555` background with `#888888` text
+- Interactive elements (buttons, links) MUST have visible hover and focus states
+- The hexagon level badge text (white on `#141414` fill) does not need AA compliance since it is decorative/supplemental
 
 ---
 
@@ -197,6 +299,8 @@ interface UIElementPosition {
 - Match end is a full React screen state, not a modal above the canvas
 - `Play Again` reuses the player's last successful join intent
 - If replay fails, the client transitions to `recoverable_error`
+
+> **Responsive note:** The lobby, profile, display name picker, and sign-in screens are desktop-first for MVP. A responsive pass should add breakpoints for tablet and mobile layouts in a future iteration.
 
 ---
 
@@ -1919,6 +2023,7 @@ The hero section replaces the game screenshot from the marketing page with the p
 
 **Avatar Row:**
 - Google profile picture: 64×64 px, circle clipped via `border-radius: 50%`
+- The avatar URL is returned in the `POST /api/auth/google` response as `avatarUrl` and stored in the player record. If no avatar URL is available, display a default stick figure icon or the player's initials in a circle.
 - Display name: 24px bold, white (`#FFFFFF`)
 - Below avatar row: `8px` gap to stat cards
 
@@ -2157,6 +2262,7 @@ For the Lobby and Profile sections, note that stat values are loaded via a new W
 | Version | Date | Changes |
 |---------|------|---------|
 | 2.7.0 | 2026-05-15 | Added authentication and progression screens: Lobby Screen (level card, stats cluster, Google avatar, play CTA), Profile Screen (full lifetime stats, weapon breakdown), Display Name Picker Screen (first-time name selection), and Sign In Screen (Google OAuth + guest drop-in). See [accounts.md](accounts.md) and [progression.md](progression.md) for the supporting infrastructure. |
+| 2.8.0 | 2026-05-15 | Inserted missing Design Language & Theme section between Constants and Data Structures. Added avatar URL note to lobby Avatar Row (source is `POST /api/auth/google` response `avatarUrl`). Added responsive hint at end of Application Screens section noting desktop-first MVP with future tablet/mobile breakpoints. |
 | 2.7.1 | 2026-05-15 | Design language pass: added Design Language & Theme section with color palette, typography, spacing scale, card/button styling, and gradient text treatment derived from the marketing landing page mockup. Updated Lobby Screen: replaced green buttons with gold (`#FFD700`), added STICK RUMBLE logo nav with PLAY/PROFILE links, changed stat cluster from 3 cards to 4 (KILLS, DEATHS, K/D, XP), added hexagon level badge spec, added room code section. Updated Profile Screen: applied dark-surface card language, added hexagon level badge, aligned table styling with design theme. Updated Display Name Picker and Sign In buttons to use gold accent. |
 | 2.6.2 | 2026-04-23 | Replaced mobile-mode opt-in language with automatic detection: phone-sized touch layouts should enter mobile mode without a gameplay button, while desktop layouts continue using the existing centered stage. |
 | 2.6.1 | 2026-04-23 | Added explicit mobile-mode selection rules: mobile mode is a client-local optional mode that must not silently replace desktop behavior or remount an active match when toggled. |

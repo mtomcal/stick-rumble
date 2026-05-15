@@ -1,8 +1,8 @@
 # Networking
 
-> **Spec Version**: 1.3.1
+> **Spec Version**: 1.3.2
 > **Last Updated**: 2026-05-15
-> **Depends On**: [messages.md](messages.md), [constants.md](constants.md)
+> **Depends On**: [messages.md](messages.md), [constants.md](constants.md), [accounts.md](accounts.md)
 > **Depended By**: [rooms.md](rooms.md), [client-architecture.md](client-architecture.md), [server-architecture.md](server-architecture.md)
 
 ---
@@ -216,21 +216,24 @@ Server Accept:
     token = request.query.get("token")
     upgrade HTTP to WebSocket
     
+    playerID = generateUUID()  // Ephemeral UUID for this socket session
+    accountID = nil
     if token != null and isValidSession(token):
         player = resolvePlayerFromToken(token)
-        playerID = player.id
+        accountID = player.playerId  // Persistent DB UUID
         displayName = player.displayName  // DB authoritative
+        isAuthed = true
     else:
-        playerID = generateUUID()  // Guest
         displayName = null
+        isAuthed = false
     
     create buffered send channel (256 messages)
-    create Player { ID: playerID, DisplayName: displayName, SendChan }
+    create Player { ID: playerID, AccountID: accountID, DisplayName: displayName, SendChan, IsAuthed: isAuthed }
     log "Client connected: {playerID}"
-    add player to RoomManager
-    add player to GameServer
+    // Token validation at upgrade time resolves the player's identity for display purposes.
+    // Room assignment still waits for player:hello to preserve the single entry point for join intent.
     start write goroutine (sendChan → conn.WriteMessage)
-    enter message read loop
+    enter message read loop; player:hello performs RoomManager/GameServer enrollment
 ```
 
 **TypeScript (Client):**
@@ -283,28 +286,31 @@ func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Reques
 
     // Check for session token in query parameter
     token := r.URL.Query().Get("token")
-    var playerID string
+    playerID := uuid.New().String() // Ephemeral ID for this socket session
+    var accountID *string
     var displayName string
     var isAuthed bool
 
     if token != "" {
-        playerID, displayName, err = h.authHandler.ResolveSessionToken(token)
+        playerRecord, err := h.authHandler.ResolveSessionToken(token)
         if err == nil {
+            accountID = &playerRecord.PlayerID
+            displayName = playerRecord.DisplayName
             isAuthed = true
-            log.Printf("Authenticated client: %s (%s)", playerID, displayName)
+            log.Printf("Authenticated client: account=%s session=%s (%s)", playerRecord.PlayerID, playerID, displayName)
         } else {
             log.Printf("Invalid session token, falling back to guest: %v", err)
         }
     }
 
     if !isAuthed {
-        playerID = uuid.New().String()
         displayName = ""  // Will be set via player:hello
     }
 
     sendChan := make(chan []byte, 256)
     player := &game.Player{
-        ID:          playerID,
+        ID:          playerID,  // Ephemeral connection/session UUID
+        AccountID:   accountID, // Persistent DB UUID when authed; nil for guests
         DisplayName: displayName,
         SendChan:    sendChan,
         IsAuthed:    isAuthed,  // If true, displayName from DB is authoritative
@@ -312,9 +318,9 @@ func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Reques
 
     log.Printf("Client connected: %s (authed: %v)", playerID, isAuthed)
 
-    // Add player to room manager
-    room := h.roomManager.AddPlayer(player)
-    h.gameServer.AddPlayer(playerID)
+    // Token validation at upgrade time resolves the player's identity for display purposes.
+    // Room assignment still waits for player:hello to preserve the single entry point for join intent.
+    // Do not add the player to RoomManager or GameServer here; successful player:hello does that.
 
     // Start write goroutine
     done := make(chan struct{})
@@ -569,7 +575,18 @@ When the client has a session token (from Google OAuth sign-in), it passes the t
 - Authed players still send `player:hello` for protocol uniformity
 - For authed players, the server ignores the `displayName` field in `player:hello` — the DB-stored name is authoritative
 - For guest players (no token or invalid token), `player:hello` is used as before
+- The gameplay `Player.ID` remains an ephemeral UUID generated fresh per WebSocket connection, even for authed players
 - The `Player` struct gains an `IsAuthed` boolean field to distinguish the two cases
+- The `Player` struct gains an `AccountID *string` field. It is `nil` for guests. For authed players, `AccountID = playerRecord.playerId`, the persistent database UUID.
+- Token validation at upgrade time resolves the player's identity for display purposes. Room assignment still waits for `player:hello` to preserve the single entry point for join intent.
+
+#### Security Considerations
+
+- WSS (`WSS://`) is REQUIRED in production to prevent token interception.
+- Query strings containing tokens MUST NOT be logged by the server or reverse proxy.
+- The server MUST implement strict `CheckOrigin` rules.
+- The session token is stored in `localStorage` and is vulnerable to XSS. The client MUST implement Content Security Policy headers.
+- A server-side `POST /api/auth/revoke` endpoint should invalidate a session token when the user signs out.
 
 See [accounts.md → WebSocket Upgrade with Token](accounts.md#websocket-upgrade-with-token) for the full token resolution flow.
 
@@ -1270,6 +1287,7 @@ func TestGracefulShutdown(t *testing.T) {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.3.2 | 2026-05-15 | Clarified that authed WebSocket upgrades keep a fresh ephemeral `Player.ID`, store the persistent database UUID in `AccountID`, defer RoomManager/GameServer enrollment until `player:hello`, and document token security requirements. |
 | 1.3.1 | 2026-05-15 | Accounts & Progression: documented the `?token=` query parameter on WebSocket upgrade URL. Added Authenticated Connection section (token resolution at upgrade, authed vs guest behavior). Added Session Expiry Handling section (expiry at upgrade vs mid-session). Updated Connection Establishment pseudocode and code examples for both client (TypeScript) and server (Go) to include token-based auth. Updated spec dependencies to include [accounts.md](accounts.md). |
 | 1.2.0 | 2026-04-11 | Friends-MVP alignment: documented the re-handshake contract for reconnecting clients (every new connection must begin with a fresh `player:hello`), and the explicit MVP scope decision that in-progress matches do not resume across reconnects. Cross-references [messages.md](messages.md#player-hello) and [rooms.md](rooms.md#named-room-join). |
 | 1.0.0 | 2026-02-02 | Initial specification |

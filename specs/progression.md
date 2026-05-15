@@ -1,6 +1,6 @@
 # Progression System
 
-> **Spec Version**: 1.0.0
+> **Spec Version**: 1.0.1
 > **Last Updated**: 2026-05-15
 > **Depends On**: [constants.md](constants.md), [accounts.md](accounts.md), [player.md](player.md)
 > **Depended By**: [client-architecture.md](client-architecture.md), [ui.md](ui.md)
@@ -60,17 +60,18 @@ No new data structures. The progression system operates on:
 
 The XP required for each level increases linearly: Level N requires `N * 500` XP.
 
-| Level | XP Required | Cumulative XP |
-|-------|-------------|---------------|
-| 1 | 500 | 0-499 |
-| 2 | 1,000 | 500-1,499 |
-| 3 | 1,500 | 1,500-2,999 |
-| 4 | 2,000 | 3,000-4,999 |
-| 5 | 2,500 | 5,000-7,499 |
-| 10 | 5,000 | 27,500-32,499 |
-| 20 | 10,000 | 105,000-114,999 |
-| 50 | 25,000 | 637,500-662,499 |
-| 100 | 50,000 | 2,525,000-2,574,999 |
+| Level | XP For Next Level | Cumulative XP To Reach Level | Lifetime XP Range |
+|-------|-------------------|------------------------------|-------------------|
+| 1 | 500 | 0 | 0-499 |
+| 2 | 1,000 | 500 | 500-1,499 |
+| 3 | 1,500 | 1,500 | 1,500-2,999 |
+| 4 | 2,000 | 3,000 | 3,000-4,999 |
+| 5 | 2,500 | 5,000 | 5,000-7,499 |
+| 6 | 3,000 | 7,500 | 7,500-10,499 |
+| 10 | 5,000 | 22,500 | 22,500-27,499 |
+| 20 | 10,000 | 95,000 | 95,000-104,999 |
+| 50 | 25,000 | 612,500 | 612,500-637,499 |
+| 100 | 50,000 | 2,475,000 | 2,475,000-2,524,999 |
 
 ```
 function xpForLevel(level: int) -> int:
@@ -93,7 +94,7 @@ function levelForXp(totalXp: int) -> int:
   - Level 2: 2,700 >= 1,000 → subtract 1,000, remaining = 1,700
   - Level 3: 1,700 >= 1,500 → subtract 1,500, remaining = 200
   - Level 4: 200 < 2,000 → stop
-  - Result: Level 3 (4,500 XP consumed total), 200 XP toward Level 4
+  - Result: Level 4 (3,000 XP consumed total), 200 XP toward Level 4
 
 ### Event to Track
 
@@ -177,6 +178,8 @@ func ProcessMatchEndStats(player *PlayerState, score PlayerScore, winners []stri
 
 **Why process on match end (not in real-time)?** Batch processing on match end is simpler, more reliable, and avoids concurrency issues with stats being updated during an active match. The match results are the authoritative source of truth for a player's performance in that match.
 
+**XP calculation note:** The match score's `score.xp` is the amount earned during the completed match. Level-up detection uses the pattern `preXP = lifetimeStats.totalXP`, then `lifetimeStats.totalXP += score.xp`, then compares `levelForXp(preXP)` against `levelForXp(lifetimeStats.totalXP)`. Do not compute match XP by subtracting a pre-match XP snapshot from a post-match XP snapshot.
+
 ### Level-Up Detection
 
 Level-up detection compares the player's pre-match level against their post-match level. If the level increased, a level-up event is fired.
@@ -253,6 +256,7 @@ export class LevelUpToast {
 - If the player levels up multiple times in one match, only the final level is shown.
 - The toast is shown in the lobby screen after match end, not during the match.
 - If the player is a guest, no level-up toast is shown (guests do not have progression).
+- The XP bar shows the player's progress within their current level: `(currentLevelXp / xpForNextLevel)` where `currentLevelXp = lifetimeXP - cumulativeXPForPreviousLevels` and `xpForNextLevel = level * XP_PER_LEVEL_BASE`.
 
 ### XP Per Kill
 
@@ -298,15 +302,15 @@ Each kill awards 100 XP (`XP_PER_KILL`). This XP accumulates on `PlayerState.XP`
 
 ### TypeScript (Client)
 
-1. **Level-Up Toast**: A React component or a Phaser overlay that appears in the lobby after match end. The lobby receives the new level as part of the match result payload.
+1. **Level-Up Toast**: A React component or a Phaser overlay that appears in the lobby after match end. The lobby loads the updated level from `GET /api/player/me` after match-end stat processing completes.
 2. **Level Display**: The lobby and profile screens show the player's current level as a large number with an XP progress bar indicating progress to the next level.
-3. **XP Progress Bar**: Shows `currentMatchXP` / `xpForLevel(currentLevel)`. The bar fills proportionally.
+3. **XP Progress Bar**: Shows lifetime XP progress within the current level using `currentLevelXp / xpForNextLevel`. It does not show per-match XP.
 
 ### Go (Server)
 
 1. **Level Functions**: Pure functions (`xpForLevel`, `levelForXp`) that take and return integers. No side effects, no database access. Easy to unit test.
 2. **Match End Integration**: The `ProcessMatchEndStats` function is called by the match system when `match:ended` is emitted. It runs within a database transaction to ensure atomic updates.
-3. **Level-Up Notification**: Level-up events are pushed to the WebSocket connection for delivery to the lobby screen. They are not broadcast during an active match.
+3. **Level-Up Notification**: The lobby/profile UI observes level changes through `GET /api/player/me` after match end. Real-time WebSocket level-up delivery is a future extension, not part of the MVP contract.
 
 ---
 
@@ -326,7 +330,8 @@ Each kill awards 100 XP (`XP_PER_KILL`). This XP accumulates on `PlayerState.XP`
 - `levelForXp(500)` → Level 2
 - `levelForXp(1499)` → Level 2
 - `levelForXp(1500)` → Level 3
-- `levelForXp(3200)` → Level 3 (3200 - 500 - 1000 - 1500 = 200 remaining, < 2000)
+- `levelForXp(3200)` → Level 4 (3200 - 500 - 1000 - 1500 = 200 remaining toward Level 4)
+- `levelForXp(10000)` → Level 6 (10000 is within the 7,500-10,499 XP range)
 
 **Expected Output:**
 - Correct level for each input
@@ -340,9 +345,9 @@ test "XP converts to correct level":
     assert levelForXp(500) == 2
     assert levelForXp(1499) == 2
     assert levelForXp(1500) == 3
-    assert levelForXp(3200) == 3
-    assert levelForXp(4500) == 4  // 4500 - 500 - 1000 - 1500 - 2000 = -500
-    assert levelForXp(10000) == 5 // 10000 - 500 - 1000 - 1500 - 2000 - 2500 = 2500 leftover... approx Level 5→6 boundary
+    assert levelForXp(3200) == 4
+    assert levelForXp(4500) == 4
+    assert levelForXp(10000) == 6
 ```
 
 ### TS-PROG-002: Level-Up Detection Fires on Crossing Threshold
@@ -417,4 +422,5 @@ test "XP converts to correct level":
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.0.1 | 2026-05-15 | Corrected the leveling table and `levelForXp` examples, clarified lifetime XP bar inputs, and removed ambiguous post-match/pre-match XP subtraction language. |
 | 1.0.0 | 2026-05-15 | Initial specification |
